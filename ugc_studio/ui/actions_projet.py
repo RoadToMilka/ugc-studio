@@ -10,9 +10,8 @@ from ..chemins import dossier_projets_defaut
 from ..projets import ErreurProjet
 from ..services import Services
 from .dialogues.projet import DialogueNouveauProjet
-from .icones import icone
+from .icones import icone_menu
 from .ouvrir import ouvrir_dossier
-from .theme import Couleurs
 
 NB_RECENTS_MENU = 5
 
@@ -39,10 +38,10 @@ def ouvrir_projet(parent: QWidget, services: Services, dossier: Path | None = No
 def remplir_menu_projet(menu: QMenu, parent: QWidget, services: Services) -> None:
     """(Re)construit le menu « Projet » : nouveau, ouvrir, récents, dossier du projet."""
     menu.clear()
-    menu.addAction(icone("folder-plus", Couleurs.TEXTE_SECONDAIRE), "Nouveau projet…").triggered.connect(
+    menu.addAction(icone_menu("folder-plus"), "Nouveau projet…").triggered.connect(
         lambda: nouveau_projet(parent, services)
     )
-    menu.addAction(icone("folder-open", Couleurs.TEXTE_SECONDAIRE), "Ouvrir un projet…").triggered.connect(
+    menu.addAction(icone_menu("folder-open"), "Ouvrir un projet…").triggered.connect(
         lambda: ouvrir_projet(parent, services)
     )
     projet = services.projets.projet
@@ -55,6 +54,6 @@ def remplir_menu_projet(menu: QMenu, parent: QWidget, services: Services) -> Non
             menu.addAction(nom).triggered.connect(lambda _c=False, d=dossier: ouvrir_projet(parent, services, d))
     if projet is not None:
         menu.addSeparator()
-        menu.addAction(icone("folder-open", Couleurs.TEXTE_SECONDAIRE), "Ouvrir le dossier du projet").triggered.connect(
+        menu.addAction(icone_menu("folder-open"), "Ouvrir le dossier du projet").triggered.connect(
             lambda: ouvrir_dossier(projet.dossier)
         )

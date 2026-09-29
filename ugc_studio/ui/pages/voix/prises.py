@@ -28,7 +28,7 @@ from ... import taches
 from ...composants.elements import bouton, libelle, vider_disposition
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
-from ...icones import icone
+from ...icones import icone, icone_menu
 from ...ouvrir import ouvrir_dossier
 from ...theme import Couleurs, Dimensions, Espacements
 
@@ -103,20 +103,20 @@ class LignePrise(QFrame):
 
         plus = bouton_icone("ellipsis", "Plus d'actions")
         menu = QMenu(plus)
-        menu.addAction(icone("pencil", Couleurs.TEXTE_SECONDAIRE), "Renommer…").triggered.connect(
+        menu.addAction(icone_menu("pencil"), "Renommer…").triggered.connect(
             lambda: liste.renommer(prise.identifiant)
         )
-        menu.addAction(icone("download", Couleurs.TEXTE_SECONDAIRE), "Exporter en WAV…").triggered.connect(
+        menu.addAction(icone_menu("download"), "Exporter en WAV…").triggered.connect(
             lambda: liste.exporter(prise.identifiant, "wav")
         )
-        menu.addAction(icone("download", Couleurs.TEXTE_SECONDAIRE), "Exporter en MP3…").triggered.connect(
+        menu.addAction(icone_menu("download"), "Exporter en MP3…").triggered.connect(
             lambda: liste.exporter(prise.identifiant, "mp3")
         )
-        menu.addAction(icone("folder-open", Couleurs.TEXTE_SECONDAIRE), "Afficher dans le dossier").triggered.connect(
+        menu.addAction(icone_menu("folder-open"), "Afficher dans le dossier").triggered.connect(
             lambda: ouvrir_dossier(liste.chemin(prise).parent)
         )
         menu.addSeparator()
-        menu.addAction(icone("trash", Couleurs.ERREUR), "Supprimer…").triggered.connect(
+        menu.addAction(icone_menu("trash", Couleurs.ERREUR), "Supprimer…").triggered.connect(
             lambda: liste.supprimer(prise.identifiant)
         )
         plus.setMenu(menu)

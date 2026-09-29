@@ -15,7 +15,7 @@ import traceback
 from pathlib import Path
 
 import PySide6
-from PySide6.QtCore import QTimer, qVersion
+from PySide6.QtCore import QPoint, QTimer, qVersion
 from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader
 from PySide6.QtWidgets import QApplication, QScrollArea
 
@@ -160,7 +160,20 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             for index in range(reglages.onglets.count()):
                 reglages.onglets.setCurrentIndex(index)
                 capturer(fenetre, f"reglages-{index + 1}")
+                # Onglet plus haut que la fenêtre : capture du bas de l'onglet aussi.
+                defilement = reglages.onglets.widget(index).findChild(QScrollArea)
+                if defilement is not None and defilement.verticalScrollBar().maximum() > 0:
+                    defilement.verticalScrollBar().setValue(defilement.verticalScrollBar().maximum())
+                    capturer(fenetre, f"reglages-{index + 1}-bas")
+                    defilement.verticalScrollBar().setValue(0)
             reglages.onglets.setCurrentIndex(0)
+
+            # Menu « Projet » du bandeau : icônes et texte, avec le même écart que partout.
+            bouton_projet, menu_projet = fenetre.entete.bouton_projet, fenetre.entete.menu_projet
+            menu_projet.popup(bouton_projet.mapToGlobal(QPoint(0, bouton_projet.height())))
+            capturer(menu_projet, "menu-projet")
+            menu_projet.hide()
+
             dialogue = reglages.connexions.ajouter()
             capturer(dialogue, "dialogue-ajout-cle")
             dialogue.reject()

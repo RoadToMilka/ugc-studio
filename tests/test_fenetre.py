@@ -34,10 +34,10 @@ def test_clic_sur_un_module(app_configuree, qtbot, tmp_path):
 
 def test_cout_de_session_affiche_au_format(app_configuree, qtbot, tmp_path):
     fenetre = _fenetre(qtbot, tmp_path / "preferences.json")
-    assert "0.0" in fenetre.entete.cout_session.text()
-    fenetre.entete.definir_cout_session(0.007)
+    assert ">0.00<" in fenetre.entete.cout_session.text()
+    fenetre.entete.definir_cout_session(0.0071)
     texte = fenetre.entete.cout_session.text()
-    assert ">0.0<" in texte and ">07<" in texte and "€" in texte
+    assert ">0.00<" in texte and ">71<" in texte and "€" in texte
 
 
 def test_cout_de_session_suit_les_appels(app_configuree, qtbot):
@@ -47,11 +47,16 @@ def test_cout_de_session_suit_les_appels(app_configuree, qtbot):
 
 
 def test_montant_label_petites_decimales(app_configuree, qtbot):
-    etiquette = MontantLabel(0.007, 20)
+    from ugc_studio.ui.theme import COULEUR_PETITES_DECIMALES, Couleurs
+
+    etiquette = MontantLabel(0.0071, 20)
     qtbot.addWidget(etiquette)
-    assert "font-size:20px" in etiquette.text()
-    assert "font-size:14px" in etiquette.text()  # 70 % de 20 px
-    assert etiquette.accessibleName() == "0.007 €"
+    texte = etiquette.text()
+    assert '<span style="font-size:20px">0.00</span>' in texte  # 1re et 2e décimales : normales
+    # 3e et 4e décimales : 70 % de 20 px et plus sombres
+    assert f'<span style="font-size:14px; color:{COULEUR_PETITES_DECIMALES}">71</span>' in texte
+    assert COULEUR_PETITES_DECIMALES == Couleurs.TEXTE_SECONDAIRE
+    assert etiquette.accessibleName() == "0.0071\u00a0€"
 
 
 def test_la_fenetre_se_souvient_du_module(app_configuree, qtbot, tmp_path):

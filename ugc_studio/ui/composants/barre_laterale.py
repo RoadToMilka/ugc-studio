@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QIcon, QPainter, QPen, QPixmap, QTextOption
+from PySide6.QtGui import QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractButton,
     QButtonGroup,
@@ -21,6 +21,7 @@ from ...chemins import dossier_ressources
 from ..icones import icone
 from ..polices import police
 from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
+from .bouton import dessiner_icone_et_texte
 from .elements import libelle
 
 
@@ -95,26 +96,24 @@ class BoutonNavigation(QAbstractButton):
             peintre.setBrush(fond if fond is not None else Qt.BrushStyle.NoBrush)
             peintre.drawRoundedRect(cadre, Arrondis.CONTROLE, Arrondis.CONTROLE)
 
-        # Icône
+        # Icône + libellé : même dessin et même écart que les boutons de l'app (composants/bouton.py).
         cote = Dimensions.ICONE
-        x_icone = Espacements.M
-        y_icone = (self.height() - cote) // 2
         etat = QIcon.State.On if selectionne else QIcon.State.Off
         mode = QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled
         image: QPixmap = self.icon().pixmap(QSize(cote, cote), self.devicePixelRatioF(), mode, etat)
-        peintre.drawPixmap(x_icone, y_icone, image)
-
-        # Libellé
-        peintre.setFont(police(Typo.COURANT, Typo.GRAISSE_MOYENNE))
         couleur_texte = Couleurs.TEXTE if (selectionne or survole) else Couleurs.TEXTE_SECONDAIRE
         if not self.isEnabled():
             couleur_texte = Couleurs.TEXTE_DESACTIVE
-        peintre.setPen(qcolor(couleur_texte))
-        x_texte = x_icone + cote + Espacements.M
-        zone_texte = QRectF(self.rect().adjusted(x_texte, 0, -Espacements.M, 0))
-        options = QTextOption(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-        options.setWrapMode(QTextOption.WrapMode.NoWrap)
-        peintre.drawText(zone_texte, self.text(), options)
+        dessiner_icone_et_texte(
+            peintre,
+            QRectF(self.rect()).adjusted(Espacements.M, 0, -Espacements.M, 0),
+            image,
+            cote,
+            self.text(),
+            police(Typo.COURANT, Typo.GRAISSE_MOYENNE),
+            qcolor(couleur_texte),
+            centrer=False,
+        )
         peintre.end()
 
     # Redessiner le bouton quand la souris entre ou sort (effet de survol).

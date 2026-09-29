@@ -115,8 +115,10 @@ class Typo:
     GRAISSE_FORTE = 600
 
 
-# §4.4 — Montants : les 2e et 3e décimales sont affichées à ~70 % de la taille normale.
+# §4.4 — Montants : la partie entière et les 2 premières décimales sont en taille et couleur
+# normales ; les décimales suivantes (3e, 4e…) sont plus petites (~70 %) et plus sombres.
 RATIO_PETITES_DECIMALES = 0.70
+COULEUR_PETITES_DECIMALES = Couleurs.TEXTE_SECONDAIRE
 
 
 class Dimensions:
@@ -124,8 +126,10 @@ class Dimensions:
 
     BORDURE = 1  # épaisseur des bordures
     LARGEUR_BARRE_LATERALE = 224
-    ICONE = 20  # icônes de la barre latérale et des boutons
-    ICONE_PETITE = 16  # flèches des listes déroulantes, coches
+    ICONE = 20  # icônes de la barre latérale et des boutons-icônes (⋯, lecture)
+    ICONE_PETITE = 16  # icônes des boutons avec texte et des menus, flèches, coches
+    # Espace entre une icône et son texte : le même partout (barre latérale, boutons, menus…).
+    ECART_ICONE_TEXTE = Espacements.M
     LOGO = 28
     CASE_A_COCHER = 18
     BARRE_DEFILEMENT = 16
@@ -227,6 +231,9 @@ def palette():
 # type (QPushButton…), leur nom d'objet (#racine…) ou une propriété (role="titre-page"…).
 # ---------------------------------------------------------------------------------------------
 
+# Espace fixe (non réglable) que Qt ajoute après la colonne des icônes dans les menus.
+_QT_ESPACE_APRES_ICONE_MENU = 4
+
 _MODELE_FEUILLE_DE_STYLE = Template(
     """
 /* ---------- Base ---------- */
@@ -286,6 +293,10 @@ QLabel[role="succes"] {
 }
 QLabel[role="avertissement"] {
     color: $avertissement;
+}
+QLabel[role="legende-avertissement"] {
+    color: $avertissement;
+    font-size: ${legende}px;
 }
 QLabel[role="erreur"] {
     color: $erreur;
@@ -414,7 +425,8 @@ QTableCornerButton::section {
     border: none;
 }
 
-/* ---------- Boutons ---------- */
+/* ---------- Boutons des fenêtres standard de Qt (messages, saisie d'un nom…) ----------
+   Les boutons de l'app elle-même sont dessinés par ui/composants/bouton.py. */
 QPushButton {
     background: $surface_elevee;
     color: $texte;
@@ -438,70 +450,6 @@ QPushButton:disabled {
     background: $surface;
     color: $texte_desactive;
     border-color: $couleur_bordure;
-}
-QPushButton[variante="principal"] {
-    background: $teinte;
-    border-color: $accent;
-}
-QPushButton[variante="principal"]:hover {
-    background: $teinte_survol;
-    border-color: $accent_survol;
-}
-QPushButton[variante="principal"]:pressed {
-    background: $teinte_pressee;
-    border-color: $accent_presse;
-}
-QPushButton[variante="principal"]:disabled {
-    background: $surface;
-    color: $texte_desactive;
-    border-color: $couleur_bordure;
-}
-QPushButton[variante="discret"] {
-    background: transparent;
-    border-color: transparent;
-    color: $texte_secondaire;
-}
-QPushButton[variante="discret"]:hover {
-    background: $surface_elevee;
-    color: $texte;
-}
-QPushButton[variante="discret"]:focus {
-    border-color: $accent;
-}
-QPushButton[variante="icone"] {
-    padding: 0px;
-    background: transparent;
-    border-color: transparent;
-    min-width: ${hauteur_interne_petit_bouton}px;
-    max-width: ${hauteur_interne_petit_bouton}px;
-    min-height: ${hauteur_interne_petit_bouton}px;
-    max-height: ${hauteur_interne_petit_bouton}px;
-}
-QPushButton[variante="icone"]:hover {
-    background: $surface_elevee;
-}
-QPushButton[variante="icone"]:focus {
-    border-color: $accent;
-}
-QPushButton::menu-indicator {
-    image: none;
-    width: 0px;
-}
-QPushButton[variante="projet"] {
-    background: transparent;
-    border: none;
-    padding: 0px;
-    min-height: 0px;
-    text-align: left;
-    font-size: ${titre_bloc}px;
-    font-family: "$famille_forte";
-    font-weight: $graisse_forte;
-}
-QPushButton[variante="projet"]:hover {
-    color: $accent_survol;
-}
-QPushButton[variante="projet"][vide="true"] {
-    color: $texte_secondaire;
 }
 
 /* ---------- Champs ---------- */
@@ -650,9 +598,12 @@ QMenu {
     padding: ${esp_xs}px;
 }
 QMenu::item {
-    padding: ${esp_s}px ${esp_m}px;
+    padding: ${esp_s}px ${esp_m}px ${esp_s}px ${marge_gauche_menu}px;
     border-radius: ${arrondi_controle}px;
     background: transparent;
+}
+QMenu::icon {
+    left: ${esp_m}px;
 }
 QMenu::item:selected {
     background: $teinte;
@@ -736,6 +687,10 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "hauteur_interne_petit_bouton": Hauteurs.PETIT_BOUTON - 2 * Dimensions.BORDURE,
         "hauteur_interne_pastille": Hauteurs.PASTILLE - 2 * Dimensions.BORDURE,
         "icone_petite": Dimensions.ICONE_PETITE,
+        # Menus : Qt place le texte à « taille d'icône + 4 px » du début de la zone de texte.
+        # Cette marge gauche pose l'icône à 12 px du bord et son texte à ECART_ICONE_TEXTE
+        # après elle, comme partout ailleurs dans l'app.
+        "marge_gauche_menu": Espacements.M + Dimensions.ECART_ICONE_TEXTE - _QT_ESPACE_APRES_ICONE_MENU,
         "case_a_cocher": Dimensions.CASE_A_COCHER,
         "barre_defilement": Dimensions.BARRE_DEFILEMENT,
         "poignee_min": Dimensions.POIGNEE_DEFILEMENT_MIN,

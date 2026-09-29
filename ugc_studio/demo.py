@@ -47,7 +47,14 @@ def remplir_donnees_demo(services: Services) -> None:
             perso.identifiant,
             True,
             "Clé valide — 42 modèles accessibles.",
-            ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.5-transcribe", "gemini-3.5-flash"],
+            [
+                "gemini-3.8-flash-tts",
+                "gemini-3.8-flash-lite-tts",
+                "gemini-3.5-transcribe",
+                "gemini-3.5-transcribe-live",
+                "gemini-3.1-flash-tts-preview",
+                "gemini-3.5-flash",
+            ],
         )
         ancienne = connexions.ajouter("google", "Ancienne clé", CLE_DEMO.replace("4f2c", "9a1b"))
         connexions.enregistrer_test(

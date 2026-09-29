@@ -17,7 +17,7 @@ class PageAVenir(Page):
 
         cadre, disposition = bloc()
         ligne_titre = QHBoxLayout()
-        ligne_titre.setSpacing(Espacements.S)
+        ligne_titre.setSpacing(0)
         sablier = QLabel()
         sablier.setPixmap(
             icone("hourglass", Couleurs.ACCENT_SURVOL).pixmap(
@@ -25,7 +25,9 @@ class PageAVenir(Page):
             )
         )
         ligne_titre.addWidget(sablier)
+        ligne_titre.addSpacing(Dimensions.ECART_ICONE_TEXTE)  # même écart icône → texte que partout
         ligne_titre.addWidget(libelle("Ce module arrive bientôt", "titre-bloc", retour_a_la_ligne=False))
+        ligne_titre.addSpacing(Espacements.S)
         ligne_titre.addWidget(pastille(etapes), 0, Qt.AlignmentFlag.AlignVCenter)
         ligne_titre.addStretch(1)
         disposition.addLayout(ligne_titre)

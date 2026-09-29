@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QFileDialog, QHBoxLayout, QLin
 
 from ...chemins import dossier_projets_defaut
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES, ErreurProjet, GestionnaireProjets, Projet
+from ..composants.bouton import activer_avec_entree
 from ..composants.elements import bouton, libelle
 from ..theme import Dimensions, Espacements
 
@@ -57,7 +58,7 @@ class DialogueNouveauProjet(QDialog):
         boutons.addStretch(1)
         boutons.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_creer = bouton("Créer le projet", variante="principal", nom_icone="folder-plus", action=self.valider)
-        self.bouton_creer.setDefault(True)
+        activer_avec_entree(self.bouton_creer, self)  # la touche Entrée valide
         boutons.addWidget(self.bouton_creer)
         disposition.addSpacing(Espacements.S)
         disposition.addLayout(boutons)

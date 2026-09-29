@@ -6,7 +6,7 @@ import logging
 from dataclasses import replace
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLineEdit
 
 from ....audio import en_wav
 from ....chemins import dossier_cache

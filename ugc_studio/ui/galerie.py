@@ -49,6 +49,8 @@ class GalerieComposants(QFrame):
         ligne.addWidget(bouton("Générer", variante="principal", nom_icone="mic"))
         ligne.addWidget(bouton("Tester la clé", nom_icone="key-round"))
         ligne.addWidget(bouton("Annuler", variante="discret"))
+        ligne.addWidget(bouton("Ouvrir le dossier", variante="discret", nom_icone="folder-open"))
+        ligne.addWidget(bouton("", variante="icone", nom_icone="ellipsis"))
         ligne.addStretch(1)
         d.addLayout(ligne)
         ligne = QHBoxLayout()
@@ -92,7 +94,7 @@ class GalerieComposants(QFrame):
         # Montants et texte long
         cadre, d = bloc("Montants (§4.4) et texte")
         montants = QVBoxLayout()
-        for valeur, taille in ((0, Typo.COURANT), (0.007, Typo.TITRE_BLOC), (12.3456, Typo.TITRE_PAGE), (0.00042, Typo.GRAND_CHIFFRE)):
+        for valeur, taille in ((0, Typo.COURANT), (0.0071, Typo.TITRE_BLOC), (12.3456, Typo.TITRE_PAGE), (0.000042, Typo.GRAND_CHIFFRE)):
             montants.addWidget(MontantLabel(valeur, taille))
         d.addLayout(montants)
         texte = QTextEdit()

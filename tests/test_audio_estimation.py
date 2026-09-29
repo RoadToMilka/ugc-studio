@@ -42,10 +42,10 @@ def test_duree_parlee():
 def test_estimation_du_cout(tmp_path):
     prix = CataloguePrix(tmp_path / "prix.json")
     prix.definir_taux(Decimal("1"))
-    estimation = estimer(" ".join(["mot"] * 27), "", "gemini-3.8-flash-tts", prix, tokens_par_seconde=32)
+    estimation = estimer(" ".join(["mot"] * 27), "", "gemini-3.8-flash-tts", prix)
     assert estimation.tokens_entree == tokens_texte(" ".join(["mot"] * 27))
-    assert estimation.tokens_sortie == 320  # 10 s × 32 tokens/s
-    assert estimation.cout_eur == prix.cout_eur("gemini-3.8-flash-tts", estimation.tokens_entree, 320)
+    assert estimation.tokens_sortie == 250  # 10 s × 25 tokens/s (valeur de départ, page des tarifs Google)
+    assert estimation.cout_eur == prix.cout_eur("gemini-3.8-flash-tts", estimation.tokens_entree, 250)
 
 
 def test_calibrage_des_tokens_audio():

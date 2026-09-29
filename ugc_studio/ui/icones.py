@@ -81,6 +81,11 @@ def icone(
     return resultat
 
 
+def icone_menu(nom: str, couleur: str = Couleurs.TEXTE_SECONDAIRE) -> QIcon:
+    """Icône d'une ligne de menu, dessinée à la taille exacte des menus (16 px) pour rester nette."""
+    return icone(nom, couleur, taille=Dimensions.ICONE_PETITE)
+
+
 def fichier_icone(nom: str, couleur: str, taille: int = Dimensions.ICONE_PETITE) -> str:
     """Chemin d'un fichier SVG recoloré, pour la feuille de style (qui ne lit que des fichiers).
 

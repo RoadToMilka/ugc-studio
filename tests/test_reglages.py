@@ -103,6 +103,54 @@ def test_prix_modifie_depuis_l_onglet(app_configuree, qtbot, services):
     assert services.prix.prix("gemini-3.8-flash-tts").entree == Decimal("0.50")
 
 
+def test_tarifs_google_dans_l_onglet(app_configuree, qtbot, services):
+    page = PageReglages(services)
+    qtbot.addWidget(page)
+    transcription = page.modeles.ligne("gemini-3.5-transcribe")
+    assert (transcription.entree.text(), transcription.sortie.text()) == ("2.00", "12.00")
+    assert not transcription.zone_minute.isHidden()
+    assert transcription.cout_minute.montant == services.prix.cout_reference_eur("gemini-3.5-transcribe")
+    assert transcription.hausse.isHidden()  # aucun changement de prix annoncé
+    voix = page.modeles.ligne("gemini-3.8-flash-tts")
+    assert not voix.hausse.isHidden() and "01/01/2027" in voix.hausse.text() and "18.00 $" in voix.hausse.text()
+    assert voix.personnalise.isHidden()
+
+
+def test_prix_personnalise_signale_puis_retabli(app_configuree, qtbot, services):
+    page = PageReglages(services)
+    qtbot.addWidget(page)
+    voix = page.modeles.ligne("gemini-3.8-flash-tts")
+    avant = voix.cout_minute.montant
+    voix.sortie.setText("10")
+    voix.sortie.editingFinished.emit()
+    assert voix.sortie.text() == "10"
+    assert not voix.personnalise.isHidden() and "9.00 $" in voix.personnalise.text()
+    assert voix.cout_minute.montant > avant  # l'ordre de grandeur suit le prix saisi
+    page.modeles._retablir()
+    assert voix.sortie.text() == "9.00" and voix.personnalise.isHidden()
+    assert voix.cout_minute.montant == avant
+
+
+def test_anciens_modeles_listes_seulement_s_ils_sont_accessibles(app_configuree, qtbot, services):
+    page = PageReglages(services)
+    qtbot.addWidget(page)
+    assert page.modeles.ligne("gemini-2.5-pro-preview-tts") is None
+    connexion = services.connexions.ajouter("google", "Perso", CLE)
+    services.connexions.enregistrer_test(
+        connexion.identifiant, True, "Clé valide", ["gemini-3.8-flash-tts", "gemini-2.5-pro-preview-tts", "gemini-3.5-transcribe-live"]
+    )
+    assert page.modeles.ligne("gemini-2.5-pro-preview-tts") is not None
+    assert page.modeles.ligne("gemini-3.5-transcribe-live") is None  # modèle « Live » : jamais utilisé par l'app
+
+
+def test_le_cout_d_une_minute_suit_le_taux(app_configuree, qtbot, services):
+    page = PageReglages(services)
+    qtbot.addWidget(page)
+    voix = page.modeles.ligne("gemini-3.8-flash-tts")
+    services.prix.definir_taux(Decimal("1"))
+    assert voix.cout_minute.montant == Decimal("0.013625")  # 250 × 0,50 $ + 1 500 × 9 $, par million
+
+
 def test_taux_saisi(app_configuree, qtbot, services):
     page = PageReglages(services)
     qtbot.addWidget(page)
@@ -118,7 +166,7 @@ def test_suivi_des_couts(app_configuree, qtbot, services):
     qtbot.addWidget(page)
     assert page.couts.tableau.rowCount() == 0
     services.couts.enregistrer("google", "gemini-3.8-flash-tts", "voix", 1_000, 20_000, projet="Sérum")
-    services.couts.enregistrer("google", "gemini-3.5-transcribe", "transcription", 500, 50)
+    services.couts.enregistrer("google", "modele-sans-prix", "transcription", 500, 50)
     assert page.couts.tableau.rowCount() == 2
     attendu = services.prix.cout_eur("gemini-3.8-flash-tts", 1_000, 20_000)
     assert page.couts.total.montant == attendu

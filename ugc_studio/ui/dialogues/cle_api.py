@@ -18,6 +18,7 @@ from ...connexions import Connexion, ErreurConnexion, GestionnaireConnexions, ne
 from ...fournisseurs import ADAPTATEURS, FOURNISSEURS_PREVUS, creer_adaptateur
 from ...fournisseurs.base import Adaptateur, ResultatTest
 from .. import taches
+from ..composants.bouton import activer_avec_entree
 from ..composants.elements import bouton, libelle
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
@@ -107,7 +108,7 @@ class DialogueCle(QDialog):
         self.bouton_annuler = bouton("Annuler", action=self.reject)
         boutons.addWidget(self.bouton_annuler)
         self.bouton_valider = bouton("Tester et enregistrer", variante="principal", nom_icone="key-round", action=self.valider)
-        self.bouton_valider.setDefault(True)
+        activer_avec_entree(self.bouton_valider, self)  # la touche Entrée valide
         boutons.addWidget(self.bouton_valider)
         disposition.addSpacing(Espacements.S)
         disposition.addLayout(boutons)

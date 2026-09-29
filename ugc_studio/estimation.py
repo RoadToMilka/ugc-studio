@@ -15,11 +15,13 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .balises import MOTIF_BALISE
+from .fournisseurs.capacites import TOKENS_AUDIO_PAR_SECONDE
 from .prix import CataloguePrix
 
 CARACTERES_PAR_TOKEN = 4
 MOTS_PAR_SECONDE = 2.7  # ≈ 160 mots par minute, débit courant d'une pub UGC
-TOKENS_AUDIO_PAR_SECONDE_DEFAUT = 32.0
+# Valeur de départ : 25 tokens par seconde d'audio, d'après la page des tarifs de Google.
+TOKENS_AUDIO_PAR_SECONDE_DEFAUT = float(TOKENS_AUDIO_PAR_SECONDE)
 DUREE_BALISES = {"short pause": 0.5, "long pause": 1.2}
 DUREE_AUTRE_BALISE = 0.6  # rire, soupir…
 POIDS_NOUVELLE_MESURE = 0.3  # part de la dernière génération dans la moyenne ajustée
