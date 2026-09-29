@@ -208,6 +208,12 @@ class EditeurScript(QTextEdit):
         curseur.setCharFormat(format_texte())
 
     def _format_propre_apres_badge(self) -> None:
-        """Le texte tapé juste après un badge ne doit pas hériter de son format de badge."""
+        """Le texte tapé juste après un badge ne doit pas hériter de son format de badge.
+
+        Uniquement sans sélection : avec une sélection, setCurrentCharFormat() appliquerait le
+        format à tout le texte sélectionné… et effacerait les badges qu'il contient.
+        """
+        if self.textCursor().hasSelection():
+            return
         if self.currentCharFormat().objectType() == TYPE_BALISE:
             self.setCurrentCharFormat(format_texte())

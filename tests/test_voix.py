@@ -191,3 +191,11 @@ def test_menu_projet(app_configuree, qtbot, services, tmp_path):
     assert textes[:2] == ["Nouveau projet…", "Ouvrir un projet…"]
     assert "A" in textes and "B" not in textes  # B est le projet ouvert
     assert "Ouvrir le dossier du projet" in textes
+
+
+def test_selectionner_tout_ne_detruit_pas_les_badges(editeur):
+    # Régression : sélectionner un texte finissant par un badge effaçait les badges.
+    editeur.definir_segments(SCRIPT)
+    editeur.selectAll()
+    editeur.moveCursor(QTextCursor.MoveOperation.End)
+    assert editeur.segments() == normaliser([dict(s) for s in SCRIPT])
