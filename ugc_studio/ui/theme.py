@@ -106,6 +106,11 @@ class Dimensions:
     BARRE_DEFILEMENT = 16
     POIGNEE_DEFILEMENT_MIN = 32
     CONTENU_LARGEUR_MAX = 960  # largeur maximale des pages de type « formulaire »
+    SOULIGNEMENT_ONGLET = 2  # trait mauve sous l'onglet sélectionné
+    DIALOGUE_LARGEUR = 520
+    CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
+    ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
+    TABLEAU_HAUTEUR_MIN = 320
     FENETRE_LARGEUR = 1360
     FENETRE_HAUTEUR = 860
     FENETRE_LARGEUR_MIN = 960
@@ -267,6 +272,16 @@ QLabel[role="pastille"] {
 QLabel[vide="true"] {
     color: $texte_secondaire;
 }
+QLabel[role="etiquette"] {
+    color: $texte_secondaire;
+    background: $surface_elevee;
+    border: none;
+    border-radius: ${rayon_etiquette}px;
+    padding: 0px ${esp_s}px;
+    font-size: ${legende}px;
+    min-height: ${etiquette_hauteur}px;
+    max-height: ${etiquette_hauteur}px;
+}
 
 /* ---------- Blocs ---------- */
 QFrame[role="bloc"] {
@@ -279,6 +294,73 @@ QFrame[role="separateur"] {
     border: none;
     min-height: ${bordure}px;
     max-height: ${bordure}px;
+}
+QFrame[role="ligne"] {
+    background: transparent;
+    border: none;
+    border-bottom: ${bordure}px solid $couleur_bordure;
+}
+
+/* ---------- Onglets ---------- */
+QTabWidget::pane {
+    border: none;
+    border-top: ${bordure}px solid $couleur_bordure;
+    top: -${bordure}px;
+    background: transparent;
+}
+QTabBar {
+    background: transparent;
+}
+QTabBar::tab {
+    background: transparent;
+    color: $texte_secondaire;
+    border: none;
+    border-bottom: ${soulignement_onglet}px solid transparent;
+    padding: ${esp_s}px ${esp_xs}px;
+    margin-right: ${esp_xl}px;
+    font-family: "$famille_moyenne";
+    font-weight: $graisse_moyenne;
+}
+QTabBar::tab:hover {
+    color: $texte;
+}
+QTabBar::tab:selected {
+    color: $texte;
+    border-bottom-color: $accent;
+}
+
+/* ---------- Tableaux ---------- */
+QTableView {
+    background: transparent;
+    color: $texte;
+    border: none;
+    gridline-color: transparent;
+    selection-background-color: $teinte_selection;
+    selection-color: $texte;
+    outline: none;
+}
+QTableView::item {
+    padding: 0px ${esp_m}px;
+    border: none;
+    border-bottom: ${bordure}px solid $couleur_bordure;
+}
+QHeaderView {
+    background: transparent;
+    border: none;
+}
+QHeaderView::section {
+    background: transparent;
+    color: $texte_secondaire;
+    border: none;
+    border-bottom: ${bordure}px solid $couleur_bordure;
+    padding: ${esp_s}px ${esp_m}px;
+    font-size: ${legende}px;
+    font-family: "$famille_moyenne";
+    font-weight: $graisse_moyenne;
+}
+QTableCornerButton::section {
+    background: transparent;
+    border: none;
 }
 
 /* ---------- Boutons ---------- */
@@ -337,10 +419,22 @@ QPushButton[variante="discret"]:focus {
 }
 QPushButton[variante="icone"] {
     padding: 0px;
+    background: transparent;
+    border-color: transparent;
     min-width: ${hauteur_interne_petit_bouton}px;
     max-width: ${hauteur_interne_petit_bouton}px;
     min-height: ${hauteur_interne_petit_bouton}px;
     max-height: ${hauteur_interne_petit_bouton}px;
+}
+QPushButton[variante="icone"]:hover {
+    background: $surface_elevee;
+}
+QPushButton[variante="icone"]:focus {
+    border-color: $accent;
+}
+QPushButton::menu-indicator {
+    image: none;
+    width: 0px;
 }
 
 /* ---------- Champs ---------- */
@@ -376,6 +470,9 @@ QTextEdit:disabled, QPlainTextEdit:disabled {
     background: $surface;
     color: $texte_desactive;
     border-color: $couleur_bordure;
+}
+QLineEdit[invalide="true"] {
+    border-color: $erreur;
 }
 QComboBox {
     padding-right: ${esp_xxl}px;
@@ -551,6 +648,7 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "esp_s": Espacements.S,
         "esp_m": Espacements.M,
         "esp_l": Espacements.L,
+        "esp_xl": Espacements.XL,
         "esp_xxl": Espacements.XXL,
         # formes et tailles
         "bordure": Dimensions.BORDURE,
@@ -558,6 +656,9 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "arrondi_bloc": Arrondis.BLOC,
         "arrondi_petit": Arrondis.PETIT,
         "rayon_pastille": Hauteurs.PASTILLE // 2,
+        "rayon_etiquette": Dimensions.ETIQUETTE_HAUTEUR // 2,
+        "etiquette_hauteur": Dimensions.ETIQUETTE_HAUTEUR,
+        "soulignement_onglet": Dimensions.SOULIGNEMENT_ONGLET,
         # Qt compte la hauteur sans les bordures : 36 px au total = 34 px + 2 × 1 px de bordure.
         "hauteur_interne_controle": Hauteurs.CONTROLE - 2 * Dimensions.BORDURE,
         "hauteur_interne_petit_bouton": Hauteurs.PETIT_BOUTON - 2 * Dimensions.BORDURE,

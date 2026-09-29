@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.6 — 29/09/2026 (plan de réalisation de la V1 en 8 étapes, précisions montants, design et distribution)
+> Version du document : 1.7 — 29/09/2026 (étape 2 : détails des connexions API, des prix et du suivi des coûts)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -31,6 +31,7 @@ Application Windows de bureau pour produire des **publicités e-commerce UGC / i
 | Rendu des sous-titres | Dessin image par image en Python (Qt QPainter), puis assemblage par FFmpeg | Contrôle total du design ; aperçu identique à l'export |
 | Stockage des clés API | Coffre-fort Windows via la bibliothèque `keyring` | Clés chiffrées, jamais dans un fichier ni sur GitHub |
 | Données locales | Fichiers JSON dans `%APPDATA%\UGC Studio\` | Styles, préréglages, projets, historique des coûts |
+| Appels aux API | Requêtes HTTP directes (module `urllib` de Python), d'après l'API REST officielle ; le SDK officiel `google-genai` sert de référence pour les formats | Aucune bibliothèque en plus, code lisible, testable sans Internet |
 | Distribution | `.exe` construit par GitHub Actions (PyInstaller, machine Windows), publié dans les Releases GitHub | Aucun outil à installer côté utilisateur |
 | Code source | Dépôt privé GitHub `RoadToMilka/ugc-studio` | Historique, sauvegarde, build automatique |
 
@@ -85,6 +86,8 @@ L'app **croise** « modèles disponibles avec tes clés » × « capacités requ
 
 Ajouter un fournisseur = écrire un nouvel adaptateur ; le reste de l'app ne change pas.
 
+Un modèle absent du tableau mais accessible avec une clé est reconnu d'après son nom (`…-tts` → voix, `…transcribe…` → transcription) : il apparaît dans « Modèles et prix » avec des prix à renseigner.
+
 **V1 : adaptateur Google uniquement.** Fournisseurs prévus ensuite : OpenAI, ElevenLabs, Anthropic (texte uniquement — pas de TTS/STT chez Anthropic).
 
 ---
@@ -99,6 +102,9 @@ Ajouter un fournisseur = écrire un nouvel adaptateur ; le reste de l'app ne cha
 - **Remplacer**, **renommer**, **supprimer** (avec confirmation).
 - Plusieurs clés par fournisseur possibles ; une clé « par défaut » par fournisseur.
 - La clé n'est jamais réaffichée en clair après enregistrement (seulement `AIza…4f2c`).
+- Rangement : la clé dans le Gestionnaire d'identification de Windows (entrée « UGC Studio ») ; nom, fournisseur, aperçu, clé par défaut et résultat du dernier test dans `connexions.json`.
+- Test de clé = demande de la liste des modèles (gratuit). La clé n'est enregistrée qu'après un test réussi ; sans Internet, bouton « Enregistrer sans tester ».
+- Les modèles accessibles lors du dernier test réussi sont retenus : ce sont eux que les menus proposent (croisement avec les capacités, §3.4).
 
 ### 4.2 Catalogue des modèles et prix
 
@@ -108,13 +114,16 @@ Ajouter un fournisseur = écrire un nouvel adaptateur ; le reste de l'app ne cha
   - `gemini-3.8-flash-tts` : 0,50 $ / M tokens texte entrée — 9,00 $ / M tokens audio sortie
   - `gemini-3.8-flash-lite-tts` : 0,50 $ / 6,00 $
   - `gemini-3.5-transcribe` : prix à vérifier dans la doc officielle au moment du code
-- **Taux de change USD → EUR** modifiable (champ manuel ; mise à jour automatique optionnelle plus tard).
+- **Taux de change USD → EUR** modifiable (champ manuel), ou récupéré en un clic auprès de la Banque centrale européenne (taux de référence du jour). Valeur de départ : 0,86, signalée « à vérifier ».
+- Prix et taux rangés dans `prix.json` (seuls les prix modifiés y sont écrits ; bouton « Rétablir les prix par défaut »).
 
 ### 4.3 Suivi des coûts
 
 - Chaque appel API enregistre : date, projet, modèle, tokens entrée, tokens sortie, coût € (calculé avec les compteurs de tokens renvoyés par l'API).
 - **Pendant une tâche** : affichage en temps réel des tokens et du coût.
-- Historique filtrable par jour / mois / projet / modèle, avec totaux.
+- Historique filtrable par période (aujourd'hui, ce mois-ci, le mois dernier, cette année, tout), projet et modèle, avec totaux (coût, nombre d'appels, tokens). Les 500 appels les plus récents de la période sont listés ; les totaux portent sur toute la période.
+- Rangement : un fichier par mois, `couts\AAAA-MM.jsonl`, une ligne par appel (le coût est calculé et figé au moment de l'appel).
+- Un appel dont le modèle n'a pas de prix renseigné est compté à part et signalé.
 - Limite : l'app compte **ce qu'elle a consommé** ; elle ne connaît pas le solde du compte Google.
 
 ### 4.4 Affichage des montants

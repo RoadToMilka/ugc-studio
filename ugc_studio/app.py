@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from . import NOM_APP, __version__
-from .chemins import VARIABLE_DOSSIER_DONNEES, dossier_ressources, fichier_journal, fichier_preferences
+from .chemins import VARIABLE_DOSSIER_DONNEES, dossier_ressources, fichier_journal
 from .journal import configurer_journal
 
 journal = logging.getLogger(__name__)
@@ -103,16 +103,27 @@ def main(arguments: list[str] | None = None) -> int:
 
     from PySide6.QtWidgets import QApplication
 
-    from .preferences import Preferences
+    from .services import creer_services
     from .ui.erreurs import installer_gestion_erreurs
     from .ui.fenetre_principale import FenetrePrincipale
-    from .ui.pages.page_reglages import ouvrir_journal
+    from .ui.ouvrir import ouvrir_journal
 
     app = QApplication([sys.argv[0], *arguments])
     resume = configurer_application(app)
     installer_gestion_erreurs(ouvrir_journal, mode_autotest=dossier_autotest is not None)
 
-    fenetre = FenetrePrincipale(Preferences(fichier_preferences()))
+    if dossier_autotest is None:
+        services = creer_services()
+    else:
+        # L'autotest utilise un coffre-fort en mémoire et des données de démonstration,
+        # pour que les captures d'écran montrent des écrans remplis.
+        from .connexions import CoffreMemoire
+        from .demo import remplir_donnees_demo
+
+        services = creer_services(CoffreMemoire())
+        remplir_donnees_demo(services)
+
+    fenetre = FenetrePrincipale(services)
     fenetre.show()
 
     if dossier_autotest is not None:

@@ -8,11 +8,11 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from .. import NOM_APP
-from ..preferences import Preferences
+from ..services import Services
 from .composants.barre_laterale import BarreLaterale, Module
 from .composants.entete import Entete
 from .pages.page_a_venir import PageAVenir
-from .pages.page_reglages import PageReglages
+from .pages.reglages import PageReglages
 from .theme import Dimensions
 
 journal = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ MODULES_HAUT = (
 MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
 
 
-def _creer_pages() -> dict[str, QWidget]:
+def _creer_pages(services: Services) -> dict[str, QWidget]:
     return {
         "voix": PageAVenir(
             "Voix",
@@ -59,14 +59,15 @@ def _creer_pages() -> dict[str, QWidget]:
                 "Export SRT pour Premiere Pro",
             ],
         ),
-        "reglages": PageReglages(),
+        "reglages": PageReglages(services),
     }
 
 
 class FenetrePrincipale(QMainWindow):
-    def __init__(self, preferences: Preferences):
+    def __init__(self, services: Services):
         super().__init__()
-        self._preferences = preferences
+        self.services = services
+        self._preferences = services.preferences
         self.setWindowTitle(NOM_APP)
         self.setMinimumSize(Dimensions.FENETRE_LARGEUR_MIN, Dimensions.FENETRE_HAUTEUR_MIN)
 
@@ -94,13 +95,19 @@ class FenetrePrincipale(QMainWindow):
         self.setCentralWidget(racine)
 
         self._index_pages: dict[str, int] = {}
-        for identifiant, page in _creer_pages().items():
+        for identifiant, page in _creer_pages(services).items():
             self._index_pages[identifiant] = self.pages.addWidget(page)
+
+        # Compteur de coût de la session (bandeau du haut) : mis à jour à chaque appel payant.
+        services.couts.abonner(lambda _appel: self.entete.definir_cout_session(services.couts.cout_session))
 
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
 
     # --- Navigation -------------------------------------------------------------------------
+
+    def page(self, identifiant: str) -> QWidget:
+        return self.pages.widget(self._index_pages[identifiant])
 
     def identifiants_modules(self) -> list[str]:
         return list(self._index_pages)

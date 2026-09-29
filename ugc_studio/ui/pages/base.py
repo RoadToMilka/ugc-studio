@@ -9,6 +9,57 @@ from ..composants.elements import libelle
 from ..theme import Dimensions, Espacements
 
 
+def zone_defilante(
+    largeur_max: int | None = Dimensions.CONTENU_LARGEUR_MAX,
+    marges: tuple[int, int, int, int] = (0, 0, 0, 0),
+) -> tuple[QScrollArea, QVBoxLayout]:
+    """Zone qui défile verticalement quand son contenu est trop haut.
+
+    Renvoie la zone et la disposition verticale où ajouter le contenu. La colonne de contenu
+    occupe toute la largeur disponible sans dépasser `largeur_max` (au-delà, les lignes de
+    texte deviennent trop longues à lire), et reste calée à gauche.
+    """
+    zone = QScrollArea()
+    zone.setWidgetResizable(True)
+    zone.setFrameShape(QFrame.Shape.NoFrame)
+    zone.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+    interieur = QWidget()
+    interieur.setObjectName("contenuDefilant")
+    zone.setWidget(interieur)
+    # setWidget() rend le fond du contenu opaque (couleur « fenêtre » de la palette) :
+    # on le remet transparent pour voir le fond de l'app, comme dans le reste de l'interface.
+    interieur.setAutoFillBackground(False)
+    zone.viewport().setAutoFillBackground(False)
+
+    disposition = QVBoxLayout(interieur)
+    disposition.setContentsMargins(*marges)
+    disposition.setSpacing(0)
+
+    colonne = QWidget()
+    if largeur_max is not None:
+        colonne.setMaximumWidth(largeur_max)
+    contenu = QVBoxLayout(colonne)
+    contenu.setContentsMargins(0, 0, 0, 0)
+    contenu.setSpacing(Espacements.L)
+    ligne = QHBoxLayout()
+    ligne.setContentsMargins(0, 0, 0, 0)
+    ligne.addWidget(colonne, 1)
+    ligne.addStretch(0)
+    disposition.addLayout(ligne)
+    disposition.addStretch(1)
+    return zone, contenu
+
+
+def entete_de_page(titre: str, sous_titre: str) -> QVBoxLayout:
+    entete = QVBoxLayout()
+    entete.setContentsMargins(0, 0, 0, 0)
+    entete.setSpacing(Espacements.XS)
+    entete.addWidget(libelle(titre, "titre-page"))
+    entete.addWidget(libelle(sous_titre, "secondaire"))
+    return entete
+
+
 class Page(QWidget):
     """Page avec un en-tête (titre + sous-titre) et une zone de contenu défilante.
 
@@ -20,43 +71,9 @@ class Page(QWidget):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
-
-        zone = QScrollArea()
-        zone.setWidgetResizable(True)
-        zone.setFrameShape(QFrame.Shape.NoFrame)
-        zone.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        zone, self.contenu = zone_defilante(
+            largeur_max, (Espacements.XXL, Espacements.XL, Espacements.XXL, Espacements.XXL)
+        )
         disposition.addWidget(zone)
-
-        interieur = QWidget()
-        interieur.setObjectName("contenuDefilant")
-        zone.setWidget(interieur)
-        # setWidget() rend le fond du contenu opaque (couleur « fenêtre » de la palette) :
-        # on le remet transparent pour voir le fond de l'app, comme dans le reste de l'interface.
-        interieur.setAutoFillBackground(False)
-        zone.viewport().setAutoFillBackground(False)
-        marges = QVBoxLayout(interieur)
-        marges.setContentsMargins(Espacements.XXL, Espacements.XL, Espacements.XXL, Espacements.XXL)
-        marges.setSpacing(0)
-
-        # La colonne de contenu occupe toute la largeur disponible, sans dépasser `largeur_max`
-        # (au-delà, les lignes de texte deviennent trop longues à lire) ; elle reste calée à gauche.
-        colonne = QWidget()
-        if largeur_max is not None:
-            colonne.setMaximumWidth(largeur_max)
-        self.contenu = QVBoxLayout(colonne)
-        self.contenu.setContentsMargins(0, 0, 0, 0)
-        self.contenu.setSpacing(Espacements.L)
-        ligne = QHBoxLayout()
-        ligne.setContentsMargins(0, 0, 0, 0)
-        ligne.addWidget(colonne, 1)
-        ligne.addStretch(0)
-        marges.addLayout(ligne)
-        marges.addStretch(1)
-
-        entete = QVBoxLayout()
-        entete.setSpacing(Espacements.XS)
-        self.titre = libelle(titre, "titre-page")
-        entete.addWidget(self.titre)
-        entete.addWidget(libelle(sous_titre, "secondaire"))
-        self.contenu.addLayout(entete)
+        self.contenu.addLayout(entete_de_page(titre, sous_titre))
         self.contenu.addSpacing(Espacements.S)

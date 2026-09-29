@@ -2,13 +2,15 @@
 
 from PySide6.QtCore import Qt
 
-from ugc_studio.preferences import Preferences
+from ugc_studio.connexions import CoffreMemoire
+from ugc_studio.services import creer_services
 from ugc_studio.ui.composants.montant_label import MontantLabel
 from ugc_studio.ui.fenetre_principale import FenetrePrincipale
 
 
-def _fenetre(qtbot, chemin):
-    fenetre = FenetrePrincipale(Preferences(chemin))
+def _fenetre(qtbot, _chemin=None):
+    # Les préférences sont rangées dans le dossier de données temporaire des tests.
+    fenetre = FenetrePrincipale(creer_services(CoffreMemoire()))
     qtbot.addWidget(fenetre)
     return fenetre
 
@@ -36,6 +38,12 @@ def test_cout_de_session_affiche_au_format(app_configuree, qtbot, tmp_path):
     fenetre.entete.definir_cout_session(0.007)
     texte = fenetre.entete.cout_session.text()
     assert ">0.0<" in texte and ">07<" in texte and "€" in texte
+
+
+def test_cout_de_session_suit_les_appels(app_configuree, qtbot):
+    fenetre = _fenetre(qtbot)
+    fenetre.services.couts.enregistrer("google", "gemini-3.8-flash-tts", "voix", 1_000, 20_000)
+    assert fenetre.entete.cout_session.montant == fenetre.services.couts.cout_session > 0
 
 
 def test_montant_label_petites_decimales(app_configuree, qtbot):
