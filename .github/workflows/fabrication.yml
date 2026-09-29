@@ -20,7 +20,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # nécessaire pour publier les Releases
+  contents: write # publier les Releases, ranger les branches fusionnées
+  pull-requests: read # retrouver les branches des Pull Requests fusionnées
 
 concurrency:
   group: fabrication-${{ github.ref }}
@@ -98,6 +99,11 @@ jobs:
       # de travail, qui n'a pas accès aux fichiers joints des runs.
       - name: Déposer le rapport pour relecture (référence cachée)
         if: always()
+        continue-on-error: true
+        env:
+          JETON: ${{ github.token }}
+          DEPOT: ${{ github.repository }}
+          BRANCHE: ${{ github.ref_name }}
         run: |
           $copie = Join-Path $env:RUNNER_TEMP "rapport-git"
           New-Item -ItemType Directory -Force -Path $copie | Out-Null
@@ -106,9 +112,16 @@ jobs:
           git init -q
           git config user.name "Fabrication automatique"
           git config user.email "actions@users.noreply.github.com"
+          git config core.autocrlf false
           git add -A
-          git commit -q -m "Rapport de fabrication ${{ github.sha }}"
-          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "HEAD:refs/rapports/${{ github.ref_name }}"
+          git commit -q -m "Rapport de fabrication $env:GITHUB_SHA"
+          for ($essai = 1; $essai -le 3; $essai++) {
+            $sortie = git push -f "https://x-access-token:$env:JETON@github.com/$env:DEPOT.git" "HEAD:refs/rapports/$env:BRANCHE" 2>&1
+            if ($LASTEXITCODE -eq 0) { Write-Host "Rapport déposé."; exit 0 }
+            Start-Sleep -Seconds 5
+          }
+          Write-Output "::warning title=Rapport non déposé::$($sortie -join ' | ')"
+          exit 1
 
       - name: Joindre UGC-Studio.exe
         uses: actions/upload-artifact@v7
@@ -132,3 +145,21 @@ jobs:
           $options = @($etiquette, "dist/UGC-Studio.exe", "--title", "UGC Studio $version", "--generate-notes", "--target", "${{ github.sha }}")
           if ($version.StartsWith("0.")) { $options += "--prerelease" }
           gh release create @options
+
+      # Les branches des étapes déjà fusionnées (et leur rapport caché) ne servent plus :
+      # on les supprime pour garder la liste des branches propre.
+      - name: Ranger les branches déjà fusionnées (branche main)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Continue"
+          $branches = gh pr list --state merged --limit 100 --json headRefName --jq ".[].headRefName"
+          foreach ($branche in $branches) {
+            if (-not $branche -or $branche -eq "main") { continue }
+            foreach ($ref in @("heads/$branche", "rapports/$branche")) {
+              gh api -X DELETE "repos/${{ github.repository }}/git/refs/$ref" 2>&1 | Out-Null
+              if ($LASTEXITCODE -eq 0) { Write-Host "Supprimé : $ref" }
+            }
+          }
+          exit 0

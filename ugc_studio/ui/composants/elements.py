@@ -88,6 +88,17 @@ def separateur() -> QFrame:
     return ligne
 
 
+def vider_disposition(disposition) -> None:
+    """Retire et détruit tout le contenu d'une disposition (y compris les dispositions imbriquées)."""
+    while disposition.count():
+        element = disposition.takeAt(0)
+        if element.widget() is not None:
+            element.widget().deleteLater()
+        elif element.layout() is not None:
+            vider_disposition(element.layout())
+            element.layout().deleteLater()
+
+
 def conteneur_vertical(espacement: int = Espacements.M) -> tuple[QWidget, QVBoxLayout]:
     """Zone transparente qui empile ses éléments verticalement."""
     zone = QWidget()

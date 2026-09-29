@@ -1,0 +1,220 @@
+"""Onglet « Suivi des coûts » (§4.3) : historique filtrable des appels payants, avec totaux."""
+
+from __future__ import annotations
+
+from datetime import date, timedelta
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontMetrics
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ....couts import AppelApi, filtrer, totaux
+from ....fournisseurs.capacites import modele_connu
+from ....services import Services
+from ...composants.elements import bloc, libelle
+from ...composants.montant_label import MontantLabel
+from ...polices import police
+from ...theme import Dimensions, Espacements, Hauteurs, Typo
+
+TOUS = "__tous__"
+SANS_PROJET = "__sans_projet__"
+LIGNES_MAX = 500  # au-delà, seuls les appels les plus récents sont listés (les totaux restent complets)
+
+COLONNES = ("Date", "Projet", "Modèle", "Opération", "Tokens entrée", "Tokens sortie", "Coût")
+
+
+def _periode(choix: str, aujourd_hui: date) -> tuple[date | None, date | None]:
+    if choix == "jour":
+        return aujourd_hui, aujourd_hui
+    if choix == "mois":
+        return aujourd_hui.replace(day=1), aujourd_hui
+    if choix == "mois_precedent":
+        fin = aujourd_hui.replace(day=1) - timedelta(days=1)
+        return fin.replace(day=1), fin
+    if choix == "annee":
+        return aujourd_hui.replace(month=1, day=1), aujourd_hui
+    return None, None
+
+
+def _nombre(n: int) -> str:
+    """1234567 → « 1 234 567 » (espaces fines insécables, à la française)."""
+    return f"{n:,}".replace(",", " ")
+
+
+class OngletCouts(QWidget):
+    def __init__(self, services: Services):
+        super().__init__()
+        self._services = services
+
+        disposition = QVBoxLayout(self)
+        disposition.setContentsMargins(0, Espacements.XL, 0, Espacements.XL)
+        disposition.setSpacing(Espacements.L)
+
+        # Filtres
+        filtres = QHBoxLayout()
+        filtres.setSpacing(Espacements.S)
+        self.periode = QComboBox()
+        for texte, valeur in (
+            ("Aujourd'hui", "jour"),
+            ("Ce mois-ci", "mois"),
+            ("Le mois dernier", "mois_precedent"),
+            ("Cette année", "annee"),
+            ("Tout l'historique", "tout"),
+        ):
+            self.periode.addItem(texte, valeur)
+        self.periode.setCurrentIndex(1)
+        self.projet = QComboBox()
+        self.modele = QComboBox()
+        for liste in (self.periode, self.projet, self.modele):
+            liste.currentIndexChanged.connect(self.rafraichir)
+            filtres.addWidget(liste)
+        filtres.addStretch(1)
+        disposition.addLayout(filtres)
+
+        # Totaux
+        cadre, d = bloc()
+        ligne = QHBoxLayout()
+        ligne.setSpacing(Espacements.L)
+        colonne = QVBoxLayout()
+        colonne.setSpacing(0)
+        colonne.addWidget(libelle("Total de la période", "legende", retour_a_la_ligne=False))
+        self.total = MontantLabel(0, Typo.GRAND_CHIFFRE)
+        colonne.addWidget(self.total)
+        ligne.addLayout(colonne)
+        self.resume = libelle("", "secondaire")
+        ligne.addWidget(self.resume, 1, Qt.AlignmentFlag.AlignBottom)
+        d.addLayout(ligne)
+        self.avertissement = libelle("", "avertissement")
+        self.avertissement.hide()
+        d.addWidget(self.avertissement)
+        disposition.addWidget(cadre)
+
+        # Tableau des appels
+        cadre, d = bloc(marges=Espacements.L)
+        self.tableau = QTableWidget(0, len(COLONNES))
+        self.tableau.setHorizontalHeaderLabels(COLONNES)
+        self.tableau.verticalHeader().hide()
+        self.tableau.verticalHeader().setDefaultSectionSize(Hauteurs.CONTROLE)
+        self.tableau.setShowGrid(False)
+        self.tableau.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tableau.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tableau.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.tableau.setMinimumHeight(Dimensions.TABLEAU_HAUTEUR_MIN)
+        entete = self.tableau.horizontalHeader()
+        entete.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        entete.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        entete.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        # La colonne « Coût » contient des éléments dessinés à part (montants au format §4.4) que
+        # le calcul automatique de largeur ne voit pas : on lui donne une largeur fixe suffisante.
+        mesure = QFontMetrics(police(Typo.COURANT))
+        entete.setSectionResizeMode(len(COLONNES) - 1, QHeaderView.ResizeMode.Fixed)
+        self.tableau.setColumnWidth(
+            len(COLONNES) - 1, mesure.horizontalAdvance("prix inconnu") + 2 * Espacements.M + Espacements.L
+        )
+        d.addWidget(self.tableau)
+        self.vide = libelle(
+            "Aucun appel payant sur cette période. Les coûts apparaîtront ici dès la première voix générée.",
+            "discret",
+        )
+        d.addWidget(self.vide)
+        disposition.addWidget(cadre, 1)
+
+        disposition.addWidget(
+            libelle(
+                "L'app compte ce qu'elle a consommé ; elle ne connaît pas le solde de ton compte Google.",
+                "legende",
+            )
+        )
+
+        self._remplir_listes()
+        services.couts.abonner(lambda _appel: self._apres_nouvel_appel())
+        self.rafraichir()
+
+    # --- Listes de filtres -------------------------------------------------------------------
+
+    def _remplir_listes(self) -> None:
+        tous = self._services.couts.lire()
+        for liste, premier, valeurs in (
+            (self.projet, "Tous les projets", sorted({a.projet or SANS_PROJET for a in tous})),
+            (self.modele, "Tous les modèles", sorted({a.modele for a in tous})),
+        ):
+            choix = liste.currentData()
+            liste.blockSignals(True)
+            liste.clear()
+            liste.addItem(premier, TOUS)
+            for valeur in valeurs:
+                if liste is self.projet:
+                    texte = "Sans projet" if valeur == SANS_PROJET else valeur
+                else:
+                    connu = modele_connu(valeur)
+                    texte = connu.nom if connu else valeur
+                liste.addItem(texte, valeur)
+            index = liste.findData(choix)
+            liste.setCurrentIndex(max(index, 0))
+            liste.blockSignals(False)
+
+    def _apres_nouvel_appel(self) -> None:
+        self._remplir_listes()
+        self.rafraichir()
+
+    # --- Tableau -----------------------------------------------------------------------------
+
+    def appels_affiches(self) -> list[AppelApi]:
+        depuis, jusqu_a = _periode(self.periode.currentData(), date.today())
+        appels = self._services.couts.lire(depuis, jusqu_a)
+        projet = self.projet.currentData()
+        if projet not in (None, TOUS):
+            appels = [a for a in appels if (a.projet or SANS_PROJET) == projet]
+        modele = self.modele.currentData()
+        if modele not in (None, TOUS):
+            appels = filtrer(appels, modele=modele)
+        return appels
+
+    def rafraichir(self) -> None:
+        appels = self.appels_affiches()
+        somme = totaux(appels)
+        self.total.definir_montant(somme.cout_eur)
+        self.resume.setText(
+            f"{somme.nombre} appel{'s' if somme.nombre > 1 else ''}  ·  "
+            f"{_nombre(somme.tokens_entree)} tokens d'entrée  ·  {_nombre(somme.tokens_sortie)} tokens de sortie"
+        )
+        self.avertissement.setVisible(somme.sans_prix > 0)
+        self.avertissement.setText(
+            f"{somme.sans_prix} appel(s) sans prix : renseigne le prix du modèle dans « Modèles et prix »."
+        )
+
+        recents = list(reversed(appels))[:LIGNES_MAX]
+        self.tableau.setRowCount(len(recents))
+        for ligne, appel in enumerate(recents):
+            connu = modele_connu(appel.modele)
+            valeurs = (
+                appel.date.strftime("%d/%m/%Y %H:%M"),
+                appel.projet or "—",
+                connu.nom if connu else appel.modele,
+                appel.operation,
+                _nombre(appel.tokens_entree),
+                _nombre(appel.tokens_sortie),
+            )
+            for colonne, texte in enumerate(valeurs):
+                element = QTableWidgetItem(texte)
+                if colonne in (4, 5):
+                    element.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                self.tableau.setItem(ligne, colonne, element)
+            if appel.cout_eur is None:
+                cout = libelle("prix inconnu", "avertissement", retour_a_la_ligne=False)
+            else:
+                cout = MontantLabel(appel.cout_eur)
+            cout.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            cout.setContentsMargins(0, 0, Espacements.M, 0)
+            self.tableau.setCellWidget(ligne, len(COLONNES) - 1, cout)
+        self.tableau.setVisible(bool(recents))
+        self.vide.setVisible(not recents)

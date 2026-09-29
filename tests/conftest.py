@@ -23,3 +23,12 @@ def app_configuree(qapp):
 
     configurer_application(qapp)
     return qapp
+
+
+@pytest.fixture
+def services(dossier_donnees_temporaire):
+    """Services de l'app (clés, prix, coûts) dans le dossier temporaire, avec un coffre-fort en mémoire."""
+    from ugc_studio.connexions import CoffreMemoire
+    from ugc_studio.services import creer_services
+
+    return creer_services(CoffreMemoire())

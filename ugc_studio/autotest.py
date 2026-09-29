@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import platform
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -37,6 +38,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "icones_feuille_de_style",
     "journal_ecrit",
     "feuille_de_style_appliquee",
+    "coffre_windows",
     "captures",
 )
 
@@ -50,6 +52,31 @@ def _laisser_afficher(secondes: float = PAUSE_AFFICHAGE_S) -> None:
 
 def _formats_images() -> list[str]:
     return sorted(bytes(f).decode("ascii", "replace") for f in QImageReader.supportedImageFormats())
+
+
+def _verifier_coffre_windows(rapport: dict) -> bool:
+    """Écrit, relit puis efface une valeur de test dans le vrai coffre-fort de Windows.
+
+    Vérifie que le .exe sait bien y ranger les clés (la bibliothèque keyring doit être
+    correctement embarquée). Hors Windows, la vérification est sans objet.
+    """
+    if sys.platform != "win32":
+        rapport["coffre_windows"] = "sans objet (pas Windows)"
+        return True
+    try:
+        from .connexions import CoffreWindows
+
+        coffre = CoffreWindows()
+        compte = "autotest/verification"
+        coffre.ecrire(compte, "valeur-de-test")
+        relu = coffre.lire(compte)
+        coffre.supprimer(compte)
+        efface = coffre.lire(compte) is None
+        rapport["coffre_windows"] = f"relu={relu == 'valeur-de-test'} efface={efface}"
+        return relu == "valeur-de-test" and efface
+    except Exception as erreur:  # noqa: BLE001
+        rapport["coffre_windows"] = f"erreur : {erreur!r}"
+        return False
 
 
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
@@ -91,25 +118,42 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["journal_ecrit"] = fichier_journal().exists() and fichier_journal().stat().st_size > 0
             verifs["feuille_de_style_appliquee"] = len(app.styleSheet()) > 0
 
+            verifs["coffre_windows"] = _verifier_coffre_windows(rapport)
+
             if captures_taille_fixe:
                 fenetre.resize(Dimensions.FENETRE_LARGEUR, Dimensions.FENETRE_HAUTEUR)
             _laisser_afficher()
             rapport["taille_fenetre"] = [fenetre.width(), fenetre.height()]
+            attendues = 0
+
+            def capturer(widget, nom: str) -> None:
+                nonlocal attendues
+                attendues += 1
+                _laisser_afficher()
+                chemin = dossier / f"{nom}.png"
+                if widget.grab().save(str(chemin)):
+                    rapport["captures"].append(chemin.name)
+
             for identifiant in fenetre.identifiants_modules():
                 fenetre.afficher_module(identifiant)
-                _laisser_afficher()
-                chemin = dossier / f"module-{identifiant}.png"
-                if fenetre.grab().save(str(chemin)):
-                    rapport["captures"].append(chemin.name)
+                capturer(fenetre, f"module-{identifiant}")
+
+            # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
+            reglages = fenetre.page("reglages")
+            fenetre.afficher_module("reglages")
+            for index in range(reglages.onglets.count()):
+                reglages.onglets.setCurrentIndex(index)
+                capturer(fenetre, f"reglages-{index + 1}")
+            reglages.onglets.setCurrentIndex(0)
+            dialogue = reglages.connexions.ajouter()
+            capturer(dialogue, "dialogue-ajout-cle")
+            dialogue.reject()
 
             galerie = GalerieComposants()
             galerie.show()
-            _laisser_afficher()
-            chemin = dossier / "galerie-composants.png"
-            if galerie.grab().save(str(chemin)):
-                rapport["captures"].append(chemin.name)
+            capturer(galerie, "galerie-composants")
             galerie.close()
-            verifs["captures"] = len(rapport["captures"]) == len(fenetre.identifiants_modules()) + 1
+            verifs["captures"] = len(rapport["captures"]) == attendues
         except Exception:  # noqa: BLE001 — tout problème doit finir dans le rapport
             rapport["erreurs"].append(traceback.format_exc())
 
