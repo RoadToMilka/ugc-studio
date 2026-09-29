@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.2 — 29/09/2026 (vérifié contre les pages officielles des modèles)
+> Version du document : 1.3 — 29/09/2026 (vérifié contre les pages officielles des modèles)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -202,7 +202,7 @@ Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe)
 
 - Entrée max : **8 192 tokens** de texte ; sortie max : **16 384 tokens** audio. Un script trop long est découpé automatiquement en répliques, générées puis recollées.
 - Multi-voix dans une seule requête : 2 voix de base maximum ; avec des voix personnalisées, une requête par réplique puis assemblage (V4).
-- **Mode de traitement** (réglage avancé, V4) : standard, *Flex* (moins cher, plus lent), *Priority* (plus rapide), *Batch* (gros volumes de variantes). Tous sont supportés par Gemini 3.8 Flash TTS, pas par Gemini 3.5 Transcribe.
+- **Mode de traitement** : Standard uniquement. Le mode *Batch* (gros lots de variantes, résultats différés) pourra être ajouté plus tard si besoin ; *Flex* et *Priority* ne sont pas retenus.
 - Formats de sortie possibles : WAV (défaut), PCM brut, mu-law, A-law, fréquence réglable. L'app garde WAV 24 kHz.
 - Pas d'horodatage des mots en sortie : d'où la chaîne TTS → STT (§3.3).
 - Bouton **« Créer les sous-titres de cette prise »** (cf. §3.3).
