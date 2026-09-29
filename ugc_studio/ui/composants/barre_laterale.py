@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QFont, QIcon, QPainter, QPen, QPixmap, QTextOption
+from PySide6.QtGui import QIcon, QPainter, QPen, QPixmap, QTextOption
 from PySide6.QtWidgets import (
     QAbstractButton,
     QButtonGroup,
@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
 from ... import NOM_APP, __version__
 from ...chemins import dossier_ressources
 from ..icones import icone
-from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, qcolor
+from ..polices import police
+from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .elements import libelle
 
 
@@ -51,6 +52,20 @@ class BoutonNavigation(QAbstractButton):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(Hauteurs.CONTROLE)
         self.setToolTip(module.libelle)
+        self._focus_clavier = False
+
+    # Le contour de « focus » ne s'affiche que si l'on arrive sur le bouton avec la touche Tab
+    # (navigation au clavier), pas quand la fenêtre s'ouvre ou après un clic.
+    def focusInEvent(self, evenement) -> None:
+        self._focus_clavier = evenement.reason() in (
+            Qt.FocusReason.TabFocusReason,
+            Qt.FocusReason.BacktabFocusReason,
+        )
+        super().focusInEvent(evenement)
+
+    def focusOutEvent(self, evenement) -> None:
+        self._focus_clavier = False
+        super().focusOutEvent(evenement)
 
     def sizeHint(self) -> QSize:
         return QSize(Dimensions.LARGEUR_BARRE_LATERALE, Hauteurs.CONTROLE)
@@ -72,7 +87,7 @@ class BoutonNavigation(QAbstractButton):
         else:
             fond = None
             contour = None
-        if self.hasFocus():  # navigation au clavier
+        if self.hasFocus() and self._focus_clavier:
             contour = qcolor(Couleurs.ACCENT_SURVOL)
 
         if fond is not None or contour is not None:
@@ -90,9 +105,7 @@ class BoutonNavigation(QAbstractButton):
         peintre.drawPixmap(x_icone, y_icone, image)
 
         # Libellé
-        police = QFont(self.font())
-        police.setWeight(QFont.Weight.Medium)
-        peintre.setFont(police)
+        peintre.setFont(police(Typo.COURANT, Typo.GRAISSE_MOYENNE))
         couleur_texte = Couleurs.TEXTE if (selectionne or survole) else Couleurs.TEXTE_SECONDAIRE
         if not self.isEnabled():
             couleur_texte = Couleurs.TEXTE_DESACTIVE

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QByteArray
+from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from .. import NOM_APP
@@ -72,6 +72,10 @@ class FenetrePrincipale(QMainWindow):
 
         racine = QFrame()
         racine.setObjectName("racine")
+        # À l'ouverture, le « focus » clavier est posé sur le fond de la fenêtre plutôt que sur
+        # le premier bouton : aucun contour de focus n'apparaît tant qu'on n'utilise pas Tab.
+        racine.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        racine.setFocus()
         disposition = QHBoxLayout(racine)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)

@@ -220,10 +220,12 @@ QLabel {
 }
 QLabel[role="titre-page"] {
     font-size: ${titre_page}px;
+    font-family: "$famille_forte";
     font-weight: $graisse_forte;
 }
 QLabel[role="titre-bloc"], QLabel[role="nom-app"] {
     font-size: ${titre_bloc}px;
+    font-family: "$famille_forte";
     font-weight: $graisse_forte;
 }
 QLabel[role="secondaire"] {
@@ -238,6 +240,7 @@ QLabel[role="discret"] {
     font-size: ${legende}px;
 }
 QLabel[role="montant"] {
+    font-family: "$famille_forte";
     font-weight: $graisse_forte;
 }
 QLabel[role="succes"] {
@@ -256,6 +259,7 @@ QLabel[role="pastille"] {
     border-radius: ${rayon_pastille}px;
     padding: 0px ${esp_s}px;
     font-size: ${legende}px;
+    font-family: "$famille_moyenne";
     font-weight: $graisse_moyenne;
     min-height: ${hauteur_interne_pastille}px;
     max-height: ${hauteur_interne_pastille}px;
@@ -285,6 +289,7 @@ QPushButton {
     border-radius: ${arrondi_controle}px;
     padding: 0px ${esp_l}px;
     min-height: ${hauteur_interne_controle}px;
+    font-family: "$famille_moyenne";
     font-weight: $graisse_moyenne;
 }
 QPushButton:hover {
@@ -503,12 +508,15 @@ QToolTip {
 )
 
 
-def feuille_de_style(icones: dict[str, str]) -> str:
+def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = None) -> str:
     """Feuille de style complète de l'app.
 
     `icones` donne le chemin des images utilisées par la feuille de style (flèche des listes
     déroulantes, coche des cases à cocher) : clés « fleche », « fleche_desactivee », « coche ».
+    `familles` indique, pour chaque graisse, le nom de famille de police à utiliser
+    (voir ui/polices.py) ; par défaut « Inter » pour toutes.
     """
+    familles = familles or {}
     valeurs = {
         # couleurs
         "fond": Couleurs.FOND,
@@ -536,6 +544,8 @@ def feuille_de_style(icones: dict[str, str]) -> str:
         "titre_page": Typo.TITRE_PAGE,
         "graisse_moyenne": Typo.GRAISSE_MOYENNE,
         "graisse_forte": Typo.GRAISSE_FORTE,
+        "famille_moyenne": familles.get(Typo.GRAISSE_MOYENNE, Typo.FAMILLE),
+        "famille_forte": familles.get(Typo.GRAISSE_FORTE, Typo.FAMILLE),
         # espacements
         "esp_xs": Espacements.XS,
         "esp_s": Espacements.S,

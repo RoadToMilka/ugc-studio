@@ -68,7 +68,7 @@ def configurer_application(app) -> dict:
 
     from .ui import theme
     from .ui.icones import icones_feuille_de_style
-    from .ui.polices import charger_polices, police
+    from .ui.polices import charger_polices, familles_par_graisse, police
 
     app.setApplicationName(NOM_APP)
     app.setApplicationVersion(__version__)
@@ -80,9 +80,9 @@ def configurer_application(app) -> dict:
     familles = charger_polices()
     app.setFont(police())
     app.setPalette(theme.palette())
-    app.setStyleSheet(theme.feuille_de_style(icones_feuille_de_style()))
+    app.setStyleSheet(theme.feuille_de_style(icones_feuille_de_style(), familles_par_graisse()))
     app.setWindowIcon(QIcon(str(dossier_ressources() / "app.png")))
-    return {"polices": familles, "traduction_fr": traduction}
+    return {"polices": familles, "familles_par_graisse": familles_par_graisse(), "traduction_fr": traduction}
 
 
 def main(arguments: list[str] | None = None) -> int:

@@ -22,6 +22,7 @@ from . import __version__
 from .chemins import fichier_journal
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
+from .ui.polices import police
 from .ui.theme import Dimensions, Typo
 
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
@@ -72,6 +73,13 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["police_inter_chargee"] = Typo.FAMILLE in QFontDatabase.families()
             rapport["police_utilisee"] = QFontInfo(fenetre.font()).family()
             verifs["police_inter_utilisee"] = rapport["police_utilisee"] == Typo.FAMILLE
+            rapport["familles_par_graisse"] = resume.get("familles_par_graisse")
+            rapport["rendu_des_graisses"] = {
+                graisse: f"{QFontInfo(police(Typo.COURANT, graisse)).family()} / "
+                f"{QFontInfo(police(Typo.COURANT, graisse)).styleName()} / "
+                f"{QFontInfo(police(Typo.COURANT, graisse)).weight()}"
+                for graisse in (Typo.GRAISSE_NORMALE, Typo.GRAISSE_MOYENNE, Typo.GRAISSE_FORTE)
+            }
             verifs["traduction_fr"] = bool(resume.get("traduction_fr"))
             verifs["icones_navigation"] = all(
                 not b.icon().isNull() for b in fenetre.barre_laterale.boutons()

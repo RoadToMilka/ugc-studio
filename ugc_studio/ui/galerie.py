@@ -40,6 +40,7 @@ class GalerieComposants(QFrame):
         etats.addWidget(pastille("Étape 2"))
         etats.addStretch(1)
         d.addLayout(etats)
+        d.addStretch(1)
         grille.addWidget(cadre, 0, 0)
 
         # Boutons
@@ -59,6 +60,7 @@ class GalerieComposants(QFrame):
         ligne.addWidget(inactif_principal)
         ligne.addStretch(1)
         d.addLayout(ligne)
+        d.addStretch(1)
         grille.addWidget(cadre, 0, 1)
 
         # Champs
@@ -84,6 +86,7 @@ class GalerieComposants(QFrame):
         cases.addWidget(inactive)
         cases.addStretch(1)
         d.addLayout(cases)
+        d.addStretch(1)
         grille.addWidget(cadre, 1, 0)
 
         # Montants et texte long
@@ -95,4 +98,5 @@ class GalerieComposants(QFrame):
         texte = QTextEdit()
         texte.setPlainText("Salut ! <laugh> J'ai testé ce sérum pendant deux semaines…")
         d.addWidget(texte)
+        d.addStretch(1)
         grille.addWidget(cadre, 1, 1)

@@ -30,6 +30,10 @@ class Page(QWidget):
         interieur = QWidget()
         interieur.setObjectName("contenuDefilant")
         zone.setWidget(interieur)
+        # setWidget() rend le fond du contenu opaque (couleur « fenêtre » de la palette) :
+        # on le remet transparent pour voir le fond de l'app, comme dans le reste de l'interface.
+        interieur.setAutoFillBackground(False)
+        zone.viewport().setAutoFillBackground(False)
         marges = QVBoxLayout(interieur)
         marges.setContentsMargins(Espacements.XXL, Espacements.XL, Espacements.XXL, Espacements.XXL)
         marges.setSpacing(0)

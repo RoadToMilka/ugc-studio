@@ -59,6 +59,15 @@ def test_feuille_de_style_complete():
     assert 'url("C:/c.svg")' in feuille
 
 
+def test_familles_par_graisse():
+    # Sous Windows, le SemiBold d'Inter peut être rangé dans une famille « Inter SemiBold » séparée.
+    feuille = theme.feuille_de_style(ICONES_FACTICES, {600: "Inter SemiBold", 500: "Inter Medium"})
+    assert 'font-family: "Inter SemiBold";\n    font-weight: 600;' in feuille
+    assert 'font-family: "Inter Medium";\n    font-weight: 500;' in feuille
+    par_defaut = theme.feuille_de_style(ICONES_FACTICES)
+    assert "Inter SemiBold" not in par_defaut
+
+
 def test_hauteur_des_boutons_36px():
     # Qt compte la hauteur sans la bordure : 34 px + 2 × 1 px = 36 px (§9.4).
     feuille = theme.feuille_de_style(ICONES_FACTICES)
