@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
 from .balises import MOTIF_BALISE
 from .fournisseurs.capacites import TOKENS_AUDIO_PAR_SECONDE
+from .fournisseurs.voix import Replique
 from .prix import CataloguePrix
 
 CARACTERES_PAR_TOKEN = 4
@@ -61,11 +63,22 @@ def estimer(
     prix: CataloguePrix,
     tokens_par_seconde: float = TOKENS_AUDIO_PAR_SECONDE_DEFAUT,
 ) -> Estimation:
-    duree = duree_parlee(texte_api)
-    entree = tokens_texte(texte_api) + tokens_texte(style)
+    return estimer_repliques([Replique(texte_api, style)], modele, prix, tokens_par_seconde)
+
+
+def estimer_repliques(
+    repliques: Sequence[Replique],
+    modele: str,
+    prix: CataloguePrix,
+    tokens_par_seconde: float = TOKENS_AUDIO_PAR_SECONDE_DEFAUT,
+) -> Estimation:
+    """Estimation pour tout le script : chaque réplique envoie son texte et son propre style."""
+    avec_texte = [r for r in repliques if r.texte.strip()]
+    duree = sum(duree_parlee(r.texte) for r in avec_texte)
+    entree = sum(tokens_texte(r.texte) + tokens_texte(r.style) for r in avec_texte)
     sortie = math.ceil(duree * tokens_par_seconde)
-    cout = prix.cout_eur(modele, entree, sortie) if texte_api.strip() else Decimal(0)
-    return Estimation(len(texte_api), duree, entree, sortie, cout)
+    cout = prix.cout_eur(modele, entree, sortie) if avec_texte else Decimal(0)
+    return Estimation(sum(len(r.texte) for r in avec_texte), duree, entree, sortie, cout)
 
 
 def ajuster_tokens_par_seconde(actuel: float, tokens_sortie: int, duree_s: float) -> float:
@@ -76,13 +89,40 @@ def ajuster_tokens_par_seconde(actuel: float, tokens_sortie: int, duree_s: float
     return (1 - POIDS_NOUVELLE_MESURE) * actuel + POIDS_NOUVELLE_MESURE * mesure
 
 
+def _trop_long(repliques: Sequence[Replique], tokens_par_seconde: float) -> bool:
+    """Ces répliques dépassent-elles les limites d'une seule requête (§5.6 bis) ?"""
+    entree = sum(tokens_texte(r.texte) + tokens_texte(r.style) for r in repliques)
+    sortie = sum(duree_parlee(r.texte) for r in repliques) * tokens_par_seconde
+    return entree > TOKENS_ENTREE_MAX * MARGE_SECURITE or sortie > TOKENS_SORTIE_MAX * MARGE_SECURITE
+
+
+def regrouper(repliques: Sequence[Replique], tokens_par_seconde: float) -> list[tuple[Replique, ...]]:
+    """Répartit les répliques en requêtes qui respectent les limites du modèle.
+
+    Les répliques voisines partent ensemble tant qu'elles tiennent dans une requête. Une réplique
+    trop longue à elle seule est découpée aux fins de phrases, chaque morceau gardant son style.
+    """
+    groupes: list[tuple[Replique, ...]] = []
+    courant: list[Replique] = []
+    for replique in repliques:
+        if not replique.texte.strip():
+            continue
+        for morceau in decouper_si_trop_long(replique.texte, tokens_par_seconde):
+            element = Replique(morceau, replique.style)
+            if courant and _trop_long([*courant, element], tokens_par_seconde):
+                groupes.append(tuple(courant))
+                courant = []
+            courant.append(element)
+    if courant:
+        groupes.append(tuple(courant))
+    return groupes
+
+
 def decouper_si_trop_long(texte_api: str, tokens_par_seconde: float) -> list[str]:
-    """Découpe un script trop long pour une seule requête en morceaux, aux fins de phrases (§5.6 bis)."""
-    limite_sortie = TOKENS_SORTIE_MAX * MARGE_SECURITE
-    limite_entree = TOKENS_ENTREE_MAX * MARGE_SECURITE
+    """Découpe un texte trop long pour une seule requête en morceaux, aux fins de phrases (§5.6 bis)."""
 
     def trop_long(texte: str) -> bool:
-        return tokens_texte(texte) > limite_entree or duree_parlee(texte) * tokens_par_seconde > limite_sortie
+        return _trop_long([Replique(texte)], tokens_par_seconde)
 
     if not trop_long(texte_api):
         return [texte_api]

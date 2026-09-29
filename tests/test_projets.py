@@ -2,8 +2,11 @@
 
 import pytest
 
+import json
+
 from ugc_studio.audio import wav_depuis_pcm
-from ugc_studio.projets import ErreurProjet, GestionnaireProjets, nom_de_dossier
+from ugc_studio.projets import ErreurProjet, GestionnaireProjets, RepliqueProjet, nom_de_dossier
+from ugc_studio.prononciation import Prononciation
 
 WAV = wav_depuis_pcm(b"\x00\x00" * 24_000)  # 1 seconde de silence
 
@@ -27,15 +30,52 @@ def test_creer_puis_rouvrir(gestion, tmp_path):
     projet = gestion.creer("Sérum Glowzy", tmp_path, "nl-BE")
     assert (projet.dossier / "projet.json").exists()
     assert (projet.dossier / "prises").is_dir()
-    projet.script = [{"texte": "Salut "}, {"balise": "laugh"}]
+    projet.repliques = [
+        RepliqueProjet([{"texte": "Salut "}, {"balise": "laugh"}], "excited", "excité"),
+        RepliqueProjet([{"texte": "Le lien est en dessous."}]),
+    ]
+    projet.prononciations = [Prononciation("Glowzy", "Glo-zi")]
     projet.voix.voix = "Puck"
     gestion.enregistrer()
 
     autre = GestionnaireProjets(tmp_path / "recents.json")
     rouvert = autre.ouvrir(projet.dossier)
     assert rouvert.nom == "Sérum Glowzy" and rouvert.langue == "nl-BE"
-    assert rouvert.script == [{"texte": "Salut "}, {"balise": "laugh"}]
+    assert rouvert.repliques == projet.repliques
+    assert rouvert.prononciations == [Prononciation("Glowzy", "Glo-zi")]
+    # Script complet (sous-titres) : les répliques bout à bout.
+    assert rouvert.script == [{"texte": "Salut "}, {"balise": "laugh"}, {"texte": " Le lien est en dessous."}]
     assert rouvert.voix.voix == "Puck"
+
+
+def test_projet_de_l_etape_3_converti(gestion, tmp_path):
+    """Format 1 : un seul script, et le style dans les réglages de voix → une seule réplique."""
+    dossier = tmp_path / "Ancien"
+    dossier.mkdir()
+    (dossier / "projet.json").write_text(
+        json.dumps(
+            {
+                "version_format": 1,
+                "nom": "Ancien",
+                "voix": {"modele": "gemini-3.8-flash-tts", "voix": "Leda", "style": "warm"},
+                "script": [{"texte": "Bonjour"}],
+                "prises": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    projet = gestion.ouvrir(dossier)
+    assert projet.repliques == [RepliqueProjet([{"texte": "Bonjour"}], "warm")]
+    assert projet.voix.voix == "Leda" and projet.prononciations == []
+    gestion.enregistrer()
+    enregistre = json.loads((dossier / "projet.json").read_text(encoding="utf-8"))
+    assert enregistre["version_format"] == 2 and "script" not in enregistre and "style" not in enregistre["voix"]
+
+
+def test_nouveau_projet_avec_une_replique_vide(gestion, tmp_path):
+    projet = gestion.creer("Vide", tmp_path)
+    assert projet.repliques == [RepliqueProjet()]
+    assert projet.script == []
 
 
 def test_deux_projets_du_meme_nom(gestion, tmp_path):

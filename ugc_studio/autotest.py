@@ -23,6 +23,9 @@ from . import __version__
 from .chemins import fichier_journal
 from .demo import SCRIPT_DEMO
 from .script import normaliser
+from .ui.dialogues.assistant_style import DialogueAssistantStyle
+from .ui.dialogues.prononciation import DialoguePrononciation
+from .ui.dialogues.styles import DialogueBibliothequeStyles, DialogueStyle
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
@@ -81,6 +84,14 @@ def _verifier_coffre_windows(rapport: dict) -> bool:
     except Exception as erreur:  # noqa: BLE001
         rapport["coffre_windows"] = f"erreur : {erreur!r}"
         return False
+
+
+def _assistant_rempli(parent) -> DialogueAssistantStyle:
+    """Assistant de style avec quelques choix faits, pour une capture parlante."""
+    dialogue = DialogueAssistantStyle(parent)
+    for liste, valeur in ((dialogue.emotion, "chaleureux"), (dialogue.emotion2, "enthousiaste"), (dialogue.rythme, "débit rapide")):
+        liste.setCurrentIndex(liste.findData(valeur))
+    return dialogue
 
 
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
@@ -147,9 +158,12 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             fenetre.afficher_module("voix")
             defilement = atelier.findChild(QScrollArea)
             if defilement is not None:
-                defilement.verticalScrollBar().setValue(defilement.verticalScrollBar().maximum())
-                capturer(fenetre, "voix-prises")
-                defilement.verticalScrollBar().setValue(0)
+                # La page défile : une capture par hauteur d'écran, jusqu'aux prises.
+                barre = defilement.verticalScrollBar()
+                for numero, position in enumerate(range(barre.pageStep(), barre.maximum() + barre.pageStep(), barre.pageStep()), 2):
+                    barre.setValue(min(position, barre.maximum()))
+                    capturer(fenetre, f"voix-{numero}")
+                barre.setValue(0)
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
             verifs["lecture_audio"] = atelier.lecteur._lecteur is not None  # Qt Multimedia embarqué
@@ -177,6 +191,25 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             dialogue = reglages.connexions.ajouter()
             capturer(dialogue, "dialogue-ajout-cle")
             dialogue.reject()
+
+            # Fenêtres de l'étape 4 : bibliothèque de styles, style, assistant, prononciation.
+            services = fenetre.services
+            carte = atelier.repliques.cartes()[0]
+            for nom, fenetre_dialogue in (
+                (
+                    "bibliotheque-styles",
+                    DialogueBibliothequeStyles(
+                        services, fenetre, cible="réplique 1",
+                        style_actuel=(carte.champ_style.consigne(), carte.champ_style.consigne_fr()),
+                    ),
+                ),
+                ("dialogue-style", DialogueStyle(services, services.styles.styles[0], fenetre, "Modifier le style")),
+                ("assistant-style", _assistant_rempli(fenetre)),
+                ("dialogue-prononciation", DialoguePrononciation(services, None, fenetre)),
+            ):
+                fenetre_dialogue.show()
+                capturer(fenetre_dialogue, nom)
+                fenetre_dialogue.reject()
 
             galerie = GalerieComposants()
             galerie.show()

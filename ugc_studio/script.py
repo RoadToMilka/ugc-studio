@@ -75,3 +75,54 @@ def texte_brut(segments: list[Segment]) -> str:
 
 def est_vide(segments: list[Segment]) -> bool:
     return not texte_brut(segments) and not any("balise" in s for s in segments)
+
+
+def joindre_repliques(scripts: list[list[Segment]]) -> list[Segment]:
+    """Script complet à partir des répliques : bout à bout, séparées par une espace.
+
+    ex. [« …en deux semaines ! »] + [« Le lien est en dessous. »] → « …en deux semaines ! Le lien… »
+    """
+    resultat: list[Segment] = []
+    for segments in scripts:
+        if est_vide(segments):
+            continue
+        if resultat:
+            resultat.append({"texte": " "})
+        resultat.extend(dict(s) for s in segments)
+    return normaliser(resultat)
+
+
+def couper(segments: list[Segment], position: int) -> tuple[list[Segment], list[Segment]]:
+    """Coupe un script en deux à une position (en caractères ; un badge compte pour 1).
+
+    Sert à « Découper ici » : la fin d'une réplique devient une nouvelle réplique.
+    """
+    avant: list[Segment] = []
+    apres: list[Segment] = []
+    restant = position
+    for segment in segments:
+        if "balise" in segment:
+            (avant if restant > 0 else apres).append(dict(segment))
+            restant -= 1
+            continue
+        texte = segment.get("texte", "")
+        coupe = max(0, min(len(texte), restant))
+        for morceau, cible in ((texte[:coupe], avant), (texte[coupe:], apres)):
+            if morceau:
+                cible.append({**segment, "texte": morceau})
+        restant -= len(texte)
+    return _rogner(normaliser(avant), fin=True), _rogner(normaliser(apres), fin=False)
+
+
+def _rogner(segments: list[Segment], fin: bool) -> list[Segment]:
+    """Retire les espaces laissés à l'endroit de la coupe (fin du 1er morceau, début du 2e)."""
+    if not segments:
+        return segments
+    index = -1 if fin else 0
+    if "texte" in segments[index]:
+        texte = segments[index]["texte"].rstrip() if fin else segments[index]["texte"].lstrip()
+        if texte:
+            segments[index] = {**segments[index], "texte": texte}
+        else:
+            segments.pop(index)
+    return segments

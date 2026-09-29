@@ -28,6 +28,9 @@ TOKENS_AUDIO_PAR_SECONDE = 25
 TOKENS_TEXTE_PAR_MINUTE_TRANSCRITE = 175
 # Texte d'une minute de voix off : ≈ 160 mots ≈ 1 000 caractères ≈ 250 tokens.
 TOKENS_TEXTE_PAR_MINUTE_DE_VOIX = 250
+# Traduction d'un style : consigne + quelques mots envoyés, quelques mots (et un peu de réflexion) reçus.
+TOKENS_TRADUCTION_ENTREE = 150
+TOKENS_TRADUCTION_SORTIE = 60
 
 
 class Capacite(StrEnum):
@@ -108,6 +111,7 @@ _MINUTE_DE_VOIX = Reference(TOKENS_TEXTE_PAR_MINUTE_DE_VOIX, 60 * TOKENS_AUDIO_P
 _MINUTE_TRANSCRITE = Reference(
     60 * TOKENS_AUDIO_PAR_SECONDE, TOKENS_TEXTE_PAR_MINUTE_TRANSCRITE, "par minute transcrite"
 )
+_TRADUCTION = Reference(TOKENS_TRADUCTION_ENTREE, TOKENS_TRADUCTION_SORTIE, "par style traduit")
 
 # Prix vérifiés sur la page officielle des tarifs Google le PRIX_VERIFIES_LE (§4.2).
 MODELES_CONNUS: tuple[ModeleConnu, ...] = (
@@ -145,6 +149,19 @@ MODELES_CONNUS: tuple[ModeleConnu, ...] = (
         sortie="texte",
         reference=_MINUTE_TRANSCRITE,
         note="Transcription mot par mot (sous-titres).",
+    ),
+    ModeleConnu(
+        "gemini-3.8-flash",
+        "google",
+        "Gemini 3.8 Flash",
+        frozenset({Capacite.TEXTE}),
+        (
+            Tarif(Decimal("0.75"), Decimal("3.75")),
+            Tarif(Decimal("1.50"), Decimal("7.50"), HAUSSE_GOOGLE_2027),
+        ),
+        sortie="texte",
+        reference=_TRADUCTION,
+        note="Modèle de texte : traduit tes styles en anglais.",
     ),
     # Anciennes générations de voix (documentation Google : ni Voice Design ni balises).
     # Listées seulement si elles sont accessibles avec une clé.

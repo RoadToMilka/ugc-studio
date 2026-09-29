@@ -92,7 +92,10 @@ class LignePrise(QFrame):
         details = [_date_lisible(prise.date), prise.voix]
         connu = modele_connu(prise.modele)
         details.append(connu.nom if connu else prise.modele)
-        if prise.style:
+        if len(prise.repliques) > 1:
+            styles = {r.get("style", "") for r in prise.repliques}
+            details.append(f"{len(prise.repliques)} répliques" + (", styles différents" if len(styles) > 1 else ""))
+        if prise.style and len({r.get("style", "") for r in prise.repliques}) <= 1:
             details.append(f"style « {prise.style} »")
         textes.addWidget(libelle("  ·  ".join(details), "legende"))
         disposition.addLayout(textes, 1)

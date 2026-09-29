@@ -137,10 +137,13 @@ class Dimensions:
     CONTENU_LARGEUR_MAX = 960  # largeur maximale des pages de type « formulaire »
     SOULIGNEMENT_ONGLET = 2  # trait mauve sous l'onglet sélectionné
     DIALOGUE_LARGEUR = 520
+    DIALOGUE_LARGE_LARGEUR = 760  # bibliothèque de styles, dictionnaire de prononciation
+    DIALOGUE_LARGE_HAUTEUR = 560
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
     EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
+    EDITEUR_REPLIQUE_HAUTEUR_MIN = 88  # éditeur d'une réplique (grandit ensuite avec son texte)
     # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
     BADGE_MARGE_HORIZONTALE = 8  # espace intérieur, à gauche et à droite du nom de la balise
     BADGE_ECART = 4  # espace de part et d'autre d'un badge dans le texte
@@ -267,6 +270,10 @@ QLabel[role="titre-page"] {
     font-size: ${titre_page}px;
     font-family: "$famille_forte";
     font-weight: $graisse_forte;
+}
+QLabel[role="intitule"] {
+    font-family: "$famille_moyenne";
+    font-weight: $graisse_moyenne;
 }
 QLabel[role="titre-bloc"], QLabel[role="nom-app"] {
     font-size: ${titre_bloc}px;

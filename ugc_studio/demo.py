@@ -13,19 +13,30 @@ from datetime import datetime, timedelta
 
 from .audio import FREQUENCE_TTS, wav_depuis_pcm
 from .chemins import dossier_projets_defaut
+from .projets import RepliqueProjet
+from .prononciation import Prononciation
+from .script import joindre_repliques
 from .services import Services
 
 CLE_DEMO = "AIzaDEMO-cle-de-demonstration-0000-4f2c"
 
-SCRIPT_DEMO = [
-    {"texte": "Franchement, je n'y croyais pas… "},
-    {"balise": "short pause"},
-    {"texte": " Mais ce sérum a "},
-    {"texte": "vraiment", "accentue": True},
-    {"texte": " changé ma peau en deux semaines ! "},
-    {"balise": "laugh"},
-    {"texte": " Le lien est juste en dessous."},
+# Deux répliques : un hook enthousiaste, puis un appel à l'action chaleureux.
+REPLIQUES_DEMO = [
+    RepliqueProjet(
+        [
+            {"texte": "Franchement, je n'y croyais pas… "},
+            {"balise": "short pause"},
+            {"texte": " Mais ce sérum Glowzy a "},
+            {"texte": "vraiment", "accentue": True},
+            {"texte": " changé ma peau en deux semaines ! "},
+            {"balise": "laugh"},
+        ],
+        "excited and playful, fast-paced",
+        "excité et complice, débit rapide",
+    ),
+    RepliqueProjet([{"texte": "Le lien est juste en dessous."}], "warm and reassuring", "chaleureux et rassurant"),
 ]
+SCRIPT_DEMO = REPLIQUES_DEMO[0].script  # 1re réplique (vérifiée par l'autotest dans l'éditeur)
 
 
 def son_de_demonstration(secondes: float, frequence: float = 220.0) -> bytes:
@@ -76,17 +87,18 @@ def remplir_donnees_demo(services: Services) -> None:
 
     if services.projets.projet is None and not services.projets.recents():
         projet = services.projets.creer("Sérum Glowzy", dossier_projets_defaut())
-        projet.script = [dict(s) for s in SCRIPT_DEMO]
-        projet.voix.style = "complice et enthousiaste, débit rapide"
+        projet.repliques = [RepliqueProjet([dict(s) for s in r.script], r.style, r.style_fr) for r in REPLIQUES_DEMO]
+        projet.prononciations = [Prononciation("Glowzy", "Glo-zi")]
         services.projets.enregistrer()
         for duree, voix, note, frequence in ((7.4, "Kore", 4, 220.0), (8.1, "Leda", 0, 262.0)):
             services.projets.ajouter_prise(
                 son_de_demonstration(duree, frequence),
                 modele="gemini-3.8-flash-tts",
                 voix=voix,
-                style=projet.voix.style,
+                style="styles par réplique",
                 texte_api="…",
-                script=[dict(s) for s in SCRIPT_DEMO],
+                script=joindre_repliques([r.script for r in REPLIQUES_DEMO]),
+                repliques=[{"texte_api": "…", "style": r.style} for r in REPLIQUES_DEMO],
                 duree_s=duree,
                 tokens_entree=120,
                 tokens_sortie=int(duree * 25),

@@ -165,3 +165,61 @@ def test_nouvel_essai_si_google_surcharge(serveur, monkeypatch):
     resultat = AdaptateurGoogle(CLE, url_api=serveur.url).generer_voix(RequeteVoix("m", "Kore", (Replique("a"),)))
     assert resultat.duree_s > 0
     assert len(serveur.requetes) == 2
+
+
+# --- Texte (API Interactions, ex. Gemini 3.8 Flash) : traduction des styles -------------------
+
+
+def _reponse_texte(texte: str):
+    return {
+        "status": "completed",
+        "steps": [
+            {"type": "user_input", "content": [{"type": "text", "text": "…"}]},
+            {"type": "thought", "summary": [{"type": "text", "text": "Translating…"}]},
+            {"type": "model_output", "content": [{"type": "text", "text": texte}]},
+        ],
+        "usage": {"total_input_tokens": 90, "total_output_tokens": 8, "total_thought_tokens": 30},
+    }
+
+
+def test_requete_de_texte(serveur):
+    from ugc_studio.fournisseurs.texte import RequeteTexte
+
+    serveur.programmer(200, _reponse_texte("warm and enthusiastic, fast-paced"))
+    resultat = AdaptateurGoogle(CLE, url_api=serveur.url).generer_texte(
+        RequeteTexte("gemini-3.8-flash", "chaleureux et enthousiaste, débit rapide", "Translate.", "low")
+    )
+    corps = json.loads(serveur.requetes[0]["corps"])
+    assert corps == {
+        "model": "gemini-3.8-flash",
+        "input": [{"type": "text", "text": "chaleureux et enthousiaste, débit rapide"}],
+        "generation_config": {"thinking_level": "low"},
+        "system_instruction": "Translate.",
+    }
+    assert resultat.texte == "warm and enthusiastic, fast-paced"
+    assert (resultat.tokens_entree, resultat.tokens_sortie) == (90, 38)  # réflexion comptée en sortie
+
+
+def test_texte_des_dernieres_etapes_seulement():
+    from ugc_studio.fournisseurs.google import trouver_texte
+
+    donnees = _reponse_texte("fin")
+    donnees["steps"][2]["content"] = [{"type": "text", "text": "début "}, {"type": "text", "text": "fin"}]
+    assert trouver_texte(donnees) == "début fin"
+    assert trouver_texte({"output_text": "direct"}) == "direct"
+    with pytest.raises(ErreurFournisseur, match="aucun texte"):
+        from ugc_studio.fournisseurs.google import lire_resultat_texte
+
+        lire_resultat_texte({"status": "completed", "steps": []})
+
+
+def test_traduction_d_un_style(serveur):
+    from ugc_studio.traduction import MODELE_TRADUCTION, traduire_en_anglais
+
+    serveur.programmer(200, _reponse_texte('"whispered and playful"\n'))
+    resultat = traduire_en_anglais(AdaptateurGoogle(CLE, url_api=serveur.url), "  chuchoté,   complice ")
+    assert resultat.texte == "whispered and playful"  # guillemets et retour à la ligne retirés
+    corps = json.loads(serveur.requetes[0]["corps"])
+    assert corps["model"] == MODELE_TRADUCTION == "gemini-3.8-flash"
+    assert corps["input"][0]["text"] == "chuchoté, complice"
+    assert "English" in corps["system_instruction"]

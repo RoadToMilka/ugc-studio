@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 from ..journal import declarer_secret
+from .texte import RequeteTexte, ResultatTexte
 from .voix import RequeteVoix, ResultatVoix
 
 
@@ -72,3 +73,7 @@ class Adaptateur(ABC):
     def generer_voix(self, requete: RequeteVoix) -> ResultatVoix:
         """Génère une voix off (TTS)."""
         raise ErreurFournisseur(f"{self.nom} ne sait pas générer de voix.", "non_disponible")
+
+    def generer_texte(self, requete: RequeteTexte) -> ResultatTexte:
+        """Génère du texte (ex. traduction d'un style en anglais)."""
+        raise ErreurFournisseur(f"{self.nom} ne sait pas générer de texte.", "non_disponible")

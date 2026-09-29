@@ -8,6 +8,8 @@ from ugc_studio.audio import duree_wav, wav_depuis_pcm
 from ugc_studio.fournisseurs.base import Adaptateur
 from ugc_studio.fournisseurs.voix import ResultatVoix
 from ugc_studio.generation import CLE_CALIBRAGE, enregistrer_prise, preparer, produire_audio, tokens_par_seconde
+from ugc_studio.projets import RepliqueProjet
+from ugc_studio.prononciation import Prononciation
 
 
 class FauxTTS(Adaptateur):
@@ -32,7 +34,7 @@ SCRIPT = [{"texte": "Ce sérum est "}, {"texte": "top", "accentue": True}, {"tex
 
 def test_prise_complete(services, tmp_path):
     services.projets.creer("Sérum", tmp_path)
-    commande = preparer("google", "gemini-3.8-flash-tts", "Kore", " chaleureux ", SCRIPT, "Sérum")
+    commande = preparer("google", "gemini-3.8-flash-tts", "Kore", [RepliqueProjet(SCRIPT, " chaleureux ")], "Sérum")
     assert commande.texte_api == "Ce sérum est TOP ! <laugh>"
     faux = FauxTTS()
     resultat = produire_audio(faux, commande, 25)
@@ -53,9 +55,43 @@ def test_prise_complete(services, tmp_path):
 def test_script_long_genere_en_plusieurs_fois(services, tmp_path):
     services.projets.creer("Long", tmp_path)
     phrase = " ".join(["mot"] * 50) + ". "
-    commande = preparer("google", "gemini-3.8-flash-tts", "Kore", "", [{"texte": phrase * 200}], "Long")
+    commande = preparer("google", "gemini-3.8-flash-tts", "Kore", [RepliqueProjet([{"texte": phrase * 200}])], "Long")
     faux = FauxTTS()
     resultat = produire_audio(faux, commande, 25)
     assert len(faux.requetes) > 1
     assert resultat.tokens_sortie == 60 * len(faux.requetes)
     assert resultat.duree_s > 2 * len(faux.requetes) - 0.01
+
+
+def test_repliques_envoyees_ensemble_chacune_avec_son_style(services, tmp_path):
+    services.projets.creer("Pub", tmp_path)
+    repliques = [
+        RepliqueProjet([{"texte": "Stop ! Regarde ça."}], "excited, fast-paced"),
+        RepliqueProjet([]),  # réplique vide : ignorée
+        RepliqueProjet([{"texte": "Ce sérum a changé ma peau."}], "warm and sincere"),
+    ]
+    commande = preparer("google", "gemini-3.8-flash-tts", "Kore", repliques, "Pub")
+    faux = FauxTTS()
+    resultat = produire_audio(faux, commande, 25)
+    (requete,) = faux.requetes  # une seule requête pour les deux répliques
+    assert [(r.texte, r.style) for r in requete.repliques] == [
+        ("Stop ! Regarde ça.", "excited, fast-paced"),
+        ("Ce sérum a changé ma peau.", "warm and sincere"),
+    ]
+    prise = enregistrer_prise(services, commande, resultat)
+    assert prise.style == "styles par réplique"
+    assert prise.repliques == [
+        {"texte_api": "Stop ! Regarde ça.", "style": "excited, fast-paced"},
+        {"texte_api": "Ce sérum a changé ma peau.", "style": "warm and sincere"},
+    ]
+    assert prise.script == [{"texte": "Stop ! Regarde ça. Ce sérum a changé ma peau."}]
+
+
+def test_prononciation_appliquee_seulement_au_texte_envoye(services, tmp_path):
+    services.projets.creer("Glowzy", tmp_path)
+    script = [{"texte": "Glowzy, c'est top."}]
+    commande = preparer(
+        "google", "gemini-3.8-flash-tts", "Kore", [RepliqueProjet(script)], "Glowzy", [Prononciation("Glowzy", "Glo-zi")]
+    )
+    assert commande.texte_api == "Glo-zi, c'est top."  # ce que la voix prononce
+    assert commande.script == script  # les sous-titres gardent l'orthographe correcte
