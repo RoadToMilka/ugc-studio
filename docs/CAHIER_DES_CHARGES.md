@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.0 — 29/09/2026
+> Version du document : 1.1 — 29/09/2026 (vérifié contre les pages officielles des modèles)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -188,6 +188,16 @@ Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe)
 - Chaque génération = une **prise** conservée dans le projet (horodatée, avec voix/style/coût utilisés).
 - Comparer, renommer, noter (★), supprimer les prises.
 - Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3.
+- **Variantes** : générer N versions d'un même script (voix ou style différents) en un clic, pour les tests A/B de pubs.
+- **Écoute pendant la génération** (streaming) : option pour entendre le début avant la fin du calcul.
+
+### 5.6 bis Limites du modèle (doc officielle)
+
+- Entrée max : **8 192 tokens** de texte ; sortie max : **16 384 tokens** audio. Un script trop long est découpé automatiquement en répliques, générées puis recollées.
+- Multi-voix dans une seule requête : 2 voix de base maximum ; avec des voix personnalisées, une requête par réplique puis assemblage (V4).
+- **Mode de traitement** (réglage avancé, V4) : standard, *Flex* (moins cher, plus lent), *Priority* (plus rapide), *Batch* (gros volumes de variantes). Tous sont supportés par Gemini 3.8 Flash TTS, pas par Gemini 3.5 Transcribe.
+- Formats de sortie possibles : WAV (défaut), PCM brut, mu-law, A-law, fréquence réglable. L'app garde WAV 24 kHz.
+- Pas d'horodatage des mots en sortie : d'où la chaîne TTS → STT (§3.3).
 - Bouton **« Créer les sous-titres de cette prise »** (cf. §3.3).
 
 ### 5.7 Langue
@@ -211,9 +221,26 @@ Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe)
 
 ### 6.3 Options
 
-- **Langue** : détection auto ou langue forcée (recommandé pour les vidéos courtes).
-- **Vocabulaire personnalisé** : liste de termes (nom de marque, produit…), idéalement < 100 termes ; listes enregistrables par projet ou globales.
-- **Mode smart** (suppression des hésitations « euh », mise en forme) : interrupteur — désactivé si on veut garder l'authenticité UGC.
+**Incompatibilités officielles de l'API (doc Google, sept. 2026) — elles dictent la conception :**
+- l'horodatage par mot (`timestamp_granularities: ["word"]`) ne fonctionne qu'en mode **verbatim** ;
+- il est **incompatible avec le vocabulaire personnalisé** (`custom_vocabulary`) ;
+- le mode **smart** est incompatible avec l'horodatage et avec la séparation des voix ;
+- la séparation des voix (`diarization_mode: "speaker"`) est incompatible avec le vocabulaire personnalisé.
+
+Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
+
+- **Langue** : détection auto ou langue forcée (`language_codes`, recommandé pour les vidéos courtes).
+- **Séparation des voix** (jusqu'à 8 personnes, fiable jusqu'à 2 ; au-delà expérimental) : chaque mot reçoit un locuteur (`spk_1`, `spk_2`…). Utile pour une pub à deux personnes : style de sous-titre différent par personne (V2).
+- **Vocabulaire personnalisé en double passe** (option) : 1re passe verbatim + horodatage par mot ; 2e passe avec le vocabulaire, sans horodatage ; l'app aligne le texte de la 2e passe sur les temps de la 1re. Coût doublé (quelques millièmes d'euro sur une pub). Listes de termes (< 100 recommandé, 1 000 max) enregistrables par projet ou globales.
+- **Dictionnaire de remplacements** (local, gratuit) : « sérum anti rides » → « Sérum Anti-Rides® », appliqué automatiquement après chaque transcription.
+- **Masquer les hésitations dans les sous-titres** (remplace le mode smart) : l'app retire elle-même « euh », « hum »… de l'affichage en conservant les temps des autres mots. Liste de mots modifiable par langue. L'audio n'est pas modifié.
+- Le **mode smart** reste disponible uniquement pour une transcription texte sans timing (copier un script depuis une vidéo concurrente, par ex.).
+
+### 6.3 bis Limites et formats
+
+- Durée max : 1 h en texte seul, **30 min** avec horodatage ou séparation des voix. Au-delà, l'app découpe l'audio en morceaux et recolle les temps.
+- Formats acceptés par l'API : WAV, MP3, AIFF, AAC, OGG, FLAC, M4A, Opus, WebM… La vidéo n'est pas acceptée : l'app extrait toujours l'audio avec FFmpeg (en FLAC ou WAV, sans perte) avant l'envoi.
+- Envoi via l'API Files (fichier téléversé puis référencé).
 
 ### 6.4 Éditeur de transcription
 
@@ -428,7 +455,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.0`+`07`.
 - Architecture d'adaptateurs + tableau de capacités (adaptateur Google seul).
 - Voix : éditeur avec badges de balises, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
-- Transcription : import vidéo/audio, extraction audio, transcription mot par mot, langue, vocabulaire, mode smart, éditeur de transcription.
+- Transcription : import vidéo/audio, extraction audio, transcription mot par mot, langue, séparation des voix, dictionnaire de remplacements, masquage des hésitations, vocabulaire en double passe, éditeur de transcription.
 - Lien « prise TTS → sous-titres » avec alignement sur le script.
 - Sous-titres : règles de découpage complètes (§7.3), export **SRT**.
 - Projets (sauvegarde/réouverture).
