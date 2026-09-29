@@ -529,7 +529,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 ## 13. Points ouverts
 
 - Liste définitive des **catégories de pub** et de leur ton (l'utilisateur les créera dans la bibliothèque de styles ; quelques exemples fournis par défaut).
-- Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon Voice Design en V4).
+- Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
 - **Prix exacts** de Gemini 3.5 Transcribe et syntaxe exacte des API au moment du code (la doc évolue vite — toujours vérifier la doc officielle avant d'écrire un adaptateur).
 - Valeurs précises des **zones de sécurité** par plateforme (à documenter au moment de la V2).
 
