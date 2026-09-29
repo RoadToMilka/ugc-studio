@@ -1,10 +1,11 @@
 """Générer une voix off pour le projet ouvert (§5.6) : du script à la prise enregistrée.
 
 Étapes :
-1. le script est transformé en texte pour l'API (balises, mots accentués en majuscules) ;
-2. s'il est trop long pour une seule requête, il est découpé aux fins de phrases (§5.6 bis) ;
-3. chaque morceau est envoyé au fournisseur ; les audios sont recollés ;
-4. la prise est rangée dans le dossier du projet, et le coût est noté dans le suivi des coûts.
+1. chaque réplique du script est transformée en texte pour l'API (balises, mots accentués en
+   majuscules), puis le dictionnaire de prononciation y est appliqué (§5.2) ;
+2. les répliques partent ensemble, chacune avec son style ; si c'est trop long pour une seule
+   requête, elles sont réparties en plusieurs requêtes (§5.6 bis) et les audios sont recollés ;
+3. la prise est rangée dans le dossier du projet, et le coût est noté dans le suivi des coûts.
 
 La partie « appel réseau » (`produire_audio`) tourne en tâche de fond ; l'enregistrement de la
 prise (`enregistrer_prise`) se fait ensuite dans la tâche principale.
@@ -12,15 +13,17 @@ prise (`enregistrer_prise`) se fait ensuite dans la tâche principale.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
 from .audio import concatener_wav, duree_wav
-from .estimation import TOKENS_AUDIO_PAR_SECONDE_DEFAUT, ajuster_tokens_par_seconde, decouper_si_trop_long
+from .estimation import TOKENS_AUDIO_PAR_SECONDE_DEFAUT, ajuster_tokens_par_seconde, regrouper
 from .fournisseurs.base import Adaptateur
 from .fournisseurs.voix import Replique, RequeteVoix, ResultatVoix
-from .projets import Prise
-from .script import texte_pour_api
+from .projets import Prise, RepliqueProjet
+from .prononciation import Prononciation, appliquer
+from .script import est_vide, joindre_repliques, texte_pour_api
 from .services import Services
 
 PAUSE_ENTRE_MORCEAUX_S = 0.25
@@ -34,15 +37,54 @@ class Commande:
     fournisseur: str
     modele: str
     voix: str
-    style: str
-    script: list[dict]
-    texte_api: str
+    repliques: tuple[Replique, ...]  # texte envoyé (prononciations appliquées) et style de chaque réplique
+    script: list[dict]  # script complet d'origine (pour les sous-titres)
     projet: str | None = None
     operation: str = "voix"
 
+    @property
+    def texte_api(self) -> str:
+        return "\n".join(r.texte for r in self.repliques)
 
-def preparer(fournisseur: str, modele: str, voix: str, style: str, script: list[dict], projet: str | None) -> Commande:
-    return Commande(fournisseur, modele, voix, style.strip(), [dict(s) for s in script], texte_pour_api(script), projet)
+    @property
+    def style(self) -> str:
+        """Style affiché avec la prise : le style commun, ou « styles par réplique »."""
+        styles = {r.style for r in self.repliques}
+        if len(styles) > 1:
+            return "styles par réplique"
+        return styles.pop() if styles else ""
+
+
+def repliques_api(repliques: Sequence[RepliqueProjet], prononciations: Sequence[Prononciation] = ()) -> list[Replique]:
+    """Répliques du projet → texte exact envoyé au TTS (répliques vides ignorées)."""
+    return [
+        Replique(appliquer(texte_pour_api(r.script), list(prononciations)), r.style.strip())
+        for r in repliques
+        if not est_vide(r.script)
+    ]
+
+
+def preparer(
+    fournisseur: str,
+    modele: str,
+    voix: str,
+    repliques: Sequence[RepliqueProjet],
+    projet: str | None,
+    prononciations: Sequence[Prononciation] = (),
+) -> Commande:
+    return Commande(
+        fournisseur,
+        modele,
+        voix,
+        tuple(repliques_api(repliques, prononciations)),
+        joindre_repliques([r.script for r in repliques]),
+        projet,
+    )
+
+
+def preparer_texte(fournisseur: str, modele: str, voix: str, texte: str, operation: str) -> Commande:
+    """Commande pour une courte phrase (extrait d'une voix, essai de prononciation)."""
+    return Commande(fournisseur, modele, voix, (Replique(texte),), [{"texte": texte}], None, operation)
 
 
 def tokens_par_seconde(services: Services, modele: str) -> float:
@@ -55,11 +97,8 @@ def tokens_par_seconde(services: Services, modele: str) -> float:
 
 def produire_audio(adaptateur: Adaptateur, commande: Commande, tokens_seconde: float) -> ResultatVoix:
     """Appel(s) au fournisseur — à lancer en tâche de fond."""
-    morceaux = decouper_si_trop_long(commande.texte_api, tokens_seconde)
-    resultats = [
-        adaptateur.generer_voix(RequeteVoix(commande.modele, commande.voix, (Replique(texte, commande.style),)))
-        for texte in morceaux
-    ]
+    groupes = regrouper(commande.repliques, tokens_seconde)
+    resultats = [adaptateur.generer_voix(RequeteVoix(commande.modele, commande.voix, groupe)) for groupe in groupes]
     if len(resultats) == 1:
         return resultats[0]
     wav = concatener_wav([r.audio_wav for r in resultats], PAUSE_ENTRE_MORCEAUX_S)
@@ -106,4 +145,5 @@ def enregistrer_prise(services: Services, commande: Commande, resultat: Resultat
         tokens_entree=resultat.tokens_entree,
         tokens_sortie=resultat.tokens_sortie,
         cout_eur=None if cout is None else format(cout, "f"),
+        repliques=[{"texte_api": r.texte, "style": r.style} for r in commande.repliques],
     )

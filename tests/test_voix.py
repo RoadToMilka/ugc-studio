@@ -112,9 +112,9 @@ def test_page_voix_sans_puis_avec_projet(app_configuree, qtbot, services, tmp_pa
 
 
 def _atelier_pret(services, qtbot, tmp_path, monkeypatch):
-    from ugc_studio.ui.pages.voix import atelier as module_atelier
+    from ugc_studio.ui import connexion_ia
 
-    monkeypatch.setattr(module_atelier, "creer_adaptateur", lambda _f, _cle: FauxTTS("cle-factice-123456"))
+    monkeypatch.setattr(connexion_ia, "creer_adaptateur", lambda _f, _cle: FauxTTS("cle-factice-123456"))
     connexion = services.connexions.ajouter("google", "Perso", "AIza-cle-factice-123456")
     services.connexions.enregistrer_test(connexion.identifiant, True, "ok", ["gemini-3.8-flash-tts"])
     services.projets.creer("Sérum", tmp_path)
@@ -138,6 +138,7 @@ def test_generer_une_prise(app_configuree, qtbot, services, tmp_path, monkeypatc
     assert len(atelier.prises.lignes()) == 1
     # Le script a été enregistré dans le projet.
     assert services.projets.projet.script == atelier.editeur.segments()
+    assert services.projets.projet.repliques[0].script == atelier.editeur.segments()
 
 
 def test_erreur_de_generation_affichee(app_configuree, qtbot, services, tmp_path, monkeypatch):

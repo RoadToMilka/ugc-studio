@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 
+import math
+
 from PySide6.QtCore import QMimeData, QRectF, QSizeF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
@@ -88,11 +90,16 @@ def format_texte(accentue: bool = False) -> QTextCharFormat:
 
 class EditeurScript(QTextEdit):
     script_modifie = Signal()
+    focus_recu = Signal()  # l'éditeur devient celui où la palette insère ses balises
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, hauteur_auto: bool = False):
+        """`hauteur_auto` : l'éditeur grandit avec son texte (répliques), au lieu d'avoir sa propre
+        barre de défilement dans une page qui défile déjà."""
         super().__init__(parent)
         self.setAcceptRichText(False)
-        self.setMinimumHeight(Dimensions.EDITEUR_HAUTEUR_MIN)
+        self._hauteur_auto = hauteur_auto
+        self._hauteur_min = Dimensions.EDITEUR_REPLIQUE_HAUTEUR_MIN if hauteur_auto else Dimensions.EDITEUR_HAUTEUR_MIN
+        self.setMinimumHeight(self._hauteur_min)
         self.setPlaceholderText(
             "Écris ou colle ton script ici. Pour ajouter une balise (rire, pause…), clique à l'endroit "
             "voulu dans le texte, puis sur la balise dans la palette."
@@ -101,6 +108,28 @@ class EditeurScript(QTextEdit):
         self.document().documentLayout().registerHandler(TYPE_BALISE, self._dessin)
         self.textChanged.connect(self.script_modifie.emit)
         self.cursorPositionChanged.connect(self._format_propre_apres_badge)
+        if hauteur_auto:
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.document().documentLayout().documentSizeChanged.connect(self._ajuster_hauteur)
+
+    def focusInEvent(self, evenement) -> None:
+        super().focusInEvent(evenement)
+        self.focus_recu.emit()
+
+    def resizeEvent(self, evenement) -> None:
+        super().resizeEvent(evenement)
+        if self._hauteur_auto:
+            self._ajuster_hauteur()
+
+    def _ajuster_hauteur(self, *_args) -> None:
+        """Hauteur = hauteur du texte + bordures et marges intérieures (au moins la hauteur minimale).
+
+        Bordures et marges = ce qui sépare le bord de l'éditeur de sa zone de texte (« viewport »).
+        """
+        cadre = self.height() - self.viewport().height()
+        hauteur = max(self._hauteur_min, math.ceil(self.document().size().height()) + cadre)
+        if hauteur != self.height():
+            self.setFixedHeight(hauteur)
 
     # --- Contenu -----------------------------------------------------------------------------
 
@@ -135,6 +164,10 @@ class EditeurScript(QTextEdit):
 
     def texte_api(self) -> str:
         return texte_pour_api(self.segments())
+
+    def position_curseur(self) -> int:
+        """Position du curseur, en caractères (un badge compte pour 1), pour « Découper ici »."""
+        return self.textCursor().position()
 
     # --- Actions -----------------------------------------------------------------------------
 

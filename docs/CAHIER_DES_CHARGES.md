@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.9 — 30/09/2026 (étape 3 : montants à 4 décimales, bouton maison, tarifs officiels de Google)
+> Version du document : 2.0 — 30/09/2026 (étape 4 : répliques et styles, traduction, bibliothèque de styles, dictionnaire de prononciation)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -53,7 +53,8 @@ Le `.exe` n'est pas signé : au premier lancement, Windows affiche « Windows a 
 
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
 
-- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, script, liste des prises) et `prises\prise-001.wav`, `prise-002.wav`…
+- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises) et `prises\prise-001.wav`, `prise-002.wav`…
+- Format du fichier : version 2 depuis l'étape 4 (script en répliques). Un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
 - Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
 - Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
 - Au démarrage, le dernier projet utilisé est rouvert automatiquement.
@@ -121,14 +122,15 @@ Un modèle absent du tableau mais accessible avec une clé est reconnu d'après 
 | `gemini-3.8-flash-tts` | 0,50 $ (texte) | 9,00 $ (audio) | 0,00225 $ pour 10 s d'audio |
 | `gemini-3.8-flash-lite-tts` | 0,50 $ | 6,00 $ | |
 | `gemini-3.5-transcribe` | 2,00 $ (audio) | 12,00 $ (texte) | ≈ 0,005 $ par minute transcrite |
+| `gemini-3.8-flash` (texte : traduction des styles) | 0,75 $ | 3,75 $ | réflexion comprise en sortie |
 | `gemini-3.1-flash-tts-preview` | 1,00 $ | 20,00 $ | ancienne génération |
 | `gemini-2.5-pro-preview-tts` | 1,00 $ | 20,00 $ | ancienne génération |
 | `gemini-2.5-flash-preview-tts` | 0,50 $ | 10,00 $ | ancienne génération |
 
-- **Changements de prix annoncés** : Google double les prix des modèles 3.8 **à partir du 01/01/2027** (Flash TTS : 1,00 $ / 18,00 $ ; Flash-Lite TTS : 1,00 $ / 12,00 $). Chaque modèle a donc une liste de tarifs datés ; l'app applique **automatiquement** le tarif en vigueur le jour de l'appel et affiche le prochain changement sous le modèle.
+- **Changements de prix annoncés** : Google double les prix des modèles 3.8 **à partir du 01/01/2027** (Flash TTS : 1,00 $ / 18,00 $ ; Flash-Lite TTS : 1,00 $ / 12,00 $ ; Flash : 1,50 $ / 7,50 $). Chaque modèle a donc une liste de tarifs datés ; l'app applique **automatiquement** le tarif en vigueur le jour de l'appel et affiche le prochain changement sous le modèle.
 - **Prix modifiables** par modèle (entrée et sortie). Un prix saisi à la main est signalé (« Prix modifié à la main », avec le tarif Google) et s'applique jusqu'au prochain changement de tarif annoncé par Google : l'information la plus récente l'emporte.
 - **Ordre de grandeur en euros** sous chaque prix : coût d'une minute de voix (≈ 250 tokens de texte + 60 s × 25 tokens audio) ou d'une minute transcrite (60 s × 25 tokens audio + ≈ 175 tokens de texte), d'après les chiffres de la page des tarifs.
-- Modèles listés : les modèles principaux (3.8 Flash TTS, 3.8 Flash-Lite TTS, 3.5 Transcribe) toujours ; les anciennes générations et les modèles inconnus seulement s'ils sont accessibles avec une clé. Les anciennes générations de voix n'ont ni balises ni Voice Design (doc officielle). Les modèles « Live » (temps réel, ex. `gemini-3.5-transcribe-live`) utilisent une autre API et ne sont jamais proposés.
+- Modèles listés : les modèles principaux (3.8 Flash TTS, 3.8 Flash-Lite TTS, 3.5 Transcribe, 3.8 Flash pour les traductions) toujours ; les anciennes générations et les modèles inconnus seulement s'ils sont accessibles avec une clé. Les anciennes générations de voix n'ont ni balises ni Voice Design (doc officielle). Les modèles « Live » (temps réel, ex. `gemini-3.5-transcribe-live`) utilisent une autre API et ne sont jamais proposés.
 - **Niveau gratuit** de Google (clé sans moyen de paiement) : ces modèles n'y sont pas facturés (limites d'usage plus basses). L'app affiche quand même le coût au tarif payant ; une note le rappelle.
 - Bouton « Page des tarifs Google » pour vérifier les prix.
 - **Taux de change USD → EUR** modifiable (champ manuel), ou récupéré en un clic auprès de la Banque centrale européenne (taux de référence du jour). Valeur de départ : 0,86, signalée « à vérifier ».
@@ -180,7 +182,9 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 (Liste issue de la doc officielle Gemini TTS ; les balises restent en anglais même pour un texte français.)
 
-- **Dictionnaire de prononciation (mots de marque)** : l'API n'a pas de paramètre dédié aux noms de marque. L'app garde donc une liste « mot écrit → façon de le prononcer » (ex. « Glowzy » → « Glo-zi »). Au moment de générer, **seul le texte envoyé au TTS** est remplacé ; le script affiché et les sous-titres gardent l'orthographe correcte (grâce à l'alignement sur le script, §3.3). Bouton ▶ pour tester la prononciation d'un mot seul (coût minime). Dictionnaires globaux ou par projet.
+- **Dictionnaire de prononciation (mots de marque)** : l'API n'a pas de paramètre dédié aux noms de marque. L'app garde donc une liste « mot écrit → façon de le prononcer » (ex. « Glowzy » → « Glo-zi »). Au moment de générer, **seul le texte envoyé au TTS** est remplacé ; le script affiché et les sous-titres gardent l'orthographe correcte (grâce à l'alignement sur le script, §3.3). Bouton ▶ pour tester la prononciation d'un mot seul (coût minime, noté « essai de prononciation » ; l'audio est gardé en cache). Dictionnaires globaux (`prononciations.json`) ou par projet ; pour un même mot, celui du projet l'emporte.
+  - Remplacement : mots entiers, sans tenir compte des majuscules ; le mot le plus long d'abord (« Glowzy Pro » avant « Glowzy ») ; les balises ne sont jamais modifiées.
+  - Fenêtre « Prononciation » (bouton sous le script) : deux onglets, « Ce projet » et « Tous les projets ».
 - **Aide à l'accentuation** : bouton « Accentuer » qui met le mot sélectionné en MAJUSCULES (le modèle appuie sur les mots en capitales). Ces majuscules n'impactent pas les sous-titres (le texte des sous-titres est géré séparément, cf. §7.2).
 - Compteur de caractères et **estimation du coût** avant génération : tokens d'entrée ≈ caractères ÷ 4 ; durée d'après le nombre de mots (≈ 160 mots/min) et les pauses ; tokens audio ≈ durée × tokens par seconde. Ce dernier chiffre (25 au départ, d'après la page des tarifs de Google) est **ajusté automatiquement** après chaque génération avec les vrais nombres renvoyés par Google.
 - Affichage d'un mot accentué : en MAJUSCULES et en mauve dans l'éditeur ; l'écriture d'origine est conservée pour les sous-titres.
@@ -190,6 +194,9 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 - Le script peut être découpé en **répliques** (blocs). Chaque réplique a son propre champ **style** (optionnel) — utile quand l'émotion change en cours de pub (ex. hook énergique → témoignage calme).
 - Le style de réplique est envoyé dans `speech_metadata.style`.
+- Toutes les répliques partent **dans la même requête** (une entrée de texte par réplique, chacune avec son style) : une seule prise. Si le total dépasse les limites du modèle (§5.6 bis), les répliques sont réparties sur plusieurs requêtes, puis les audios sont recollés.
+- Interface : les répliques s'affichent l'une sous l'autre (« Réplique 1 », « Réplique 2 »…), chacune avec son champ style et son éditeur à badges, qui grandit avec le texte. Bouton « Ajouter une réplique » ; menu ⋯ de chaque réplique : **Découper ici** (la fin de la réplique, après le curseur, devient une nouvelle réplique avec le même style), Monter, Descendre, Supprimer. La palette de balises et « Accentuer » agissent sur la dernière réplique utilisée.
+- Chaque prise retient le texte et le style envoyés pour chaque réplique ; la liste des prises indique « N répliques » quand il y en a plusieurs.
 
 ### 5.4 Choix de la voix
 
@@ -229,12 +236,15 @@ Un **style** enregistré contient :
 - langue.
 
 Actions : créer, modifier, dupliquer, supprimer, **appliquer en un clic**. Quelques exemples fournis au départ (modifiables/supprimables).
+- Rangement : `styles.json` dans le dossier de données de l'app.
+- Accès : bouton 📚 à côté du champ style de chaque réplique. « Appliquer » met la consigne (et sa traduction) sur la réplique, et choisit la voix et le modèle du style. « Enregistrer le style actuel » crée un style à partir de celui de la réplique.
+- Fenêtre de création / modification : nom, catégorie (liste modifiable), modèle, voix, langue, style (avec assistant et traduction), balises souvent utilisées (noms de la palette, vérifiés), et le panneau « Conseils Google » à côté.
 
 Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe).
 
 **Assistant de style structuré** : style = *émotion / attitude* + *rythme / prosodie* (optionnel), ex. « chaleureux et enthousiaste, débit rapide », « chuchoté, complice ». Champs guidés assemblés en une consigne courte, modifiable en texte libre.
 
-**Panneau « Conseils Google »** (visible dans l'éditeur de styles et à côté du champ style des répliques) :
+**Panneau « Conseils Google »** (visible dans l'éditeur de styles et sous le script, repliable — le choix est retenu) :
 - Style **court** (quelques mots) : émotion, attitude, rythme, volume, hauteur/inflexion.
 - **Tester d'abord sans style** : la plupart des générations n'en ont pas besoin.
 - Pour une ambiance constante, **réutiliser exactement la même consigne** d'une réplique à l'autre.
@@ -253,6 +263,9 @@ Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe)
 Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en anglais**, comme dans les exemples Google.
 - L'assistant structuré assemble directement la consigne en anglais ; la **traduction française** s'affiche juste en dessous, en lecture seule, pour comprendre ce qui est envoyé.
 - En texte libre, on peut écrire en anglais, ou écrire en français puis cliquer **« Traduire en anglais »** : l'app traduit avec un modèle de texte Gemini (même clé API, coût minime affiché) et montre les deux versions avant d'enregistrer.
+  - Modèle : `gemini-3.8-flash`, avec le niveau de réflexion le plus bas qu'il accepte (`thinking_level: "low"` ; « minimal » n'existe pas pour ce modèle), et une consigne système qui demande une traduction fidèle et courte. Coût noté « traduction » dans le suivi (ordre de grandeur : 0,0002 € par style).
+  - Un style modifié à la main après traduction perd sa traduction affichée (elle ne lui correspond plus).
+  - Vérification en direct supplémentaire : un style qui semble écrit en français (accents, mots français courants) est signalé, avec l'invitation à le traduire.
 - Les exemples et conseils Google sont affichés **en anglais d'origine**, avec leur traduction française.
 - Le texte du script (ce que la voix prononce) reste bien sûr dans la langue du projet.
 

@@ -63,3 +63,37 @@ def test_script_long_decoupe_aux_fins_de_phrases():
     assert all(m.endswith(".") for m in morceaux)
     assert "".join(morceaux).replace(" ", "") == texte.replace(" ", "")
     assert decouper_si_trop_long("Court.", 32) == ["Court."]
+
+
+def test_estimation_de_plusieurs_repliques(tmp_path):
+    from ugc_studio.estimation import estimer_repliques
+    from ugc_studio.fournisseurs.voix import Replique
+
+    prix = CataloguePrix(tmp_path / "prix.json")
+    une = estimer_repliques([Replique("Bonjour à toutes et à tous", "warm")], "gemini-3.8-flash-tts", prix)
+    deux = estimer_repliques(
+        [Replique("Bonjour à toutes et à tous", "warm"), Replique("", "ignored"), Replique("Bonjour à toutes et à tous", "warm")],
+        "gemini-3.8-flash-tts",
+        prix,
+    )
+    assert deux.caracteres == 2 * une.caracteres
+    assert deux.tokens_entree == 2 * une.tokens_entree  # chaque réplique envoie son style
+    assert deux.duree_s == pytest.approx(2 * une.duree_s)
+
+
+def test_repliques_reparties_en_plusieurs_requetes_si_trop_longues():
+    from ugc_studio.estimation import TOKENS_SORTIE_MAX, _trop_long, duree_parlee, regrouper
+    from ugc_studio.fournisseurs.voix import Replique
+
+    phrase = " ".join(["mot"] * 50) + ". "
+    repliques = [Replique(phrase * 40, f"style {n}") for n in range(4)]
+    groupes = regrouper(repliques, 25)
+    assert len(groupes) > 1
+    assert all(not _trop_long(groupe, 25) for groupe in groupes)
+    # Rien n'est perdu, et chaque morceau garde le style de sa réplique.
+    assert sum(duree_parlee(r.texte) for g in groupes for r in g) == pytest.approx(
+        sum(duree_parlee(r.texte) for r in repliques), rel=0.01
+    )
+    assert {r.style for g in groupes for r in g} == {f"style {n}" for n in range(4)}
+    assert TOKENS_SORTIE_MAX > 0
+    assert regrouper([Replique("Court.", "a"), Replique("", "b")], 25) == [(Replique("Court.", "a"),)]

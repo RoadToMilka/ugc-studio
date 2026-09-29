@@ -1,10 +1,14 @@
 """Projets (§3.2) : un projet = un dossier qui regroupe tout.
 
     Documents\\UGC Studio\\Projets\\Sérum Glowzy\\
-        projet.json        ← nom, langue, script, réglages de voix, liste des prises…
+        projet.json        ← nom, langue, répliques du script, réglages de voix, prises…
         prises\\           ← fichiers audio générés (WAV 24 kHz mono)
 
 Rouvrir un projet restaure son état complet. L'enregistrement est automatique.
+
+Format 2 (étape 4) : le script est découpé en **répliques**, chacune avec son style (§5.3).
+Un projet au format 1 (un seul script et un seul style) est converti à l'ouverture : il devient
+une seule réplique.
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ from datetime import datetime
 from pathlib import Path
 
 from .chemins import dossier_donnees
+from .prononciation import Prononciation, depuis_liste
+from .script import joindre_repliques
 from .stockage import ecrire_json, lire_json
 
 journal = logging.getLogger(__name__)
@@ -65,7 +71,23 @@ def nom_de_dossier(nom: str) -> str:
 class ReglagesVoix:
     modele: str = "gemini-3.8-flash-tts"
     voix: str = "Kore"
-    style: str = ""
+
+
+@dataclass
+class RepliqueProjet:
+    """Un bloc du script avec sa consigne de style facultative (§5.3)."""
+
+    script: list[dict] = field(default_factory=list)  # segments (voir script.py)
+    style: str = ""  # consigne de jeu, en anglais : c'est elle qui est envoyée à Google
+    style_fr: str = ""  # sa traduction française, affichée pour comprendre ce qui est envoyé
+
+    @classmethod
+    def depuis_dict(cls, brut: dict) -> RepliqueProjet:
+        return cls(
+            script=[dict(s) for s in brut.get("script") or [] if isinstance(s, dict)],
+            style=str(brut.get("style") or ""),
+            style_fr=str(brut.get("style_fr") or ""),
+        )
 
 
 @dataclass
@@ -77,13 +99,14 @@ class Prise:
     modele: str
     voix: str
     style: str
-    texte_api: str  # texte exact envoyé au TTS
-    script: list[dict]  # script au moment de la génération (pour créer les sous-titres)
+    texte_api: str  # texte exact envoyé au TTS (répliques séparées par un retour à la ligne)
+    script: list[dict]  # script complet au moment de la génération (pour créer les sous-titres)
     duree_s: float
     tokens_entree: int = 0
     tokens_sortie: int = 0
     cout_eur: str | None = None
     note: int = 0  # 0 à 5 étoiles
+    repliques: list[dict] = field(default_factory=list)  # [{"texte_api", "style"}] envoyées à Google
 
 
 @dataclass
@@ -94,10 +117,16 @@ class Projet:
     cree_le: str = ""
     modifie_le: str = ""
     voix: ReglagesVoix = field(default_factory=ReglagesVoix)
-    script: list[dict] = field(default_factory=list)
+    repliques: list[RepliqueProjet] = field(default_factory=lambda: [RepliqueProjet()])
+    prononciations: list[Prononciation] = field(default_factory=list)  # dictionnaire du projet (§5.2)
     prises: list[Prise] = field(default_factory=list)
 
-    VERSION_FORMAT = 1
+    VERSION_FORMAT = 2
+
+    @property
+    def script(self) -> list[dict]:
+        """Tout le script, répliques bout à bout (pour les sous-titres)."""
+        return joindre_repliques([r.script for r in self.repliques])
 
     @property
     def fichier(self) -> Path:
@@ -114,13 +143,25 @@ class Projet:
             "cree_le": self.cree_le,
             "modifie_le": self.modifie_le,
             "voix": asdict(self.voix),
-            "script": self.script,
+            "repliques": [asdict(r) for r in self.repliques],
+            "prononciations": [asdict(p) for p in self.prononciations],
             "prises": [asdict(p) for p in self.prises],
         }
 
     @classmethod
     def depuis_dict(cls, dossier: Path, donnees: dict) -> Projet:
         voix = donnees.get("voix") or {}
+        brutes = donnees.get("repliques")
+        if isinstance(brutes, list):
+            repliques = [RepliqueProjet.depuis_dict(r) for r in brutes if isinstance(r, dict)]
+        else:
+            # Format 1 : un seul script et un seul style (dans les réglages de voix).
+            repliques = [
+                RepliqueProjet(
+                    script=[dict(s) for s in donnees.get("script") or [] if isinstance(s, dict)],
+                    style=str(voix.get("style") or ""),
+                )
+            ]
         prises = []
         for brut in donnees.get("prises", []):
             try:
@@ -134,7 +175,8 @@ class Projet:
             cree_le=donnees.get("cree_le", ""),
             modifie_le=donnees.get("modifie_le", ""),
             voix=ReglagesVoix(**{k: v for k, v in voix.items() if k in ReglagesVoix.__dataclass_fields__}),
-            script=list(donnees.get("script") or []),
+            repliques=repliques or [RepliqueProjet()],
+            prononciations=depuis_liste(donnees.get("prononciations")),
             prises=prises,
         )
 

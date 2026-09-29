@@ -13,6 +13,8 @@ from .couts import JournalCouts
 from .preferences import Preferences
 from .prix import CataloguePrix
 from .projets import GestionnaireProjets
+from .prononciation import DictionnaireGlobal
+from .styles import BibliothequeStyles
 
 
 @dataclass
@@ -22,6 +24,8 @@ class Services:
     prix: CataloguePrix
     couts: JournalCouts
     projets: GestionnaireProjets
+    styles: BibliothequeStyles  # bibliothèque de styles personnalisés (§5.5)
+    prononciations: DictionnaireGlobal  # dictionnaire de prononciation commun à tous les projets (§5.2)
 
 
 def creer_services(coffre: Coffre | None = None) -> Services:
@@ -34,4 +38,6 @@ def creer_services(coffre: Coffre | None = None) -> Services:
         prix=prix,
         couts=JournalCouts(dossier / "couts", prix),
         projets=GestionnaireProjets(dossier / "projets_recents.json"),
+        styles=BibliothequeStyles(dossier / "styles.json"),
+        prononciations=DictionnaireGlobal(dossier / "prononciations.json"),
     )

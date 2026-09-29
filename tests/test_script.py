@@ -45,3 +45,27 @@ def test_script_vide():
     assert est_vide([])
     assert est_vide([{"texte": "   "}])
     assert not est_vide([{"balise": "sigh"}])
+
+
+def test_couper_une_replique_au_curseur():
+    from ugc_studio.script import couper
+
+    script = [{"texte": "Wow ! Le lien "}, {"balise": "laugh"}, {"texte": " vite", "accentue": True}]
+    avant, apres = couper(script, len("Wow ! "))
+    assert avant == [{"texte": "Wow !"}]  # espaces retirés à l'endroit de la coupe
+    assert apres == [{"texte": "Le lien "}, {"balise": "laugh"}, {"texte": " vite", "accentue": True}]
+    # Un badge compte pour un caractère.
+    avant, apres = couper(script, len("Wow ! Le lien ") + 1)
+    assert avant[-1] == {"balise": "laugh"} and apres == [{"texte": "vite", "accentue": True}]
+    assert couper(script, 0) == ([], script)
+
+
+def test_joindre_les_repliques():
+    from ugc_studio.script import joindre_repliques
+
+    assert joindre_repliques([[{"texte": "A !"}], [], [{"balise": "sigh"}, {"texte": " B"}]]) == [
+        {"texte": "A ! "},
+        {"balise": "sigh"},
+        {"texte": " B"},
+    ]
+    assert joindre_repliques([]) == []
