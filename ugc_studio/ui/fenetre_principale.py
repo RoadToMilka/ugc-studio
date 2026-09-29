@@ -100,6 +100,7 @@ class FenetrePrincipale(QMainWindow):
 
         # Compteur de coût de la session (bandeau du haut) : mis à jour à chaque appel payant.
         services.couts.abonner(lambda _appel: self.entete.definir_cout_session(services.couts.cout_session))
+        self.entete.definir_cout_session(services.couts.cout_session)
 
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -21,6 +22,7 @@ from ....fournisseurs.capacites import modele_connu
 from ....services import Services
 from ...composants.elements import bloc, libelle
 from ...composants.montant_label import MontantLabel
+from ...polices import police
 from ...theme import Dimensions, Espacements, Hauteurs, Typo
 
 TOUS = "__tous__"
@@ -111,6 +113,13 @@ class OngletCouts(QWidget):
         entete.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         entete.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         entete.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        # La colonne « Coût » contient des éléments dessinés à part (montants au format §4.4) que
+        # le calcul automatique de largeur ne voit pas : on lui donne une largeur fixe suffisante.
+        mesure = QFontMetrics(police(Typo.COURANT))
+        entete.setSectionResizeMode(len(COLONNES) - 1, QHeaderView.ResizeMode.Fixed)
+        self.tableau.setColumnWidth(
+            len(COLONNES) - 1, mesure.horizontalAdvance("prix inconnu") + 2 * Espacements.M + Espacements.L
+        )
         d.addWidget(self.tableau)
         self.vide = libelle(
             "Aucun appel payant sur cette période. Les coûts apparaîtront ici dès la première voix générée.",
