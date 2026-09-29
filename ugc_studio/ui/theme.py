@@ -36,6 +36,28 @@ class Couleurs:
     ERREUR = "#EF4444"
 
 
+class CouleursBalises:
+    """§5.2 — Couleur des badges de balises, une par famille (voir ugc_studio/balises.py)."""
+
+    PAUSES = "#94A3B8"  # gris ardoise
+    RIRES = "#FACC15"  # jaune
+    SOUFFLE = "#2DD4BF"  # turquoise
+    REACTIONS = "#FB923C"  # orange
+    VOIX = "#38BDF8"  # bleu ciel
+    EMOTIONS = "#F472B6"  # rose
+
+    @classmethod
+    def de(cls, famille: str) -> str:
+        return {
+            "pauses": cls.PAUSES,
+            "rires": cls.RIRES,
+            "souffle": cls.SOUFFLE,
+            "reactions": cls.REACTIONS,
+            "voix": cls.VOIX,
+            "emotions": cls.EMOTIONS,
+        }.get(famille, Couleurs.TEXTE_SECONDAIRE)
+
+
 class Opacites:
     """Transparences appliquées aux couleurs ci-dessus (0 = invisible, 1 = opaque)."""
 
@@ -43,6 +65,9 @@ class Opacites:
     TEINTE = 0.18  # fond mauve du bouton principal
     TEINTE_SURVOL = 0.26
     TEINTE_PRESSEE = 0.34
+    FOND_BADGE = 0.16  # fond coloré des badges de balises
+    CONTOUR_BADGE = 0.55
+    FOND_BADGE_SURVOL = 0.30
 
 
 class Espacements:
@@ -90,8 +115,10 @@ class Typo:
     GRAISSE_FORTE = 600
 
 
-# §4.4 — Montants : les 2e et 3e décimales sont affichées à ~70 % de la taille normale.
+# §4.4 — Montants : la partie entière et les 2 premières décimales sont en taille et couleur
+# normales ; les décimales suivantes (3e, 4e…) sont plus petites (~70 %) et plus sombres.
 RATIO_PETITES_DECIMALES = 0.70
+COULEUR_PETITES_DECIMALES = Couleurs.TEXTE_SECONDAIRE
 
 
 class Dimensions:
@@ -99,8 +126,10 @@ class Dimensions:
 
     BORDURE = 1  # épaisseur des bordures
     LARGEUR_BARRE_LATERALE = 224
-    ICONE = 20  # icônes de la barre latérale et des boutons
-    ICONE_PETITE = 16  # flèches des listes déroulantes, coches
+    ICONE = 20  # icônes de la barre latérale et des boutons-icônes (⋯, lecture)
+    ICONE_PETITE = 16  # icônes des boutons avec texte et des menus, flèches, coches
+    # Espace entre une icône et son texte : le même partout (barre latérale, boutons, menus…).
+    ECART_ICONE_TEXTE = Espacements.M
     LOGO = 28
     CASE_A_COCHER = 18
     BARRE_DEFILEMENT = 16
@@ -111,6 +140,14 @@ class Dimensions:
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
+    EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
+    # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
+    BADGE_MARGE_HORIZONTALE = 8  # espace intérieur, à gauche et à droite du nom de la balise
+    BADGE_ECART = 4  # espace de part et d'autre d'un badge dans le texte
+    GLISSIERE_HAUTEUR = 4  # barre de progression du lecteur
+    GLISSIERE_POIGNEE = 12
+    ETOILE = 16  # étoiles de notation des prises
+    CHAMP_STYLE_LARGEUR_MIN = 320
     FENETRE_LARGEUR = 1360
     FENETRE_HAUTEUR = 860
     FENETRE_LARGEUR_MIN = 960
@@ -194,6 +231,9 @@ def palette():
 # type (QPushButton…), leur nom d'objet (#racine…) ou une propriété (role="titre-page"…).
 # ---------------------------------------------------------------------------------------------
 
+# Espace fixe (non réglable) que Qt ajoute après la colonne des icônes dans les menus.
+_QT_ESPACE_APRES_ICONE_MENU = 4
+
 _MODELE_FEUILLE_DE_STYLE = Template(
     """
 /* ---------- Base ---------- */
@@ -253,6 +293,10 @@ QLabel[role="succes"] {
 }
 QLabel[role="avertissement"] {
     color: $avertissement;
+}
+QLabel[role="legende-avertissement"] {
+    color: $avertissement;
+    font-size: ${legende}px;
 }
 QLabel[role="erreur"] {
     color: $erreur;
@@ -329,6 +373,24 @@ QTabBar::tab:selected {
     border-bottom-color: $accent;
 }
 
+/* ---------- Glissières (position de lecture) ---------- */
+QSlider::groove:horizontal {
+    height: ${glissiere}px;
+    background: $couleur_bordure;
+    border-radius: ${rayon_glissiere}px;
+}
+QSlider::sub-page:horizontal {
+    background: $accent;
+    border-radius: ${rayon_glissiere}px;
+}
+QSlider::handle:horizontal {
+    background: $texte;
+    width: ${poignee_glissiere}px;
+    height: ${poignee_glissiere}px;
+    margin: -${marge_poignee_glissiere}px 0px;
+    border-radius: ${rayon_poignee_glissiere}px;
+}
+
 /* ---------- Tableaux ---------- */
 QTableView {
     background: transparent;
@@ -363,7 +425,8 @@ QTableCornerButton::section {
     border: none;
 }
 
-/* ---------- Boutons ---------- */
+/* ---------- Boutons des fenêtres standard de Qt (messages, saisie d'un nom…) ----------
+   Les boutons de l'app elle-même sont dessinés par ui/composants/bouton.py. */
 QPushButton {
     background: $surface_elevee;
     color: $texte;
@@ -387,54 +450,6 @@ QPushButton:disabled {
     background: $surface;
     color: $texte_desactive;
     border-color: $couleur_bordure;
-}
-QPushButton[variante="principal"] {
-    background: $teinte;
-    border-color: $accent;
-}
-QPushButton[variante="principal"]:hover {
-    background: $teinte_survol;
-    border-color: $accent_survol;
-}
-QPushButton[variante="principal"]:pressed {
-    background: $teinte_pressee;
-    border-color: $accent_presse;
-}
-QPushButton[variante="principal"]:disabled {
-    background: $surface;
-    color: $texte_desactive;
-    border-color: $couleur_bordure;
-}
-QPushButton[variante="discret"] {
-    background: transparent;
-    border-color: transparent;
-    color: $texte_secondaire;
-}
-QPushButton[variante="discret"]:hover {
-    background: $surface_elevee;
-    color: $texte;
-}
-QPushButton[variante="discret"]:focus {
-    border-color: $accent;
-}
-QPushButton[variante="icone"] {
-    padding: 0px;
-    background: transparent;
-    border-color: transparent;
-    min-width: ${hauteur_interne_petit_bouton}px;
-    max-width: ${hauteur_interne_petit_bouton}px;
-    min-height: ${hauteur_interne_petit_bouton}px;
-    max-height: ${hauteur_interne_petit_bouton}px;
-}
-QPushButton[variante="icone"]:hover {
-    background: $surface_elevee;
-}
-QPushButton[variante="icone"]:focus {
-    border-color: $accent;
-}
-QPushButton::menu-indicator {
-    image: none;
-    width: 0px;
 }
 
 /* ---------- Champs ---------- */
@@ -583,9 +598,12 @@ QMenu {
     padding: ${esp_xs}px;
 }
 QMenu::item {
-    padding: ${esp_s}px ${esp_m}px;
+    padding: ${esp_s}px ${esp_m}px ${esp_s}px ${marge_gauche_menu}px;
     border-radius: ${arrondi_controle}px;
     background: transparent;
+}
+QMenu::icon {
+    left: ${esp_m}px;
 }
 QMenu::item:selected {
     background: $teinte;
@@ -659,11 +677,20 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "rayon_etiquette": Dimensions.ETIQUETTE_HAUTEUR // 2,
         "etiquette_hauteur": Dimensions.ETIQUETTE_HAUTEUR,
         "soulignement_onglet": Dimensions.SOULIGNEMENT_ONGLET,
+        "glissiere": Dimensions.GLISSIERE_HAUTEUR,
+        "rayon_glissiere": Dimensions.GLISSIERE_HAUTEUR // 2,
+        "poignee_glissiere": Dimensions.GLISSIERE_POIGNEE,
+        "rayon_poignee_glissiere": Dimensions.GLISSIERE_POIGNEE // 2,
+        "marge_poignee_glissiere": (Dimensions.GLISSIERE_POIGNEE - Dimensions.GLISSIERE_HAUTEUR) // 2,
         # Qt compte la hauteur sans les bordures : 36 px au total = 34 px + 2 × 1 px de bordure.
         "hauteur_interne_controle": Hauteurs.CONTROLE - 2 * Dimensions.BORDURE,
         "hauteur_interne_petit_bouton": Hauteurs.PETIT_BOUTON - 2 * Dimensions.BORDURE,
         "hauteur_interne_pastille": Hauteurs.PASTILLE - 2 * Dimensions.BORDURE,
         "icone_petite": Dimensions.ICONE_PETITE,
+        # Menus : Qt place le texte à « taille d'icône + 4 px » du début de la zone de texte.
+        # Cette marge gauche pose l'icône à 12 px du bord et son texte à ECART_ICONE_TEXTE
+        # après elle, comme partout ailleurs dans l'app.
+        "marge_gauche_menu": Espacements.M + Dimensions.ECART_ICONE_TEXTE - _QT_ESPACE_APRES_ICONE_MENU,
         "case_a_cocher": Dimensions.CASE_A_COCHER,
         "barre_defilement": Dimensions.BARRE_DEFILEMENT,
         "poignee_min": Dimensions.POIGNEE_DEFILEMENT_MIN,

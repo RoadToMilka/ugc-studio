@@ -133,14 +133,19 @@ class JournalCouts:
         projet: str | None = None,
         quand: datetime | None = None,
     ) -> AppelApi:
+        moment = (quand or datetime.now().astimezone()).replace(microsecond=0)
         appel = AppelApi(
-            date=(quand or datetime.now().astimezone()).replace(microsecond=0),
+            date=moment,
             fournisseur=fournisseur,
             modele=modele,
             operation=operation,
             tokens_entree=int(tokens_entree),
             tokens_sortie=int(tokens_sortie),
-            cout_eur=self._catalogue.cout_eur(modele, tokens_entree, tokens_sortie),
+            # Prix en vigueur le jour de l'appel (ex. hausse de Google au 01/01/2027) ;
+            # sans date précisée, c'est aujourd'hui.
+            cout_eur=self._catalogue.cout_eur(
+                modele, tokens_entree, tokens_sortie, le=quand.date() if quand is not None else None
+            ),
             projet=projet,
         )
         self._dossier.mkdir(parents=True, exist_ok=True)

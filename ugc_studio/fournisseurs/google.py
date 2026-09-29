@@ -1,20 +1,41 @@
 """Adaptateur Google (API Gemini).
 
-Référence : API REST « generativelanguage.googleapis.com », version v1beta, telle qu'utilisée
-par le SDK officiel google-genai (v2.25, septembre 2026). La clé est envoyée dans l'en-tête
-« x-goog-api-key » (jamais dans l'adresse, pour qu'elle n'apparaisse dans aucun historique).
+Références (septembre 2026) : API REST « generativelanguage.googleapis.com » version v1beta,
+SDK officiel google-genai 2.25 et guides officiels du « Gemini API Cookbook »
+(Get_started_TTS, Get_Started_Voices, Get_started_transcribe).
+
+- Liste des modèles : GET /v1beta/models
+- Voix (Gemini 3.8 TTS) : POST /v1beta/interactions (API « Interactions »), avec le texte dans
+  `input`, la consigne de style dans une annotation `speech_metadata` et la voix dans
+  `generation_config.speech_config`. La réponse contient l'audio en WAV (base64).
+
+La clé est envoyée dans l'en-tête « x-goog-api-key » (jamais dans l'adresse, pour qu'elle
+n'apparaisse dans aucun historique).
 """
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
+import logging
+import time
 from typing import Any
 from urllib.parse import urlencode
 
+from ..audio import FREQUENCE_TTS, duree_wav, en_wav
 from .base import Adaptateur, ErreurFournisseur, InfoModele
 from .http import ReponseHttp, requete
+from .voix import RequeteVoix, ResultatVoix
+
+journal = logging.getLogger(__name__)
 
 URL_API = "https://generativelanguage.googleapis.com/v1beta"
 TAILLE_PAGE_MODELES = 1000
+DELAI_GENERATION = 300  # secondes : une longue voix off peut prendre du temps
+ESSAIS_SI_SURCHARGE = 2
+PAUSE_AVANT_NOUVEL_ESSAI = 3  # secondes
+STATUTS_EN_ECHEC = {"failed", "cancelled", "incomplete", "budget_exceeded"}
 
 
 class AdaptateurGoogle(Adaptateur):
@@ -77,6 +98,78 @@ class AdaptateurGoogle(Adaptateur):
             jeton = donnees.get("nextPageToken")
             if not jeton:
                 return modeles
+
+    # --- Voix (TTS) ----------------------------------------------------------------------------
+
+    def generer_voix(self, requete_voix: RequeteVoix) -> ResultatVoix:
+        entrees = []
+        for replique in requete_voix.repliques:
+            element: dict[str, Any] = {"type": "text", "text": replique.texte}
+            if replique.style.strip():
+                element["annotations"] = [{"type": "speech_metadata", "style": replique.style.strip()}]
+            entrees.append(element)
+        corps = {
+            "model": requete_voix.modele,
+            "input": entrees,
+            "response_format": {"type": "audio"},
+            "generation_config": {"speech_config": [{"voice": requete_voix.voix}]},
+        }
+        for essai in range(1, ESSAIS_SI_SURCHARGE + 1):
+            try:
+                donnees = self._appeler("POST", "interactions", corps=corps, delai=DELAI_GENERATION)
+                return lire_resultat_voix(donnees)
+            except ErreurFournisseur as erreur:
+                # Google surchargé (erreur 5xx) : on réessaie une fois après une courte pause.
+                if erreur.code != "serveur" or essai == ESSAIS_SI_SURCHARGE:
+                    raise
+                journal.warning("Google surchargé, nouvel essai dans %s s", PAUSE_AVANT_NOUVEL_ESSAI)
+                time.sleep(PAUSE_AVANT_NOUVEL_ESSAI)
+        raise AssertionError("inaccessible")
+
+
+def trouver_audio(donnees: dict) -> dict | None:
+    """Bloc audio de la réponse : `output_audio`, ou le dernier audio des étapes (`steps`) du modèle."""
+    if isinstance(donnees.get("output_audio"), dict):
+        return donnees["output_audio"]
+    for etape in reversed(donnees.get("steps") or []):
+        if not isinstance(etape, dict) or etape.get("type") not in (None, "model_output"):
+            continue
+        for element in reversed(etape.get("content") or []):
+            if isinstance(element, dict) and element.get("type") == "audio":
+                return element
+    return None
+
+
+def lire_resultat_voix(donnees: dict) -> ResultatVoix:
+    """Réponse de l'API Interactions → audio WAV + nombres de tokens (pour le coût)."""
+    statut = donnees.get("status")
+    if statut in STATUTS_EN_ECHEC:
+        messages = "; ".join(
+            str(e.get("message", "")) for e in donnees.get("errors") or [] if isinstance(e, dict)
+        )
+        raise ErreurFournisseur(
+            f"Google n'a pas pu générer la voix (statut « {statut} »)" + (f" : {messages}" if messages else "."),
+            "generation",
+            json.dumps(donnees, ensure_ascii=False)[:1000],
+        )
+    audio = trouver_audio(donnees)
+    if not audio or not audio.get("data"):
+        raise ErreurFournisseur(
+            "Google n'a renvoyé aucun audio. Vérifie que le texte n'est pas vide, puis réessaie.",
+            "sans_audio",
+            json.dumps({k: v for k, v in donnees.items() if k != "input"}, ensure_ascii=False)[:1000],
+        )
+    try:
+        brut = base64.b64decode(audio["data"])
+        wav = en_wav(brut, int(audio.get("sample_rate") or FREQUENCE_TTS))
+        duree = duree_wav(wav)
+    except (binascii.Error, ValueError, EOFError) as erreur:
+        raise ErreurFournisseur("Audio reçu de Google illisible.", "audio_illisible", str(erreur)) from erreur
+    usage = donnees.get("usage") or {}
+    tokens_entree = int(usage.get("total_input_tokens") or 0)
+    # Les éventuels tokens de « réflexion » sont facturés comme des tokens de sortie.
+    tokens_sortie = int(usage.get("total_output_tokens") or 0) + int(usage.get("total_thought_tokens") or 0)
+    return ResultatVoix(wav, duree, tokens_entree, tokens_sortie, {"statut": statut, "usage": usage})
 
 
 def traduire_erreur(reponse: ReponseHttp) -> ErreurFournisseur:

@@ -1,12 +1,13 @@
-"""Bandeau du haut (§9.6) : nom du projet à gauche, coût de la session à droite (format §4.4)."""
+"""Bandeau du haut (§9.6) : projet ouvert à gauche (cliquable : menu Projet), coût de la session à droite."""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QMenu, QVBoxLayout
 
 from ...montants import Montant
 from ..theme import Espacements, Typo
+from .bouton import Bouton
 from .elements import libelle
 from .montant_label import MontantLabel
 
@@ -21,12 +22,16 @@ class Entete(QFrame):
         disposition.setContentsMargins(Espacements.XL, Espacements.M, Espacements.XL, Espacements.M)
         disposition.setSpacing(Espacements.L)
 
-        # À gauche : projet ouvert
+        # À gauche : projet ouvert. Un clic ouvre le menu Projet (nouveau, ouvrir, récents…).
         gauche = QVBoxLayout()
         gauche.setSpacing(0)
         gauche.addWidget(libelle("Projet", "legende", retour_a_la_ligne=False))
-        self.nom_projet = libelle(TEXTE_SANS_PROJET, "titre-bloc", retour_a_la_ligne=False)
-        gauche.addWidget(self.nom_projet)
+        # Flèche après le nom, séparée par le même écart que partout (Dimensions.ECART_ICONE_TEXTE).
+        self.bouton_projet = Bouton(TEXTE_SANS_PROJET, "projet", "chevron-down", icone_a_droite=True)
+        self.bouton_projet.setToolTip("Nouveau projet, ouvrir un projet, projets récents…")
+        self.menu_projet = QMenu(self.bouton_projet)
+        self.bouton_projet.setMenu(self.menu_projet)
+        gauche.addWidget(self.bouton_projet, 0, Qt.AlignmentFlag.AlignLeft)
         disposition.addLayout(gauche)
         disposition.addStretch(1)
 
@@ -44,12 +49,13 @@ class Entete(QFrame):
 
         self.definir_projet(None)
 
+    @property
+    def nom_projet(self):
+        return self.bouton_projet
+
     def definir_projet(self, nom: str | None) -> None:
-        self.nom_projet.setText(nom or TEXTE_SANS_PROJET)
-        # Propriété « vide » : grise le texte quand aucun projet n'est ouvert (voir theme.py).
-        self.nom_projet.setProperty("vide", not nom)
-        self.nom_projet.style().unpolish(self.nom_projet)
-        self.nom_projet.style().polish(self.nom_projet)
+        self.bouton_projet.setText(nom or TEXTE_SANS_PROJET)
+        self.bouton_projet.definir_attenue(not nom)  # texte grisé quand aucun projet n'est ouvert
 
     def definir_cout_session(self, montant: Montant) -> None:
         self.cout_session.definir_montant(montant)

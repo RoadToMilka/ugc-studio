@@ -15,12 +15,14 @@ import traceback
 from pathlib import Path
 
 import PySide6
-from PySide6.QtCore import QTimer, qVersion
+from PySide6.QtCore import QPoint, QTimer, qVersion
 from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QScrollArea
 
 from . import __version__
 from .chemins import fichier_journal
+from .demo import SCRIPT_DEMO
+from .script import normaliser
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
@@ -39,6 +41,8 @@ VERIFICATIONS_OBLIGATOIRES = (
     "journal_ecrit",
     "feuille_de_style_appliquee",
     "coffre_windows",
+    "editeur_badges",
+    "lecture_audio",
     "captures",
 )
 
@@ -138,13 +142,38 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 fenetre.afficher_module(identifiant)
                 capturer(fenetre, f"module-{identifiant}")
 
+            # Page Voix (projet de démonstration) : bas de page (prises), puis vérification de l'éditeur.
+            atelier = fenetre.page("voix").atelier
+            fenetre.afficher_module("voix")
+            defilement = atelier.findChild(QScrollArea)
+            if defilement is not None:
+                defilement.verticalScrollBar().setValue(defilement.verticalScrollBar().maximum())
+                capturer(fenetre, "voix-prises")
+                defilement.verticalScrollBar().setValue(0)
+            verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
+            rapport["texte_api_demo"] = atelier.editeur.texte_api()
+            verifs["lecture_audio"] = atelier.lecteur._lecteur is not None  # Qt Multimedia embarqué
+
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")
             fenetre.afficher_module("reglages")
             for index in range(reglages.onglets.count()):
                 reglages.onglets.setCurrentIndex(index)
                 capturer(fenetre, f"reglages-{index + 1}")
+                # Onglet plus haut que la fenêtre : capture du bas de l'onglet aussi.
+                defilement = reglages.onglets.widget(index).findChild(QScrollArea)
+                if defilement is not None and defilement.verticalScrollBar().maximum() > 0:
+                    defilement.verticalScrollBar().setValue(defilement.verticalScrollBar().maximum())
+                    capturer(fenetre, f"reglages-{index + 1}-bas")
+                    defilement.verticalScrollBar().setValue(0)
             reglages.onglets.setCurrentIndex(0)
+
+            # Menu « Projet » du bandeau : icônes et texte, avec le même écart que partout.
+            bouton_projet, menu_projet = fenetre.entete.bouton_projet, fenetre.entete.menu_projet
+            menu_projet.popup(bouton_projet.mapToGlobal(QPoint(0, bouton_projet.height())))
+            capturer(menu_projet, "menu-projet")
+            menu_projet.hide()
+
             dialogue = reglages.connexions.ajouter()
             capturer(dialogue, "dialogue-ajout-cle")
             dialogue.reject()

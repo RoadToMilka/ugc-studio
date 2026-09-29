@@ -1,6 +1,7 @@
 """MontantLabel : affichage d'un montant en euros au format du cahier des charges (§4.4).
 
-Exemple : 0.007 € s'affiche « 0.0 » en taille normale, puis « 07 » plus petit (~70 %), puis « € ».
+Exemple : 0.0071 € s'affiche « 0.00 » en taille et couleur normales, puis « 71 » plus petit
+(~70 %) et plus sombre, puis « € ».
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel
 
 from ...montants import Montant, decouper_montant, en_decimal, formater_montant
-from ..theme import RATIO_PETITES_DECIMALES, Typo
+from ..theme import COULEUR_PETITES_DECIMALES, RATIO_PETITES_DECIMALES, Typo
 
 
 class MontantLabel(QLabel):
@@ -29,10 +30,10 @@ class MontantLabel(QLabel):
         self._montant = en_decimal(montant)
         principal, petites = decouper_montant(self._montant)
         petite_taille = round(self._taille * RATIO_PETITES_DECIMALES)
-        # Texte « riche » (mini-HTML) : chaque morceau a sa propre taille de police.
+        # Texte « riche » (mini-HTML) : chaque morceau a sa propre taille (et couleur) de police.
         self.setText(
             f'<span style="font-size:{self._taille}px">{principal}</span>'
-            f'<span style="font-size:{petite_taille}px">{petites}</span>'
+            f'<span style="font-size:{petite_taille}px; color:{COULEUR_PETITES_DECIMALES}">{petites}</span>'
             f'<span style="font-size:{self._taille}px">&nbsp;€</span>'
         )
         self.setAccessibleName(formater_montant(self._montant))

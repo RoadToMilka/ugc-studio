@@ -1,11 +1,13 @@
 """Préparation commune à tous les tests."""
 
 import os
+from datetime import date
 
 import pytest
 
-# Les tests d'interface tournent sans écran (fenêtres dessinées en mémoire).
+# Les tests d'interface tournent sans écran (fenêtres dessinées en mémoire) et sans son.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("UGC_STUDIO_SANS_AUDIO", "1")
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +16,18 @@ def dossier_donnees_temporaire(tmp_path, monkeypatch):
     dossier = tmp_path / "donnees"
     monkeypatch.setenv("UGC_STUDIO_DOSSIER_DONNEES", str(dossier))
     return dossier
+
+
+# Date « du jour » fixée pendant les tests : les prix de Google changent à des dates annoncées
+# (ex. hausse du 01/01/2027), et un test ne doit pas donner un autre résultat selon le jour où il
+# est lancé.
+AUJOURD_HUI_DES_TESTS = date(2026, 10, 1)
+
+
+@pytest.fixture(autouse=True)
+def date_du_jour_fixe(monkeypatch):
+    monkeypatch.setattr("ugc_studio.prix.aujourd_hui", lambda: AUJOURD_HUI_DES_TESTS)
+    return AUJOURD_HUI_DES_TESTS
 
 
 @pytest.fixture

@@ -14,7 +14,7 @@ from ....services import Services
 from ... import taches
 from ...composants.elements import bloc, bouton, libelle, pastille, vider_disposition
 from ...dialogues.cle_api import DialogueCle
-from ...icones import icone
+from ...icones import icone, icone_menu
 from ...theme import Couleurs, Dimensions, Espacements
 from ..base import zone_defilante
 
@@ -75,17 +75,17 @@ class LigneConnexion(QFrame):
         plus.setIconSize(QSize(Dimensions.ICONE, Dimensions.ICONE))
         plus.setToolTip("Plus d'actions")
         menu = QMenu(plus)
-        action_defaut = menu.addAction(icone("star", Couleurs.TEXTE_SECONDAIRE), "Définir par défaut")
+        action_defaut = menu.addAction(icone_menu("star"), "Définir par défaut")
         action_defaut.setEnabled(not connexion.par_defaut)
         action_defaut.triggered.connect(lambda: onglet.definir_par_defaut(connexion.identifiant))
-        menu.addAction(icone("pencil", Couleurs.TEXTE_SECONDAIRE), "Renommer…").triggered.connect(
+        menu.addAction(icone_menu("pencil"), "Renommer…").triggered.connect(
             lambda: onglet.renommer(connexion.identifiant)
         )
-        menu.addAction(icone("key-round", Couleurs.TEXTE_SECONDAIRE), "Remplacer la clé…").triggered.connect(
+        menu.addAction(icone_menu("key-round"), "Remplacer la clé…").triggered.connect(
             lambda: onglet.remplacer(connexion.identifiant)
         )
         menu.addSeparator()
-        menu.addAction(icone("trash", Couleurs.ERREUR), "Supprimer…").triggered.connect(
+        menu.addAction(icone_menu("trash", Couleurs.ERREUR), "Supprimer…").triggered.connect(
             lambda: onglet.supprimer(connexion.identifiant)
         )
         plus.setMenu(menu)

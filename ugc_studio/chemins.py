@@ -53,6 +53,42 @@ def dossier_cache() -> Path:
     return _creer(dossier_donnees() / "cache")
 
 
+def dossier_documents() -> Path:
+    """Dossier « Documents » de l'utilisateur, même s'il a été déplacé (ex. vers OneDrive)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            import uuid
+            from ctypes import wintypes
+
+            # Identifiant Windows du dossier Documents (FOLDERID_Documents).
+            identifiant = uuid.UUID("{FDD39AD0-238F-46AF-ADB4-6C85480369C7}")
+
+            class GUID(ctypes.Structure):
+                _fields_ = [("donnees", ctypes.c_byte * 16)]
+
+            guid = GUID()
+            ctypes.memmove(guid.donnees, identifiant.bytes_le, 16)
+            chemin = ctypes.c_wchar_p()
+            fonction = ctypes.windll.shell32.SHGetKnownFolderPath
+            fonction.argtypes = [ctypes.POINTER(GUID), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)]
+            if fonction(ctypes.byref(guid), 0, None, ctypes.byref(chemin)) == 0 and chemin.value:
+                resultat = Path(chemin.value)
+                ctypes.windll.ole32.CoTaskMemFree(chemin)
+                return resultat
+        except (AttributeError, OSError, ValueError):
+            pass
+    return Path.home() / "Documents"
+
+
+def dossier_projets_defaut() -> Path:
+    """Emplacement proposé pour les nouveaux projets (§10) : Documents\\UGC Studio\\Projets."""
+    force = os.environ.get(VARIABLE_DOSSIER_DONNEES)
+    if force:  # tests automatiques : tout reste dans le dossier temporaire
+        return Path(force) / "Projets"
+    return dossier_documents() / NOM_APP / "Projets"
+
+
 def dossier_ressources() -> Path:
     """Ressources embarquées (polices, icônes).
 

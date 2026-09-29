@@ -58,12 +58,21 @@ def test_aucune_couleur_ni_taille_en_dur():
                     ecarts.append(f"{fichier.relative_to(RACINE)}:{noeud.lineno} texte « {noeud.value[:40]} »")
             elif isinstance(noeud, ast.Call) and _nom_appel(noeud) in FONCTIONS_DE_TAILLE:
                 for argument in [*noeud.args, *(k.value for k in noeud.keywords)]:
+                    # Un nombre qui multiplie ou divise une valeur du thème (ex. « 2 × marge »,
+                    # pour les deux côtés) n'est pas une valeur de design : il est accepté.
+                    facteurs = {
+                        id(cote)
+                        for binaire in ast.walk(argument)
+                        if isinstance(binaire, ast.BinOp) and isinstance(binaire.op, (ast.Mult, ast.Div, ast.FloorDiv))
+                        for cote in (binaire.left, binaire.right)
+                    }
                     for sous in ast.walk(argument):
                         if (
                             isinstance(sous, ast.Constant)
                             and isinstance(sous.value, (int, float))
                             and not isinstance(sous.value, bool)
                             and sous.value != 0
+                            and id(sous) not in facteurs
                         ):
                             ecarts.append(
                                 f"{fichier.relative_to(RACINE)}:{noeud.lineno} "

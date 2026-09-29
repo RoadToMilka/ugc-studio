@@ -2,4 +2,9 @@
 # Les versions sont figées : chaque fabrication du .exe utilise exactement les mêmes,
 # une mise à jour ne peut donc pas casser l'app sans qu'on l'ait décidé.
 PySide6-Essentials==6.11.2
+# Modules Qt supplémentaires : Qt Multimedia (lecture des prises audio).
+PySide6-Addons==6.11.2
+# Coffre-fort de Windows pour les clés API.
 keyring==25.7.0
+# Encodeur MP3 (LAME) pour l'export des prises.
+lameenc==1.8.4

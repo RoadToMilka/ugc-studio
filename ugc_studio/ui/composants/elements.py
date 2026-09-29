@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from ..icones import icone
-from ..theme import Couleurs, Dimensions, Espacements
+from ..theme import Espacements
+from .bouton import Bouton
 
 
 def libelle(
@@ -51,19 +51,10 @@ def bouton(
     variante: str | None = None,
     nom_icone: str | None = None,
     action: Callable[[], None] | None = None,
-) -> QPushButton:
-    """Bouton. Variantes : None (normal), « principal » (contour mauve), « discret »."""
-    resultat = QPushButton(texte)
-    if variante:
-        resultat.setProperty("variante", variante)
-    if nom_icone:
-        couleur = Couleurs.TEXTE if variante == "principal" else Couleurs.TEXTE_SECONDAIRE
-        resultat.setIcon(icone(nom_icone, couleur))
-        resultat.setIconSize(QSize(Dimensions.ICONE_PETITE, Dimensions.ICONE_PETITE))
-    resultat.setCursor(Qt.CursorShape.PointingHandCursor)
-    # Le contour mauve de « focus » n'apparaît qu'en naviguant au clavier (touche Tab),
-    # pas après un simple clic de souris.
-    resultat.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+) -> Bouton:
+    """Bouton de l'app (voir composants/bouton.py). Variantes : None (normal), « principal »
+    (contour mauve), « discret » (sans cadre), « icone » (petit bouton carré, icône seule)."""
+    resultat = Bouton(texte, variante, nom_icone)
     if action is not None:
         resultat.clicked.connect(action)
     return resultat

@@ -17,6 +17,7 @@ def catalogue(tmp_path):
 def test_prix_par_defaut(catalogue):
     prix = catalogue.prix("gemini-3.8-flash-tts")
     assert (prix.entree, prix.sortie, prix.personnalise) == (Decimal("0.50"), Decimal("9.00"), False)
+    assert catalogue.prix("gemini-3.5-transcribe").sortie == Decimal("12.00")
     assert catalogue.taux_usd_eur == TAUX_PAR_DEFAUT
 
 
@@ -26,23 +27,65 @@ def test_calcul_du_cout(catalogue):
     assert catalogue.cout_eur("gemini-3.8-flash-tts", 1_000, 20_000) == Decimal("0.16245")
 
 
+def test_le_prix_du_jour_de_l_appel_est_applique(catalogue):
+    catalogue.definir_taux(Decimal("1"))
+    avant = catalogue.cout_eur("gemini-3.8-flash-tts", 0, 1_000_000, le=date(2026, 12, 31))
+    apres = catalogue.cout_eur("gemini-3.8-flash-tts", 0, 1_000_000, le=date(2027, 1, 1))
+    assert (avant, apres) == (Decimal("9.00"), Decimal("18.00"))
+    prochain = catalogue.prochain_tarif_google("gemini-3.8-flash-tts")
+    assert (prochain.depuis, prochain.sortie) == (date(2027, 1, 1), Decimal("18.00"))
+
+
 def test_prix_inconnu(catalogue):
-    assert catalogue.cout_eur("gemini-3.5-transcribe", 1000, 50) is None
-    assert catalogue.cout_eur("gemini-3.5-transcribe", 0, 0) == 0  # rien consommé : gratuit
+    assert catalogue.cout_eur("modele-sans-prix", 1000, 50) is None
+    assert catalogue.cout_eur("modele-sans-prix", 0, 0) == 0  # rien consommé : gratuit
 
 
 def test_prix_modifie_puis_retabli(tmp_path, catalogue):
-    catalogue.definir_prix("gemini-3.8-flash-tts", Decimal("1.00"), Decimal("18.00"))
+    catalogue.definir_prix("gemini-3.8-flash-tts", Decimal("0.60"), Decimal("10.00"))
     recharge = CataloguePrix(tmp_path / "prix.json")
-    assert recharge.prix("gemini-3.8-flash-tts").sortie == Decimal("18.00")
+    assert recharge.prix("gemini-3.8-flash-tts").sortie == Decimal("10.00")
     assert recharge.prix("gemini-3.8-flash-tts").personnalise
     recharge.retablir_defauts()
     assert recharge.prix("gemini-3.8-flash-tts").sortie == Decimal("9.00")
 
 
+def test_changement_google_posterieur_l_emporte_sur_le_prix_saisi(catalogue):
+    catalogue.definir_prix("gemini-3.8-flash-tts", Decimal("0.60"), Decimal("10.00"))  # saisi le 01/10/2026
+    assert catalogue.prix("gemini-3.8-flash-tts", le=date(2026, 12, 31)).sortie == Decimal("10.00")
+    en_2027 = catalogue.prix("gemini-3.8-flash-tts", le=date(2027, 1, 1))
+    assert (en_2027.sortie, en_2027.personnalise) == (Decimal("18.00"), False)
+
+
 def test_prix_identique_au_catalogue_non_retenu(catalogue):
     catalogue.definir_prix("gemini-3.8-flash-tts", Decimal("0.5"), Decimal("9"))
     assert not catalogue.prix("gemini-3.8-flash-tts").personnalise
+
+
+def test_prix_saisi_identique_au_nouveau_tarif_n_est_pas_personnalise(tmp_path):
+    # Ex. prix de Transcribe saisi à la main en v0.2 (il n'était pas encore dans le catalogue).
+    (tmp_path / "prix.json").write_text(
+        '{"version_format": 1, "modeles": {"gemini-3.5-transcribe": {"entree": "2", "sortie": "12"}}}',
+        encoding="utf-8",
+    )
+    assert not CataloguePrix(tmp_path / "prix.json").prix("gemini-3.5-transcribe").personnalise
+
+
+def test_modeles_listes(catalogue):
+    principaux = catalogue.identifiants()
+    assert principaux[:3] == ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.5-transcribe"]
+    assert "gemini-2.5-pro-preview-tts" not in principaux  # ancienne génération : seulement si accessible
+    avec_cle = catalogue.identifiants({"gemini-2.5-pro-preview-tts", "gemini-4-flash-tts"})
+    assert avec_cle[-2:] == ["gemini-2.5-pro-preview-tts", "gemini-4-flash-tts"]
+
+
+def test_cout_d_une_minute(catalogue):
+    catalogue.definir_taux(Decimal("1"))
+    # 250 tokens de texte à 0,50 $/M + 1 500 tokens audio à 9 $/M = 0,013625 $
+    assert catalogue.cout_reference_eur("gemini-3.8-flash-tts") == Decimal("0.013625")
+    hausse = catalogue.prochain_tarif_google("gemini-3.8-flash-tts")
+    assert catalogue.cout_reference_eur("gemini-3.8-flash-tts", hausse) == Decimal("0.02725")
+    assert catalogue.cout_reference_eur("modele-sans-prix") is None
 
 
 def test_lire_decimal():
@@ -82,10 +125,18 @@ def test_journal_des_couts(tmp_path, catalogue):
 
 def test_appel_sans_prix_compte_a_part(tmp_path, catalogue):
     couts = JournalCouts(tmp_path / "couts", catalogue)
-    couts.enregistrer("google", "gemini-3.5-transcribe", "transcription", 500, 100)
+    couts.enregistrer("google", "modele-sans-prix", "transcription", 500, 100)
     total = totaux(couts.lire())
     assert total.nombre == 1 and total.sans_prix == 1 and total.cout_eur == 0
     assert couts.cout_session == 0
+
+
+def test_appel_enregistre_au_prix_de_son_jour(tmp_path, catalogue):
+    couts = JournalCouts(tmp_path / "couts", catalogue)
+    zone = timezone(timedelta(hours=1))
+    avant = couts.enregistrer("google", "gemini-3.8-flash-tts", "voix", 0, 1000, quand=datetime(2026, 12, 31, 23, 0, tzinfo=zone))
+    apres = couts.enregistrer("google", "gemini-3.8-flash-tts", "voix", 0, 1000, quand=datetime(2027, 1, 1, 9, 0, tzinfo=zone))
+    assert apres.cout_eur == 2 * avant.cout_eur  # hausse de Google au 01/01/2027
 
 
 def test_filtres_et_totaux(tmp_path, catalogue):

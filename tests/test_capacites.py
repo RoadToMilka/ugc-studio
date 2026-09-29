@@ -1,17 +1,65 @@
-"""Tableau des capacités (§3.4) : seuls les modèles compatibles sont proposés."""
+"""Tableau des capacités (§3.4) : seuls les modèles compatibles sont proposés. Tarifs Google (§4.2)."""
 
-from ugc_studio.fournisseurs.capacites import Capacite, deviner_capacites, modele_connu, modeles_pour
+from datetime import date
+from decimal import Decimal
+
+from ugc_studio.fournisseurs.capacites import (
+    HAUSSE_GOOGLE_2027,
+    Capacite,
+    deviner_capacites,
+    modele_connu,
+    modeles_pour,
+)
 
 
 def test_modeles_du_cahier_des_charges():
     tts = modele_connu("gemini-3.8-flash-tts")
     assert Capacite.TTS in tts.capacites and Capacite.TTS_BALISES in tts.capacites
-    assert str(tts.prix_entree) == "0.50" and str(tts.prix_sortie) == "9.00"
+    tarif = tts.tarif(date(2026, 10, 1))
+    assert (tarif.entree, tarif.sortie) == (Decimal("0.50"), Decimal("9.00"))
     lite = modele_connu("gemini-3.8-flash-lite-tts")
-    assert str(lite.prix_sortie) == "6.00"
+    assert lite.tarif(date(2026, 10, 1)).sortie == Decimal("6.00")
     stt = modele_connu("gemini-3.5-transcribe")
     assert Capacite.STT_MOTS_HORODATES in stt.capacites
-    assert stt.prix_entree is None  # prix à renseigner
+    # Page des tarifs Google : 2 $ (audio) et 12 $ (texte) par million de tokens.
+    assert (stt.tarif(date(2026, 10, 1)).entree, stt.tarif(date(2026, 10, 1)).sortie) == (Decimal("2.00"), Decimal("12.00"))
+
+
+def test_hausse_annoncee_au_1er_janvier_2027():
+    tts = modele_connu("gemini-3.8-flash-tts")
+    assert tts.tarif(date(2026, 12, 31)).sortie == Decimal("9.00")
+    assert tts.tarif(HAUSSE_GOOGLE_2027).sortie == Decimal("18.00")
+    assert tts.prochain_tarif(date(2026, 10, 1)).depuis == HAUSSE_GOOGLE_2027
+    assert tts.prochain_tarif(HAUSSE_GOOGLE_2027) is None
+    assert modele_connu("gemini-3.5-transcribe").prochain_tarif(date(2026, 10, 1)) is None
+
+
+def test_ordre_de_grandeur_google():
+    """« 0,00225 $ pour 10 s d'audio » (3.8 Flash TTS) et « ≈ 0,005 $/min » (3.5 Transcribe)."""
+    tts = modele_connu("gemini-3.8-flash-tts")
+    tarif = tts.tarif(date(2026, 10, 1))
+    assert tts.reference.tokens_sortie * tarif.sortie / 1_000_000 / 6 == Decimal("0.00225")
+    stt = modele_connu("gemini-3.5-transcribe")
+    tarif = stt.tarif(date(2026, 10, 1))
+    minute = (stt.reference.tokens_entree * tarif.entree + stt.reference.tokens_sortie * tarif.sortie) / 1_000_000
+    assert Decimal("0.0045") < minute < Decimal("0.0055")
+
+
+def test_anciennes_voix_sans_balises_ni_voice_design():
+    for identifiant in ("gemini-3.1-flash-tts-preview", "gemini-2.5-pro-preview-tts", "gemini-2.5-flash-preview-tts"):
+        ancien = modele_connu(identifiant)
+        assert Capacite.TTS in ancien.capacites
+        assert Capacite.TTS_BALISES not in ancien.capacites and Capacite.TTS_VOICE_DESIGN not in ancien.capacites
+        assert not ancien.principal
+
+
+def test_modeles_live_jamais_proposes():
+    assert deviner_capacites("gemini-3.5-transcribe-live") == frozenset()
+    assert deviner_capacites("gemini-2.5-flash-native-audio-preview-12-2025") == frozenset()
+    assert modeles_pour({Capacite.STT}, {"gemini-3.5-transcribe", "gemini-3.5-transcribe-live"})[0].identifiant == (
+        "gemini-3.5-transcribe"
+    )
+    assert len(modeles_pour({Capacite.STT}, {"gemini-3.5-transcribe", "gemini-3.5-transcribe-live"})) == 1
 
 
 def test_capacites_devinees_pour_un_nouveau_modele():
@@ -23,8 +71,18 @@ def test_capacites_devinees_pour_un_nouveau_modele():
 def test_croisement_cles_et_taches():
     disponibles = {"gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.5-transcribe", "gemini-3.5-flash"}
     voix = modeles_pour({Capacite.TTS}, disponibles)
-    assert [c.identifiant for c in voix] == ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts"]
+    # Dans l'ordre du catalogue : le modèle conseillé d'abord.
+    assert [c.identifiant for c in voix] == ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"]
     assert all(c.compatible for c in voix)
+
+
+def test_balises_demandees_ancien_modele_incompatible():
+    choix = modeles_pour({Capacite.TTS, Capacite.TTS_BALISES}, {"gemini-3.8-flash-tts", "gemini-2.5-pro-preview-tts"})
+    assert [(c.identifiant, c.compatible) for c in choix] == [
+        ("gemini-3.8-flash-tts", True),
+        ("gemini-2.5-pro-preview-tts", False),
+    ]
+    assert "Balises" in choix[1].raison
 
 
 def test_modele_stt_sans_mots_horodates_marque_incompatible():

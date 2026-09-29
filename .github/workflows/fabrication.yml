@@ -59,7 +59,10 @@ jobs:
       - name: Tests automatiques
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest --junitxml=rapport/tests.xml
+        run: |
+          # Sortie copiée dans le rapport : en cas de plantage, on y voit le dernier test lancé.
+          python -m pytest -v --junitxml=rapport/tests.xml -o faulthandler_timeout=300 2>&1 | Tee-Object -FilePath rapport/pytest.txt
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Fabriquer UGC-Studio.exe
         run: |

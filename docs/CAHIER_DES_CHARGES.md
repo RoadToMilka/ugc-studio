@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.7 — 29/09/2026 (étape 2 : détails des connexions API, des prix et du suivi des coûts)
+> Version du document : 1.9 — 30/09/2026 (étape 3 : montants à 4 décimales, bouton maison, tarifs officiels de Google)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -52,6 +52,11 @@ Le `.exe` n'est pas signé : au premier lancement, Windows affiche « Windows a 
 ### 3.2 Notion de Projet
 
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
+
+- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, script, liste des prises) et `prises\prise-001.wav`, `prise-002.wav`…
+- Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
+- Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
+- Au démarrage, le dernier projet utilisé est rouvert automatiquement.
 
 ### 3.3 Lien TTS → sous-titres
 
@@ -109,11 +114,23 @@ Un modèle absent du tableau mais accessible avec une clé est reconnu d'après 
 ### 4.2 Catalogue des modèles et prix
 
 - Liste des modèles connus avec leurs capacités.
-- **Prix modifiables** par modèle : entrée et sortie, en $ par million de tokens (les tarifs changent — ex. Gemini 3.8 Flash TTS doublera au 01/01/2027).
-- Valeurs par défaut V1 (à vérifier au moment du code) :
-  - `gemini-3.8-flash-tts` : 0,50 $ / M tokens texte entrée — 9,00 $ / M tokens audio sortie
-  - `gemini-3.8-flash-lite-tts` : 0,50 $ / 6,00 $
-  - `gemini-3.5-transcribe` : prix à vérifier dans la doc officielle au moment du code
+- **Prix par défaut = tarifs officiels de Google** ([page des tarifs](https://ai.google.dev/gemini-api/docs/pricing?hl=fr), tarif « Standard » du niveau payant), vérifiés le 30/09/2026, en $ par million de tokens :
+
+| Modèle | Entrée | Sortie | Ordre de grandeur (Google) |
+|---|---|---|---|
+| `gemini-3.8-flash-tts` | 0,50 $ (texte) | 9,00 $ (audio) | 0,00225 $ pour 10 s d'audio |
+| `gemini-3.8-flash-lite-tts` | 0,50 $ | 6,00 $ | |
+| `gemini-3.5-transcribe` | 2,00 $ (audio) | 12,00 $ (texte) | ≈ 0,005 $ par minute transcrite |
+| `gemini-3.1-flash-tts-preview` | 1,00 $ | 20,00 $ | ancienne génération |
+| `gemini-2.5-pro-preview-tts` | 1,00 $ | 20,00 $ | ancienne génération |
+| `gemini-2.5-flash-preview-tts` | 0,50 $ | 10,00 $ | ancienne génération |
+
+- **Changements de prix annoncés** : Google double les prix des modèles 3.8 **à partir du 01/01/2027** (Flash TTS : 1,00 $ / 18,00 $ ; Flash-Lite TTS : 1,00 $ / 12,00 $). Chaque modèle a donc une liste de tarifs datés ; l'app applique **automatiquement** le tarif en vigueur le jour de l'appel et affiche le prochain changement sous le modèle.
+- **Prix modifiables** par modèle (entrée et sortie). Un prix saisi à la main est signalé (« Prix modifié à la main », avec le tarif Google) et s'applique jusqu'au prochain changement de tarif annoncé par Google : l'information la plus récente l'emporte.
+- **Ordre de grandeur en euros** sous chaque prix : coût d'une minute de voix (≈ 250 tokens de texte + 60 s × 25 tokens audio) ou d'une minute transcrite (60 s × 25 tokens audio + ≈ 175 tokens de texte), d'après les chiffres de la page des tarifs.
+- Modèles listés : les modèles principaux (3.8 Flash TTS, 3.8 Flash-Lite TTS, 3.5 Transcribe) toujours ; les anciennes générations et les modèles inconnus seulement s'ils sont accessibles avec une clé. Les anciennes générations de voix n'ont ni balises ni Voice Design (doc officielle). Les modèles « Live » (temps réel, ex. `gemini-3.5-transcribe-live`) utilisent une autre API et ne sont jamais proposés.
+- **Niveau gratuit** de Google (clé sans moyen de paiement) : ces modèles n'y sont pas facturés (limites d'usage plus basses). L'app affiche quand même le coût au tarif payant ; une note le rappelle.
+- Bouton « Page des tarifs Google » pour vérifier les prix.
 - **Taux de change USD → EUR** modifiable (champ manuel), ou récupéré en un clic auprès de la Banque centrale européenne (taux de référence du jour). Valeur de départ : 0,86, signalée « à vérifier ».
 - Prix et taux rangés dans `prix.json` (seuls les prix modifiés y sont écrits ; bouton « Rétablir les prix par défaut »).
 
@@ -128,11 +145,11 @@ Un modèle absent du tableau mais accessible avec une clé est reconnu d'après 
 
 ### 4.4 Affichage des montants
 
-Format imposé : `0.000 €` (3 décimales minimum)
-- partie entière + 1re décimale en taille normale ;
-- 2e et 3e décimales en **plus petit** (≈ 70 % de la taille) ;
-- ex. `0.0` + `07` €. Composant réutilisable `MontantLabel`.
-- Un montant non nul qui s'afficherait `0.000 €` (ex. 0.0004 € pour un essai de voix) reçoit des décimales supplémentaires jusqu'au premier chiffre utile (6 au maximum) : `0.0` + `004` €. Un coût réel n'apparaît jamais comme gratuit.
+Format imposé : `0.0000 €` (4 décimales minimum)
+- partie entière + 1re et 2e décimales en taille et couleur normales ;
+- 3e et 4e décimales en **plus petit** (≈ 70 % de la taille) et **plus sombre** (texte secondaire), pour ne pas attirer l'œil ;
+- ex. `0.00` + `71` €. Composant réutilisable `MontantLabel`.
+- Un montant non nul qui s'afficherait `0.0000 €` (ex. 0.00004 €) reçoit des décimales supplémentaires jusqu'au premier chiffre utile (6 au maximum) : `0.00` + `004` €. Un coût réel n'apparaît jamais comme gratuit.
 - Calculs en nombres décimaux exacts (`Decimal`), arrondi au plus proche (5 vers le haut).
 
 ---
@@ -165,7 +182,9 @@ Format imposé : `0.000 €` (3 décimales minimum)
 
 - **Dictionnaire de prononciation (mots de marque)** : l'API n'a pas de paramètre dédié aux noms de marque. L'app garde donc une liste « mot écrit → façon de le prononcer » (ex. « Glowzy » → « Glo-zi »). Au moment de générer, **seul le texte envoyé au TTS** est remplacé ; le script affiché et les sous-titres gardent l'orthographe correcte (grâce à l'alignement sur le script, §3.3). Bouton ▶ pour tester la prononciation d'un mot seul (coût minime). Dictionnaires globaux ou par projet.
 - **Aide à l'accentuation** : bouton « Accentuer » qui met le mot sélectionné en MAJUSCULES (le modèle appuie sur les mots en capitales). Ces majuscules n'impactent pas les sous-titres (le texte des sous-titres est géré séparément, cf. §7.2).
-- Compteur de caractères et **estimation du coût** avant génération.
+- Compteur de caractères et **estimation du coût** avant génération : tokens d'entrée ≈ caractères ÷ 4 ; durée d'après le nombre de mots (≈ 160 mots/min) et les pauses ; tokens audio ≈ durée × tokens par seconde. Ce dernier chiffre (25 au départ, d'après la page des tarifs de Google) est **ajusté automatiquement** après chaque génération avec les vrais nombres renvoyés par Google.
+- Affichage d'un mot accentué : en MAJUSCULES et en mauve dans l'éditeur ; l'écriture d'origine est conservée pour les sous-titres.
+- Copier/coller : entre éditeurs de l'app, badges et accents sont conservés ; un texte collé depuis un autre logiciel voit ses balises `<laugh>`… transformées en badges.
 
 ### 5.3 Découpage en répliques
 
@@ -176,7 +195,7 @@ Format imposé : `0.000 €` (3 décimales minimum)
 
 - **Voix de base** (30 voix Google) avec leur caractère (Puck — Upbeat, Kore — Firm, Leda — Youthful…).
 - **Bibliothèque étendue** interrogée via l'API (`voices.list`) avec **filtres** : langue, accent, genre, hauteur (grave/moyenne/aiguë), persona, contexte d'usage, recherche texte.
-- Bouton **▶ écouter** un extrait pour chaque voix (génération d'une phrase test, coût affiché).
+- Bouton **▶ écouter** un extrait pour chaque voix (génération d'une phrase test, coût affiché). L'extrait est généré une seule fois par modèle, voix et langue, puis gardé en cache ; son coût est noté « essai de voix ».
 - **Favoris** de voix.
 - *(V4)* Voice Replication (clonage à partir de 30 s, **uniquement avec l'accord de la personne**).
 
@@ -242,7 +261,9 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 - Bouton **Générer** → lecture immédiate dans l'app.
 - Chaque génération = une **prise** conservée dans le projet (horodatée, avec voix/style/coût utilisés).
 - Comparer, renommer, noter (★), supprimer les prises.
-- Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3.
+- Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3 (encodeur LAME, 192 kb/s).
+- Appel technique (Gemini 3.8 TTS) : API **Interactions** (`POST /v1beta/interactions`) — texte dans `input` (avec l'annotation `speech_metadata.style` quand un style est donné), voix dans `generation_config.speech_config`. Réponse : WAV 24 kHz mono en base64, et nombres de tokens (`usage`) pour le coût.
+- En cas de surcharge passagère de Google (erreur 5xx), un nouvel essai est fait automatiquement après 3 s.
 - **Variantes** (tests A/B de pubs) : générer plusieurs versions d'un même script en un seul lancement.
   - **Mode « mêmes réglages »** : N générations identiques ; le modèle varie naturellement l'interprétation → on garde la meilleure prise.
   - **Mode « réglages par variante »** : tableau où chaque colonne est une variante. Tout part des réglages de base ; pour chaque variante on modifie seulement ce qu'on veut comparer (voix, style, modèle, consigne d'une réplique, balises). Les valeurs modifiées sont surlignées en mauve pour voir d'un coup d'œil ce qui change.
@@ -254,7 +275,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 
 ### 5.6 bis Limites du modèle (doc officielle)
 
-- Entrée max : **8 192 tokens** de texte ; sortie max : **16 384 tokens** audio. Un script trop long est découpé automatiquement en répliques, générées puis recollées.
+- Entrée max : **8 192 tokens** de texte ; sortie max : **16 384 tokens** audio. Un script trop long est découpé automatiquement (aux fins de phrases, avec 20 % de marge sous ces limites), les morceaux sont générés puis recollés avec 0,25 s de silence.
 - Multi-voix dans une seule requête : 2 voix de base maximum ; avec des voix personnalisées, une requête par réplique puis assemblage (V4).
 - **Mode de traitement** : Standard uniquement. Le mode *Batch* (gros lots de variantes, résultats différés) pourra être ajouté plus tard si besoin ; *Flex* et *Priority* ne sont pas retenus.
 - Formats de sortie possibles : WAV (défaut), PCM brut, mu-law, A-law, fréquence réglable. L'app garde WAV 24 kHz.
@@ -265,6 +286,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 
 - Français par défaut ; sélecteur de langue par projet : anglais (US), anglais (UK), espagnol (Espagne), italien, néerlandais (Belgique), néerlandais (Pays-Bas), allemand.
 - La langue filtre la bibliothèque de voix.
+- La langue n'est pas envoyée au TTS en V1 : le modèle la reconnaît dans le texte. Elle sert à la phrase d'extrait des voix et, plus tard, à la transcription.
 
 ---
 
@@ -483,6 +505,14 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Boutons et champs : **36 px**
 - Petits boutons (icônes) : 28 px
 
+### 9.4 bis Boutons
+
+- Tous les boutons de l'app sont dessinés par un **composant maison** (`ui/composants/bouton.py`), comme les entrées de la barre latérale : le bouton standard de Qt colle l'icône au texte (≈ 4 px) sans réglage possible.
+- L'icône et le texte sont toujours **centrés en hauteur** (le texte est centré sur la hauteur de ses majuscules).
+- **Écart icône → texte identique partout** : 12 px (`Dimensions.ECART_ICONE_TEXTE`), dans la barre latérale, les boutons, le bandeau (flèche après le nom du projet) et les menus.
+- Icônes : 16 px dans les boutons avec texte et les menus, 20 px dans la barre latérale et les petits boutons-icônes (⋯, lecture).
+- Variantes : normal, principal (contour mauve), discret (sans cadre), icône (carré de 28 px), projet (nom du projet dans le bandeau). Contour de focus seulement en navigation au clavier (touche Tab).
+
 ### 9.5 Typographie
 
 - Police : **Inter** (embarquée dans l'app)
@@ -524,7 +554,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 ## 12. Découpage en versions
 
 ### V1 — Socle utilisable
-- Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.0`+`07`.
+- Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.00`+`71`.
 - Architecture d'adaptateurs + tableau de capacités (adaptateur Google seul).
 - Voix : éditeur avec badges de balises, dictionnaire de prononciation, variantes, **Voice Design** (création de voix + conseils Google), assistant de style avec conseils Google, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
 - Transcription : import vidéo/audio, extraction audio, transcription mot par mot, langue, séparation des voix, dictionnaire de remplacements, masquage des hésitations, éditeur de transcription.
@@ -572,8 +602,9 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 
 - Liste définitive des **catégories de pub** et de leur ton (l'utilisateur les créera dans la bibliothèque de styles ; quelques exemples fournis par défaut).
 - Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
-- **Prix exacts** de Gemini 3.5 Transcribe et syntaxe exacte des API au moment du code (la doc évolue vite — toujours vérifier la doc officielle avant d'écrire un adaptateur).
+- Syntaxe exacte des API au moment du code (la doc évolue vite — toujours vérifier la doc officielle avant d'écrire un adaptateur). Les prix de Gemini 3.5 Transcribe sont connus depuis la v1.9 (§4.2).
 - Valeurs précises des **zones de sécurité** par plateforme (à documenter au moment de la V2).
+- **Durée de conservation des voix créées** (Voice Design) : le guide officiel « Get_Started_Voices » indique 7 jours (`expire_time`), le §5.4 bis 1 an. L'app affichera la date renvoyée par Google (à vérifier à l'étape 5).
 
 ---
 

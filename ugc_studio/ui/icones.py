@@ -21,9 +21,14 @@ from .theme import Couleurs, Dimensions
 ECHELLES = (1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0)
 
 
-def svg_colore(nom: str, couleur: str, taille: int | None = None) -> str:
-    """Contenu SVG de l'icône `nom`, dessinée dans la couleur demandée."""
+def svg_colore(nom: str, couleur: str, taille: int | None = None, rempli: bool = False) -> str:
+    """Contenu SVG de l'icône `nom`, dessinée dans la couleur demandée.
+
+    `rempli` : l'intérieur de l'icône est peint aussi (ex. étoile pleine pour une note).
+    """
     svg = (dossier_ressources() / "icones" / f"{nom}.svg").read_text(encoding="utf-8")
+    if rempli:
+        svg = svg.replace('fill="none"', 'fill="currentColor"', 1)
     svg = svg.replace("currentColor", couleur)
     if taille is not None:
         svg = re.sub(r'width="\d+"', f'width="{taille}"', svg, count=1)
@@ -49,6 +54,7 @@ def icone(
     couleur_active: str | None = None,
     couleur_desactivee: str = Couleurs.TEXTE_DESACTIVE,
     taille: int = Dimensions.ICONE,
+    rempli: bool = False,
 ) -> QIcon:
     """Icône Qt prête à l'emploi.
 
@@ -69,10 +75,15 @@ def icone(
             (QIcon.Mode.Disabled, QIcon.State.On, couleur_desactivee),
         ]
     for mode, etat, teinte in variantes:
-        svg = svg_colore(nom, teinte)
+        svg = svg_colore(nom, teinte, rempli=rempli)
         for echelle in ECHELLES:
             resultat.addPixmap(image_svg(svg, round(taille * echelle)), mode, etat)
     return resultat
+
+
+def icone_menu(nom: str, couleur: str = Couleurs.TEXTE_SECONDAIRE) -> QIcon:
+    """Icône d'une ligne de menu, dessinée à la taille exacte des menus (16 px) pour rester nette."""
+    return icone(nom, couleur, taille=Dimensions.ICONE_PETITE)
 
 
 def fichier_icone(nom: str, couleur: str, taille: int = Dimensions.ICONE_PETITE) -> str:
