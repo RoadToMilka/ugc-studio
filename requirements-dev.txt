@@ -1,0 +1,6 @@
+# Outils de développement : tests automatiques et fabrication du .exe.
+-r requirements.txt
+pytest==9.1.1
+pytest-qt==4.5.0
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.7

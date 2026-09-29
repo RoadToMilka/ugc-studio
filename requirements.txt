@@ -1,0 +1,4 @@
+# Bibliothèques utilisées par l'app.
+# Les versions sont figées : chaque fabrication du .exe utilise exactement les mêmes,
+# une mise à jour ne peut donc pas casser l'app sans qu'on l'ait décidé.
+PySide6-Essentials==6.11.2

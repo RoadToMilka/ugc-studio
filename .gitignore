@@ -1,0 +1,12 @@
+# Fichiers générés automatiquement (jamais envoyés sur GitHub)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+build/
+dist/
+rapport/
+
+# Sécurité : aucun fichier de clés ou de configuration locale
+.env
+*.key
