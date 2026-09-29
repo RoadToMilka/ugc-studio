@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.4 — 29/09/2026 (vérifié contre les pages officielles des modèles)
+> Version du document : 1.5 — 29/09/2026 (vérifié contre les pages officielles des modèles)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -219,7 +219,12 @@ Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe)
 - méta-consignes (« même voix », « garde le timbre »…) ;
 - sons ponctuels écrits dans le style (« rire », « soupir »…) → proposition de les convertir en balises.
 
-Langue des consignes : les exemples Google sont en anglais ; l'app permettra le français et l'anglais, à comparer lors des tests (l'app pourra proposer une traduction automatique en anglais si l'anglais donne de meilleurs résultats).
+**Langue des consignes : anglais envoyé à Google, traduction française affichée.**
+Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en anglais**, comme dans les exemples Google.
+- L'assistant structuré assemble directement la consigne en anglais ; la **traduction française** s'affiche juste en dessous, en lecture seule, pour comprendre ce qui est envoyé.
+- En texte libre, on peut écrire en anglais, ou écrire en français puis cliquer **« Traduire en anglais »** : l'app traduit avec un modèle de texte Gemini (même clé API, coût minime affiché) et montre les deux versions avant d'enregistrer.
+- Les exemples et conseils Google sont affichés **en anglais d'origine**, avec leur traduction française.
+- Le texte du script (ce que la voix prononce) reste bien sûr dans la langue du projet.
 
 ### 5.6 Génération et prises
 
