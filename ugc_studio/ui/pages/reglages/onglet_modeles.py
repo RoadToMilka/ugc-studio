@@ -24,13 +24,15 @@ from ....fournisseurs.capacites import (
 from ....prix import lire_decimal, recuperer_taux_bce
 from ....services import Services
 from ... import taches
-from ...composants.elements import bloc, bouton, libelle, vider_disposition
+from ...composants.elements import bloc, bouton, libelle, separateur, vider_disposition
 from ...composants.montant_label import MontantLabel
 from ...ouvrir import ouvrir_page_web
 from ...theme import Dimensions, Espacements, Typo
 from ..base import zone_defilante
 
 NATURES = {"texte": "texte envoyé", "audio": "audio"}
+COLONNES = ("Modèle", "Capacités", "Accès", "Entrée $/M", "Sortie $/M")
+NB_COLONNES = len(COLONNES)
 
 
 def _texte(valeur: Decimal | None) -> str:
@@ -204,9 +206,11 @@ class OngletModeles(QWidget):
 
     def rafraichir(self) -> None:
         vider_disposition(self._grille)
+        for ligne_grille in range(self._grille.rowCount()):  # la grille garde ses anciennes lignes
+            self._grille.setRowMinimumHeight(ligne_grille, 0)
         self._lignes.clear()
 
-        for colonne, titre in enumerate(("Modèle", "Capacités", "Accès", "Entrée $/M", "Sortie $/M")):
+        for colonne, titre in enumerate(COLONNES):
             self._grille.addWidget(libelle(titre, "legende", retour_a_la_ligne=False), 0, colonne)
 
         disponibles = self._services.connexions.modeles_disponibles()
@@ -216,7 +220,9 @@ class OngletModeles(QWidget):
         detectes = {m for m in disponibles if deviner_capacites(m)}
         rang = 1
         for identifiant in self._services.prix.identifiants(detectes):
-            self._grille.setRowMinimumHeight(rang, Espacements.M)  # espace avant chaque modèle
+            # Avant chaque modèle : un fin trait horizontal, avec de l'espace au-dessus et en dessous.
+            self._grille.setRowMinimumHeight(rang, Espacements.XL)
+            self._grille.addWidget(separateur(), rang, 0, 1, NB_COLONNES, Qt.AlignmentFlag.AlignVCenter)
             self._ajouter_modele(identifiant, rang + 1, identifiant in disponibles, une_cle_testee)
             rang += 3
 
