@@ -93,6 +93,23 @@ jobs:
           path: rapport/
           retention-days: 30
 
+      # Copie du rapport dans une référence Git cachée (refs/rapports/<branche>), invisible dans
+      # la liste des branches : Claude peut ainsi relire les captures d'écran depuis son espace
+      # de travail, qui n'a pas accès aux fichiers joints des runs.
+      - name: Déposer le rapport pour relecture (référence cachée)
+        if: always()
+        run: |
+          $copie = Join-Path $env:RUNNER_TEMP "rapport-git"
+          New-Item -ItemType Directory -Force -Path $copie | Out-Null
+          Copy-Item -Recurse -Force rapport/* $copie
+          Set-Location $copie
+          git init -q
+          git config user.name "Fabrication automatique"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Rapport de fabrication ${{ github.sha }}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" "HEAD:refs/rapports/${{ github.ref_name }}"
+
       - name: Joindre UGC-Studio.exe
         uses: actions/upload-artifact@v7
         with:
