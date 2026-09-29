@@ -8,11 +8,14 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from .. import NOM_APP
+from ..projets import ErreurProjet, Projet
 from ..services import Services
+from .actions_projet import remplir_menu_projet
 from .composants.barre_laterale import BarreLaterale, Module
 from .composants.entete import Entete
 from .pages.page_a_venir import PageAVenir
 from .pages.reglages import PageReglages
+from .pages.voix import PageVoix
 from .theme import Dimensions
 
 journal = logging.getLogger(__name__)
@@ -27,17 +30,7 @@ MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
 
 def _creer_pages(services: Services) -> dict[str, QWidget]:
     return {
-        "voix": PageAVenir(
-            "Voix",
-            "Voix off générée par IA (TTS).",
-            "Étapes 3 à 6",
-            [
-                "Éditeur de script avec badges de balises (<laugh>, <sigh>, pauses…)",
-                "Voix Google, bibliothèque filtrable, favoris et Voice Design",
-                "Répliques, styles personnalisés et conseils Google",
-                "Prises, variantes A/B, export WAV et MP3",
-            ],
-        ),
+        "voix": PageVoix(services),
         "transcription": PageAVenir(
             "Transcription",
             "Texte horodaté mot par mot à partir d'une vidéo ou d'un audio (STT).",
@@ -102,8 +95,34 @@ class FenetrePrincipale(QMainWindow):
         services.couts.abonner(lambda _appel: self.entete.definir_cout_session(services.couts.cout_session))
         self.entete.definir_cout_session(services.couts.cout_session)
 
+        # Menu « Projet » du bandeau, reconstruit à chaque ouverture (pour les projets récents).
+        self.entete.menu_projet.aboutToShow.connect(
+            lambda: remplir_menu_projet(self.entete.menu_projet, self, services)
+        )
+        services.projets.abonner(self._projet_change)
+
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
+        self._rouvrir_dernier_projet()
+
+    # --- Projet ------------------------------------------------------------------------------
+
+    def _projet_change(self, projet: Projet | None) -> None:
+        self.entete.definir_projet(projet.nom if projet else None)
+        self.setWindowTitle(f"{projet.nom} — {NOM_APP}" if projet else NOM_APP)
+
+    def _rouvrir_dernier_projet(self) -> None:
+        """Au démarrage, le dernier projet utilisé est rouvert automatiquement."""
+        if self.services.projets.projet is not None:
+            self._projet_change(self.services.projets.projet)
+            return
+        dernier = self.services.projets.dernier_projet()
+        if dernier is None:
+            return
+        try:
+            self.services.projets.ouvrir(dernier)
+        except ErreurProjet:
+            journal.warning("Dernier projet non rouvert : %s", dernier, exc_info=True)
 
     # --- Navigation -------------------------------------------------------------------------
 
@@ -148,6 +167,9 @@ class FenetrePrincipale(QMainWindow):
         self.move(cadre.topLeft())
 
     def closeEvent(self, evenement) -> None:
+        voix = self.page("voix")
+        voix.atelier.lecteur.arreter()
+        voix.atelier.enregistrer_maintenant()
         self._preferences.ecrire("geometrie_fenetre", bytes(self.saveGeometry().toBase64()).decode("ascii"))
         self._preferences.ecrire("module", self.module_actuel())
         try:

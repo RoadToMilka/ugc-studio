@@ -12,6 +12,7 @@ from .connexions import Coffre, CoffreWindows, GestionnaireConnexions
 from .couts import JournalCouts
 from .preferences import Preferences
 from .prix import CataloguePrix
+from .projets import GestionnaireProjets
 
 
 @dataclass
@@ -20,6 +21,7 @@ class Services:
     connexions: GestionnaireConnexions
     prix: CataloguePrix
     couts: JournalCouts
+    projets: GestionnaireProjets
 
 
 def creer_services(coffre: Coffre | None = None) -> Services:
@@ -31,4 +33,5 @@ def creer_services(coffre: Coffre | None = None) -> Services:
         connexions=GestionnaireConnexions(dossier / "connexions.json", coffre or CoffreWindows()),
         prix=prix,
         couts=JournalCouts(dossier / "couts", prix),
+        projets=GestionnaireProjets(dossier / "projets_recents.json"),
     )

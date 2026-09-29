@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 from ..journal import declarer_secret
+from .voix import RequeteVoix, ResultatVoix
 
 
 class ErreurFournisseur(Exception):
@@ -65,3 +66,9 @@ class Adaptateur(ABC):
         except ErreurFournisseur as erreur:
             return ResultatTest(False, erreur.message, code=erreur.code)
         return ResultatTest(True, f"Clé valide — {len(modeles)} modèles accessibles.", modeles)
+
+    # --- Fonctions des tâches (chaque fournisseur n'implémente que ce qu'il sait faire) -------
+
+    def generer_voix(self, requete: RequeteVoix) -> ResultatVoix:
+        """Génère une voix off (TTS)."""
+        raise ErreurFournisseur(f"{self.nom} ne sait pas générer de voix.", "non_disponible")

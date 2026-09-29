@@ -52,11 +52,14 @@ def zone_defilante(
 
 
 def entete_de_page(titre: str, sous_titre: str) -> QVBoxLayout:
+    """Titre + sous-titre d'une page. Les deux textes restent accessibles : `entete.titre`, `entete.sous_titre`."""
     entete = QVBoxLayout()
     entete.setContentsMargins(0, 0, 0, 0)
     entete.setSpacing(Espacements.XS)
-    entete.addWidget(libelle(titre, "titre-page"))
-    entete.addWidget(libelle(sous_titre, "secondaire"))
+    entete.titre = libelle(titre, "titre-page")
+    entete.sous_titre = libelle(sous_titre, "secondaire")
+    entete.addWidget(entete.titre)
+    entete.addWidget(entete.sous_titre)
     return entete
 
 
@@ -75,5 +78,7 @@ class Page(QWidget):
             largeur_max, (Espacements.XXL, Espacements.XL, Espacements.XXL, Espacements.XXL)
         )
         disposition.addWidget(zone)
-        self.contenu.addLayout(entete_de_page(titre, sous_titre))
+        entete = entete_de_page(titre, sous_titre)
+        self.titre, self.sous_titre = entete.titre, entete.sous_titre
+        self.contenu.addLayout(entete)
         self.contenu.addSpacing(Espacements.S)

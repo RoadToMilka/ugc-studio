@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.7 — 29/09/2026 (étape 2 : détails des connexions API, des prix et du suivi des coûts)
+> Version du document : 1.8 — 29/09/2026 (étape 3 : projets, génération de voix via l'API Interactions, prises)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -52,6 +52,11 @@ Le `.exe` n'est pas signé : au premier lancement, Windows affiche « Windows a 
 ### 3.2 Notion de Projet
 
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
+
+- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, script, liste des prises) et `prises\prise-001.wav`, `prise-002.wav`…
+- Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
+- Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
+- Au démarrage, le dernier projet utilisé est rouvert automatiquement.
 
 ### 3.3 Lien TTS → sous-titres
 
@@ -165,7 +170,9 @@ Format imposé : `0.000 €` (3 décimales minimum)
 
 - **Dictionnaire de prononciation (mots de marque)** : l'API n'a pas de paramètre dédié aux noms de marque. L'app garde donc une liste « mot écrit → façon de le prononcer » (ex. « Glowzy » → « Glo-zi »). Au moment de générer, **seul le texte envoyé au TTS** est remplacé ; le script affiché et les sous-titres gardent l'orthographe correcte (grâce à l'alignement sur le script, §3.3). Bouton ▶ pour tester la prononciation d'un mot seul (coût minime). Dictionnaires globaux ou par projet.
 - **Aide à l'accentuation** : bouton « Accentuer » qui met le mot sélectionné en MAJUSCULES (le modèle appuie sur les mots en capitales). Ces majuscules n'impactent pas les sous-titres (le texte des sous-titres est géré séparément, cf. §7.2).
-- Compteur de caractères et **estimation du coût** avant génération.
+- Compteur de caractères et **estimation du coût** avant génération : tokens d'entrée ≈ caractères ÷ 4 ; durée d'après le nombre de mots (≈ 160 mots/min) et les pauses ; tokens audio ≈ durée × tokens par seconde. Ce dernier chiffre (32 au départ) est **ajusté automatiquement** après chaque génération avec les vrais nombres renvoyés par Google.
+- Affichage d'un mot accentué : en MAJUSCULES et en mauve dans l'éditeur ; l'écriture d'origine est conservée pour les sous-titres.
+- Copier/coller : entre éditeurs de l'app, badges et accents sont conservés ; un texte collé depuis un autre logiciel voit ses balises `<laugh>`… transformées en badges.
 
 ### 5.3 Découpage en répliques
 
@@ -176,7 +183,7 @@ Format imposé : `0.000 €` (3 décimales minimum)
 
 - **Voix de base** (30 voix Google) avec leur caractère (Puck — Upbeat, Kore — Firm, Leda — Youthful…).
 - **Bibliothèque étendue** interrogée via l'API (`voices.list`) avec **filtres** : langue, accent, genre, hauteur (grave/moyenne/aiguë), persona, contexte d'usage, recherche texte.
-- Bouton **▶ écouter** un extrait pour chaque voix (génération d'une phrase test, coût affiché).
+- Bouton **▶ écouter** un extrait pour chaque voix (génération d'une phrase test, coût affiché). L'extrait est généré une seule fois par modèle, voix et langue, puis gardé en cache ; son coût est noté « essai de voix ».
 - **Favoris** de voix.
 - *(V4)* Voice Replication (clonage à partir de 30 s, **uniquement avec l'accord de la personne**).
 
@@ -242,7 +249,9 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 - Bouton **Générer** → lecture immédiate dans l'app.
 - Chaque génération = une **prise** conservée dans le projet (horodatée, avec voix/style/coût utilisés).
 - Comparer, renommer, noter (★), supprimer les prises.
-- Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3.
+- Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3 (encodeur LAME, 192 kb/s).
+- Appel technique (Gemini 3.8 TTS) : API **Interactions** (`POST /v1beta/interactions`) — texte dans `input` (avec l'annotation `speech_metadata.style` quand un style est donné), voix dans `generation_config.speech_config`. Réponse : WAV 24 kHz mono en base64, et nombres de tokens (`usage`) pour le coût.
+- En cas de surcharge passagère de Google (erreur 5xx), un nouvel essai est fait automatiquement après 3 s.
 - **Variantes** (tests A/B de pubs) : générer plusieurs versions d'un même script en un seul lancement.
   - **Mode « mêmes réglages »** : N générations identiques ; le modèle varie naturellement l'interprétation → on garde la meilleure prise.
   - **Mode « réglages par variante »** : tableau où chaque colonne est une variante. Tout part des réglages de base ; pour chaque variante on modifie seulement ce qu'on veut comparer (voix, style, modèle, consigne d'une réplique, balises). Les valeurs modifiées sont surlignées en mauve pour voir d'un coup d'œil ce qui change.
@@ -254,7 +263,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 
 ### 5.6 bis Limites du modèle (doc officielle)
 
-- Entrée max : **8 192 tokens** de texte ; sortie max : **16 384 tokens** audio. Un script trop long est découpé automatiquement en répliques, générées puis recollées.
+- Entrée max : **8 192 tokens** de texte ; sortie max : **16 384 tokens** audio. Un script trop long est découpé automatiquement (aux fins de phrases, avec 20 % de marge sous ces limites), les morceaux sont générés puis recollés avec 0,25 s de silence.
 - Multi-voix dans une seule requête : 2 voix de base maximum ; avec des voix personnalisées, une requête par réplique puis assemblage (V4).
 - **Mode de traitement** : Standard uniquement. Le mode *Batch* (gros lots de variantes, résultats différés) pourra être ajouté plus tard si besoin ; *Flex* et *Priority* ne sont pas retenus.
 - Formats de sortie possibles : WAV (défaut), PCM brut, mu-law, A-law, fréquence réglable. L'app garde WAV 24 kHz.
@@ -265,6 +274,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 
 - Français par défaut ; sélecteur de langue par projet : anglais (US), anglais (UK), espagnol (Espagne), italien, néerlandais (Belgique), néerlandais (Pays-Bas), allemand.
 - La langue filtre la bibliothèque de voix.
+- La langue n'est pas envoyée au TTS en V1 : le modèle la reconnaît dans le texte. Elle sert à la phrase d'extrait des voix et, plus tard, à la transcription.
 
 ---
 
@@ -574,6 +584,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 - Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
 - **Prix exacts** de Gemini 3.5 Transcribe et syntaxe exacte des API au moment du code (la doc évolue vite — toujours vérifier la doc officielle avant d'écrire un adaptateur).
 - Valeurs précises des **zones de sécurité** par plateforme (à documenter au moment de la V2).
+- **Durée de conservation des voix créées** (Voice Design) : le guide officiel « Get_Started_Voices » indique 7 jours (`expire_time`), le §5.4 bis 1 an. L'app affichera la date renvoyée par Google (à vérifier à l'étape 5).
 
 ---
 

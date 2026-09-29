@@ -36,6 +36,28 @@ class Couleurs:
     ERREUR = "#EF4444"
 
 
+class CouleursBalises:
+    """§5.2 — Couleur des badges de balises, une par famille (voir ugc_studio/balises.py)."""
+
+    PAUSES = "#94A3B8"  # gris ardoise
+    RIRES = "#FACC15"  # jaune
+    SOUFFLE = "#2DD4BF"  # turquoise
+    REACTIONS = "#FB923C"  # orange
+    VOIX = "#38BDF8"  # bleu ciel
+    EMOTIONS = "#F472B6"  # rose
+
+    @classmethod
+    def de(cls, famille: str) -> str:
+        return {
+            "pauses": cls.PAUSES,
+            "rires": cls.RIRES,
+            "souffle": cls.SOUFFLE,
+            "reactions": cls.REACTIONS,
+            "voix": cls.VOIX,
+            "emotions": cls.EMOTIONS,
+        }.get(famille, Couleurs.TEXTE_SECONDAIRE)
+
+
 class Opacites:
     """Transparences appliquées aux couleurs ci-dessus (0 = invisible, 1 = opaque)."""
 
@@ -43,6 +65,9 @@ class Opacites:
     TEINTE = 0.18  # fond mauve du bouton principal
     TEINTE_SURVOL = 0.26
     TEINTE_PRESSEE = 0.34
+    FOND_BADGE = 0.16  # fond coloré des badges de balises
+    CONTOUR_BADGE = 0.55
+    FOND_BADGE_SURVOL = 0.30
 
 
 class Espacements:
@@ -111,6 +136,14 @@ class Dimensions:
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
+    EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
+    # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
+    BADGE_MARGE_HORIZONTALE = 8  # espace intérieur, à gauche et à droite du nom de la balise
+    BADGE_ECART = 4  # espace de part et d'autre d'un badge dans le texte
+    GLISSIERE_HAUTEUR = 4  # barre de progression du lecteur
+    GLISSIERE_POIGNEE = 12
+    ETOILE = 16  # étoiles de notation des prises
+    CHAMP_STYLE_LARGEUR_MIN = 320
     FENETRE_LARGEUR = 1360
     FENETRE_HAUTEUR = 860
     FENETRE_LARGEUR_MIN = 960
@@ -329,6 +362,24 @@ QTabBar::tab:selected {
     border-bottom-color: $accent;
 }
 
+/* ---------- Glissières (position de lecture) ---------- */
+QSlider::groove:horizontal {
+    height: ${glissiere}px;
+    background: $couleur_bordure;
+    border-radius: ${rayon_glissiere}px;
+}
+QSlider::sub-page:horizontal {
+    background: $accent;
+    border-radius: ${rayon_glissiere}px;
+}
+QSlider::handle:horizontal {
+    background: $texte;
+    width: ${poignee_glissiere}px;
+    height: ${poignee_glissiere}px;
+    margin: -${marge_poignee_glissiere}px 0px;
+    border-radius: ${rayon_poignee_glissiere}px;
+}
+
 /* ---------- Tableaux ---------- */
 QTableView {
     background: transparent;
@@ -435,6 +486,22 @@ QPushButton[variante="icone"]:focus {
 QPushButton::menu-indicator {
     image: none;
     width: 0px;
+}
+QPushButton[variante="projet"] {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    min-height: 0px;
+    text-align: left;
+    font-size: ${titre_bloc}px;
+    font-family: "$famille_forte";
+    font-weight: $graisse_forte;
+}
+QPushButton[variante="projet"]:hover {
+    color: $accent_survol;
+}
+QPushButton[variante="projet"][vide="true"] {
+    color: $texte_secondaire;
 }
 
 /* ---------- Champs ---------- */
@@ -659,6 +726,11 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "rayon_etiquette": Dimensions.ETIQUETTE_HAUTEUR // 2,
         "etiquette_hauteur": Dimensions.ETIQUETTE_HAUTEUR,
         "soulignement_onglet": Dimensions.SOULIGNEMENT_ONGLET,
+        "glissiere": Dimensions.GLISSIERE_HAUTEUR,
+        "rayon_glissiere": Dimensions.GLISSIERE_HAUTEUR // 2,
+        "poignee_glissiere": Dimensions.GLISSIERE_POIGNEE,
+        "rayon_poignee_glissiere": Dimensions.GLISSIERE_POIGNEE // 2,
+        "marge_poignee_glissiere": (Dimensions.GLISSIERE_POIGNEE - Dimensions.GLISSIERE_HAUTEUR) // 2,
         # Qt compte la hauteur sans les bordures : 36 px au total = 34 px + 2 × 1 px de bordure.
         "hauteur_interne_controle": Hauteurs.CONTROLE - 2 * Dimensions.BORDURE,
         "hauteur_interne_petit_bouton": Hauteurs.PETIT_BOUTON - 2 * Dimensions.BORDURE,
