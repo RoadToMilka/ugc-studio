@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.1 — 29/09/2026 (vérifié contre les pages officielles des modèles)
+> Version du document : 1.2 — 29/09/2026 (vérifié contre les pages officielles des modèles)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -152,6 +152,7 @@ Format imposé : `0.000 €` (3 décimales minimum)
 
 (Liste issue de la doc officielle Gemini TTS ; les balises restent en anglais même pour un texte français.)
 
+- **Dictionnaire de prononciation (mots de marque)** : l'API n'a pas de paramètre dédié aux noms de marque. L'app garde donc une liste « mot écrit → façon de le prononcer » (ex. « Glowzy » → « Glo-zi »). Au moment de générer, **seul le texte envoyé au TTS** est remplacé ; le script affiché et les sous-titres gardent l'orthographe correcte (grâce à l'alignement sur le script, §3.3). Bouton ▶ pour tester la prononciation d'un mot seul (coût minime). Dictionnaires globaux ou par projet.
 - **Aide à l'accentuation** : bouton « Accentuer » qui met le mot sélectionné en MAJUSCULES (le modèle appuie sur les mots en capitales). Ces majuscules n'impactent pas les sous-titres (le texte des sous-titres est géré séparément, cf. §7.2).
 - Compteur de caractères et **estimation du coût** avant génération.
 
@@ -188,7 +189,13 @@ Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe)
 - Chaque génération = une **prise** conservée dans le projet (horodatée, avec voix/style/coût utilisés).
 - Comparer, renommer, noter (★), supprimer les prises.
 - Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3.
-- **Variantes** : générer N versions d'un même script (voix ou style différents) en un clic, pour les tests A/B de pubs.
+- **Variantes** (tests A/B de pubs) : générer plusieurs versions d'un même script en un seul lancement.
+  - **Mode « mêmes réglages »** : N générations identiques ; le modèle varie naturellement l'interprétation → on garde la meilleure prise.
+  - **Mode « réglages par variante »** : tableau où chaque colonne est une variante. Tout part des réglages de base ; pour chaque variante on modifie seulement ce qu'on veut comparer (voix, style, modèle, consigne d'une réplique, balises). Les valeurs modifiées sont surlignées en mauve pour voir d'un coup d'œil ce qui change.
+  - Bouton « dupliquer la variante » pour créer une variante voisine avec un petit changement.
+  - Coût total estimé affiché avant le lancement.
+  - Écoute comparative : lecture enchaînée ou bascule instantanée A/B au même moment du texte ; note ★ et choix de la variante retenue.
+  - Chaque variante devient une prise normale (§5.6).
 - **Écoute pendant la génération** (streaming) : option pour entendre le début avant la fin du calcul.
 
 ### 5.6 bis Limites du modèle (doc officielle)
@@ -231,8 +238,9 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 
 - **Langue** : détection auto ou langue forcée (`language_codes`, recommandé pour les vidéos courtes).
 - **Séparation des voix** (jusqu'à 8 personnes, fiable jusqu'à 2 ; au-delà expérimental) : chaque mot reçoit un locuteur (`spk_1`, `spk_2`…). Utile pour une pub à deux personnes : style de sous-titre différent par personne (V2).
-- **Vocabulaire personnalisé en double passe** (option) : 1re passe verbatim + horodatage par mot ; 2e passe avec le vocabulaire, sans horodatage ; l'app aligne le texte de la 2e passe sur les temps de la 1re. Coût doublé (quelques millièmes d'euro sur une pub). Listes de termes (< 100 recommandé, 1 000 max) enregistrables par projet ou globales.
-- **Dictionnaire de remplacements** (local, gratuit) : « sérum anti rides » → « Sérum Anti-Rides® », appliqué automatiquement après chaque transcription.
+- **Dictionnaire de remplacements** (local, gratuit) : « sérum anti rides » → « Sérum Anti-Rides® », appliqué automatiquement après chaque transcription. Dictionnaires globaux ou par projet.
+- **Correction manuelle** de n'importe quel mot dans l'éditeur (§6.4) — solution principale pour les erreurs ponctuelles.
+- Pas de vocabulaire personnalisé côté API en V1 (incompatible avec l'horodatage par mot) : non retenu, le dictionnaire + la correction manuelle suffisent.
 - **Masquer les hésitations dans les sous-titres** (remplace le mode smart) : l'app retire elle-même « euh », « hum »… de l'affichage en conservant les temps des autres mots. Liste de mots modifiable par langue. L'audio n'est pas modifié.
 - Le **mode smart** reste disponible uniquement pour une transcription texte sans timing (copier un script depuis une vidéo concurrente, par ex.).
 
@@ -454,8 +462,8 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 ### V1 — Socle utilisable
 - Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.0`+`07`.
 - Architecture d'adaptateurs + tableau de capacités (adaptateur Google seul).
-- Voix : éditeur avec badges de balises, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
-- Transcription : import vidéo/audio, extraction audio, transcription mot par mot, langue, séparation des voix, dictionnaire de remplacements, masquage des hésitations, vocabulaire en double passe, éditeur de transcription.
+- Voix : éditeur avec badges de balises, dictionnaire de prononciation, variantes, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
+- Transcription : import vidéo/audio, extraction audio, transcription mot par mot, langue, séparation des voix, dictionnaire de remplacements, masquage des hésitations, éditeur de transcription.
 - Lien « prise TTS → sous-titres » avec alignement sur le script.
 - Sous-titres : règles de découpage complètes (§7.3), export **SRT**.
 - Projets (sauvegarde/réouverture).
