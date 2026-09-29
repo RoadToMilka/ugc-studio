@@ -4,8 +4,9 @@ import os
 
 import pytest
 
-# Les tests d'interface tournent sans écran (fenêtres dessinées en mémoire).
+# Les tests d'interface tournent sans écran (fenêtres dessinées en mémoire) et sans son.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("UGC_STUDIO_SANS_AUDIO", "1")
 
 
 @pytest.fixture(autouse=True)

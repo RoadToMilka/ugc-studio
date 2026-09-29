@@ -7,12 +7,15 @@ lecteur audio de Windows.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 
 journal = logging.getLogger(__name__)
+
+VARIABLE_SANS_AUDIO = "UGC_STUDIO_SANS_AUDIO"
 
 
 class Lecteur(QObject):
@@ -25,6 +28,8 @@ class Lecteur(QObject):
         super().__init__(parent)
         self._chemin = ""
         self._lecteur = None
+        if os.environ.get(VARIABLE_SANS_AUDIO):
+            return  # tests automatiques : pas de lecture audio réelle
         try:
             from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
@@ -57,7 +62,8 @@ class Lecteur(QObject):
         """Lance la lecture de ce fichier, ou la met en pause s'il joue déjà."""
         chemin = str(chemin)
         if self._lecteur is None:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(chemin))
+            if not os.environ.get(VARIABLE_SANS_AUDIO):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(chemin))
             return
         if chemin == self._chemin and self.en_lecture():
             self._lecteur.pause()
