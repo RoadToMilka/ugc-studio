@@ -68,7 +68,7 @@ class DialogueStyle(QDialog):
         self._services = services
         self._style = style
         self.setWindowTitle(titre)
-        self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
+        self.setMinimumSize(Dimensions.DIALOGUE_STYLE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)

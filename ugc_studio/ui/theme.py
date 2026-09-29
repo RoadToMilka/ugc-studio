@@ -140,6 +140,7 @@ class Dimensions:
     DIALOGUE_LARGE_LARGEUR = 760  # bibliothèque de styles, dictionnaire de prononciation
     DIALOGUE_LARGE_HAUTEUR = 560
     PANNEAU_CONSEILS_LARGEUR = 280  # colonne « Conseils Google » à côté d'un formulaire
+    DIALOGUE_STYLE_LARGEUR = 880  # formulaire d'un style + colonne des conseils
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
