@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.3 — 29/09/2026 (vérifié contre les pages officielles des modèles)
+> Version du document : 1.4 — 29/09/2026 (vérifié contre les pages officielles des modèles)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -167,7 +167,26 @@ Format imposé : `0.000 €` (3 décimales minimum)
 - **Bibliothèque étendue** interrogée via l'API (`voices.list`) avec **filtres** : langue, accent, genre, hauteur (grave/moyenne/aiguë), persona, contexte d'usage, recherche texte.
 - Bouton **▶ écouter** un extrait pour chaque voix (génération d'une phrase test, coût affiché).
 - **Favoris** de voix.
-- *(V4)* Voice Design (création de voix par description) et Voice Replication (clonage à partir de 30 s, **uniquement avec l'accord de la personne**).
+- *(V4)* Voice Replication (clonage à partir de 30 s, **uniquement avec l'accord de la personne**).
+
+### 5.4 bis Voice Design — créer ses voix (V1)
+
+Création de voix personnalisées **dans l'app** (API `POST /v1beta/voices`, `type: "prompted"`), sans passer par Google AI Studio.
+
+- Champs : nom, langue, genre, modèle (Flash TTS ou Flash-Lite TTS), **description**.
+- **Assistant de description structurée** : champs guidés (âge, genre, timbre, texture de voix, accent régional, persona / rôle) assemblés automatiquement en 1–2 phrases, modifiables ensuite en texte libre. Ex. : « Jeune femme d'environ 25 ans, française, voix légèrement voilée, spontanée et complice, comme si elle parlait à une amie face caméra. »
+- Google renvoie un **extrait audio** → écoute immédiate → garder ou ajuster la description et recommencer.
+- Gestion : liste, réécoute (`voices.get` renvoie l'extrait), renommage, suppression, **date d'expiration** affichée (conservation 1 an), compteur **x / 200 voix**.
+- Les voix créées dans Google AI Studio (même projet) apparaissent aussi dans l'app.
+- Coût éventuel de création : à vérifier au moment du code ; affiché s'il existe.
+
+**Panneau « Conseils Google »** (toujours visible à côté du formulaire) :
+- Mettre ici les **traits permanents** : âge, genre, timbre, texture vocale, accent régional.
+- Description **courte et précise : 1 à 2 phrases**.
+- Éviter les paragraphes longs et les descriptions **contradictoires**.
+- L'émotion et le jeu se règlent ensuite avec des styles courts, pas dans la description.
+
+**Vérifications en direct** : avertissement au-delà de 2 phrases / ~40 mots.
 
 ### 5.5 Bibliothèque de styles personnalisés
 
@@ -175,13 +194,32 @@ Un **style** enregistré contient :
 - nom, catégorie (UGC témoignage, unboxing, placement influenceur, hook, pub classique… — catégories libres, créables par l'utilisateur) ;
 - fournisseur + modèle ;
 - voix ;
-- consigne de style (courte ; un avertissement s'affiche au-delà d'environ 15 mots, car les consignes longues font dériver la voix) ;
+- consigne de style (courte — voir conseils ci-dessous) ;
 - balises par défaut éventuelles ;
 - langue.
 
 Actions : créer, modifier, dupliquer, supprimer, **appliquer en un clic**. Quelques exemples fournis au départ (modifiables/supprimables).
 
 Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe).
+
+**Assistant de style structuré** : style = *émotion / attitude* + *rythme / prosodie* (optionnel), ex. « chaleureux et enthousiaste, débit rapide », « chuchoté, complice ». Champs guidés assemblés en une consigne courte, modifiable en texte libre.
+
+**Panneau « Conseils Google »** (visible dans l'éditeur de styles et à côté du champ style des répliques) :
+- Style **court** (quelques mots) : émotion, attitude, rythme, volume, hauteur/inflexion.
+- **Tester d'abord sans style** : la plupart des générations n'en ont pas besoin.
+- Pour une ambiance constante, **réutiliser exactement la même consigne** d'une réplique à l'autre.
+- Si l'émotion change en cours de texte → **découper en répliques** avec un style chacune, plutôt qu'une longue consigne.
+- **Pas de traits permanents** dans le style (âge, genre, nom, accent) → ils vont dans la voix (Voice Design ou choix de voix).
+- **Pas de méta-consignes** du type « garde la même voix », « ne change pas de timbre » : elles augmentent la dérive.
+- Les événements ponctuels (rire, soupir, pause) se mettent en **balises dans le texte**, pas dans le style.
+
+**Vérifications en direct** dans le champ style (avertissements non bloquants) :
+- plus de ~10 mots ;
+- mots évoquant un trait permanent (« ans », « homme », « femme », « accent », « voix grave »…) ;
+- méta-consignes (« même voix », « garde le timbre »…) ;
+- sons ponctuels écrits dans le style (« rire », « soupir »…) → proposition de les convertir en balises.
+
+Langue des consignes : les exemples Google sont en anglais ; l'app permettra le français et l'anglais, à comparer lors des tests (l'app pourra proposer une traduction automatique en anglais si l'anglais donne de meilleurs résultats).
 
 ### 5.6 Génération et prises
 
@@ -462,7 +500,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 ### V1 — Socle utilisable
 - Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.0`+`07`.
 - Architecture d'adaptateurs + tableau de capacités (adaptateur Google seul).
-- Voix : éditeur avec badges de balises, dictionnaire de prononciation, variantes, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
+- Voix : éditeur avec badges de balises, dictionnaire de prononciation, variantes, **Voice Design** (création de voix + conseils Google), assistant de style avec conseils Google, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
 - Transcription : import vidéo/audio, extraction audio, transcription mot par mot, langue, séparation des voix, dictionnaire de remplacements, masquage des hésitations, éditeur de transcription.
 - Lien « prise TTS → sous-titres » avec alignement sur le script.
 - Sous-titres : règles de découpage complètes (§7.3), export **SRT**.
@@ -482,7 +520,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Résumé avant export (§8.5).
 
 ### V4 — Voix avancées et fournisseurs
-- Voice Design, Voice Replication (avec consentement), multi-voix.
+- Voice Replication (avec consentement), multi-voix.
 - Adaptateurs OpenAI, ElevenLabs, Anthropic.
 - Installateur Windows.
 
