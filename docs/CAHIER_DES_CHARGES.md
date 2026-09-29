@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 1.5 — 29/09/2026 (vérifié contre les pages officielles des modèles)
+> Version du document : 1.6 — 29/09/2026 (plan de réalisation de la V1 en 8 étapes, précisions montants, design et distribution)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -123,6 +123,8 @@ Format imposé : `0.000 €` (3 décimales minimum)
 - partie entière + 1re décimale en taille normale ;
 - 2e et 3e décimales en **plus petit** (≈ 70 % de la taille) ;
 - ex. `0.0` + `07` €. Composant réutilisable `MontantLabel`.
+- Un montant non nul qui s'afficherait `0.000 €` (ex. 0.0004 € pour un essai de voix) reçoit des décimales supplémentaires jusqu'au premier chiffre utile (6 au maximum) : `0.0` + `004` €. Un coût réel n'apparaît jamais comme gratuit.
+- Calculs en nombres décimaux exacts (`Decimal`), arrondi au plus proche (5 vers le haut).
 
 ---
 
@@ -454,6 +456,8 @@ Toutes les valeurs ci-dessous sont centralisées dans **un seul fichier de thèm
 | Erreur | `#EF4444` |
 
 Le mauve sert aux contours des éléments clés (champ actif, bloc sélectionné, bouton principal), aux focus et aux repères.
+- Bouton principal : contour mauve et fond légèrement teinté de mauve (18 %).
+- Élément sélectionné (ex. module actif de la barre latérale) : contour mauve et fond mauve très léger (12 %).
 
 ### 9.2 Espacements
 
@@ -481,6 +485,12 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - En haut : nom du projet, **compteur de coût de la session** (format §4.4).
 - Zone centrale : contenu du module.
 
+### 9.7 Valeurs complémentaires
+
+- Également définies dans `theme.py` : largeur de la barre latérale, taille des icônes, petits arrondis de 4 px (cases à cocher, barres de défilement), pastilles d'information de 20 px de haut, taille de la fenêtre au premier lancement (au plus 92 % de l'écran) et taille minimale.
+- Icônes : collection **Lucide** (licence ISC, incluse), recolorées avec les couleurs du thème.
+- Un test automatique refuse toute couleur, taille ou marge écrite en dur hors de `theme.py`.
+
 ---
 
 ## 10. Données et sécurité
@@ -495,6 +505,8 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 ## 11. Distribution
 
 - Chaque version publiée = une **Release GitHub** avec le `.exe` construit automatiquement (GitHub Actions, machine Windows, PyInstaller).
+- Fabrication automatique à chaque envoi de code : tests, fabrication de `UGC-Studio.exe`, démarrage du `.exe` en mode autotest (vérifications + captures d'écran de chaque module), rapport joint au run.
+- Le numéro de version est dans `ugc_studio/__init__.py`. Quand il change sur la branche `main`, une Release `v<version>` est publiée automatiquement. Les versions `0.x` (étapes de la V1) sont marquées « pré-version ».
 - FFmpeg et la police Inter sont inclus dans l'app : rien à installer.
 - *(plus tard)* Installateur qui crée l'icône sur le bureau et dans le menu Démarrer.
 
@@ -512,6 +524,22 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Projets (sauvegarde/réouverture).
 - Thème sombre complet (§9).
 - Build `.exe` automatique via GitHub Actions.
+
+#### 12.1 Étapes de réalisation de la V1
+
+Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle est prête ; la suivante démarre sans attendre de validation.
+
+| Étape | Version | Contenu |
+|---|---|---|
+| 1. Socle | 0.1.0 | Structure du code, thème sombre (§9), fenêtre principale, police Inter, journal d'erreurs, stockage JSON, fabrication automatique du `.exe` |
+| 2. Réglages & API | 0.2.0 | Connexions API (coffre-fort Windows), test de clé, adaptateurs + tableau de capacités, catalogue de prix, taux de change, suivi et historique des coûts |
+| 3. Projets + Voix de base | 0.3.0 | Projets, éditeur de script avec badges de balises, voix de base, génération, prises, export WAV/MP3, estimation du coût |
+| 4. Voix : styles | 0.4.0 | Répliques, styles et assistant, traduction FR → EN, conseils Google, bibliothèque de styles, dictionnaire de prononciation, accentuation |
+| 5. Voix : bibliothèque | 0.5.0 | Bibliothèque étendue filtrable, favoris, écoute d'extraits, Voice Design |
+| 6. Voix : variantes | 0.6.0 | Variantes A/B (2 modes), écoute comparative, écoute pendant la génération |
+| 7. Transcription | 0.7.0 | Import, extraction FFmpeg, transcription mot par mot, options, éditeur |
+| 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
+| V1 complète | 1.0.0 | Finitions et Release définitive |
 
 ### V2 — Studio de style
 - Style du texte complet (§7.4), mot actif (§7.5), préréglages de style (§7.6).
@@ -547,3 +575,4 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Corriger la **cause** d'un problème plutôt que le contourner.
 - Aucune action demandant un terminal à l'utilisateur.
 - Mettre à jour ce document quand une décision change.
+- Une étape = une branche + une **Pull Request** dont la description explique ce qui change et pourquoi. Quand la fabrication automatique est verte, Claude fusionne la PR, la Release est publiée, et l'étape suivante démarre **sans attendre la validation** de l'utilisateur, qui teste quand il est disponible et signale les problèmes.

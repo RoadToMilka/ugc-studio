@@ -1,0 +1,96 @@
+# -*- mode: python ; coding: utf-8 -*-
+"""Recette de fabrication du .exe avec PyInstaller.
+
+Elle est utilisée par la fabrication automatique (GitHub Actions) : rien à lancer à la main.
+Résultat : un seul fichier « UGC-Studio.exe » qui contient Python, Qt, la police Inter et les icônes.
+"""
+
+import sys
+from pathlib import Path
+
+RACINE = Path(SPECPATH).parent  # SPECPATH : dossier de ce fichier (fourni par PyInstaller)
+sys.path.insert(0, str(RACINE))
+
+from PyInstaller.utils.win32.versioninfo import (  # noqa: E402
+    FixedFileInfo,
+    StringFileInfo,
+    StringStruct,
+    StringTable,
+    VarFileInfo,
+    VarStruct,
+    VSVersionInfo,
+)
+
+from ugc_studio import NOM_APP, __version__  # noqa: E402
+
+NOM_EXE = "UGC-Studio"
+
+
+def _version_windows(texte):
+    """« 0.1.0 » → (0, 1, 0, 0), le format attendu par Windows."""
+    parties = [int(p) for p in texte.split(".")[:4]]
+    return tuple(parties + [0] * (4 - len(parties)))
+
+
+# Fiche d'identité du .exe (clic droit → Propriétés → Détails dans Windows).
+INFOS_VERSION = VSVersionInfo(
+    ffi=FixedFileInfo(filevers=_version_windows(__version__), prodvers=_version_windows(__version__)),
+    kids=[
+        StringFileInfo(
+            [
+                StringTable(
+                    "040C04B0",  # français, Unicode
+                    [
+                        StringStruct("CompanyName", "RoadToMilka"),
+                        StringStruct("FileDescription", NOM_APP),
+                        StringStruct("FileVersion", __version__),
+                        StringStruct("InternalName", NOM_APP),
+                        StringStruct("OriginalFilename", f"{NOM_EXE}.exe"),
+                        StringStruct("ProductName", NOM_APP),
+                        StringStruct("ProductVersion", __version__),
+                    ],
+                )
+            ]
+        ),
+        VarFileInfo([VarStruct("Translation", [0x040C, 1200])]),
+    ],
+)
+
+a = Analysis(
+    [str(RACINE / "lancer_ugc_studio.py")],
+    pathex=[str(RACINE)],
+    datas=[(str(RACINE / "ugc_studio" / "ressources"), "ugc_studio/ressources")],
+    excludes=["tkinter"],
+    noarchive=False,
+)
+
+
+def _garder(destination):
+    """Allège le .exe : seules les traductions françaises de Qt sont gardées."""
+    parties = Path(destination).parts
+    if "translations" in parties and parties[0] == "PySide6":
+        return Path(destination).name.endswith("_fr.qm")
+    return True
+
+
+a.datas = [entree for entree in a.datas if _garder(entree[0])]
+# Rendu OpenGL logiciel de secours (~20 Mo) : inutile pour une interface Qt Widgets.
+a.binaries = [entree for entree in a.binaries if Path(entree[0]).name.lower() != "opengl32sw.dll"]
+
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name=NOM_EXE,
+    icon=str(RACINE / "ugc_studio" / "ressources" / "app.ico"),
+    version=INFOS_VERSION,
+    console=False,  # application fenêtrée : pas de fenêtre noire de terminal
+    debug=False,
+    strip=False,
+    upx=False,
+    runtime_tmpdir=None,
+)
