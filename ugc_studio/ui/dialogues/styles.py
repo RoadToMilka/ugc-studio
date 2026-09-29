@@ -35,7 +35,7 @@ from ..composants.conseils import ListeConseils
 from ..composants.elements import bouton, conteneur_vertical, libelle, separateur, vider_disposition
 from ..icones import icone_menu
 from ..pages.base import zone_defilante
-from ..theme import Couleurs, Dimensions, Espacements
+from ..theme import Couleurs, Dimensions, Espacements, Hauteurs
 
 
 def description(style: Style) -> str:
@@ -68,7 +68,7 @@ class DialogueStyle(QDialog):
         self._services = services
         self._style = style
         self.setWindowTitle(titre)
-        self.setMinimumWidth(Dimensions.DIALOGUE_LARGE_LARGEUR)
+        self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
@@ -116,18 +116,23 @@ class DialogueStyle(QDialog):
                 ("Balises souvent utilisées", self.balises),
             )
         ):
-            formulaire.addWidget(libelle(titre, "legende", retour_a_la_ligne=False), rang, 0, Qt.AlignmentFlag.AlignTop)
-            formulaire.addWidget(element, rang, 1)
+            # Libellé centré sur la hauteur d'un champ (ligne du haut de l'élément).
+            etiquette = libelle(titre, "legende", retour_a_la_ligne=False)
+            etiquette.setFixedHeight(Hauteurs.CONTROLE)
+            formulaire.addWidget(etiquette, rang, 0, Qt.AlignmentFlag.AlignTop)
+            formulaire.addWidget(element, rang, 1, Qt.AlignmentFlag.AlignTop)
         formulaire.setColumnStretch(1, 1)
-        colonnes.addLayout(formulaire, 3)
+        formulaire.setRowStretch(formulaire.rowCount(), 1)  # l'espace libre va sous les champs
+        colonnes.addLayout(formulaire, 1)
 
-        conseils = QVBoxLayout()
+        # Conseils Google : colonne de largeur fixe, qui défile si besoin.
+        zone, conseils = zone_defilante(largeur_max=None)
+        zone.setFixedWidth(Dimensions.PANNEAU_CONSEILS_LARGEUR)
         conseils.setSpacing(Espacements.S)
         conseils.addWidget(libelle("Conseils Google", "intitule"))
         conseils.addWidget(ListeConseils(CONSEILS_STYLE))
-        conseils.addStretch(1)
-        colonnes.addLayout(conseils, 2)
-        disposition.addLayout(colonnes)
+        colonnes.addWidget(zone)
+        disposition.addLayout(colonnes, 1)
 
         self.statut = libelle("", "erreur")
         self.statut.hide()
@@ -248,24 +253,18 @@ class DialogueBibliothequeStyles(QDialog):
         disposition.setSpacing(Espacements.M)
         entete = QHBoxLayout()
         entete.setSpacing(Espacements.S)
-        textes = QVBoxLayout()
-        textes.setSpacing(Espacements.XS)
-        textes.addWidget(libelle("Bibliothèque de styles", "titre-bloc"))
-        explication = "Tes styles enregistrés, rangés par catégorie."
-        if cible:
-            explication += f" « Appliquer » met le style sur la {cible} et choisit sa voix."
-        textes.addWidget(libelle(explication, "secondaire"))
-        entete.addLayout(textes, 1)
+        entete.addWidget(libelle("Bibliothèque de styles", "titre-bloc", retour_a_la_ligne=False))
+        entete.addStretch(1)
         if style_actuel[0]:
             entete.addWidget(
-                bouton("Enregistrer le style actuel", variante="discret", nom_icone="plus", action=self.enregistrer_actuel),
-                0,
-                Qt.AlignmentFlag.AlignTop,
+                bouton("Enregistrer le style actuel", variante="discret", nom_icone="plus", action=self.enregistrer_actuel)
             )
-        entete.addWidget(
-            bouton("Nouveau style", nom_icone="plus", action=self.nouveau), 0, Qt.AlignmentFlag.AlignTop
-        )
+        entete.addWidget(bouton("Nouveau style", nom_icone="plus", action=self.nouveau))
         disposition.addLayout(entete)
+        explication = "Tes styles enregistrés, rangés par catégorie."
+        if cible:
+            explication += f" « Appliquer » met le style sur la {cible} et choisit sa voix et son modèle."
+        disposition.addWidget(libelle(explication, "secondaire"))
 
         zone, contenu = zone_defilante(largeur_max=None)
         self._liste_widget, self._liste = conteneur_vertical(Espacements.XS)
