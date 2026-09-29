@@ -554,7 +554,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 ## 12. Découpage en versions
 
 ### V1 — Socle utilisable
-- Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.0`+`07`.
+- Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.00`+`71`.
 - Architecture d'adaptateurs + tableau de capacités (adaptateur Google seul).
 - Voix : éditeur avec badges de balises, dictionnaire de prononciation, variantes, **Voice Design** (création de voix + conseils Google), assistant de style avec conseils Google, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
 - Transcription : import vidéo/audio, extraction audio, transcription mot par mot, langue, séparation des voix, dictionnaire de remplacements, masquage des hésitations, éditeur de transcription.
