@@ -93,17 +93,20 @@ class Pastille(QLabel):
 
 class Ampoule(QWidget):
     """Petite ampoule dessinée devant une info : l'icône Lucide « lightbulb », à la taille des
-    icônes de boutons (donc avec la même épaisseur de trait), dans la couleur du texte secondaire."""
+    icônes de boutons (donc avec la même épaisseur de trait), dans la couleur du texte secondaire.
+    `largeur` : largeur de la colonne où l'ampoule est centrée (par défaut, celle de l'icône)."""
 
-    def __init__(self):
+    def __init__(self, largeur: int = Dimensions.ICONE_PETITE):
         super().__init__()
         self._icone = icone("lightbulb", Couleurs.TEXTE_SECONDAIRE, taille=Dimensions.ICONE_PETITE)
-        self.setFixedSize(Dimensions.ICONE_PETITE, Dimensions.ICONE_PETITE)
+        self.setFixedSize(largeur, Dimensions.ICONE_PETITE)
 
     def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
         peintre = QPainter(self)
         mode = QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled
-        self._icone.paint(peintre, QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignCenter, mode)
+        cote = Dimensions.ICONE_PETITE
+        zone = QRect((self.width() - cote) // 2, 0, cote, cote)  # centrée dans sa colonne
+        self._icone.paint(peintre, zone, Qt.AlignmentFlag.AlignCenter, mode)
         peintre.end()
 
 
@@ -112,19 +115,20 @@ class Info(QWidget):
     Toujours la même ampoule, dans toute l'app : on repère une info d'un coup d'œil.
 
     `role` : « legende » (petit texte, sous un champ) ou « secondaire » (texte courant gris, pour
-    une explication en haut d'un bloc ou d'une fenêtre).
+    une explication en haut d'un bloc ou d'une fenêtre). `largeur_ampoule` : largeur de la colonne
+    de l'ampoule (ex. celle d'une case à cocher, pour aligner le texte sur celui de la case).
 
     Le même emplacement peut aussi montrer une donnée ou un message d'état (« Mot 3 sur 120 »,
     « Récupération… », une erreur) : afficher_etat() l'écrit alors sans ampoule, car ce n'est pas une
     aide ; setText() remet l'info avec son ampoule."""
 
-    def __init__(self, texte: str = "", role: str = "legende"):
+    def __init__(self, texte: str = "", role: str = "legende", largeur_ampoule: int = Dimensions.ICONE_PETITE):
         super().__init__()
         self._role = role
         disposition = QHBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(Espacements.S)
-        self.ampoule = Ampoule()
+        self.ampoule = Ampoule(largeur_ampoule)
         self.etiquette = libelle(texte, role)
         # L'ampoule est centrée sur la première ligne du texte (le texte peut en avoir plusieurs).
         taille = Typo.LEGENDE if role == "legende" else Typo.COURANT
@@ -254,12 +258,11 @@ def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, 
     case = QCheckBox(texte)
     disposition.addWidget(case)
     if explication:
-        explication_info = info(explication)
-        # Texte de l'info aligné sur celui de la case : la case et l'espace avant son texte (voir
-        # QCheckBox dans la feuille de style), moins l'ampoule et son espace ; l'ampoule tombe
-        # ainsi sous la case.
-        explication_info.setContentsMargins(Dimensions.CASE_A_COCHER - Dimensions.ICONE_PETITE, 0, 0, 0)
-        disposition.addWidget(explication_info)
+        # La colonne de l'ampoule a la largeur de la case (18 px plus sa bordure de chaque côté,
+        # voir QCheckBox dans la feuille de style) : l'ampoule est centrée sous la case, et le
+        # texte commence au même endroit que celui de la case (même espace de 8 px avant).
+        largeur_case = Dimensions.CASE_A_COCHER + 2 * Dimensions.BORDURE
+        disposition.addWidget(Info(explication, largeur_ampoule=largeur_case))
     return zone, case
 
 

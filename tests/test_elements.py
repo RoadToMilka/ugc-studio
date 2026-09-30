@@ -80,9 +80,11 @@ def test_case_a_cocher_avec_explication(app_configuree, qtbot):
     option = QStyleOptionButton()
     case.initStyleOption(option)
     debut_texte_case = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, option, case).left()
-    assert abs(legende.mapTo(zone, QPoint(0, 0)).x() - (case.x() + debut_texte_case)) <= 1
-    ampoule = explication.ampoule.mapTo(zone, QPoint(0, 0)).x()
-    assert case.x() <= ampoule and ampoule + Dimensions.ICONE_PETITE <= case.x() + Dimensions.CASE_A_COCHER
+    assert legende.mapTo(zone, QPoint(0, 0)).x() == case.x() + debut_texte_case  # même début de texte
+    indicateur = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, case)
+    centre_case = case.x() + indicateur.x() + indicateur.width() / 2
+    centre_ampoule = explication.ampoule.mapTo(zone, QPoint(0, 0)).x() + explication.ampoule.width() / 2
+    assert abs(centre_ampoule - centre_case) <= 0.5  # ampoule centrée sous la case
     zone.setEnabled(False)  # griser la zone grise la case et son explication
     assert not case.isEnabled() and not legende.isEnabled() and not explication.ampoule.isEnabled()
     zone, case = case_a_cocher("Tout en majuscules")
