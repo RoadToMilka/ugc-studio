@@ -19,7 +19,6 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
-    QCheckBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -55,7 +54,7 @@ from ....transcription import (
 from ... import taches
 from ...composants.choix_voix import choisir
 from ...composants.editeur_transcription import EditeurTranscription, nom_de_personne
-from ...composants.elements import bloc, bouton, libelle, liste_deroulante, minutes_secondes
+from ...composants.elements import bloc, bouton, case_a_cocher, libelle, liste_deroulante, minutes_secondes
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
@@ -172,11 +171,15 @@ class AtelierTranscription(Page):
             grille.addWidget(element, rang, 1)
         grille.setColumnStretch(1, 1)
         d.addLayout(grille)
-        self.separation = QCheckBox("Séparer les voix (chaque mot reçoit la personne qui parle ; fiable jusqu'à 2 personnes)")
-        d.addWidget(self.separation)
-        self.texte_seul = QCheckBox("Texte seul, nettoyé (mode « smart ») : sans le moment de chaque mot, donc sans sous-titres")
+        self.zone_separation, self.separation = case_a_cocher(
+            "Séparer les voix", "Chaque mot reçoit la personne qui parle (fiable jusqu'à 2 personnes)."
+        )
+        d.addWidget(self.zone_separation)
+        zone, self.texte_seul = case_a_cocher(
+            "Texte seul, nettoyé (mode « smart »)", "Sans le moment de chaque mot : pas de sous-titres possibles."
+        )
         self.texte_seul.toggled.connect(self._texte_seul_change)
-        d.addWidget(self.texte_seul)
+        d.addWidget(zone)
         outils = QHBoxLayout()
         outils.setSpacing(Espacements.S)
         remplacements = bouton("Remplacements", variante="discret", nom_icone="book-a", action=self.ouvrir_remplacements)
@@ -187,9 +190,12 @@ class AtelierTranscription(Page):
         outils.addWidget(hesitations)
         outils.addStretch(1)
         d.addLayout(outils)
-        self.masquer = QCheckBox("Masquer les hésitations dans les sous-titres (l'audio et les autres mots ne changent pas)")
+        zone, self.masquer = case_a_cocher(
+            "Masquer les hésitations dans les sous-titres",
+            "« euh », « hum »… disparaissent des sous-titres ; l'audio et les autres mots ne changent pas.",
+        )
         self.masquer.toggled.connect(self._masquer_change)
-        d.addWidget(self.masquer)
+        d.addWidget(zone)
         self.contenu.addWidget(cadre)
 
         # --- Transcrire ---
@@ -410,7 +416,7 @@ class AtelierTranscription(Page):
                 self.cout_estime.definir_montant(cout)
 
     def _texte_seul_change(self, actif: bool) -> None:
-        self.separation.setEnabled(not actif)  # incompatibles chez Google
+        self.zone_separation.setEnabled(not actif)  # incompatibles chez Google
 
     # --- Source ------------------------------------------------------------------------------
 

@@ -32,6 +32,7 @@ from .ui.dialogues.variantes import ONGLET_MEMES_REGLAGES, ONGLET_PAR_VARIANTE, 
 from .ui.dialogues.voice_design import DialogueVoiceDesign
 from .ui.dialogues.voix import DialogueBibliothequeVoix
 from .ui.composants.choix_voix import choisir
+from .ui.erreurs import erreurs_autotest
 from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
@@ -159,6 +160,19 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
                 for enfant in element.findChildren(QWidget, "", Qt.FindChildOption.FindDirectChildrenOnly)
             )
         ]
+        if not coupables:
+            # Rien n'est encore coupé (la marge de droite a absorbé l'excès) : on cite les éléments
+            # visibles les plus larges, ceux qui imposent cette largeur (ex. une case à cocher au
+            # texte trop long, qui ne passe jamais à la ligne).
+            coupables = [
+                element
+                for element in interieur.findChildren(QWidget)
+                if element.isVisible()
+                and not any(
+                    enfant.isVisible()
+                    for enfant in element.findChildren(QWidget, "", Qt.FindChildOption.FindDirectChildrenOnly)
+                )
+            ]
         coupables.sort(key=lambda e: e.minimumSizeHint().width(), reverse=True)
         problemes.append(
             f"{nom} : contenu plus large que la partie visible de {exces} px — "
@@ -400,6 +414,9 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["captures"] = len(rapport["captures"]) == attendues
         except Exception:  # noqa: BLE001 — tout problème doit finir dans le rapport
             rapport["erreurs"].append(traceback.format_exc())
+        # Erreurs inattendues survenues ailleurs pendant l'autotest (ex. dans une réaction à un
+        # signal de Qt) : elles comptent aussi.
+        rapport["erreurs"] += erreurs_autotest
 
         rapport["succes"] = not rapport["erreurs"] and all(
             verifs.get(nom) for nom in VERIFICATIONS_OBLIGATOIRES

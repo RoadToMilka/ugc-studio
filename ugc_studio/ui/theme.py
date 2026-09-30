@@ -299,6 +299,9 @@ QLabel[role="legende"] {
     color: $texte_secondaire;
     font-size: ${legende}px;
 }
+QLabel[role="legende"]:disabled {
+    color: $texte_desactive;
+}
 QLabel[role="discret"] {
     color: $texte_desactive;
     font-size: ${legende}px;

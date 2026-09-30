@@ -131,6 +131,8 @@ class ExtracteurAudio(QObject):
                 self.progression.emit(min(1.0, tampon.startTime() / 1000 / duree))
 
     def _decodage_fini(self) -> None:
+        if self._fini or self._decodeur is None:
+            return  # déjà terminé (ex. « fini » signalé une 2e fois pendant l'arrêt du décodeur)
         self._lire_tampons()
         self._fini = True
         self._veille.stop()
@@ -161,10 +163,14 @@ class ExtracteurAudio(QObject):
         self._liberer()
 
     def _liberer(self) -> None:
-        if self._decodeur is not None:
-            self._decodeur.stop()
-            self._decodeur.deleteLater()
-            self._decodeur = None
+        # Sous Windows, stop() signale « fini » tout de suite, pendant qu'on est encore ici : le
+        # décodeur est donc d'abord retiré (self._decodeur = None) et rendu muet, pour que ce
+        # signal tardif ne relance pas la fin du décodage une deuxième fois.
+        decodeur, self._decodeur = self._decodeur, None
+        if decodeur is not None:
+            decodeur.blockSignals(True)
+            decodeur.stop()
+            decodeur.deleteLater()
         self._pcm = bytearray()
 
 

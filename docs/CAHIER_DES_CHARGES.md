@@ -578,7 +578,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Barre latérale gauche : Voix, Transcription, Sous-titres, Réglages (icônes + libellés).
 - En haut : nom du projet, **compteur de coût de la session** (format §4.4).
 - Zone centrale : contenu du module.
-- **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent.
+- **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test). Le texte d'une case à cocher ne passe jamais à la ligne : il reste court (48 caractères au plus, vérifié par un test) et l'explication va dans une légende dessous, qui passe à la ligne (`case_a_cocher()`). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent (ou, si rien n'est encore coupé, les plus larges). Toute erreur inattendue pendant l'autotest le fait échouer.
 
 ### 9.7 Valeurs complémentaires
 
