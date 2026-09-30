@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QAbstractButton, QGridLayout, QVBoxLayout, QWidget
 from ...balises import FAMILLES, info_balise, nom_affiche
 from ..polices import police
 from ..theme import CouleursBalises, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
-from .bouton import dessiner_texte_centre_minuscules
+from .bouton import dessiner_texte_centre_a_l_oeil
 from .elements import libelle
 from .flux import DispositionFlux
 
@@ -54,7 +54,7 @@ class BoutonBalise(QAbstractButton):
         peintre.setPen(QPen(qcolor(self._couleur, Opacites.CONTOUR_BADGE), Dimensions.BORDURE))
         peintre.setBrush(QBrush(qcolor(self._couleur, opacite)))
         peintre.drawRoundedRect(zone, zone.height() / 2, zone.height() / 2)
-        dessiner_texte_centre_minuscules(peintre, QRectF(self.rect()), self.text(), self._police, qcolor(self._couleur))
+        dessiner_texte_centre_a_l_oeil(peintre, QRectF(self.rect()), self.text(), self._police, qcolor(self._couleur))
         peintre.end()
 
 

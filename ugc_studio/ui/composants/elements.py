@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 
 from ..polices import police
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
-from .bouton import Bouton, dessiner_texte_centre_minuscules
+from .bouton import Bouton, dessiner_texte_centre_a_l_oeil
 
 
 def libelle(
@@ -61,7 +61,7 @@ def minutes_secondes(secondes: float) -> str:
 class Pastille(QLabel):
     """Petite étiquette arrondie (ex. « Retenue », « Par défaut ») : contour mauve, fond mauve
     léger. Dessinée ici plutôt que par la feuille de style, pour centrer le texte à l'œil (voir
-    bouton.ligne_de_base_minuscules) : centré par Qt, il paraissait 1 à 2 px trop bas."""
+    bouton.ligne_de_base_a_l_oeil) : centré par Qt, il paraissait 1 à 2 px trop bas."""
 
     def __init__(self, texte: str):
         super().__init__(texte)
@@ -85,7 +85,7 @@ class Pastille(QLabel):
         peintre.setBrush(qcolor(Couleurs.ACCENT, Opacites.TEINTE_SELECTION))
         peintre.drawRoundedRect(zone, zone.height() / 2, zone.height() / 2)
         couleur = Couleurs.ACCENT_SURVOL if self.isEnabled() else Couleurs.TEXTE_DESACTIVE
-        dessiner_texte_centre_minuscules(peintre, QRectF(self.rect()), self.text(), self._police, qcolor(couleur))
+        dessiner_texte_centre_a_l_oeil(peintre, QRectF(self.rect()), self.text(), self._police, qcolor(couleur))
         peintre.end()
 
 

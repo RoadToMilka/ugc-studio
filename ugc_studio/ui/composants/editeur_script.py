@@ -35,7 +35,7 @@ from ...balises import famille_de, info_balise, nom_affiche
 from ...script import depuis_texte, normaliser, texte_pour_api
 from ..polices import police
 from ..theme import Couleurs, CouleursBalises, Dimensions, Hauteurs, Opacites, Typo, qcolor
-from .bouton import dessiner_texte_centre_minuscules
+from .bouton import dessiner_texte_centre_a_l_oeil
 
 CARACTERE_OBJET = "￼"  # caractère « objet » (remplacé à l'écran par le dessin du badge)
 TYPE_BALISE = int(QTextFormat.ObjectTypes.UserObject.value) + 1
@@ -70,7 +70,7 @@ class DessinBadge(QPyTextObject):
         peintre.setPen(QPen(qcolor(couleur, Opacites.CONTOUR_BADGE), Dimensions.BORDURE))
         peintre.setBrush(QBrush(qcolor(couleur, Opacites.FOND_BADGE)))
         peintre.drawRoundedRect(pastille, rayon, rayon)
-        dessiner_texte_centre_minuscules(peintre, pastille, nom_affiche(balise), self._police, qcolor(couleur))
+        dessiner_texte_centre_a_l_oeil(peintre, pastille, nom_affiche(balise), self._police, qcolor(couleur))
         peintre.restore()
 
 

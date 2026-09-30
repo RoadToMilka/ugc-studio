@@ -39,28 +39,31 @@ def hauteur_majuscules(mesures: QFontMetricsF) -> float:
     return mesures.capHeight() or mesures.tightBoundingRect("H").height()
 
 
-def ligne_de_base_minuscules(zone: QRectF, mesures: QFontMetricsF) -> float:
-    """Ligne de base d'un texte surtout en minuscules (noms de balises, « Retenue »…) centré à
-    l'œil dans `zone` : le milieu de la hauteur des minuscules (« x ») tombe au milieu de la zone.
+def ligne_de_base_a_l_oeil(zone: QRectF, mesures: QFontMetricsF, texte: str) -> float:
+    """Ligne de base qui centre à l'œil un mot court dans `zone` (noms de balises, « Retenue »…).
 
     Pourquoi ? Qt centre la « boîte » de la police, qui garde de la place au-dessus des lettres
-    pour les majuscules et les accents : un mot en minuscules paraît alors 1 à 2 px trop bas
-    (plus d'espace au-dessus qu'en dessous). Avec la police Inter, centrer les minuscules laisse
-    aussi autant de place au-dessus des lettres hautes (« h », « l ») qu'en dessous des lettres
-    qui descendent (« p », « g »)."""
-    return round(zone.center().y() + mesures.xHeight() / 2)
+    pour les majuscules et les accents : un mot en minuscules paraît alors 1 à 2 px trop bas.
+    Centrer seulement les minuscules (la hauteur du « x ») ne suffit pas non plus : un mot qui
+    commence par une majuscule, comme « Retenue », paraît alors trop haut. L'app vise donc le
+    milieu entre le centre de l'encre du mot (du haut de sa lettre la plus haute au bas de sa
+    lettre la plus basse) et le centre de ses minuscules."""
+    encre = mesures.tightBoundingRect(texte)  # coordonnées depuis la ligne de base (négatif = au-dessus)
+    milieu_minuscules = -mesures.xHeight() / 2
+    milieu_encre = (encre.top() + encre.bottom()) / 2 if texte and not encre.isEmpty() else milieu_minuscules
+    return round(zone.center().y() - (milieu_encre + milieu_minuscules) / 2)
 
 
-def dessiner_texte_centre_minuscules(
+def dessiner_texte_centre_a_l_oeil(
     peintre: QPainter, zone: QRectF, texte: str, police_texte: QFont, couleur: QColor
 ) -> None:
     """Dessine `texte` centré dans `zone` : au milieu en largeur, centré à l'œil en hauteur
-    (voir ligne_de_base_minuscules)."""
+    (voir ligne_de_base_a_l_oeil)."""
     mesures = QFontMetricsF(police_texte)
     x = round(zone.center().x() - mesures.horizontalAdvance(texte) / 2)
     peintre.setFont(police_texte)
     peintre.setPen(couleur)
-    peintre.drawText(QPointF(x, ligne_de_base_minuscules(zone, mesures)), texte)
+    peintre.drawText(QPointF(x, ligne_de_base_a_l_oeil(zone, mesures, texte)), texte)
 
 
 def largeur_icone_et_texte(mesures: QFontMetricsF, texte: str, cote_icone: int) -> float:
