@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 2.5 — 30/09/2026 (étape 8 : sous-titres, §3.3, §7.8, §8.1 ; zones de sécurité documentées, §7.3)
+> Version du document : 3.0 — 30/09/2026 (V1 complète, version 1.0.0 ; molette de la souris, §9.6)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -617,7 +617,9 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Barre latérale gauche : Voix, Transcription, Sous-titres, Réglages (icônes + libellés).
 - En haut : nom du projet, **compteur de coût de la session** (format §4.4).
 - Zone centrale : contenu du module.
-- **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test). Le texte d'une case à cocher ne passe jamais à la ligne : il reste court (48 caractères au plus, vérifié par un test) et l'explication va dans une légende dessous, qui passe à la ligne (`case_a_cocher()`). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent (ou, si rien n'est encore coupé, les plus larges). Toute erreur inattendue pendant l'autotest le fait échouer.
+- **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test).
+- **Molette de la souris** : faire défiler une page ne change jamais une valeur au passage. Listes déroulantes, champs de nombre et barres de lecture ne réagissent à la molette qu'après un clic dedans ; sinon la page défile. Ils se créent toujours avec `liste_deroulante()`, `champ_entier()`, `champ_decimal()` et `glissiere()` (vérifié par un test).
+- Le texte d'une case à cocher ne passe jamais à la ligne : il reste court (48 caractères au plus, vérifié par un test) et l'explication va dans une légende dessous, qui passe à la ligne (`case_a_cocher()`). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent (ou, si rien n'est encore coupé, les plus larges). Toute erreur inattendue pendant l'autotest le fait échouer.
 
 ### 9.7 Valeurs complémentaires
 
@@ -673,7 +675,9 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 6. Voix : variantes | 0.6.0 | Variantes A/B (2 modes), écoute comparative, écoute pendant la génération |
 | 7. Transcription | 0.7.0 | Import, extraction de la piste son (FFmpeg via Qt), transcription mot par mot, options, éditeur |
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
-| V1 complète | 1.0.0 | Finitions et Release définitive |
+| V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
+
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). Suite prévue : V2 — Studio de style.
 
 ### V2 — Studio de style
 - Style du texte complet (§7.4), mot actif (§7.5), préréglages de style (§7.6).

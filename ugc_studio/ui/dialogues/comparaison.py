@@ -10,7 +10,7 @@ Chaque variante reste une prise normale : elle est aussi dans la liste des prise
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QSlider, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QVBoxLayout
 
 from ...fournisseurs.capacites import modele_connu
 from ...projets import Prise
@@ -18,7 +18,7 @@ from ...services import Services
 from ...variantes import LETTRES, MODELE, STYLE, TEXTE, VOIX, Reglage, champs_differents, valeur_de_prise
 from ..composants.bouton import Bouton
 from ..composants.comparateur import ComparateurAudio
-from ..composants.elements import bouton, conteneur_vertical, libelle, minutes_secondes, vider_disposition
+from ..composants.elements import bouton, conteneur_vertical, glissiere, libelle, minutes_secondes, vider_disposition
 from ..composants.etoiles import boutons_etoiles
 from ..icones import icone
 from ..pages.base import zone_defilante
@@ -120,7 +120,7 @@ class DialogueComparaison(QDialog):
         lecteur.addWidget(self.bouton_lecture)
         self.ecoutee = libelle("", "intitule", retour_a_la_ligne=False)
         lecteur.addWidget(self.ecoutee)
-        self.position = QSlider(Qt.Orientation.Horizontal)
+        self.position = glissiere()
         self.position.sliderMoved.connect(self.comparateur.aller_a)
         lecteur.addWidget(self.position, 1)
         self.temps = libelle("0:00 / 0:00", "legende", retour_a_la_ligne=False)

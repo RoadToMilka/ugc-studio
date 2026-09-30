@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QSizePolicy,
+    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -77,18 +78,55 @@ def bouton(
     return resultat
 
 
+class _SansMolette:
+    """Un champ ne change pas quand la molette de la souris passe dessus en faisant défiler la
+    page (ex. le choix du modèle, ou le moment de lecture) : il faut d'abord cliquer dedans."""
+
+    def wheelEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        if self.hasFocus():
+            super().wheelEvent(evenement)
+        else:
+            evenement.ignore()  # la page défile normalement
+
+
+class ListeDeroulante(_SansMolette, QComboBox):
+    pass
+
+
+class Glissiere(_SansMolette, QSlider):
+    pass
+
+
+class ChampEntier(_SansMolette, QSpinBox):
+    pass
+
+
+class ChampDecimal(_SansMolette, QDoubleSpinBox):
+    pass
+
+
 def liste_deroulante(info: str | None = None) -> QComboBox:
     """Liste déroulante de l'app (toujours créée ici, jamais avec QComboBox() directement).
 
     Elle prend la largeur de son plus long choix quand il y a de la place, et peut rétrécir sinon
     (texte abrégé par « … » ; le menu ouvert montre toujours les textes en entier). Sans cela, un
     choix très long (ex. le nom d'une voix créée) élargirait toute la page au-delà de la fenêtre,
-    et le bord droit serait coupé. `info` : texte de l'infobulle."""
-    liste = QComboBox()
+    et le bord droit serait coupé. La molette ne la change qu'après un clic dedans (voir
+    _SansMolette). `info` : texte de l'infobulle."""
+    liste = ListeDeroulante()
     liste.setMinimumContentsLength(Dimensions.LISTE_CARACTERES_MIN)
+    liste.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     if info:
         liste.setToolTip(info)
     return liste
+
+
+def glissiere() -> QSlider:
+    """Barre de position horizontale (lecture d'un audio). La molette ne la déplace qu'après un
+    clic dedans : sinon, elle bloquerait le défilement de la page quand la souris passe dessus."""
+    barre = Glissiere(Qt.Orientation.Horizontal)
+    barre.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    return barre
 
 
 def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, QCheckBox]:
@@ -111,25 +149,6 @@ def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, 
         legende.setContentsMargins(Dimensions.CASE_A_COCHER + Espacements.S, 0, 0, 0)
         disposition.addWidget(legende)
     return zone, case
-
-
-class _SansMolette:
-    """Un champ de nombre ne change pas quand la molette de la souris passe dessus en faisant
-    défiler la page : il faut d'abord cliquer dedans."""
-
-    def wheelEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
-        if self.hasFocus():
-            super().wheelEvent(evenement)
-        else:
-            evenement.ignore()  # la page défile normalement
-
-
-class ChampEntier(_SansMolette, QSpinBox):
-    pass
-
-
-class ChampDecimal(_SansMolette, QDoubleSpinBox):
-    pass
 
 
 def _preparer_champ(champ: QAbstractSpinBox, suffixe: str, info: str | None) -> None:
