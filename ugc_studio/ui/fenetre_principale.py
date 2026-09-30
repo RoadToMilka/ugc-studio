@@ -13,8 +13,8 @@ from ..services import Services
 from .actions_projet import remplir_menu_projet
 from .composants.barre_laterale import BarreLaterale, Module
 from .composants.entete import Entete
-from .pages.page_a_venir import PageAVenir
 from .pages.reglages import PageReglages
+from .pages.sous_titres import PageSousTitres
 from .pages.transcription import PageTranscription
 from .pages.voix import PageVoix
 from .theme import Dimensions
@@ -33,16 +33,7 @@ def _creer_pages(services: Services) -> dict[str, QWidget]:
     return {
         "voix": PageVoix(services),
         "transcription": PageTranscription(services),
-        "sous-titres": PageAVenir(
-            "Sous-titres",
-            "Découpage, style et export des sous-titres.",
-            "Étape 8",
-            [
-                "« Créer les sous-titres de cette prise » : alignement sur le script",
-                "Règles de découpage : caractères, mots, lignes, marges",
-                "Export SRT pour Premiere Pro",
-            ],
-        ),
+        "sous-titres": PageSousTitres(services),
         "reglages": PageReglages(services),
     }
 
@@ -92,6 +83,11 @@ class FenetrePrincipale(QMainWindow):
         )
         services.projets.abonner(self._projet_change)
 
+        # « Créer les sous-titres » d'une prise (§3.3) : depuis la liste des prises du module Voix.
+        self.page("voix").atelier.prises.sous_titres_demandes.connect(self.creer_sous_titres)
+        # « Corriger les mots » des sous-titres : dans le module Transcription.
+        self.page("sous-titres").atelier.corriger_demande.connect(lambda: self.afficher_module("transcription"))
+
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
         self._rouvrir_dernier_projet()
@@ -130,8 +126,16 @@ class FenetrePrincipale(QMainWindow):
     def afficher_module(self, identifiant: str) -> None:
         if identifiant not in self._index_pages:
             return
+        precedente = self.pages.currentWidget()
+        if precedente is not None and precedente is not self.page(identifiant) and hasattr(precedente, "quitter"):
+            precedente.quitter()  # ex. la lecture de la page quittée s'arrête
         self.pages.setCurrentIndex(self._index_pages[identifiant])
         self.barre_laterale.selectionner(identifiant)
+
+    def creer_sous_titres(self, identifiant_prise: str) -> None:
+        """« Créer les sous-titres de cette prise » : ouvre le module Sous-titres et s'en charge."""
+        self.afficher_module("sous-titres")
+        self.page("sous-titres").atelier.creer_depuis_prise(identifiant_prise)
 
     # --- Mémoire de la fenêtre (taille, position, dernier module) ----------------------------
 

@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 2.4 — 30/09/2026 (étape 7 : transcription, §6 ; FFmpeg utilisé à travers Qt Multimedia, §2)
+> Version du document : 2.5 — 30/09/2026 (étape 8 : sous-titres, §3.3, §7.8, §8.1 ; zones de sécurité documentées, §7.3)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -53,8 +53,8 @@ Le `.exe` n'est pas signé : au premier lancement, Windows affiche « Windows a 
 
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
 
-- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription et dictionnaire de remplacements du projet), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite).
-- Format du fichier : version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
+- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription et dictionnaire de remplacements du projet, réglages des sous-titres), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite, ou de la prise dont on a créé les sous-titres).
+- Format du fichier : version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
 - Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
 - Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
 - Au démarrage, le dernier projet utilisé est rouvert automatiquement.
@@ -67,6 +67,11 @@ Le TTS ne renvoie pas le timing des mots. Chaîne prévue :
 3. le résultat arrive dans le Studio sous-titres.
 
 Bouton unique : **« Créer les sous-titres de cette prise »**.
+
+**Mise en œuvre (étape 8)** :
+- Où : menu ⋯ d'une prise (module Voix), ou page Sous-titres (liste des prises + « Créer les sous-titres », avec le coût estimé).
+- La prise (WAV 24 kHz mono 16 bits, sans perte) est envoyée telle quelle à Google (mode verbatim, horodatage par mot, langue du projet). Quand la transcription réussit, son audio est copié dans `sources\audio.wav` et elle devient **la transcription du projet** : ses mots se corrigent dans le module Transcription (et une nouvelle transcription y refait l'alignement). Remplacer une autre transcription (ex. d'une vidéo) demande confirmation ; en cas d'échec, rien n'est remplacé.
+- Alignement (`alignement.py`) : script de la prise sans balises (`texte_brut`), coupé en mots (une ponctuation isolée ne reste jamais seule : « semaines ! », « « Salut »). Les deux suites de mots sont comparées sans majuscules, accents ni ponctuation (comme un outil de comparaison de textes) : mot identique → temps du mot transcrit ; mots différents (« 2 » / « deux », « Glowzy » / « glowzi ») → passage transcrit partagé selon la longueur des mots ; mot du script absent → dans le silence entre ses voisins (au début ou à la fin : le temps de le dire, ≈ 70 ms par lettre ; sans silence : il partage le temps d'un voisin) ; mot transcrit absent du script (rire, hésitation) → ignoré. Les temps restent croissants (20 ms minimum par mot).
 
 ### 3.4 Système d'adaptateurs (multi-fournisseurs)
 
@@ -363,7 +368,7 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 ### 6.3 bis Limites et formats
 
 - Durée max : 1 h en texte seul, **30 min** avec horodatage ou séparation des voix. Au-delà, l'app découpe l'audio en morceaux et recolle les temps.
-- Formats acceptés par l'API : WAV, MP3, AIFF, AAC, OGG, FLAC, M4A, Opus, WebM… La vidéo n'est pas acceptée : l'app extrait toujours l'audio (WAV 16 kHz mono 16 bits, sans perte pour la parole) avant l'envoi.
+- Formats acceptés par l'API : WAV, MP3, AIFF, AAC, OGG, FLAC, M4A, Opus, WebM… La vidéo n'est pas acceptée : l'app extrait toujours l'audio (WAV 16 kHz mono 16 bits, sans perte pour la parole) avant l'envoi. Une prise TTS (WAV 24 kHz mono) est envoyée telle quelle (§3.3).
 - Envoi via l'API Files (fichier téléversé puis référencé).
 
 ### 6.4 Éditeur de transcription
@@ -468,13 +473,47 @@ Options **combinables** :
 - Choix de la plateforme pour la zone de sécurité.
 - Timeline des sous-titres : blocs déplaçables/redimensionnables, sous-titres signalés en orange (cf. §7.3), édition du texte au double-clic.
 
+### 7.8 Mise en œuvre (étape 8)
+
+Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Créer les sous-titres » d'une prise, §3.3 ; « Corriger les mots » ouvre le module Transcription), réglages, liste des sous-titres, écoute, export SRT. Les sous-titres sont recalculés à chaque changement de réglage (`sous_titres.py`, testé sans interface) ; seuls les réglages sont enregistrés dans le projet.
+
+**Réglages par défaut** : 24 caractères (espaces comprises) et 5 mots au plus par sous-titre, 2 lignes au plus, coupe de préférence après la ponctuation, durée minimale 0,6 s ; ponctuation affichée, pas de majuscules, hésitations masquées (réglage partagé avec la transcription) ; format « celui de la vidéo » (sinon 9:16), zone de sécurité TikTok, marge maximum 5 %, texte à 4 % de la hauteur de la vidéo.
+
+**Texte affiché (§7.2)** : sans les hésitations masquées ; une ponctuation transcrite à part rejoint son mot ; ponctuation masquée = retirée autour des mots (gardée à l'intérieur : « l'huile », « anti-rides », « 3.5 ») ; typographie : en français, espace insécable avant « ! ? ; : » (pas dans « 10:30 ») et à l'intérieur des guillemets « », dans les autres langues pas d'espace avant ; jamais d'espace avant « , . … ». TOUT EN MAJUSCULES à la fin. Les temps des mots ne changent jamais.
+
+**Découpage (§7.3)** :
+- Un sous-titre se termine toujours : après une fin de phrase (« . ! ? … », si « couper sur la ponctuation » est coché), à un changement de personne, ou après un silence de plus de 0,8 s.
+- Caractères et mots : deux maximums (un mot plus long que la limite de caractères reste seul) ; un mot n'est jamais coupé.
+- Parmi tous les découpages possibles, l'app retient le meilleur (programmation dynamique) : des sous-titres bien remplis et de longueurs proches (l'écart au maximum de caractères compte au carré), qui finissent si possible sur une ponctuation (bonus), en restant de préférence dans la zone de sécurité (petite pénalité pour la marge).
+
+**Écran (§7.3)** : la largeur de chaque ligne est mesurée en pixels par Qt, avec la police Inter SemiBold (celle de l'app, en attendant le style complet de la V2) à la taille du texte (en % de la hauteur de la vidéo).
+- Formats : celui de la vidéo importée (dimensions remises à l'endroit pour une vidéo de téléphone enregistrée « couchée », rotation de 90°), sinon 9:16 (1080 × 1920), 4:5 (1080 × 1350), 3:4 (1080 × 1440), 1:1 (1080 × 1080), 16:9 (1920 × 1080). Le format personnalisé arrive en V2.
+- Ordre : une ligne dans la zone de sécurité ; sinon deux lignes équilibrées dans la zone (si 2 lignes permises ; retour à la ligne de préférence après une ponctuation) ; sinon la même chose jusqu'à la marge maximum ; sinon le sous-titre est redécoupé (aucune taille ne change). Un mot seul trop large est rapetissé jusqu'à tenir dans la marge maximum, sans descendre sous 60 % de la taille du texte : il est signalé en orange (liste des sous-titres et aperçu), avec le conseil de le raccourcir s'il ne tient toujours pas.
+- Sous-titres centrés : la zone de sécurité retient le plus large des deux côtés (ex. YouTube Shorts : 10 % des deux côtés). Si elle est plus large que la zone de la marge maximum, c'est la marge maximum qui compte.
+
+**Zones de sécurité (écran 9:16, en part des bords)** :
+
+| Plateforme | Gauche | Droite | Haut | Bas | Source |
+|---|---|---|---|---|---|
+| TikTok | 11,1 % (120 px) | 11,1 % (120 px) | 12,5 % | 34,4 % | Modèle de zone de sécurité de TikTok Ads (avril 2025) ; à droite, 300 px sous le milieu de l'écran (boutons) : utilisé avec la position verticale (V2) |
+| Instagram, Facebook (Reels, Stories) | 6 % | 6 % | 14 % | 35 % | Guide des publicités Meta |
+| YouTube Shorts | 0 % | 10 % | 10 % | 25 % | Google Ads, emplacement Shorts |
+| Snapchat | 3,7 % (40 px) | 3,7 % | 10,4 % | 19,3 % | Valeurs courantes, non confirmées par Snapchat |
+| Aucune | — | — | — | — | Marge maximum seulement |
+
+Seuls les côtés servent en V1 (largeur des lignes) ; le haut et le bas serviront à placer les sous-titres (V2).
+
+**Temps** : un sous-titre va du début de son premier mot à la fin du dernier ; s'il dure moins que la durée minimale, il est prolongé jusqu'au sous-titre suivant au plus (et jusqu'à la fin de l'audio pour le dernier), puis avancé jusqu'au précédent au plus ; un trou de 0,3 s au plus entre deux sous-titres est comblé (pas de clignotement).
+
+**Liste et écoute** : numéro, temps, texte (lignes comprises), remarque ; les sous-titres signalés sont en orange. Pendant l'écoute, le sous-titre en cours est surligné et affiché en grand (aperçu simple ; l'aperçu fidèle sur la vidéo arrive en V2). Clic sur un sous-titre : il est montré, et la lecture s'y place si elle est en cours (sinon « ▶ » part de lui). Changer de module arrête la lecture de la page quittée (et libère la piste son).
+
 ---
 
 ## 8. Exports
 
 ### 8.1 Fichiers de sous-titres
 
-- **SRT** : texte + timecodes (compatible Premiere Pro et la plupart des outils). Respecte le découpage paramétré. Ne contient aucun style.
+- **SRT** : texte + timecodes (compatible Premiere Pro et la plupart des outils). Respecte le découpage paramétré. Ne contient aucun style. Écrit en UTF-8 **avec BOM** (sans lui, Premiere Pro lit mal les lettres accentuées) et fins de ligne Windows (CRLF) ; temps au format `00:00:01,250` ; blocs séparés par une ligne vide. Nom proposé : celui du projet, dans Documents.
 - *(option)* **ASS** : pour d'autres logiciels ; styles simples uniquement.
 
 ### 8.2 Overlay transparent
@@ -659,7 +698,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 - Liste définitive des **catégories de pub** et de leur ton (l'utilisateur les créera dans la bibliothèque de styles ; quelques exemples fournis par défaut).
 - Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
 - Syntaxe exacte des API au moment du code (la doc évolue vite — toujours vérifier la doc officielle avant d'écrire un adaptateur). Les prix de Gemini 3.5 Transcribe sont connus depuis la v1.9 (§4.2).
-- Valeurs précises des **zones de sécurité** par plateforme (à documenter au moment de la V2).
+- **Zones de sécurité** par plateforme : documentées au §7.8 (TikTok, Meta et YouTube d'après leurs guides ; Snapchat à confirmer). À revoir avec la position verticale des sous-titres (V2) : la zone de TikTok s'élargit à droite sous le milieu de l'écran.
 - **Durée de conservation des voix créées** (Voice Design) : la documentation officielle « Voice Design » indique 1 an et 200 voix par projet ; le guide « Get_Started_Voices » indique 7 jours. L'app affiche la date renvoyée par Google (`expire_time`).
 
 ---

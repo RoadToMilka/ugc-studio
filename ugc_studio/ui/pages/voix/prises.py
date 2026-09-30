@@ -1,4 +1,5 @@
-"""Liste des prises du projet (§5.6) : écoute, note ★, renommage, export WAV / MP3, suppression."""
+"""Liste des prises du projet (§5.6) : écoute, note ★, renommage, export WAV / MP3, suppression,
+et « Créer les sous-titres de cette prise » (§3.3)."""
 
 from __future__ import annotations
 
@@ -98,6 +99,9 @@ class LignePrise(QFrame):
 
         plus = bouton_icone("ellipsis", "Plus d'actions")
         menu = QMenu(plus)
+        menu.addAction(icone_menu("captions"), "Créer les sous-titres de cette prise").triggered.connect(
+            lambda: liste.sous_titres_demandes.emit(prise.identifiant)
+        )
         if prise.serie:
             menu.addAction(icone_menu("git-compare-arrows"), "Comparer les variantes…").triggered.connect(
                 lambda: liste.comparaison_demandee.emit(prise.serie)
@@ -131,6 +135,7 @@ def _date_lisible(texte_iso: str) -> str:
 
 class ListePrises(QWidget):
     comparaison_demandee = Signal(int)  # numéro de la série de variantes à comparer
+    sous_titres_demandes = Signal(str)  # identifiant de la prise dont créer les sous-titres (§3.3)
 
     def __init__(self, services: Services, lecteur: Lecteur):
         super().__init__()

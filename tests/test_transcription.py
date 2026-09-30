@@ -16,7 +16,16 @@ from ugc_studio.audio_source import (
 )
 from ugc_studio.fournisseurs.base import Adaptateur
 from ugc_studio.fournisseurs.stt import MotTranscrit, ResultatTranscription
-from ugc_studio.stt import Options, estimer_cout, terminer_transcription, transcrire_source
+from ugc_studio.projets import FICHIER_AUDIO
+from ugc_studio.stt import (
+    PREFERENCE_HESITATIONS,
+    Options,
+    estimer_cout,
+    hesitations,
+    terminer_transcription,
+    transcription_de_prise,
+    transcrire_source,
+)
 from ugc_studio.transcription import (
     DUREE_MAX_HORODATEE_S,
     MORCEAU_S,
@@ -261,6 +270,40 @@ def test_terminer_une_transcription(services, tmp_path):
     assert (appel.operation, appel.projet, appel.tokens_entree) == ("transcription", "Sérum", 100)
     assert Decimal(fini.cout_eur) == appel.cout_eur
     assert services.projets.projet.transcription is fini and fini.langue == "fr-FR" and fini.date
+
+
+def test_sous_titres_d_une_prise_alignes_sur_son_script(services, tmp_path):
+    """§3.3 : la prise est transcrite, puis les mots transcrits sont remplacés par ceux du script."""
+    projet = services.projets.creer("Sérum", tmp_path)
+    prise = services.projets.ajouter_prise(
+        wav_depuis_pcm(_son(2.0, 24_000), 24_000),
+        modele="gemini-3.8-flash-tts",
+        voix="Kore",
+        style="",
+        texte_api="Ce SÉRUM anti-rides est top ! <laugh>",
+        script=[{"texte": "Ce "}, {"texte": "sérum", "accentue": True}, {"texte": " anti-rides est top ! "}, {"balise": "laugh"}],
+        duree_s=2.0,
+    )
+    transcription, wav = transcription_de_prise(projet, prise)
+    assert (transcription.source, transcription.prise, transcription.langue) == (prise.nom, prise.identifiant, "fr-FR")
+    assert transcription.script == "Ce sérum anti-rides est top !"  # sans balises, casse d'origine
+    assert transcription.audio == FICHIER_AUDIO and transcription.duree_s == pytest.approx(2.0)
+    assert wav == projet.chemin(prise.fichier).read_bytes()
+    resultat = transcrire_source(FauxTranscripteur(), wav, Options("gemini-3.5-transcribe", "fr-FR"))
+    fini = terminer_transcription(services, transcription, Options("gemini-3.5-transcribe", "fr-FR"), resultat)
+    # Transcrit : « sérum » (0,5 s), « anti », « rides » ; le script donne l'orthographe exacte.
+    assert [m.texte for m in fini.mots] == ["Ce", "sérum", "anti-rides", "est", "top !"]
+    assert fini.mots[1].fin == 0.9 and fini.mots[0].fin <= fini.mots[1].debut
+    assert fini.mots[2].debut == 0.9 and fini.mots[-1].fin == 1.5
+    assert services.projets.projet.transcription is fini
+
+
+def test_hesitations_selon_la_langue(services, tmp_path):
+    services.projets.creer("Sérum", tmp_path, "en-US")
+    assert "um" in hesitations(services, None)  # langue du projet
+    assert "euh" in hesitations(services, Transcription(langue="fr-FR"))
+    services.preferences.ecrire(PREFERENCE_HESITATIONS, {"fr": ["bah"]})
+    assert hesitations(services, Transcription(langue="fr-FR")) == {"bah"}
 
 
 def test_estimation_du_cout(services):
