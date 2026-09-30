@@ -25,13 +25,22 @@ class _Retour(QObject):
 
     termine = Signal(object)
     echec = Signal(object)
+    progres = Signal(object)
 
-    def __init__(self, quand_termine, quand_echec):
+    def __init__(self, quand_termine, quand_echec, quand_progres=None):
         super().__init__()
         self._quand_termine = quand_termine
         self._quand_echec = quand_echec
+        self._quand_progres = quand_progres
         self.termine.connect(self._sur_termine)
         self.echec.connect(self._sur_echec)
+        self.progres.connect(self._sur_progres)
+
+    @Slot(object)
+    def _sur_progres(self, valeur) -> None:
+        # Les nouvelles arrivent dans l'ordre, toujours avant le résultat final.
+        if self._quand_progres is not None and self in _en_cours:
+            self._quand_progres(valeur)
 
     @Slot(object)
     def _sur_termine(self, resultat) -> None:
@@ -71,6 +80,20 @@ def lancer(
     retour = _Retour(quand_termine, quand_echec)
     _en_cours.add(retour)
     QThreadPool.globalInstance().start(_Tache(fonction, retour))
+
+
+def lancer_avec_progres(
+    fonction: Callable[[Callable[[Any], None]], Any],
+    quand_termine: Callable[[Any], None],
+    quand_echec: Callable[[Exception], None] | None = None,
+    quand_progres: Callable[[Any], None] | None = None,
+) -> None:
+    """Comme `lancer`, mais la tâche peut donner des nouvelles en cours de route : elle reçoit une
+    fonction `progres`, et chaque `progres(valeur)` appelle `quand_progres(valeur)` dans la tâche
+    principale (ex. un morceau d'audio à écouter pendant la génération)."""
+    retour = _Retour(quand_termine, quand_echec, quand_progres)
+    _en_cours.add(retour)
+    QThreadPool.globalInstance().start(_Tache(lambda: fonction(retour.progres.emit), retour))
 
 
 def en_cours() -> int:

@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -25,7 +25,8 @@ from ....fournisseurs.capacites import modele_connu
 from ....projets import Prise, copier_fichier
 from ....services import Services
 from ... import taches
-from ...composants.elements import bouton, libelle, vider_disposition
+from ...composants.elements import bouton, libelle, minutes_secondes, pastille, vider_disposition
+from ...composants.etoiles import boutons_etoiles
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...icones import icone, icone_menu
@@ -33,12 +34,6 @@ from ...ouvrir import ouvrir_dossier
 from ...theme import Couleurs, Dimensions, Espacements
 
 journal = logging.getLogger(__name__)
-NOTE_MAX = 5
-
-
-def minutes_secondes(secondes: float) -> str:
-    secondes = max(0, round(secondes))
-    return f"{secondes // 60}:{secondes % 60:02d}"
 
 
 def bouton_icone(nom_icone: str, info: str, couleur: str = Couleurs.TEXTE_SECONDAIRE, rempli: bool = False):
@@ -73,23 +68,20 @@ class LignePrise(QFrame):
         ligne_nom = QHBoxLayout()
         ligne_nom.setSpacing(Espacements.S)
         ligne_nom.addWidget(libelle(prise.nom, "titre-bloc", retour_a_la_ligne=False))
-        self.etoiles: list = []
-        for rang in range(1, NOTE_MAX + 1):
-            allumee = rang <= prise.note
-            etoile = bouton("", variante="icone")
-            etoile.setIcon(
-                icone("star", Couleurs.AVERTISSEMENT if allumee else Couleurs.TEXTE_DESACTIVE, rempli=allumee, taille=Dimensions.ETOILE)
-            )
-            etoile.setIconSize(QSize(Dimensions.ETOILE, Dimensions.ETOILE))
-            etoile.setToolTip(f"Noter {rang}/{NOTE_MAX}")
-            # Cliquer sur l'étoile déjà sélectionnée retire la note.
-            etoile.clicked.connect(lambda _c=False, r=rang: liste.noter(prise.identifiant, 0 if r == prise.note else r))
-            self.etoiles.append(etoile)
+        if prise.retenue:
+            retenue = pastille("Retenue")
+            retenue.setToolTip("Variante retenue après l'écoute comparative")
+            ligne_nom.addWidget(retenue)
+        # Cliquer sur l'étoile déjà sélectionnée retire la note.
+        self.etoiles = boutons_etoiles(prise.note, lambda note: liste.noter(prise.identifiant, note))
+        for etoile in self.etoiles:
             ligne_nom.addWidget(etoile)
         ligne_nom.addStretch(1)
         textes.addLayout(ligne_nom)
 
-        details = [_date_lisible(prise.date), prise.voix]
+        details = [_date_lisible(prise.date), liste.nom_voix(prise.voix)]
+        if prise.serie:
+            details.insert(1, f"série {prise.serie}")
         connu = modele_connu(prise.modele)
         details.append(connu.nom if connu else prise.modele)
         if len(prise.repliques) > 1:
@@ -106,6 +98,10 @@ class LignePrise(QFrame):
 
         plus = bouton_icone("ellipsis", "Plus d'actions")
         menu = QMenu(plus)
+        if prise.serie:
+            menu.addAction(icone_menu("git-compare-arrows"), "Comparer les variantes…").triggered.connect(
+                lambda: liste.comparaison_demandee.emit(prise.serie)
+            )
         menu.addAction(icone_menu("pencil"), "Renommer…").triggered.connect(
             lambda: liste.renommer(prise.identifiant)
         )
@@ -134,6 +130,8 @@ def _date_lisible(texte_iso: str) -> str:
 
 
 class ListePrises(QWidget):
+    comparaison_demandee = Signal(int)  # numéro de la série de variantes à comparer
+
     def __init__(self, services: Services, lecteur: Lecteur):
         super().__init__()
         self._services = services
@@ -168,6 +166,10 @@ class ListePrises(QWidget):
 
     def chemin(self, prise: Prise) -> Path:
         return self._services.projets.projet.chemin(prise.fichier)
+
+    def nom_voix(self, identifiant: str) -> str:
+        """Nom lisible d'une voix (ex. le nom d'une voix créée plutôt que « voice_abc123 »)."""
+        return self._services.voix.nom(identifiant)
 
     def rafraichir(self) -> None:
         vider_disposition(self._lignes)

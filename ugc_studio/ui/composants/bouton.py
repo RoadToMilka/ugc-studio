@@ -234,6 +234,8 @@ class Bouton(QAbstractButton):
         enfonce = actif and self.isDown()
         focus = actif and self.hasFocus() and self._focus_clavier
         variante = self._variante
+        if variante == "normal" and self.isCheckable() and self.isChecked():
+            variante = "principal"  # bouton « enfoncé » (ex. variante écoutée) : allure du bouton principal
 
         if variante == "projet":
             if not actif:

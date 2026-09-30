@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+
+# Reçoit chaque morceau d'audio dès son arrivée pendant une génération « en flux » :
+# (échantillons PCM 16 bits mono, fréquence en Hz). Sert à écouter la voix avant la fin du calcul.
+RecepteurAudio = Callable[[bytes, int], None]
 
 
 @dataclass(frozen=True)

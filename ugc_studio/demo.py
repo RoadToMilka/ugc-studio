@@ -2,7 +2,7 @@
 
 Elles remplissent un dossier temporaire (jamais les vraies données) pour que les captures
 d'écran montrent des écrans réalistes : deux clés, quelques appels payants, un projet avec
-un script et des prises.
+un script, des prises et une série de variantes A/B.
 """
 
 from __future__ import annotations
@@ -145,3 +145,30 @@ def remplir_donnees_demo(services: Services) -> None:
                 cout_eur="0.0021",
                 note=note,
             )
+        # Une série de variantes A/B (§5.6) : même script, voix ou style de la 1re réplique différents.
+        variantes = (
+            ("A", "Kore", REPLIQUES_DEMO[0].style, 7.2, 3, 196.0),
+            ("B", "Puck", REPLIQUES_DEMO[0].style, 7.8, 5, 247.0),
+            ("C", "Kore", "calm and intimate, slow-paced", 9.1, 0, 294.0),
+        )
+        retenue = None
+        for lettre, voix, style, duree, note, frequence in variantes:
+            prise = services.projets.ajouter_prise(
+                son_de_demonstration(duree, frequence),
+                modele="gemini-3.8-flash-tts",
+                voix=voix,
+                style="styles par réplique",
+                texte_api="…",
+                script=joindre_repliques([r.script for r in REPLIQUES_DEMO]),
+                repliques=[{"texte_api": "…", "style": style}, {"texte_api": "…", "style": REPLIQUES_DEMO[1].style}],
+                duree_s=duree,
+                tokens_entree=120,
+                tokens_sortie=int(duree * 25),
+                cout_eur="0.0021",
+                note=note,
+                serie=1,
+                variante=lettre,
+            )
+            if lettre == "B":
+                retenue = prise.identifiant
+        services.projets.retenir(retenue)

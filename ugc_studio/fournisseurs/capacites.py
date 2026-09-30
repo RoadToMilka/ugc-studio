@@ -38,6 +38,7 @@ class Capacite(StrEnum):
     TTS_BALISES = "tts_balises"
     TTS_VOICE_DESIGN = "tts_voice_design"
     TTS_MULTI_VOIX = "tts_multi_voix"
+    TTS_FLUX = "tts_flux"  # audio envoyé par morceaux pendant le calcul (écoute pendant la génération)
     STT = "stt"
     STT_MOTS_HORODATES = "stt_mots_horodates"
     STT_VOCABULAIRE = "stt_vocabulaire"
@@ -49,6 +50,7 @@ LIBELLES = {
     Capacite.TTS_BALISES: "Balises",
     Capacite.TTS_VOICE_DESIGN: "Voice Design",
     Capacite.TTS_MULTI_VOIX: "2 voix",
+    Capacite.TTS_FLUX: "Écoute en direct",
     Capacite.STT: "Transcription",
     Capacite.STT_MOTS_HORODATES: "Mots horodatés",
     Capacite.STT_VOCABULAIRE: "Vocabulaire",
@@ -56,7 +58,7 @@ LIBELLES = {
 }
 
 _VOIX = frozenset(
-    {Capacite.TTS, Capacite.TTS_BALISES, Capacite.TTS_VOICE_DESIGN, Capacite.TTS_MULTI_VOIX}
+    {Capacite.TTS, Capacite.TTS_BALISES, Capacite.TTS_VOICE_DESIGN, Capacite.TTS_MULTI_VOIX, Capacite.TTS_FLUX}
 )
 
 

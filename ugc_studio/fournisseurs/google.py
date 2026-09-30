@@ -8,6 +8,10 @@ SDK officiel google-genai 2.25 et guides officiels du « Gemini API Cookbook »
 - Voix (Gemini 3.8 TTS) : POST /v1beta/interactions (API « Interactions »), avec le texte dans
   `input`, la consigne de style dans une annotation `speech_metadata` et la voix dans
   `generation_config.speech_config`. La réponse contient l'audio en WAV (base64).
+  Avec `stream: true`, la réponse arrive en flux (server-sent events) : des événements
+  « step.delta » portent chacun un morceau d'audio (PCM brut « audio/l16 », 24 kHz, mono,
+  16 bits little-endian, en base64), puis « interaction.completed » donne le statut et les
+  nombres de tokens (`usage`) ; le flux finit par « [DONE] ».
 - Texte (ex. Gemini 3.8 Flash) : même API ; la réponse contient des étapes (`steps`) dont la
   dernière « model_output » porte le texte. Niveau de réflexion dans
   `generation_config.thinking_level` (Gemini 3.8 Flash : « low », « medium » ou « high »).
@@ -28,14 +32,22 @@ import binascii
 import json
 import logging
 import time
+from collections.abc import Iterable
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from ..audio import FREQUENCE_TTS, duree_wav, en_wav
+from ..audio import FREQUENCE_TTS, duree_wav, en_wav, lire_wav, wav_depuis_pcm
 from .base import Adaptateur, ErreurFournisseur, InfoModele
-from .http import ReponseHttp, requete
+from .http import EvenementSse, ReponseHttp, ouvrir_flux, requete
 from .texte import RequeteTexte, ResultatTexte
-from .voix import RequeteVoiceDesign, RequeteVoix, ResultatVoix, VoixBibliotheque, VoixCreee
+from .voix import (
+    RecepteurAudio,
+    RequeteVoiceDesign,
+    RequeteVoix,
+    ResultatVoix,
+    VoixBibliotheque,
+    VoixCreee,
+)
 
 journal = logging.getLogger(__name__)
 
@@ -44,6 +56,7 @@ TAILLE_PAGE_MODELES = 1000
 TAILLE_PAGE_VOIX = 1000  # maximum accepté par l'API Voices
 DELAI_CREATION_VOIX = 120  # secondes
 DELAI_GENERATION = 300  # secondes : une longue voix off peut prendre du temps
+DELAI_ENTRE_MORCEAUX = 120  # secondes : attente maximale entre deux morceaux d'une réponse en flux
 DELAI_TEXTE = 60  # secondes
 ESSAIS_SI_SURCHARGE = 2
 PAUSE_AVANT_NOUVEL_ESSAI = 3  # secondes
@@ -113,7 +126,7 @@ class AdaptateurGoogle(Adaptateur):
 
     # --- Voix (TTS) ----------------------------------------------------------------------------
 
-    def generer_voix(self, requete_voix: RequeteVoix) -> ResultatVoix:
+    def generer_voix(self, requete_voix: RequeteVoix, recevoir_audio: RecepteurAudio | None = None) -> ResultatVoix:
         entrees = []
         for replique in requete_voix.repliques:
             element: dict[str, Any] = {"type": "text", "text": replique.texte}
@@ -126,7 +139,33 @@ class AdaptateurGoogle(Adaptateur):
             "response_format": {"type": "audio"},
             "generation_config": {"speech_config": [{"voice": requete_voix.voix}]},
         }
-        return lire_resultat_voix(self._interaction(corps, DELAI_GENERATION))
+        if recevoir_audio is None:
+            return lire_resultat_voix(self._interaction(corps, DELAI_GENERATION))
+        return self._voix_en_flux({**corps, "stream": True}, recevoir_audio)
+
+    def _voix_en_flux(self, corps: dict, recevoir_audio: RecepteurAudio) -> ResultatVoix:
+        """Même demande « en flux » (`stream: true`) : Google envoie l'audio par morceaux (PCM 16 bits,
+        24 kHz, mono) pendant le calcul ; chaque morceau part aussitôt vers `recevoir_audio` (pour
+        l'écouter), puis la prise complète est assemblée. Si Google est surchargé (erreur 5xx avant
+        le premier morceau), un nouvel essai est fait après une pause."""
+        for essai in range(1, ESSAIS_SI_SURCHARGE + 1):
+            reponse = ouvrir_flux(
+                "POST",
+                f"{self._url_api}/interactions",
+                entetes={"x-goog-api-key": self._cle},
+                corps_json=corps,
+                delai=DELAI_ENTRE_MORCEAUX,
+            )
+            if isinstance(reponse, ReponseHttp):
+                erreur = traduire_erreur(reponse)
+                if erreur.code != "serveur" or essai == ESSAIS_SI_SURCHARGE:
+                    raise erreur
+                journal.warning("Google surchargé, nouvel essai dans %s s", PAUSE_AVANT_NOUVEL_ESSAI)
+                time.sleep(PAUSE_AVANT_NOUVEL_ESSAI)
+                continue
+            with reponse:
+                return lire_flux_voix(reponse.evenements(), recevoir_audio)
+        raise AssertionError("inaccessible")
 
     # --- Texte -----------------------------------------------------------------------------------
 
@@ -304,6 +343,84 @@ def lire_resultat_texte(donnees: dict) -> ResultatTexte:
         )
     entree, sortie = _tokens(donnees)
     return ResultatTexte(texte, entree, sortie, {"statut": donnees.get("status"), "usage": donnees.get("usage") or {}})
+
+
+def pcm_du_morceau(delta: dict) -> tuple[bytes, int]:
+    """(échantillons PCM 16 bits, fréquence) d'un morceau d'audio reçu en flux.
+
+    Par défaut, Google envoie du PCM brut (« audio/l16 », 24 kHz, mono, 16 bits little-endian) ;
+    un morceau au format WAV (en-tête « RIFF ») est aussi accepté."""
+    brut = base64.b64decode(delta.get("data") or "")
+    if brut[:4] == b"RIFF":
+        pcm, frequence, _canaux = lire_wav(brut)
+        return pcm, frequence
+    frequence = int(_champ(delta, "sample_rate") or delta.get("rate") or 0)
+    if not frequence:
+        # « audio/l16;rate=24000 » : la fréquence peut aussi être écrite dans le type.
+        type_mime = str(_champ(delta, "mime_type") or "")
+        _, _, suite = type_mime.partition("rate=")
+        frequence = int(suite.split(";")[0]) if suite.split(";")[0].isdigit() else FREQUENCE_TTS
+    return brut, frequence
+
+
+def lire_flux_voix(evenements: Iterable[EvenementSse], recevoir_audio: RecepteurAudio) -> ResultatVoix:
+    """Événements d'une interaction « en flux » → prise complète (WAV + tokens pour le coût).
+
+    Événements utiles : « step.delta » (un morceau d'audio, transmis aussitôt à `recevoir_audio`),
+    « interaction.completed » (statut final et nombres de tokens), « error » (génération
+    interrompue). Le flux se termine par « [DONE] »."""
+    morceaux: list[bytes] = []
+    frequence = FREQUENCE_TTS
+    finale: dict | None = None
+    for evenement in evenements:
+        if evenement.donnees.strip() == "[DONE]":
+            break
+        try:
+            donnees = json.loads(evenement.donnees)
+        except ValueError:
+            journal.warning("Événement illisible ignoré : %s", evenement.donnees[:200])
+            continue
+        if not isinstance(donnees, dict):
+            continue
+        type_evenement = donnees.get("event_type") or evenement.type
+        if type_evenement == "error":
+            erreur = donnees.get("error") or {}
+            message = str(erreur.get("message") or "").strip()
+            raise ErreurFournisseur(
+                "Google a interrompu la génération" + (f" : {message}" if message else ".") + " Réessaie.",
+                "generation",
+                json.dumps(erreur, ensure_ascii=False)[:1000],
+            )
+        if type_evenement == "step.delta":
+            delta = donnees.get("delta") or {}
+            if isinstance(delta, dict) and delta.get("type") == "audio" and delta.get("data"):
+                try:
+                    pcm, frequence = pcm_du_morceau(delta)
+                except (binascii.Error, ValueError, EOFError) as erreur:
+                    raise ErreurFournisseur("Audio reçu de Google illisible.", "audio_illisible", str(erreur)) from erreur
+                morceaux.append(pcm)
+                recevoir_audio(pcm, frequence)
+        elif type_evenement == "interaction.completed":
+            finale = donnees.get("interaction") if isinstance(donnees.get("interaction"), dict) else {}
+    if finale is None:
+        raise ErreurFournisseur(
+            "La génération s'est arrêtée avant la fin (connexion coupée ?). Réessaie.",
+            "reseau",
+            f"{len(morceaux)} morceaux reçus, sans « interaction.completed »",
+        )
+    if not morceaux:
+        # Rien reçu en route : l'audio est peut-être dans la réponse finale.
+        return lire_resultat_voix(finale)
+    _verifier_statut(finale, "la voix")
+    wav = wav_depuis_pcm(b"".join(morceaux), frequence)
+    tokens_entree, tokens_sortie = _tokens(finale)
+    return ResultatVoix(
+        wav,
+        duree_wav(wav),
+        tokens_entree,
+        tokens_sortie,
+        {"statut": finale.get("status"), "usage": finale.get("usage") or {}, "flux": len(morceaux)},
+    )
 
 
 def lire_resultat_voix(donnees: dict) -> ResultatVoix:

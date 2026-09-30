@@ -1,19 +1,24 @@
 """Atelier de voix off (§5) : modèle et voix (bibliothèque, favoris, voix créées), script en
-répliques (chacune avec son style), dictionnaire de prononciation, génération, prises."""
+répliques (chacune avec son style), dictionnaire de prononciation, génération (avec écoute pendant
+le calcul), variantes A/B et écoute comparative, prises."""
 
 from __future__ import annotations
 
 import logging
 
+from dataclasses import dataclass, field
+
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout
 
 from ....conseils import CONSEILS_STYLE
 from ....estimation import estimer_repliques
-from ....fournisseurs.capacites import MODELES_CONNUS, Capacite, modeles_pour
-from ....fournisseurs.google_voix import VOIX_GOOGLE, VOIX_PAR_DEFAUT, voix_de_base
+from ....fournisseurs.base import Adaptateur
+from ....fournisseurs.capacites import Capacite, deviner_capacites
+from ....fournisseurs.google_voix import VOIX_PAR_DEFAUT, voix_de_base
 from ....fournisseurs.voix import VoixBibliotheque
 from ....generation import (
+    Commande,
     enregistrer_prise,
     preparer,
     produire_audio,
@@ -24,27 +29,53 @@ from ....projets import LANGUES, Projet
 from ....prononciation import fusionner
 from ....script import est_vide
 from ....services import Services
+from ....variantes import LETTRES, ReglagesVariante, copie_replique
 from ... import taches
+from ...composants.choix_voix import (
+    MODELE_VOIX_PAR_DEFAUT,
+    choisir,
+    remplir_modeles_voix,
+    remplir_voix,
+    selectionner_voix,
+)
 from ...composants.conseils import ListeConseils
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import bloc, bouton, libelle, liste_deroulante
+from ...composants.elements import bloc, bouton, libelle, liste_deroulante, minutes_secondes
 from ...composants.lecteur import Lecteur
+from ...composants.lecteur_flux import LecteurFlux
 from ...composants.montant_label import MontantLabel
 from ...composants.palette_balises import PaletteBalises
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues.comparaison import DialogueComparaison
 from ...dialogues.prononciation import DialoguePrononciation
 from ...dialogues.styles import DialogueBibliothequeStyles
+from ...dialogues.variantes import DialogueVariantes
 from ...dialogues.voix import DialogueBibliothequeVoix
 from ...extraits import EcouteVoix, fichier_prononciation
 from ...theme import Dimensions, Espacements
 from ..base import Page
-from .prises import ListePrises, minutes_secondes
+from .prises import ListePrises
 from .repliques import CarteReplique, ListeRepliques
 
 journal = logging.getLogger(__name__)
 
 DELAI_ENREGISTREMENT_MS = 800  # enregistrement automatique après une pause dans la frappe
 CLE_CONSEILS_VISIBLES = "conseils_styles_visibles"
+CLE_ECOUTE_DIRECTE = "ecoute_pendant_generation"
+
+
+@dataclass
+class SerieEnCours:
+    """Variantes A/B en cours de génération : elles partent l'une après l'autre."""
+
+    numero: int
+    projet: Projet
+    adaptateur: Adaptateur
+    a_faire: list[tuple[str, Commande]]  # (lettre, commande) pas encore générées
+    total: int
+    faites: list[str] = field(default_factory=list)  # lettres prêtes
+    erreur: str = ""
+    arretee: bool = False
 
 
 class AtelierVoix(Page):
@@ -55,6 +86,11 @@ class AtelierVoix(Page):
         self._chargement = False
         self.lecteur = Lecteur(self)
         self.ecoute = EcouteVoix(services, self.lecteur, self._afficher, self._occupe_ecoute)
+        # Écoute pendant la génération ; une prise lancée à la main l'interrompt.
+        self.flux = LecteurFlux(self)
+        self.lecteur.etat_change.connect(lambda _chemin, lecture: self.flux.arreter() if lecture else None)
+        self._serie: SerieEnCours | None = None
+        self.comparaison: DialogueComparaison | None = None
 
         self._minuterie = QTimer(self)
         self._minuterie.setSingleShot(True)
@@ -136,13 +172,22 @@ class AtelierVoix(Page):
         self.contenu.addWidget(cadre)
         self._afficher_conseils(bool(services.preferences.lire(CLE_CONSEILS_VISIBLES, True)))
 
-        # --- Générer : bouton et estimation (caractères, durée, coût), puis l'avancement dessous ---
+        # --- Générer : boutons et estimation (caractères, durée, coût), option d'écoute, avancement ---
         generation = QVBoxLayout()
         generation.setSpacing(Espacements.S)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.M)
         self.bouton_generer = bouton("Générer la voix", variante="principal", nom_icone="audio-lines", action=self.generer)
         ligne.addWidget(self.bouton_generer)
+        self.bouton_variantes = bouton("Variantes…", nom_icone="git-compare-arrows", action=self.ouvrir_variantes)
+        self.bouton_variantes.setToolTip(
+            "Tests A/B : plusieurs versions du script en un seul lancement, puis écoute comparative"
+        )
+        ligne.addWidget(self.bouton_variantes)
+        self.bouton_arreter = bouton("Arrêter", nom_icone="square", action=self.arreter_variantes)
+        self.bouton_arreter.setToolTip("Arrête la série après la variante en cours (celles déjà prêtes sont gardées)")
+        self.bouton_arreter.hide()
+        ligne.addWidget(self.bouton_arreter)
         estimation = QHBoxLayout()
         estimation.setSpacing(Espacements.XS)
         self.estimation = libelle("", "legende", retour_a_la_ligne=False)
@@ -153,6 +198,14 @@ class AtelierVoix(Page):
         ligne.addLayout(estimation)
         ligne.addStretch(1)
         generation.addLayout(ligne)
+        self.ecoute_directe = QCheckBox("Écouter pendant la génération")
+        self.ecoute_directe.setToolTip(
+            "La voix commence à jouer avant la fin du calcul (modèles Gemini 3.8). "
+            "Sinon, la prise est jouée quand elle est prête."
+        )
+        self.ecoute_directe.setChecked(bool(services.preferences.lire(CLE_ECOUTE_DIRECTE, True)))
+        self.ecoute_directe.toggled.connect(self._ecoute_directe_changee)
+        generation.addWidget(self.ecoute_directe)
         self.statut = libelle("", "secondaire")
         generation.addWidget(self.statut)
         self.contenu.addLayout(generation)
@@ -160,6 +213,7 @@ class AtelierVoix(Page):
         # --- Prises ---
         cadre, d = bloc("Prises")
         self.prises = ListePrises(services, self.lecteur)
+        self.prises.comparaison_demandee.connect(self.comparer)
         d.addWidget(self.prises)
         self.contenu.addWidget(cadre)
 
@@ -183,12 +237,13 @@ class AtelierVoix(Page):
             self._minuterie.stop()
             self._enregistrer()
         self.lecteur.arreter()
+        self.flux.arreter()
         self._projet = projet
         if projet is None:
             return
         self._chargement = True
         self.titre.setText(f"Voix — {projet.nom}")
-        self._choisir(self.modele, projet.voix.modele)
+        choisir(self.modele, projet.voix.modele)
         self._selectionner_voix(projet.voix.voix or VOIX_PAR_DEFAUT)
         self.repliques.definir(projet.repliques)
         self._chargement = False
@@ -196,69 +251,29 @@ class AtelierVoix(Page):
         self.prises.rafraichir()
         self._mettre_a_jour_estimation()
 
-    @staticmethod
-    def _choisir(liste: QComboBox, valeur: str) -> None:
-        index = liste.findData(valeur)
-        if index >= 0:
-            liste.setCurrentIndex(index)
-
     def _remplir_modeles(self) -> None:
         """Modèles de voix accessibles avec les clés (croisement avec les capacités, §3.4)."""
         choix = self.modele.currentData() or (self._projet.voix.modele if self._projet else None)
-        disponibles = self._services.connexions.modeles_disponibles(FOURNISSEUR)
-        compatibles = [c for c in modeles_pour({Capacite.TTS}, disponibles) if c.compatible]
-        self.modele.blockSignals(True)
-        self.modele.clear()
-        if compatibles:
-            for c in compatibles:
-                self.modele.addItem(c.nom, c.identifiant)
-            self.info_modeles.hide()
-        else:
-            for modele in MODELES_CONNUS:
-                if Capacite.TTS in modele.capacites and modele.principal:
-                    self.modele.addItem(modele.nom, modele.identifiant)
-            self.info_modeles.setText(
-                "Aucune clé testée : ajoute et teste ta clé Google dans Réglages → Connexions API."
-            )
-            self.info_modeles.show()
-        self._choisir(self.modele, choix or "gemini-3.8-flash-tts")
-        self.modele.blockSignals(False)
+        avec_cle = remplir_modeles_voix(self.modele, self._services, choix)
+        self.info_modeles.setText("Aucune clé testée : ajoute et teste ta clé Google dans Réglages → Connexions API.")
+        self.info_modeles.setVisible(not avec_cle)
 
     # --- Voix : favoris, voix créées, 30 voix de base ----------------------------------------
 
     def _remplir_voix(self) -> None:
         """Liste des voix : favoris ★, puis voix créées, puis voix de base (sans doublon)."""
-        gestion = self._services.voix
         actuelle = self.voix.currentData() or (self._projet.voix.voix if self._projet else VOIX_PAR_DEFAUT)
-        favoris = gestion.favoris()
-        creees = [v.identifiant for v in gestion.voix_creees() if v.identifiant not in favoris]
-        base = [v.nom for v in VOIX_GOOGLE if v.nom not in favoris]
-        self.voix.blockSignals(True)
-        self.voix.clear()
-        for groupe, prefixe in ((favoris, "★ "), (creees, ""), (base, "")):
-            if not groupe:
-                continue
-            if self.voix.count():
-                self.voix.insertSeparator(self.voix.count())
-            for identifiant in groupe:
-                self.voix.addItem(prefixe + gestion.libelle(identifiant), identifiant)
-        self._selectionner_voix(actuelle, signaler=False)
-        self.voix.blockSignals(False)
+        remplir_voix(self.voix, self._services, actuelle)
 
-    def _selectionner_voix(self, identifiant: str, signaler: bool = True) -> None:
+    def _selectionner_voix(self, identifiant: str) -> None:
         """Choisit une voix dans la liste (en l'ajoutant en tête si elle n'y est pas encore)."""
-        if self.voix.findData(identifiant) < 0:
-            self.voix.insertItem(0, self._services.voix.libelle(identifiant), identifiant)
-        if not signaler:
-            self.voix.setCurrentIndex(self.voix.findData(identifiant))
-            return
-        self._choisir(self.voix, identifiant)
+        selectionner_voix(self.voix, self._services, identifiant)
 
     def _voix_changee(self, *_args) -> None:
         """Une voix créée l'a été avec un modèle précis : on prend ce modèle avec elle."""
         voix = self._services.voix.voix(self.voix.currentData() or "")
         if voix is not None and voix.creee and voix.modele and self.modele.findData(voix.modele) >= 0:
-            self._choisir(self.modele, voix.modele)
+            choisir(self.modele, voix.modele)
         self._reglage_change()
 
     def ouvrir_bibliotheque_voix(self) -> None:
@@ -362,7 +377,7 @@ class AtelierVoix(Page):
             self._selectionner_voix(style.voix)
             details.append(f"voix {self._services.voix.nom(style.voix)}")
         if self.modele.findData(style.modele) >= 0 and style.modele != self.modele.currentData():
-            self._choisir(self.modele, style.modele)
+            choisir(self.modele, style.modele)
             details.append(self.modele.currentText())
         message = f"Style « {style.nom} » appliqué à la {carte.titre.text().lower()}"
         self._afficher(message + (f" ({', '.join(details)})." if details else "."), "secondaire")
@@ -376,6 +391,7 @@ class AtelierVoix(Page):
 
     def _occupe(self, occupe: bool, message: str = "") -> None:
         self.bouton_generer.setEnabled(not occupe)
+        self.bouton_variantes.setEnabled(not occupe)
         self.bouton_extrait.setEnabled(not occupe)
         self._afficher(message, "secondaire")
 
@@ -407,24 +423,174 @@ class AtelierVoix(Page):
             self._prononciations(),
         )
         vitesse = tokens_par_seconde(self._services, commande.modele)
-        self._occupe(True, "Génération en cours… (quelques secondes)")
         projet = self._projet
+        ecoute = self._preparer_ecoute(commande.modele)
+        self._occupe(
+            True,
+            "Génération en cours… La voix commence à jouer dans un instant."
+            if ecoute
+            else "Génération en cours… (quelques secondes)",
+        )
 
         def fin(resultat) -> None:
             self._occupe(False)
+            if ecoute:
+                self.flux.terminer()  # la lecture continue jusqu'au bout
             if self._projet is not projet:
                 return  # le projet a changé pendant la génération
             prise = enregistrer_prise(self._services, commande, resultat)
             self._afficher(f"{prise.nom} prête ({minutes_secondes(prise.duree_s)}).", "succes")
             self.prises.rafraichir()
             self._mettre_a_jour_estimation()
-            self.lecteur.basculer(projet.chemin(prise.fichier))
+            if not (ecoute and self.flux.a_joue):
+                self.lecteur.basculer(projet.chemin(prise.fichier))
 
-        taches.lancer(lambda: produire_audio(adaptateur, commande, vitesse), fin, self._echec)
+        def echec(erreur: Exception) -> None:
+            self.flux.arreter()
+            self._echec(erreur)
+
+        if not ecoute:
+            taches.lancer(lambda: produire_audio(adaptateur, commande, vitesse), fin, echec)
+            return
+        # Chaque morceau d'audio reçu dans la tâche de fond est confié au lecteur (tâche principale).
+        taches.lancer_avec_progres(
+            lambda progres: produire_audio(adaptateur, commande, vitesse, lambda pcm, f: progres((pcm, f))),
+            fin,
+            echec,
+            lambda morceau: self.flux.ajouter(*morceau),
+        )
 
     def _echec(self, erreur: Exception) -> None:
         self._occupe(False)
         self._afficher(message_erreur(erreur), "erreur")
+
+    # --- Écoute pendant la génération (§5.6) --------------------------------------------------
+
+    def _ecoute_directe_changee(self, active: bool) -> None:
+        self._services.preferences.ecrire(CLE_ECOUTE_DIRECTE, active)
+        self._services.preferences.enregistrer()
+
+    def _preparer_ecoute(self, modele: str) -> bool:
+        """Écouter pendant la génération ? Oui si l'option est cochée, si le modèle envoie son audio
+        en flux et si une sortie audio est utilisable."""
+        if not self.ecoute_directe.isChecked() or Capacite.TTS_FLUX not in deviner_capacites(modele):
+            return False
+        if not self.flux.commencer():
+            return False
+        self.lecteur.arreter()
+        return True
+
+    # --- Variantes A/B (§5.6) -----------------------------------------------------------------
+
+    def reglages_de_base(self) -> ReglagesVariante:
+        """Réglages actuels de l'atelier : le point de départ de chaque variante."""
+        return ReglagesVariante(
+            self.modele.currentData() or MODELE_VOIX_PAR_DEFAUT,
+            self.voix.currentData() or VOIX_PAR_DEFAUT,
+            [copie_replique(r) for r in self.repliques.repliques()],
+        )
+
+    def ouvrir_variantes(self) -> None:
+        if self._projet is None:
+            return
+        self._enregistrer()
+        base = self.reglages_de_base()
+        if all(est_vide(r.script) for r in base.repliques):
+            self._afficher("Le script est vide : écris d'abord le texte à dire.", "erreur")
+            return
+        dialogue = DialogueVariantes(self._services, base, self._prononciations(), self.window())
+        if dialogue.exec():
+            self.generer_variantes(dialogue.variantes())
+
+    def generer_variantes(self, variantes: list[ReglagesVariante]) -> None:
+        """Génère les variantes l'une après l'autre ; chacune devient une prise de la même série."""
+        if self._projet is None or self._serie is not None or not variantes:
+            return
+        try:
+            adaptateur = adaptateur_par_defaut(self._services)
+        except Exception as erreur:  # noqa: BLE001 — message clair affiché
+            self._afficher(message_erreur(erreur), "erreur")
+            return
+        prononciations = self._prononciations()
+        a_faire = [
+            (LETTRES[index], preparer(FOURNISSEUR, v.modele, v.voix, v.repliques, self._projet.nom, prononciations))
+            for index, v in enumerate(variantes[: len(LETTRES)])
+        ]
+        self._serie = SerieEnCours(
+            self._services.projets.nouvelle_serie(), self._projet, adaptateur, a_faire, len(a_faire)
+        )
+        self.lecteur.arreter()
+        self.flux.arreter()
+        self._occupe(True)
+        self.bouton_variantes.hide()
+        self.bouton_arreter.show()
+        self.bouton_arreter.setEnabled(True)
+        self._variante_suivante()
+
+    def _variante_suivante(self) -> None:
+        serie = self._serie
+        if serie is None:
+            return
+        if serie.arretee or serie.erreur or not serie.a_faire or self._projet is not serie.projet:
+            self._serie_finie()
+            return
+        lettre, commande = serie.a_faire.pop(0)
+        numero = serie.total - len(serie.a_faire)
+        self._afficher(f"Variante {lettre} en cours ({numero}/{serie.total})…", "secondaire")
+        vitesse = tokens_par_seconde(self._services, commande.modele)
+
+        def fin(resultat) -> None:
+            if self._projet is serie.projet:
+                enregistrer_prise(self._services, commande, resultat, serie.numero, lettre)
+                serie.faites.append(lettre)
+                self.prises.rafraichir()
+            self._variante_suivante()
+
+        def echec(erreur: Exception) -> None:
+            serie.erreur = f"Variante {lettre} non générée : {message_erreur(erreur)}"
+            self._variante_suivante()
+
+        taches.lancer(lambda: produire_audio(serie.adaptateur, commande, vitesse), fin, echec)
+
+    def arreter_variantes(self) -> None:
+        """La série s'arrête après la variante en cours (celles déjà prêtes sont gardées)."""
+        if self._serie is not None:
+            self._serie.arretee = True
+            self.bouton_arreter.setEnabled(False)
+            self._afficher("Arrêt après la variante en cours…", "secondaire")
+
+    def _serie_finie(self) -> None:
+        serie, self._serie = self._serie, None
+        self._occupe(False)
+        self.bouton_arreter.hide()
+        self.bouton_variantes.show()
+        self._mettre_a_jour_estimation()
+        pretes = ", ".join(serie.faites)
+        if serie.erreur:
+            suite = f" Déjà prêtes : {pretes}." if serie.faites else ""
+            self._afficher(serie.erreur + suite, "erreur")
+        elif serie.arretee:
+            self._afficher(f"Série arrêtée. Variantes prêtes : {pretes or 'aucune'}.", "secondaire")
+        else:
+            self._afficher(f"{len(serie.faites)} variantes prêtes ({pretes}) : compare-les à l'écoute.", "succes")
+        if len(serie.faites) >= 2 and self._projet is serie.projet:
+            self.comparer(serie.numero)
+
+    def comparer(self, numero: int) -> None:
+        """Écoute comparative d'une série (fenêtre ouverte sans bloquer l'atelier)."""
+        if self._projet is None or self.comparaison is not None:
+            return
+        self.lecteur.arreter()
+        self.flux.arreter()
+        self.comparaison = DialogueComparaison(self._services, numero, self.window())
+        self.comparaison.finished.connect(self._comparaison_fermee)
+        self.comparaison.open()
+
+    def _comparaison_fermee(self, _resultat: int) -> None:
+        if self.comparaison is not None:
+            self.comparaison.deleteLater()
+        self.comparaison = None
+        self.prises.rafraichir()
 
     def _occupe_ecoute(self, occupe: bool) -> None:
         self.bouton_extrait.setEnabled(not occupe)
