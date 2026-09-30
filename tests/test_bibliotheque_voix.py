@@ -100,7 +100,7 @@ def test_langue_du_projet_meme_si_mes_voix_arrivent_d_abord(atelier, services, q
     monkeypatch.setattr(taches, "lancer", lambda *_args: None)  # les réponses arrivent « à la main »
     dialogue = _bibliotheque(services, atelier, qtbot)
     services.voix.definir_voix_creees([VOIX_CREEE_DEMO])  # « Mes voix » d'abord : pas encore de langue
-    assert dialogue.filtre_langue.currentData() == ""
+    assert dialogue.filtre_langue.findData("fr-FR") < 0  # (et la liste des voix de Google n'est pas reconstruite)
     services.voix.definir_bibliotheque(VOIX_DEMO)  # puis la bibliothèque
     assert dialogue.filtre_langue.currentData() == "fr-FR"
     services.voix.definir_bibliotheque(VOIX_DEMO)  # une actualisation garde le choix
