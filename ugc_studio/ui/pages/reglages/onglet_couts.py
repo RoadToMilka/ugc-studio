@@ -5,30 +5,33 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QHBoxLayout,
-    QHeaderView,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
 
 from ....couts import AppelApi, filtrer, totaux
 from ....fournisseurs.capacites import modele_connu
+from ....montants import nombre_lisible
 from ....services import Services
 from ...composants.elements import bloc, info, libelle, liste_deroulante
 from ...composants.montant_label import MontantLabel
-from ...polices import police
-from ...theme import Dimensions, Espacements, Hauteurs, Typo
+from ...composants.tableau import Colonne, Tableau
+from ...theme import Dimensions, Espacements, Typo
 
 TOUS = "__tous__"
 SANS_PROJET = "__sans_projet__"
 LIGNES_MAX = 500  # au-delà, seuls les appels les plus récents sont listés (les totaux restent complets)
 
-COLONNES = ("Date", "Projet", "Modèle", "Opération", "Tokens entrée", "Tokens sortie", "Coût")
+# « Entrée » et « Sortie » (et non « Tokens entrée ») : des titres courts, pour que le tableau
+# tienne en entier à la plus petite largeur de la fenêtre ; le détail est au survol du titre.
+COLONNES = (
+    Colonne("Date"),
+    Colonne("Projet", texte=True),
+    Colonne("Modèle", texte=True, etiree=True),
+    Colonne("Opération", texte=True),
+    Colonne("Entrée", a_droite=True, aide="Tokens d'entrée (texte ou audio envoyé à Google)"),
+    Colonne("Sortie", a_droite=True, aide="Tokens de sortie (audio ou texte renvoyé par Google)"),
+    Colonne("Coût", a_droite=True),
+)
+COLONNE_COUT = len(COLONNES) - 1
 
 
 def _periode(choix: str, aujourd_hui: date) -> tuple[date | None, date | None]:
@@ -42,11 +45,6 @@ def _periode(choix: str, aujourd_hui: date) -> tuple[date | None, date | None]:
     if choix == "annee":
         return aujourd_hui.replace(month=1, day=1), aujourd_hui
     return None, None
-
-
-def _nombre(n: int) -> str:
-    """1234567 → « 1 234 567 » (espaces fines insécables, à la française)."""
-    return f"{n:,}".replace(",", " ")
 
 
 class OngletCouts(QWidget):
@@ -99,26 +97,8 @@ class OngletCouts(QWidget):
 
         # Tableau des appels
         cadre, d = bloc(marges=Espacements.L)
-        self.tableau = QTableWidget(0, len(COLONNES))
-        self.tableau.setHorizontalHeaderLabels(COLONNES)
-        self.tableau.verticalHeader().hide()
-        self.tableau.verticalHeader().setDefaultSectionSize(Hauteurs.CONTROLE)
-        self.tableau.setShowGrid(False)
-        self.tableau.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.tableau.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.tableau.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.tableau = Tableau(COLONNES)
         self.tableau.setMinimumHeight(Dimensions.TABLEAU_HAUTEUR_MIN)
-        entete = self.tableau.horizontalHeader()
-        entete.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        entete.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        entete.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        # La colonne « Coût » contient des éléments dessinés à part (montants au format §4.4) que
-        # le calcul automatique de largeur ne voit pas : on lui donne une largeur fixe suffisante.
-        mesure = QFontMetrics(police(Typo.COURANT))
-        entete.setSectionResizeMode(len(COLONNES) - 1, QHeaderView.ResizeMode.Fixed)
-        self.tableau.setColumnWidth(
-            len(COLONNES) - 1, mesure.horizontalAdvance("prix inconnu") + 2 * Espacements.M + Espacements.L
-        )
         d.addWidget(self.tableau)
         self.vide = libelle(
             "Aucun appel payant sur cette période. Les coûts apparaîtront ici dès la première voix générée.",
@@ -184,7 +164,7 @@ class OngletCouts(QWidget):
         self.total.definir_montant(somme.cout_eur)
         self.resume.setText(
             f"{somme.nombre} appel{'s' if somme.nombre > 1 else ''}  ·  "
-            f"{_nombre(somme.tokens_entree)} tokens d'entrée  ·  {_nombre(somme.tokens_sortie)} tokens de sortie"
+            f"{nombre_lisible(somme.tokens_entree)} tokens d'entrée  ·  {nombre_lisible(somme.tokens_sortie)} tokens de sortie"
         )
         self.avertissement.setVisible(somme.sans_prix > 0)
         self.avertissement.setText(
@@ -200,20 +180,22 @@ class OngletCouts(QWidget):
                 appel.projet or "Sans projet",
                 connu.nom if connu else appel.modele,
                 appel.operation,
-                _nombre(appel.tokens_entree),
-                _nombre(appel.tokens_sortie),
+                nombre_lisible(appel.tokens_entree),
+                nombre_lisible(appel.tokens_sortie),
             )
             for colonne, texte in enumerate(valeurs):
                 element = QTableWidgetItem(texte)
-                if colonne in (4, 5):
+                if COLONNES[colonne].a_droite:
                     element.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self.tableau.setItem(ligne, colonne, element)
+            # Montant au format §4.4 (petites décimales) : dessiné par un élément à part.
             if appel.cout_eur is None:
                 cout = libelle("prix inconnu", "avertissement", retour_a_la_ligne=False)
             else:
                 cout = MontantLabel(appel.cout_eur)
             cout.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            cout.setContentsMargins(0, 0, Espacements.M, 0)
-            self.tableau.setCellWidget(ligne, len(COLONNES) - 1, cout)
+            cout.setContentsMargins(Espacements.M, 0, Espacements.M, 0)
+            self.tableau.setCellWidget(ligne, COLONNE_COUT, cout)
+        self.tableau.contenu_change()
         self.tableau.setVisible(bool(recents))
         self.vide.setVisible(not recents)

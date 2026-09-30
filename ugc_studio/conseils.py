@@ -1,8 +1,8 @@
 """Conseils Google et vérifications en direct (§5.4 bis, §5.5).
 
-Les conseils sont affichés en anglais d'origine avec leur traduction française. Les vérifications
-produisent des avertissements non bloquants pendant la saisie d'un style ou d'une description
-de voix.
+Chaque conseil est gardé en anglais d'origine avec sa traduction française ; l'app n'affiche que le
+français, dans les fenêtres « Conseils » (voir conseils_des_pages.py). Les vérifications produisent
+des avertissements non bloquants pendant la saisie d'un style ou d'une description de voix.
 """
 
 from __future__ import annotations

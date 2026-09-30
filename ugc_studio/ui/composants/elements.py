@@ -9,8 +9,8 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-from PySide6.QtCore import QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QFontMetricsF, QIcon, QPainter, QPen
+from PySide6.QtCore import QEvent, QRect, QRectF, QSize, Qt
+from PySide6.QtGui import QFontMetricsF, QIcon, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QCheckBox,
@@ -22,14 +22,19 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSlider,
     QSpinBox,
+    QStyle,
+    QStyleOptionComboBox,
+    QStylePainter,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
 
 from ..icones import icone
 from ..polices import police
-from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
+from ..theme import LISTES_INTEGREES, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .bouton import Bouton, dessiner_texte_centre_a_l_oeil
+from .liste_deroulante import DelegueChoix, VueChoix
 
 
 def libelle(
@@ -204,7 +209,77 @@ class _SansMolette:
 
 
 class ListeDeroulante(_SansMolette, QComboBox):
-    pass
+    """Liste déroulante de l'app (voir liste_deroulante()).
+
+    - Liste « intégrée au champ » (§9.4 quinquies) : elle s'ouvre sous le champ, sans le choix
+      actuel, que le champ montre déjà (voir composants/liste_deroulante.py).
+    - Texte trop long pour le champ fermé : abrégé par « … » (Qt le coupait au milieu d'une lettre),
+      avec le texte complet au survol."""
+
+    def __init__(self):
+        super().__init__()
+        self.setView(VueChoix())
+        self.setItemDelegate(DelegueChoix(self))
+        self.setMaxVisibleItems(Dimensions.LISTE_CHOIX_VISIBLES)
+
+    # --- Liste ouverte ---------------------------------------------------------------------------
+
+    def showPopup(self) -> None:  # noqa: N802 — nom imposé par Qt
+        vue, actuel = self.view(), self.currentIndex()
+        for rang in range(self.count()):
+            vue.setRowHidden(rang, LISTES_INTEGREES and rang == actuel)  # le champ le montre déjà
+        super().showPopup()
+
+    def hidePopup(self) -> None:  # noqa: N802 — nom imposé par Qt
+        super().hidePopup()
+        for rang in range(self.count()):
+            self.view().setRowHidden(rang, False)
+
+    # --- Champ fermé : texte abrégé par « … » ----------------------------------------------------
+
+    def _option(self) -> QStyleOptionComboBox:
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        return option
+
+    def _place_du_texte(self, option: QStyleOptionComboBox) -> int:
+        zone = self.style().subControlRect(
+            QStyle.ComplexControl.CC_ComboBox, option, QStyle.SubControl.SC_ComboBoxEditField, self
+        )
+        largeur = zone.width()
+        if not option.currentIcon.isNull():
+            largeur -= option.iconSize.width() + Espacements.XS
+        return largeur
+
+    def texte_affiche(self) -> str:
+        """Le texte tel qu'il s'affiche dans le champ fermé (abrégé par « … » s'il est trop long)."""
+        option = self._option()
+        return self.fontMetrics().elidedText(option.currentText, Qt.TextElideMode.ElideRight, self._place_du_texte(option))
+
+    def paintEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        if self.isEditable():  # le texte est alors dans un champ de saisie, qui se dessine seul
+            super().paintEvent(evenement)
+            return
+        # Comme QComboBox.paintEvent(), mais avec le texte abrégé.
+        peintre = QStylePainter(self)
+        peintre.setPen(self.palette().color(QPalette.ColorRole.Text))
+        option = self._option()
+        peintre.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, option)
+        if self.currentIndex() < 0 and self.placeholderText():
+            option.palette.setBrush(QPalette.ColorRole.ButtonText, option.palette.placeholderText())
+            option.currentText = self.placeholderText()
+        else:
+            option.currentText = self.texte_affiche()
+        peintre.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, option)
+
+    def event(self, evenement) -> bool:
+        if evenement.type() == QEvent.Type.ToolTip and not self.isEditable():
+            texte = self.currentText()
+            if texte and self.texte_affiche() != texte:
+                aide = self.toolTip()
+                QToolTip.showText(evenement.globalPos(), f"{texte}\n{aide}" if aide else texte, self)
+                return True
+        return super().event(evenement)
 
 
 class Glissiere(_SansMolette, QSlider):
@@ -223,10 +298,10 @@ def liste_deroulante(info: str | None = None) -> QComboBox:
     """Liste déroulante de l'app (toujours créée ici, jamais avec QComboBox() directement).
 
     Elle prend la largeur de son plus long choix quand il y a de la place, et peut rétrécir sinon
-    (texte abrégé par « … » ; le menu ouvert montre toujours les textes en entier). Sans cela, un
-    choix très long (ex. le nom d'une voix créée) élargirait toute la page au-delà de la fenêtre,
-    et le bord droit serait coupé. La molette ne la change qu'après un clic dedans (voir
-    _SansMolette). `info` : texte de l'infobulle."""
+    (texte abrégé par « … », texte complet au survol). Sans cela, un choix très long (ex. le nom
+    d'une voix créée) élargirait toute la page au-delà de la fenêtre, et le bord droit serait
+    coupé. La liste s'ouvre sous le champ (voir ListeDeroulante). La molette ne la change qu'après
+    un clic dedans (voir _SansMolette). `info` : texte de l'infobulle."""
     liste = ListeDeroulante()
     liste.setMinimumContentsLength(Dimensions.LISTE_CARACTERES_MIN)
     liste.setFocusPolicy(Qt.FocusPolicy.StrongFocus)

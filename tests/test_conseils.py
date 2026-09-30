@@ -66,7 +66,11 @@ def test_fenetre_des_conseils(app_configuree, qtbot):
     assert textes == [c for rubrique in PAGES["voix"].rubriques for c in rubrique.conseils]
     assert CONSEILS_STYLE[0].francais in textes
     intitules = {e.text() for e in dialogue.findChildren(QLabel) if e.property("role") == "intitule"}
-    assert intitules == {rubrique.titre for rubrique in PAGES["voix"].rubriques}
+    assert {i.replace("\u00a0", " ") for i in intitules} == {rubrique.titre for rubrique in PAGES["voix"].rubriques}
+    # Espaces insécables à la française : « « » et « : » ne restent jamais seuls en bout de ligne.
+    affiches = [e.text() for e in dialogue.findChildren(QLabel)]
+    assert any("«\u00a0warm and enthusiastic, fast-paced\u00a0»" in texte for texte in affiches)
+    assert "Styles\u00a0: les conseils de Google" in intitules
     dialogue.show()
     assert not dialogue.grab().isNull()
 

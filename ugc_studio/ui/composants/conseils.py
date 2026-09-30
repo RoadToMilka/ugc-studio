@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QWidget
 
 from ...conseils_des_pages import PAGES, PageDeConseils
+from ...sous_titres import typographie
 from ..theme import Dimensions, Espacements
 from .bouton import Bouton
 from .defilement import zone_defilante
@@ -29,17 +30,24 @@ def titre_des_conseils(page: PageDeConseils) -> str:
     return f"{page.titre} / Conseils"
 
 
+def _francais(texte: str) -> str:
+    """Espaces insécables à la française (avant « : ; ! ? », à l'intérieur des guillemets) : un
+    « « » ou un « : » ne se retrouve jamais seul en début ou en fin de ligne."""
+    return typographie(texte, "fr")
+
+
 class _Conseil(QWidget):
     """Un conseil : une puce, puis le texte, qui passe à la ligne sous lui-même (pas sous la puce)."""
 
     def __init__(self, texte: str):
         super().__init__()
+        self.source = texte  # le texte tel qu'écrit dans conseils_des_pages.py
         disposition = QHBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(Espacements.S)
         # Même police pour la puce et le texte, calés en haut : la puce tombe sur la première ligne.
         disposition.addWidget(libelle("•", "secondaire", retour_a_la_ligne=False), 0, Qt.AlignmentFlag.AlignTop)
-        self.texte = libelle(texte)
+        self.texte = libelle(_francais(texte))
         disposition.addWidget(self.texte, 1)
 
 
@@ -64,7 +72,7 @@ class DialogueConseils(QDialog):
         for rubrique in page.rubriques:
             partie = QVBoxLayout()
             partie.setSpacing(Espacements.S)
-            partie.addWidget(libelle(rubrique.titre, "intitule"))
+            partie.addWidget(libelle(_francais(rubrique.titre), "intitule"))
             for conseil in rubrique.conseils:
                 partie.addWidget(_Conseil(conseil))
             contenu.addLayout(partie)
@@ -76,8 +84,8 @@ class DialogueConseils(QDialog):
         disposition.addLayout(bas)
 
     def conseils(self) -> list[str]:
-        """Les textes affichés, dans l'ordre (pour les tests)."""
-        return [element.texte.text() for element in self.findChildren(_Conseil)]
+        """Les conseils affichés, dans l'ordre, tels qu'écrits dans conseils_des_pages.py (pour les tests)."""
+        return [element.source for element in self.findChildren(_Conseil)]
 
 
 def bouton_conseils(cle: str) -> Bouton:
