@@ -187,6 +187,15 @@ class DialogueVariantes(QDialog):
                 "secondaire",
             )
         )
+        actions = QHBoxLayout()
+        actions.setSpacing(Espacements.S)
+        self.bouton_ajouter = bouton(
+            "Ajouter une variante", variante="discret", nom_icone="plus", action=self.ajouter_variante
+        )
+        self.bouton_ajouter.setToolTip("Nouvelle variante, identique aux réglages de base (6 au maximum)")
+        actions.addWidget(self.bouton_ajouter)
+        actions.addStretch(1)
+        disposition.addLayout(actions)
         # Le tableau peut être plus large que la fenêtre (jusqu'à 6 variantes) : il défile.
         zone = QScrollArea()
         zone.setWidgetResizable(True)
@@ -220,10 +229,7 @@ class DialogueVariantes(QDialog):
         self._grille.addWidget(libelle("Réglages de base", "intitule", retour_a_la_ligne=False), 0, 1)
         for index in range(len(self._variantes)):
             self._grille.addLayout(self._titre_colonne(index), 0, 2 + index)
-        ajouter = bouton("Ajouter", variante="discret", nom_icone="plus", action=self.ajouter_variante)
-        ajouter.setToolTip("Nouvelle variante, identique aux réglages de base")
-        ajouter.setEnabled(len(self._variantes) < VARIANTES_MAX)
-        self._grille.addWidget(ajouter, 0, 2 + len(self._variantes), Qt.AlignmentFlag.AlignTop)
+        self.bouton_ajouter.setEnabled(len(self._variantes) < VARIANTES_MAX)
 
         for index, variante in enumerate(self._variantes):
             modele = liste_deroulante()

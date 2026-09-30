@@ -612,6 +612,10 @@ QScrollBar::add-line, QScrollBar::sub-line {
 QScrollBar::add-page, QScrollBar::sub-page {
     background: none;
 }
+QAbstractScrollArea::corner {
+    background: transparent;
+    border: none;
+}
 
 /* ---------- Menus et infobulles ---------- */
 QMenu {

@@ -83,6 +83,7 @@ Un **tableau de capacités** décrit chaque modèle :
 | `tts_balises` | balises `<laugh>` supportées |
 | `tts_voice_design` | création de voix par description |
 | `tts_multi_voix` | 2 voix dans une requête |
+| `tts_flux` | audio envoyé par morceaux pendant le calcul (écoute pendant la génération, §5.6) |
 | `stt` | Gemini 3.5 Transcribe |
 | `stt_mots_horodates` | horodatage par mot (obligatoire pour l'animation) |
 | `stt_vocabulaire` | vocabulaire personnalisé |
