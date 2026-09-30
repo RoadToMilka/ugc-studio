@@ -97,6 +97,10 @@ class LignePrise(QFrame):
         if prise.cout_eur is not None:
             disposition.addWidget(MontantLabel(prise.cout_eur))
 
+        self.bouton_sous_titres = bouton_icone("captions", "Créer les sous-titres de cette prise")
+        self.bouton_sous_titres.clicked.connect(lambda: liste.sous_titres_demandes.emit(prise.identifiant))
+        disposition.addWidget(self.bouton_sous_titres)
+
         plus = bouton_icone("ellipsis", "Plus d'actions")
         menu = QMenu(plus)
         menu.addAction(icone_menu("captions"), "Créer les sous-titres de cette prise").triggered.connect(

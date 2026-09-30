@@ -95,6 +95,8 @@ def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path,
         wav_depuis_pcm(b"\x00\x00" * 24_000), modele="m", voix="Kore", style="", texte_api="Bonjour",
         script=[{"texte": "Bonjour"}], duree_s=1.0,
     )
+    fenetre.show()
+    fenetre.afficher_module("voix")
     liste = fenetre.page("voix").atelier.prises
     liste.rafraichir()
     (ligne,) = liste.lignes()
@@ -102,7 +104,7 @@ def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path,
     assert actions[0] == "Créer les sous-titres de cette prise"
     demandes = []
     monkeypatch.setattr(fenetre.page("sous-titres").atelier, "creer_depuis_prise", demandes.append)
-    liste.sous_titres_demandes.emit(prise.identifiant)
+    qtbot.mouseClick(ligne.bouton_sous_titres, Qt.MouseButton.LeftButton)  # bouton de la prise
     assert fenetre.module_actuel() == "sous-titres" and demandes == [prise.identifiant]
     # « Corriger les mots » : dans le module Transcription.
     fenetre.page("sous-titres").atelier.corriger_demande.emit()
