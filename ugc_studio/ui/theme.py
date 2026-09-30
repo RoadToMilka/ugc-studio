@@ -151,6 +151,7 @@ class Dimensions:
     ZONE_DEFILANTE_HAUTEUR_SOUHAITEE = 160  # voir ZoneDefilante (ui/pages/base.py)
     DIALOGUE_HAUTEUR_MAX = 680  # une fenêtre de dialogue doit tenir sur l'écran d'un portable (768 px)
     EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
+    APERCU_SOUS_TITRE_HAUTEUR = 96  # sous-titre en cours, pendant l'écoute (page Sous-titres)
     EDITEUR_REPLIQUE_HAUTEUR_MIN = 88  # éditeur d'une réplique (grandit ensuite avec son texte)
     # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
     BADGE_MARGE_HORIZONTALE = 8  # espace intérieur, à gauche et à droite du nom de la balise
@@ -337,6 +338,20 @@ QLabel[role="pastille"] {
 }
 QLabel[vide="true"] {
     color: $texte_secondaire;
+}
+QLabel[role="apercu-sous-titre"] {
+    background: $fond;
+    color: $texte;
+    border: ${bordure}px solid $couleur_bordure;
+    border-radius: ${arrondi_controle}px;
+    padding: ${esp_m}px ${esp_l}px;
+    font-size: ${grand_chiffre}px;
+    font-family: "$famille_forte";
+    font-weight: $graisse_forte;
+    min-height: ${apercu_sous_titre}px;
+}
+QLabel[role="apercu-sous-titre"][signale="true"] {
+    color: $avertissement;
 }
 QLabel[role="etiquette"] {
     color: $texte_secondaire;
@@ -697,6 +712,7 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "courant": Typo.COURANT,
         "titre_bloc": Typo.TITRE_BLOC,
         "titre_page": Typo.TITRE_PAGE,
+        "grand_chiffre": Typo.GRAND_CHIFFRE,
         "graisse_moyenne": Typo.GRAISSE_MOYENNE,
         "graisse_forte": Typo.GRAISSE_FORTE,
         "famille_moyenne": familles.get(Typo.GRAISSE_MOYENNE, Typo.FAMILLE),
@@ -732,6 +748,7 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         # après elle, comme partout ailleurs dans l'app.
         "marge_gauche_menu": Espacements.M + Dimensions.ECART_ICONE_TEXTE - _QT_ESPACE_APRES_ICONE_MENU,
         "case_a_cocher": Dimensions.CASE_A_COCHER,
+        "apercu_sous_titre": Dimensions.APERCU_SOUS_TITRE_HAUTEUR,
         "barre_defilement": Dimensions.BARRE_DEFILEMENT,
         "poignee_min": Dimensions.POIGNEE_DEFILEMENT_MIN,
         # images

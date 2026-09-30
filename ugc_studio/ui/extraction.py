@@ -241,6 +241,9 @@ class LecteurInfos(QObject):
         hdr = getattr(QMediaMetaData.Key, "HasHdrContent", None)  # Qt 6.8 et plus
         if hdr is not None:
             cles["hdr"] = hdr
+        # Vidéo de téléphone filmée à la verticale : souvent enregistrée « couchée » avec un angle
+        # de rotation (90°) ; la résolution lue est alors celle de l'image couchée.
+        cles["rotation"] = QMediaMetaData.Key.Orientation
         infos = {"duree_s": round(lecteur.duration() / 1000, 3), "video": bool(lecteur.hasVideo())}
         for nom, cle in cles.items():
             valeur = _lisible(donnees.value(cle))

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QTextEdit, QVBoxLayout
 
-from .composants.elements import bloc, bouton, libelle, liste_deroulante, pastille
+from .composants.elements import bloc, bouton, champ_decimal, champ_entier, libelle, liste_deroulante, pastille
 from .composants.montant_label import MontantLabel
 from .theme import Dimensions, Espacements, Typo
 
@@ -78,6 +78,15 @@ class GalerieComposants(QFrame):
         inactif_champ = QLineEdit("Champ désactivé")
         inactif_champ.setEnabled(False)
         d.addWidget(inactif_champ)
+        nombres = QHBoxLayout()
+        entier = champ_entier(8, 120, info="Caractères au plus")
+        entier.setValue(24)
+        nombres.addWidget(entier)
+        decimal = champ_decimal(0.0, 5.0, 0.1, 1, " s", "Durée minimale")
+        decimal.setValue(0.6)
+        nombres.addWidget(decimal)
+        nombres.addStretch(1)
+        d.addLayout(nombres)
         cases = QHBoxLayout()
         coche = QCheckBox("TOUT EN MAJUSCULES")
         coche.setChecked(True)

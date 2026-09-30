@@ -65,6 +65,10 @@ class Transcription:
     date: str = ""
     cout_eur: str | None = None
     masquer_hesitations: bool = True  # dans les sous-titres (§6.3)
+    # Prise TTS transcrite pour créer ses sous-titres (§3.3) : les mots transcrits sont alignés
+    # sur le script de la prise (son orthographe exacte), à chaque transcription.
+    prise: str = ""  # identifiant de la prise
+    script: str = ""  # texte du script (sans balises)
 
     @property
     def horodatee(self) -> bool:
@@ -87,6 +91,25 @@ class Transcription:
         if not isinstance(transcription.infos, dict):
             transcription.infos = {}
         return transcription
+
+
+def resolution_video(infos: dict) -> tuple[int, int] | None:
+    """Largeur × hauteur de la vidéo source, telle qu'elle s'affiche. Une vidéo de téléphone
+    filmée à la verticale est souvent enregistrée « couchée » avec une rotation de 90° : ses
+    dimensions sont alors remises dans le bon sens (1920 × 1080 → 1080 × 1920)."""
+    brut = infos.get("resolution") if isinstance(infos, dict) else None
+    if not (isinstance(brut, list | tuple) and len(brut) == 2):
+        return None
+    try:
+        largeur, hauteur = int(brut[0]), int(brut[1])
+        rotation = int(float(infos.get("rotation") or 0))
+    except (TypeError, ValueError):
+        return None
+    if largeur <= 0 or hauteur <= 0:
+        return None
+    if rotation % 180 == 90:
+        largeur, hauteur = hauteur, largeur
+    return largeur, hauteur
 
 
 # --- Lecture synchronisée -----------------------------------------------------------------------

@@ -12,6 +12,9 @@ une seule réplique.
 
 Format 3 (étape 7) : la **transcription** (source importée, piste son extraite dans
 « sources\\ », mots horodatés) et le dictionnaire de remplacements du projet (§6).
+
+Format 4 (étape 8) : les **réglages des sous-titres** (découpage, texte affiché, écran, §7).
+Un projet d'un format plus ancien s'ouvre avec les réglages par défaut.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from pathlib import Path
 from .chemins import dossier_donnees
 from .prononciation import Prononciation, depuis_liste
 from .script import joindre_repliques
+from .sous_titres import ReglagesSousTitres
 from .stockage import ecrire_json, lire_json
 from .transcription import Remplacement, Transcription, remplacements_depuis_liste
 
@@ -36,6 +40,7 @@ journal = logging.getLogger(__name__)
 NOM_FICHIER = "projet.json"
 DOSSIER_PRISES = "prises"
 DOSSIER_SOURCES = "sources"  # piste son extraite de la vidéo importée (transcription, §6)
+FICHIER_AUDIO = f"{DOSSIER_SOURCES}/audio.wav"  # piste son de la transcription (source ou prise)
 NB_RECENTS = 10
 
 # §5.7 — Langues proposées (codes « langue-PAYS »).
@@ -132,8 +137,9 @@ class Projet:
     prises: list[Prise] = field(default_factory=list)
     transcription: Transcription | None = None  # §6
     remplacements: list[Remplacement] = field(default_factory=list)  # dictionnaire du projet (§6.3)
+    sous_titres: ReglagesSousTitres = field(default_factory=ReglagesSousTitres)  # §7
 
-    VERSION_FORMAT = 3
+    VERSION_FORMAT = 4
 
     @property
     def script(self) -> list[dict]:
@@ -160,6 +166,7 @@ class Projet:
             "prises": [asdict(p) for p in self.prises],
             "transcription": self.transcription.en_dict() if self.transcription else None,
             "remplacements": [asdict(r) for r in self.remplacements],
+            "sous_titres": self.sous_titres.en_dict(),
         }
 
     @classmethod
@@ -194,6 +201,7 @@ class Projet:
             prises=prises,
             transcription=_transcription(donnees.get("transcription")),
             remplacements=remplacements_depuis_liste(donnees.get("remplacements")),
+            sous_titres=ReglagesSousTitres.depuis_dict(donnees.get("sous_titres")),
         )
 
 

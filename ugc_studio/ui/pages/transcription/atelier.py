@@ -36,9 +36,18 @@ from ....chemins import dossier_documents
 from ....fournisseurs.capacites import MODELES_CONNUS, Capacite, modele_connu, modeles_pour
 from ....fournisseurs.stt import MODE_SMART, MODE_VERBATIM
 from ....prix import lire_decimal
-from ....projets import DOSSIER_SOURCES, LANGUES, Projet
+from ....projets import FICHIER_AUDIO, LANGUES, Projet
 from ....services import Services
-from ....stt import Options, estimer_cout, terminer_transcription, transcrire_source
+from ....stt import (
+    MODELE_PAR_DEFAUT,
+    PREFERENCE_HESITATIONS,
+    Options,
+    estimer_cout,
+    hesitations,
+    langue_de,
+    terminer_transcription,
+    transcrire_source,
+)
 from ....transcription import (
     Transcription,
     ajuster,
@@ -47,8 +56,8 @@ from ....transcription import (
     couper,
     fusionner,
     fusionner_remplacements,
-    hesitations_pour,
     index_au_temps,
+    resolution_video,
     supprimer,
 )
 from ... import taches
@@ -66,8 +75,6 @@ from ..base import Page
 
 journal = logging.getLogger(__name__)
 
-FICHIER_AUDIO = f"{DOSSIER_SOURCES}/audio.wav"
-CLE_HESITATIONS = "hesitations"  # préférences : {code de langue : [mots]}
 AUTO = ""  # langue : détection automatique
 
 
@@ -78,13 +85,20 @@ def fichiers_acceptes(urls) -> list[Path]:
 
 
 def description_source(transcription: Transcription) -> str:
-    """« pub.mp4 · 0:42 · 1080 × 1920 · 30 images/s · H264 »."""
-    morceaux = [Path(transcription.source).name or "source"]
+    """« pub.mp4 · 0:42 · 1080 × 1920 · 30 images/s · H264 », ou pour une prise TTS :
+    « Prise 3 · 0:12 · voix générée, alignée sur son script »."""
+    if transcription.prise:
+        morceaux = [transcription.source or "Prise"]
+    else:
+        morceaux = [Path(transcription.source).name or "source"]
     if transcription.duree_s:
         morceaux.append(minutes_secondes(transcription.duree_s))
+    if transcription.prise:
+        morceaux.append("voix générée, alignée sur son script")
     infos = transcription.infos or {}
-    if isinstance(infos.get("resolution"), list) and len(infos["resolution"]) == 2:
-        morceaux.append(f"{infos['resolution'][0]} × {infos['resolution'][1]}")
+    resolution = resolution_video(infos)
+    if resolution:
+        morceaux.append(f"{resolution[0]} × {resolution[1]}")
     if infos.get("images_par_seconde"):
         morceaux.append(f"{float(infos['images_par_seconde']):g} images/s")
     if infos.get("codec_video"):
@@ -338,7 +352,7 @@ class AtelierTranscription(Page):
             for connu in MODELES_CONNUS:
                 if Capacite.STT in connu.capacites and connu.principal:
                     self.modele.addItem(connu.nom, connu.identifiant)
-        choisir(self.modele, actuel or "gemini-3.5-transcribe")
+        choisir(self.modele, actuel or MODELE_PAR_DEFAUT)
         self.modele.blockSignals(False)
 
     # --- Affichage ---------------------------------------------------------------------------
@@ -350,15 +364,21 @@ class AtelierTranscription(Page):
         self.statut.style().polish(self.statut)
 
     def _hesitations(self) -> set[str]:
-        transcription = self.transcription
-        langue = (transcription.langue if transcription and transcription.langue else None) or (
-            self._projet.langue if self._projet else "fr-FR"
-        )
-        return hesitations_pour(langue, self._services.preferences.lire(CLE_HESITATIONS, {}) or {})
+        return hesitations(self._services, self.transcription)
+
+    def showEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        # La transcription peut avoir changé ailleurs (ex. sous-titres créés depuis une prise).
+        super().showEvent(evenement)
+        if self._projet is not None and not self._occupe:
+            self.rafraichir()
 
     def rafraichir(self) -> None:
         """Met la page à jour d'après la transcription du projet."""
         transcription = self.transcription
+        if transcription is not None and self.masquer.isChecked() != transcription.masquer_hesitations:
+            self.masquer.blockSignals(True)  # réglage partagé avec la page Sous-titres
+            self.masquer.setChecked(transcription.masquer_hesitations)
+            self.masquer.blockSignals(False)
         a_source = bool(transcription and transcription.audio)
         self.zone_depot.setVisible(not a_source)
         self.texte_source.setVisible(a_source)
@@ -409,7 +429,7 @@ class AtelierTranscription(Page):
         self.estimation.setText(f"≈ {minutes_secondes(duree)} d'audio  ·  ≈" if duree else "")
         self.cout_estime.setVisible(bool(duree))
         if duree:
-            cout = estimer_cout(duree, self.modele.currentData() or "gemini-3.5-transcribe", self._services.prix)
+            cout = estimer_cout(duree, self.modele.currentData() or MODELE_PAR_DEFAUT, self._services.prix)
             if cout is None:
                 self.cout_estime.setText("prix inconnu")
             else:
@@ -529,7 +549,7 @@ class AtelierTranscription(Page):
 
     def options(self) -> Options:
         return Options(
-            self.modele.currentData() or "gemini-3.5-transcribe",
+            self.modele.currentData() or MODELE_PAR_DEFAUT,
             self.langue.currentData() or AUTO,
             MODE_SMART if self.texte_seul.isChecked() else MODE_VERBATIM,
             self.separation.isChecked() and not self.texte_seul.isChecked(),
@@ -606,12 +626,9 @@ class AtelierTranscription(Page):
         self.rafraichir()
 
     def modifier_hesitations(self) -> None:
-        transcription = self.transcription
-        langue = (transcription.langue if transcription and transcription.langue else None) or (
-            self._projet.langue if self._projet else "fr-FR"
-        )
+        langue = langue_de(self.transcription, self._projet)
         code = langue.split("-")[0]
-        actuelles = sorted(hesitations_pour(langue, self._services.preferences.lire(CLE_HESITATIONS, {}) or {}))
+        actuelles = sorted(self._hesitations())
         texte, ok = QInputDialog.getText(
             self,
             "Hésitations",
@@ -620,9 +637,9 @@ class AtelierTranscription(Page):
         )
         if not ok:
             return
-        personnalisees = dict(self._services.preferences.lire(CLE_HESITATIONS, {}) or {})
+        personnalisees = dict(self._services.preferences.lire(PREFERENCE_HESITATIONS, {}) or {})
         personnalisees[code] = [m.strip() for m in texte.split(",") if m.strip()]
-        self._services.preferences.ecrire(CLE_HESITATIONS, personnalisees)
+        self._services.preferences.ecrire(PREFERENCE_HESITATIONS, personnalisees)
         self._services.preferences.enregistrer()
         self.rafraichir()
 

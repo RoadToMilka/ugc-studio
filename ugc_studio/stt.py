@@ -17,14 +17,17 @@ import math
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .audio import OCTETS_PAR_ECHANTILLON, lire_wav, wav_depuis_pcm
+from .alignement import aligner, mots_du_script
+from .audio import OCTETS_PAR_ECHANTILLON, duree_wav, lire_wav, wav_depuis_pcm
 from .audio_source import coupure_dans_un_silence, morceau_pcm
 from .fournisseurs.base import Adaptateur
 from .fournisseurs.capacites import TOKENS_AUDIO_PAR_SECONDE, TOKENS_TEXTE_PAR_MINUTE_TRANSCRITE
 from .fournisseurs.stt import MODE_SMART, RequeteTranscription
 from .prix import CataloguePrix
+from .projets import FICHIER_AUDIO, Prise, Projet
 from .prononciation import appliquer as remplacer_dans_le_texte
 from .prononciation import Prononciation
+from .script import texte_brut
 from .services import Services
 from .transcription import (
     DUREE_MAX_HORODATEE_S,
@@ -35,9 +38,12 @@ from .transcription import (
     appliquer_remplacements,
     decoupage,
     fusionner_remplacements,
+    hesitations_pour,
 )
 
 OPERATION = "transcription"
+MODELE_PAR_DEFAUT = "gemini-3.5-transcribe"
+PREFERENCE_HESITATIONS = "hesitations"  # préférences de l'app : {code de langue : [mots]}
 
 
 @dataclass(frozen=True)
@@ -115,13 +121,46 @@ def appliquer_dictionnaire(resultat: ResultatSource, entrees: list[Remplacement]
     )
 
 
+def langue_de(transcription: Transcription | None, projet: Projet | None) -> str:
+    """Langue de la transcription (celle choisie à l'envoi), sinon celle du projet."""
+    if transcription is not None and transcription.langue:
+        return transcription.langue
+    return projet.langue if projet is not None else "fr-FR"
+
+
+def hesitations(services: Services, transcription: Transcription | None) -> set[str]:
+    """Hésitations (« euh »…) de la langue de la transcription, telles que réglées dans l'app."""
+    personnalisees = services.preferences.lire(PREFERENCE_HESITATIONS, {}) or {}
+    return hesitations_pour(langue_de(transcription, services.projets.projet), personnalisees)
+
+
+def transcription_de_prise(projet: Projet, prise: Prise) -> tuple[Transcription, bytes]:
+    """Prépare les sous-titres d'une prise TTS (§3.3) : sa transcription, à aligner sur son script,
+    et son audio (WAV 24 kHz mono, envoyé tel quel ; rangé dans « sources » une fois transcrit)."""
+    wav = projet.chemin(prise.fichier).read_bytes()
+    transcription = Transcription(
+        source=prise.nom,
+        audio=FICHIER_AUDIO,
+        duree_s=round(duree_wav(wav), 3),
+        infos={"duree_s": round(duree_wav(wav), 3), "video": False},
+        langue=projet.langue,
+        prise=prise.identifiant,
+        script=texte_brut(prise.script),
+    )
+    return transcription, wav
+
+
 def terminer_transcription(
     services: Services, transcription: Transcription, options: Options, resultat: ResultatSource
 ) -> Transcription:
-    """Dans la tâche principale : remplacements, coût noté, transcription rangée dans le projet."""
+    """Dans la tâche principale : remplacements, alignement sur le script (prise TTS), coût noté,
+    transcription rangée dans le projet."""
     projet = services.projets.projet
     entrees = fusionner_remplacements(services.remplacements.entrees, projet.remplacements if projet else [])
     resultat = appliquer_dictionnaire(resultat, entrees)
+    if transcription.script and resultat.mots:
+        # Prise TTS (§3.3) : les mots gardent l'orthographe exacte du script, avec les temps transcrits.
+        resultat.mots = aligner(mots_du_script(transcription.script), resultat.mots)
     appel = services.couts.enregistrer(
         options.fournisseur,
         options.modele,

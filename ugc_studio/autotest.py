@@ -58,6 +58,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "lecture_audio",
     "captures",
     "sans_debordement",
+    "sous_titres",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -334,6 +335,21 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     capturer(fenetre, f"transcription-{numero}")
                 barre.setValue(0)
             verifs["decodage_audio"] = _verifier_decodage_audio(dossier, rapport)
+
+            # Page Sous-titres (étape 8) : découpage mesuré avec la vraie police, un sous-titre
+            # choisi (aperçu), une capture par hauteur d'écran.
+            sous_titres = fenetre.page("sous-titres").atelier
+            fenetre.afficher_module("sous-titres")
+            sous_titres.choisir_sous_titre(2)
+            rapport["sous_titres_demo"] = [s.texte for s in sous_titres.sous_titres]
+            verifs["sous_titres"] = bool(sous_titres.sous_titres)
+            defilement = sous_titres.findChild(QScrollArea)
+            if defilement is not None:
+                barre = defilement.verticalScrollBar()
+                for numero, position in enumerate(range(barre.pageStep(), barre.maximum() + barre.pageStep(), barre.pageStep()), 2):
+                    barre.setValue(min(position, barre.maximum()))
+                    capturer(fenetre, f"sous-titres-{numero}")
+                barre.setValue(0)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")

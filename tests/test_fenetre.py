@@ -1,6 +1,7 @@
 """Fenêtre principale : barre latérale, bandeau, navigation entre les modules."""
 
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMenu
 
 from ugc_studio.connexions import CoffreMemoire
 from ugc_studio.services import creer_services
@@ -81,3 +82,28 @@ def test_police_inter_chargee(app_configuree):
     from PySide6.QtGui import QFontDatabase
 
     assert "Inter" in QFontDatabase.families()
+
+
+def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path, monkeypatch):
+    """Menu ⋯ d'une prise → « Créer les sous-titres de cette prise » : le module Sous-titres s'en charge."""
+    from ugc_studio.audio import wav_depuis_pcm
+
+    fenetre = _fenetre(qtbot)
+    services = fenetre.services
+    services.projets.creer("Sérum", tmp_path)
+    prise = services.projets.ajouter_prise(
+        wav_depuis_pcm(b"\x00\x00" * 24_000), modele="m", voix="Kore", style="", texte_api="Bonjour",
+        script=[{"texte": "Bonjour"}], duree_s=1.0,
+    )
+    liste = fenetre.page("voix").atelier.prises
+    liste.rafraichir()
+    (ligne,) = liste.lignes()
+    actions = [a.text() for a in ligne.findChild(QMenu).actions()]
+    assert actions[0] == "Créer les sous-titres de cette prise"
+    demandes = []
+    monkeypatch.setattr(fenetre.page("sous-titres").atelier, "creer_depuis_prise", demandes.append)
+    liste.sous_titres_demandes.emit(prise.identifiant)
+    assert fenetre.module_actuel() == "sous-titres" and demandes == [prise.identifiant]
+    # « Corriger les mots » : dans le module Transcription.
+    fenetre.page("sous-titres").atelier.corriger_demande.emit()
+    assert fenetre.module_actuel() == "transcription"

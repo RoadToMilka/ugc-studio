@@ -9,7 +9,18 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFrame,
+    QLabel,
+    QSizePolicy,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..theme import Dimensions, Espacements
 from .bouton import Bouton
@@ -100,6 +111,55 @@ def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, 
         legende.setContentsMargins(Dimensions.CASE_A_COCHER + Espacements.S, 0, 0, 0)
         disposition.addWidget(legende)
     return zone, case
+
+
+class _SansMolette:
+    """Un champ de nombre ne change pas quand la molette de la souris passe dessus en faisant
+    défiler la page : il faut d'abord cliquer dedans."""
+
+    def wheelEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        if self.hasFocus():
+            super().wheelEvent(evenement)
+        else:
+            evenement.ignore()  # la page défile normalement
+
+
+class ChampEntier(_SansMolette, QSpinBox):
+    pass
+
+
+class ChampDecimal(_SansMolette, QDoubleSpinBox):
+    pass
+
+
+def _preparer_champ(champ: QAbstractSpinBox, suffixe: str, info: str | None) -> None:
+    champ.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)  # on tape la valeur (ou ↑ ↓)
+    champ.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    champ.setFixedWidth(Dimensions.CHAMP_NOMBRE_LARGEUR)
+    champ.setSuffix(suffixe)
+    champ.setKeyboardTracking(False)  # valeur prise en compte à la fin de la saisie
+    if info:
+        champ.setToolTip(info)
+
+
+def champ_entier(minimum: int, maximum: int, suffixe: str = "", info: str | None = None) -> ChampEntier:
+    """Champ pour un nombre entier, limité à [minimum, maximum]."""
+    champ = ChampEntier()
+    champ.setRange(minimum, maximum)
+    _preparer_champ(champ, suffixe, info)
+    return champ
+
+
+def champ_decimal(
+    minimum: float, maximum: float, pas: float, decimales: int = 1, suffixe: str = "", info: str | None = None
+) -> ChampDecimal:
+    """Champ pour un nombre à virgule, limité à [minimum, maximum] (↑ ↓ : ± `pas`)."""
+    champ = ChampDecimal()
+    champ.setDecimals(decimales)
+    champ.setRange(minimum, maximum)
+    champ.setSingleStep(pas)
+    _preparer_champ(champ, suffixe, info)
+    return champ
 
 
 def bloc(titre: str | None = None, marges: int = Espacements.XL) -> tuple[QFrame, QVBoxLayout]:

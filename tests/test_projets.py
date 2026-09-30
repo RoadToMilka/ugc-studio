@@ -7,6 +7,7 @@ import json
 from ugc_studio.audio import wav_depuis_pcm
 from ugc_studio.projets import ErreurProjet, GestionnaireProjets, Projet, RepliqueProjet, nom_de_dossier
 from ugc_studio.prononciation import Prononciation
+from ugc_studio.sous_titres import ReglagesSousTitres
 
 WAV = wav_depuis_pcm(b"\x00\x00" * 24_000)  # 1 seconde de silence
 
@@ -72,6 +73,15 @@ def test_projet_de_l_etape_3_converti(gestion, tmp_path):
     assert enregistre["version_format"] == Projet.VERSION_FORMAT
     assert "script" not in enregistre and "style" not in enregistre["voix"]
     assert projet.transcription is None and projet.remplacements == []
+    assert projet.sous_titres == ReglagesSousTitres()  # format 4 : réglages par défaut
+
+
+def test_reglages_des_sous_titres_enregistres(gestion, tmp_path):
+    projet = gestion.creer("Sous-titres", tmp_path)
+    projet.sous_titres.majuscules, projet.sous_titres.lignes_max = True, 1
+    gestion.enregistrer()
+    rouvert = GestionnaireProjets(tmp_path / "recents.json").ouvrir(projet.dossier)
+    assert rouvert.sous_titres.majuscules and rouvert.sous_titres.lignes_max == 1
 
 
 def test_nouveau_projet_avec_une_replique_vide(gestion, tmp_path):
@@ -115,7 +125,7 @@ def test_prises(gestion, tmp_path):
 
 def test_projets_recents(gestion, tmp_path):
     a = gestion.creer("A", tmp_path)
-    b = gestion.creer("B", tmp_path)
+    gestion.creer("B", tmp_path)
     gestion.ouvrir(a.dossier)
     assert [nom for nom, _ in gestion.recents()] == ["A", "B"]
     assert gestion.dernier_projet() == a.dossier
