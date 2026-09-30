@@ -72,29 +72,31 @@ class Tableau(QTableWidget):
 
     # --- Largeurs ------------------------------------------------------------------------------
 
-    def _largeur_du_texte(self, texte: str) -> int:
-        mesures = self.fontMetrics()
-        return max((mesures.horizontalAdvance(ligne) for ligne in texte.split("\n")), default=0)
-
-    def _largeur_de_case(self, rang: int, colonne: int) -> int:
-        element = self.cellWidget(rang, colonne)
-        if element is not None:
-            return element.sizeHint().width()
-        case = self.item(rang, colonne)
-        if case is None or not case.text():
-            return 0
-        # Marges intérieures des cases : voir QTableView::item dans la feuille de style.
-        return self._largeur_du_texte(case.text()) + 2 * Espacements.M + Dimensions.BORDURE
-
     def contenu_change(self) -> None:
         """À appeler après avoir rempli le tableau : largeur « naturelle » de chaque colonne (celle
-        de son titre ou de sa plus longue case), hauteur des lignes, puis répartition de la place."""
+        de son titre ou de sa plus longue case), hauteur des lignes, puis répartition de la place.
+
+        Les largeurs sont demandées au style de l'app (feuille de style comprise : marges des cases,
+        graisse des montants…), pas recalculées ici : sinon, une date ou un nombre pouvait être
+        abrégé de quelques pixels sous Windows."""
+        self.ensurePolished()
+        for rang in range(self.rowCount()):
+            for colonne in range(self.columnCount()):
+                element = self.cellWidget(rang, colonne)
+                if element is not None:
+                    element.ensurePolished()  # sa police (ex. montant en gras) vient de la feuille de style
         entete = self.horizontalHeader()
         for colonne in range(self.columnCount()):
-            cases = (self._largeur_de_case(rang, colonne) for rang in range(self.rowCount()))
-            self._naturelles[colonne] = max(entete.sectionSizeHint(colonne), *cases, 0)
+            self._naturelles[colonne] = max(entete.sectionSizeHint(colonne), self.sizeHintForColumn(colonne), 0)
         self._ajuster_hauteurs()
         self.ajuster_colonnes()
+
+    def showEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        # Rempli pendant qu'il était caché (onglet pas encore ouvert) : les polices définitives ne
+        # sont connues qu'à l'affichage, les largeurs sont donc recalculées.
+        super().showEvent(evenement)
+        if self.rowCount():
+            self.contenu_change()
 
     def _ajuster_hauteurs(self) -> None:
         """Une ligne de texte par case ; une case écrite exprès sur plusieurs lignes (sous-titre sur
@@ -171,8 +173,7 @@ class Tableau(QTableWidget):
             return
         texte = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
         infobulle = str(index.data(Qt.ItemDataRole.ToolTipRole) or "")
-        largeur = self._largeur_du_texte(texte) + 2 * Espacements.M
-        if texte and largeur > self.columnWidth(index.column()):
+        if texte and self.sizeHintForIndex(index).width() > self.columnWidth(index.column()):
             infobulle = f"{texte}\n{infobulle}" if infobulle else texte
         if infobulle:
             QToolTip.showText(evenement.globalPos(), infobulle, self.viewport())
