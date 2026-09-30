@@ -31,6 +31,7 @@ FONCTIONS_DE_TAILLE = {
     "setPixelSize",
     "setPointSize",
     "setIconSize",
+    "setMinimumContentsLength",
     "QSize",
     "QColor",
 }
@@ -79,3 +80,18 @@ def test_aucune_couleur_ni_taille_en_dur():
                                 f"{_nom_appel(noeud)}(… {sous.value} …)"
                             )
     assert not ecarts, "Valeurs de design écrites en dur (à déplacer dans ui/theme.py) :\n" + "\n".join(ecarts)
+
+
+def test_listes_deroulantes_creees_avec_liste_deroulante():
+    """Une QComboBox créée directement prend comme largeur *minimale* celle de son plus long choix :
+    un choix long (nom d'une voix…) élargit alors toute la page au-delà de la fenêtre et le bord
+    droit est coupé. Les listes se créent donc toujours avec elements.liste_deroulante()."""
+    autorise = RACINE / "ui" / "composants" / "elements.py"
+    ecarts = [
+        f"{fichier.relative_to(RACINE)}:{noeud.lineno}"
+        for fichier in _fichiers()
+        if fichier != autorise
+        for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8")))
+        if isinstance(noeud, ast.Call) and _nom_appel(noeud) == "QComboBox"
+    ]
+    assert not ecarts, "QComboBox() à remplacer par liste_deroulante() :\n" + "\n".join(ecarts)

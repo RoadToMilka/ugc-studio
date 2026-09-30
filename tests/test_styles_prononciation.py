@@ -70,8 +70,10 @@ def test_son_ponctuel_propose_une_balise():
 
 
 def test_description_de_voix_trop_longue():
-    assert verifier_description_voix("Jeune femme d'environ 25 ans, voix légèrement voilée.") == []
-    assert verifier_description_voix("Une phrase. Deux phrases. Trois phrases.")
+    assert verifier_description_voix("A young woman in her mid-20s with a slightly husky voice.") == []
+    assert any("longue" in a.message for a in verifier_description_voix("One sentence. Two sentences. Three sentences."))
+    (francais,) = verifier_description_voix("Jeune femme d'environ 25 ans, voix légèrement voilée.")
+    assert francais.en_francais
 
 
 def test_conseils_en_anglais_et_en_francais():

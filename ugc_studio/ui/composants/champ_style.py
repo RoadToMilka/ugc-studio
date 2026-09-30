@@ -1,10 +1,11 @@
-"""Champ « style » d'une réplique ou d'un style enregistré (§5.5).
+"""Champs de consigne envoyés à Google **en anglais** : le style d'une réplique (§5.5) et la
+description d'une voix créée avec Voice Design (§5.4 bis).
 
-Le style (consigne de jeu) est **envoyé à Google en anglais** ; sa traduction française s'affiche
-juste en dessous, pour comprendre ce qui est envoyé. Trois aides à côté du champ :
+La traduction française s'affiche juste en dessous, pour comprendre ce qui est envoyé. Aides à côté
+du champ :
 - ✨ l'assistant : on choisit en français, l'app assemble la consigne anglaise ;
 - 文A « Traduire en anglais » : on écrit en français, un modèle de texte Gemini traduit ;
-- 📚 la bibliothèque de styles (facultatif) : réutiliser un style enregistré.
+- 📚 la bibliothèque de styles (styles seulement, facultatif) : réutiliser un style enregistré.
 Sous le champ, des vérifications en direct signalent (sans bloquer) ce que Google déconseille.
 """
 
@@ -13,28 +14,35 @@ from __future__ import annotations
 import html
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
 
-from ...conseils import verifier_style
+from ...conseils import Avertissement, verifier_description_voix, verifier_style
 from ...services import Services
 from ...traduction import MODELE_TRADUCTION, traduire_en_anglais
 from .. import taches
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
-from ..theme import Espacements
+from ..theme import Dimensions, Espacements
 from .elements import bouton, libelle, vider_disposition
 
-INDICATION = "Style (facultatif), en anglais — ex. warm and enthusiastic, fast-paced"
 
+class ChampConsigne(QWidget):
+    """Base commune : champ + aides + traduction affichée + vérifications en direct."""
 
-class ChampStyle(QWidget):
-    modifie = Signal()  # style ou traduction changés
+    modifie = Signal()  # consigne ou traduction changées
     bibliotheque_demandee = Signal()
     balise_suggeree = Signal(str)  # « Insérer <laugh> » proposé par les vérifications
+    assistant_utilise = Signal(object)  # la fenêtre de l'assistant, après « Utiliser »
 
-    def __init__(self, services: Services, avec_bibliotheque: bool = True, parent=None):
+    INDICATION = ""
+    AIDE_ASSISTANT = ""
+    AIDE_BIBLIOTHEQUE = ""
+    TEXTE_A_TRADUIRE = "Écris d'abord le texte en français, puis clique ici pour le traduire."
+    PLUSIEURS_LIGNES = False  # champ de plusieurs lignes : les boutons restent en haut
+
+    def __init__(self, services: Services, avec_bibliotheque: bool = False, parent=None):
         super().__init__(parent)
         self._services = services
-        self._style_fr = ""
+        self._consigne_fr = ""
         self._programme = False  # vrai pendant un changement fait par l'app (pas par la frappe)
 
         disposition = QVBoxLayout(self)
@@ -43,24 +51,30 @@ class ChampStyle(QWidget):
 
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.XS)
-        self.champ = QLineEdit()
-        self.champ.setPlaceholderText(INDICATION)
-        self.champ.textChanged.connect(self._texte_change)
+        self.champ = self._creer_editeur()
         ligne.addWidget(self.champ, 1)
         ligne.addSpacing(Espacements.XS)
+        aides = QHBoxLayout()
+        aides.setSpacing(Espacements.XS)
+        if self.PLUSIEURS_LIGNES:
+            # Boutons en face de la 1re ligne du champ (et non au milieu de sa hauteur).
+            aides.setContentsMargins(0, Espacements.XS, 0, 0)
         self.bouton_assistant = bouton("", variante="icone", nom_icone="wand-sparkles", action=self.ouvrir_assistant)
-        self.bouton_assistant.setToolTip("Assistant de style : choisis en français, l'app écrit la consigne en anglais")
-        ligne.addWidget(self.bouton_assistant)
+        self.bouton_assistant.setToolTip(self.AIDE_ASSISTANT)
+        aides.addWidget(self.bouton_assistant)
         self.bouton_traduire = bouton("", variante="icone", nom_icone="languages", action=self.traduire)
         self.bouton_traduire.setToolTip("Traduire en anglais (modèle de texte Gemini, coût minime)")
-        ligne.addWidget(self.bouton_traduire)
+        aides.addWidget(self.bouton_traduire)
         self.bouton_bibliotheque = None
         if avec_bibliotheque:
             self.bouton_bibliotheque = bouton(
                 "", variante="icone", nom_icone="library", action=lambda: self.bibliotheque_demandee.emit()
             )
-            self.bouton_bibliotheque.setToolTip("Choisir un style dans la bibliothèque")
-            ligne.addWidget(self.bouton_bibliotheque)
+            self.bouton_bibliotheque.setToolTip(self.AIDE_BIBLIOTHEQUE)
+            aides.addWidget(self.bouton_bibliotheque)
+        ligne.addLayout(aides)
+        if self.PLUSIEURS_LIGNES:
+            ligne.setAlignment(aides, Qt.AlignmentFlag.AlignTop)
         disposition.addLayout(ligne)
 
         self.traduction = libelle("", "legende")
@@ -73,50 +87,69 @@ class ChampStyle(QWidget):
         self._avertissements.setSpacing(0)
         disposition.addLayout(self._avertissements)
 
+    # --- À préciser par chaque sorte de champ -------------------------------------------------
+
+    def _creer_editeur(self) -> QWidget:
+        champ = QLineEdit()
+        champ.setPlaceholderText(self.INDICATION)
+        champ.textChanged.connect(self._texte_change)
+        return champ
+
+    def _texte_editeur(self) -> str:
+        return self.champ.text()
+
+    def _ecrire_editeur(self, texte: str) -> None:
+        self.champ.setText(texte)
+
+    def _verifications(self, texte: str) -> list[Avertissement]:
+        return []
+
+    def _dialogue_assistant(self):
+        raise NotImplementedError
+
     # --- Valeur ------------------------------------------------------------------------------
 
-    # (Pas de méthode « style() » : ce nom est déjà une fonction de tous les éléments Qt.)
     def consigne(self) -> str:
-        """Le style tel qu'envoyé à Google (en anglais)."""
-        return self.champ.text().strip()
+        """Le texte tel qu'envoyé à Google (en anglais)."""
+        return self._texte_editeur().strip()
 
     def consigne_fr(self) -> str:
-        """Sa traduction française (vide si le style a été modifié à la main depuis)."""
-        return self._style_fr
+        """Sa traduction française (vide si le texte a été modifié à la main depuis)."""
+        return self._consigne_fr
 
-    def definir(self, style: str, style_fr: str = "") -> None:
-        """Change le style (et sa traduction française) sans passer par la frappe."""
+    def definir(self, consigne: str, consigne_fr: str = "") -> None:
+        """Change le texte (et sa traduction française) sans passer par la frappe."""
         self._programme = True
-        self._style_fr = style_fr.strip()
-        self.champ.setText(style)
+        self._consigne_fr = consigne_fr.strip()
+        self._ecrire_editeur(consigne)
         self._programme = False
         self._afficher_traduction()
         self._verifier()
         self.modifie.emit()
 
-    def _texte_change(self, _texte: str) -> None:
+    def _texte_change(self, *_args) -> None:
         if not self._programme:
-            # Le style a été modifié à la main : l'ancienne traduction ne lui correspond plus.
-            self._style_fr = ""
+            # Modifié à la main : l'ancienne traduction ne correspond plus au texte.
+            self._consigne_fr = ""
             self._afficher_traduction()
             self.message.hide()
             self._verifier()
             self.modifie.emit()
 
     def _afficher_traduction(self) -> None:
-        self.traduction.setText(f"Traduction : {self._style_fr}")
-        self.traduction.setVisible(bool(self._style_fr and self.consigne()))
+        self.traduction.setText(f"Traduction : {self._consigne_fr}")
+        self.traduction.setVisible(bool(self._consigne_fr and self.consigne()))
 
     # --- Vérifications en direct ------------------------------------------------------------
 
     def avertissements(self) -> list[str]:
-        return [a.message for a in verifier_style(self.consigne())] if self.consigne() else []
+        return [a.message for a in self._verifications(self.consigne())] if self.consigne() else []
 
     def _verifier(self) -> None:
         vider_disposition(self._avertissements)
         if not self.consigne():
             return
-        for avertissement in verifier_style(self.consigne()):
+        for avertissement in self._verifications(self.consigne()):
             texte = html.escape(avertissement.message)
             if avertissement.balise_suggeree:
                 nom = avertissement.balise_suggeree
@@ -131,18 +164,17 @@ class ChampStyle(QWidget):
     # --- Assistant et traduction -------------------------------------------------------------
 
     def ouvrir_assistant(self) -> None:
-        from ..dialogues.assistant_style import DialogueAssistantStyle
-
-        dialogue = DialogueAssistantStyle(self.window())
+        dialogue = self._dialogue_assistant()
         if dialogue.exec():
             anglais, francais = dialogue.resultat()
             self.definir(anglais, francais)
+            self.assistant_utilise.emit(dialogue)
 
     def traduire(self) -> None:
         """Traduit le texte du champ (écrit en français) en anglais."""
         texte = self.consigne()
         if not texte:
-            self._afficher_message("Écris d'abord le style en français, puis clique ici pour le traduire.", "legende")
+            self._afficher_message(self.TEXTE_A_TRADUIRE, "legende")
             return
         try:
             adaptateur = adaptateur_par_defaut(self._services)
@@ -178,3 +210,56 @@ class ChampStyle(QWidget):
         self.message.style().unpolish(self.message)
         self.message.style().polish(self.message)
         self.message.show()
+
+
+class ChampStyle(ChampConsigne):
+    """Style d'une réplique ou d'un style enregistré (§5.5)."""
+
+    INDICATION = "Style (facultatif), en anglais — ex. warm and enthusiastic, fast-paced"
+    AIDE_ASSISTANT = "Assistant de style : choisis en français, l'app écrit la consigne en anglais"
+    AIDE_BIBLIOTHEQUE = "Choisir un style dans la bibliothèque"
+    TEXTE_A_TRADUIRE = "Écris d'abord le style en français, puis clique ici pour le traduire."
+
+    def __init__(self, services: Services, avec_bibliotheque: bool = True, parent=None):
+        super().__init__(services, avec_bibliotheque, parent)
+
+    def _verifications(self, texte: str) -> list[Avertissement]:
+        return verifier_style(texte)
+
+    def _dialogue_assistant(self):
+        from ..dialogues.assistant_style import DialogueAssistantStyle
+
+        return DialogueAssistantStyle(self.window())
+
+
+class ChampDescription(ChampConsigne):
+    """Description d'une voix à créer (Voice Design, §5.4 bis) : 1 à 2 phrases, en anglais."""
+
+    INDICATION = "Description en anglais, 1 à 2 phrases — ex. A young woman in her mid-20s with a warm voice…"
+    AIDE_ASSISTANT = "Assistant : choisis âge, timbre, accent… en français, l'app écrit la description en anglais"
+    TEXTE_A_TRADUIRE = "Écris d'abord la description en français, puis clique ici pour la traduire."
+    PLUSIEURS_LIGNES = True
+
+    def __init__(self, services: Services, parent=None):
+        super().__init__(services, avec_bibliotheque=False, parent=parent)
+
+    def _creer_editeur(self) -> QWidget:
+        champ = QPlainTextEdit()
+        champ.setPlaceholderText(self.INDICATION)
+        champ.setFixedHeight(Dimensions.CHAMP_DESCRIPTION_HAUTEUR)
+        champ.textChanged.connect(self._texte_change)
+        return champ
+
+    def _texte_editeur(self) -> str:
+        return self.champ.toPlainText()
+
+    def _ecrire_editeur(self, texte: str) -> None:
+        self.champ.setPlainText(texte)
+
+    def _verifications(self, texte: str) -> list[Avertissement]:
+        return verifier_description_voix(texte)
+
+    def _dialogue_assistant(self):
+        from ..dialogues.assistant_voix import DialogueAssistantVoix
+
+        return DialogueAssistantVoix(self.window())

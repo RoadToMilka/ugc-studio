@@ -11,6 +11,11 @@ SDK officiel google-genai 2.25 et guides officiels du « Gemini API Cookbook »
 - Texte (ex. Gemini 3.8 Flash) : même API ; la réponse contient des étapes (`steps`) dont la
   dernière « model_output » porte le texte. Niveau de réflexion dans
   `generation_config.thinking_level` (Gemini 3.8 Flash : « low », « medium » ou « high »).
+- Voix (API « Voices ») : GET /v1beta/voices (bibliothèque étendue, filtres `type`,
+  `language_code`… répétables, pages de `page_size` voix), GET/DELETE /v1beta/voices/{id},
+  POST /v1beta/voices pour Voice Design (`store: true`, `voice.type: "prompted"`,
+  `voice.prompted.input` = description). La réponse d'une création contient l'identifiant
+  `voice_…`, la date d'expiration et un extrait audio (`sample_audio`).
 
 La clé est envoyée dans l'en-tête « x-goog-api-key » (jamais dans l'adresse, pour qu'elle
 n'apparaisse dans aucun historique).
@@ -24,18 +29,20 @@ import json
 import logging
 import time
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from ..audio import FREQUENCE_TTS, duree_wav, en_wav
 from .base import Adaptateur, ErreurFournisseur, InfoModele
 from .http import ReponseHttp, requete
 from .texte import RequeteTexte, ResultatTexte
-from .voix import RequeteVoix, ResultatVoix
+from .voix import RequeteVoiceDesign, RequeteVoix, ResultatVoix, VoixBibliotheque, VoixCreee
 
 journal = logging.getLogger(__name__)
 
 URL_API = "https://generativelanguage.googleapis.com/v1beta"
 TAILLE_PAGE_MODELES = 1000
+TAILLE_PAGE_VOIX = 1000  # maximum accepté par l'API Voices
+DELAI_CREATION_VOIX = 120  # secondes
 DELAI_GENERATION = 300  # secondes : une longue voix off peut prendre du temps
 DELAI_TEXTE = 60  # secondes
 ESSAIS_SI_SURCHARGE = 2
@@ -59,7 +66,7 @@ class AdaptateurGoogle(Adaptateur):
         self,
         methode: str,
         chemin: str,
-        parametres: dict[str, Any] | None = None,
+        parametres: dict[str, Any] | list[tuple[str, Any]] | None = None,
         corps: Any = None,
         delai: float = 60,
     ) -> Any:
@@ -133,6 +140,53 @@ class AdaptateurGoogle(Adaptateur):
             corps["system_instruction"] = requete_texte.consigne_systeme
         return lire_resultat_texte(self._interaction(corps, DELAI_TEXTE))
 
+    # --- Voix : bibliothèque et Voice Design --------------------------------------------------
+
+    def lister_voix(self, types: tuple[str, ...] = ("prebuilt",)) -> list[VoixBibliotheque]:
+        voix: list[VoixBibliotheque] = []
+        jeton: str | None = None
+        while True:
+            parametres: list[tuple[str, Any]] = [("page_size", TAILLE_PAGE_VOIX), *(("type", t) for t in types)]
+            if jeton:
+                parametres.append(("page_token", jeton))
+            donnees = self._appeler("GET", "voices", parametres, delai=30)
+            voix += [lire_voix(v) for v in donnees.get("voices") or [] if isinstance(v, dict)]
+            jeton = _champ(donnees, "next_page_token")
+            if not jeton:
+                return [v for v in voix if v.identifiant]
+
+    def obtenir_voix(self, identifiant: str) -> VoixBibliotheque:
+        return lire_voix(self._appeler("GET", f"voices/{quote(identifiant, safe='')}", delai=30))
+
+    def creer_voix(self, requete_voix: RequeteVoiceDesign) -> VoixCreee:
+        voix: dict[str, Any] = {
+            "model": requete_voix.modele,
+            "type": "prompted",
+            "display_name": requete_voix.nom,
+            "prompted": {"input": requete_voix.description},
+        }
+        if requete_voix.langue:
+            voix["language_code"] = requete_voix.langue
+        if requete_voix.genre:
+            voix["gender"] = requete_voix.genre
+        try:
+            donnees = self._appeler("POST", "voices", corps={"store": True, "voice": voix}, delai=DELAI_CREATION_VOIX)
+        except ErreurFournisseur as erreur:
+            if erreur.code == "quota":
+                raise ErreurFournisseur(
+                    "Google refuse de créer une voix de plus : soit le maximum de 200 voix créées est "
+                    "atteint (supprime une voix inutile), soit trop de demandes ont été faites d'affilée "
+                    "(réessaie dans quelques minutes).",
+                    "quota_voix",
+                    erreur.detail,
+                ) from erreur
+            raise
+        entree, sortie = _tokens(donnees)
+        return VoixCreee(lire_voix(donnees), entree, sortie)
+
+    def supprimer_voix(self, identifiant: str) -> None:
+        self._appeler("DELETE", f"voices/{quote(identifiant, safe='')}", delai=30)
+
     def _interaction(self, corps: dict, delai: float) -> dict:
         """POST /interactions ; si Google est surchargé (erreur 5xx), un nouvel essai après une pause."""
         for essai in range(1, ESSAIS_SI_SURCHARGE + 1):
@@ -144,6 +198,42 @@ class AdaptateurGoogle(Adaptateur):
                 journal.warning("Google surchargé, nouvel essai dans %s s", PAUSE_AVANT_NOUVEL_ESSAI)
                 time.sleep(PAUSE_AVANT_NOUVEL_ESSAI)
         raise AssertionError("inaccessible")
+
+
+def _champ(donnees: dict, nom: str, defaut: Any = None) -> Any:
+    """Champ d'une réponse, écrit « display_name » ou « displayName » selon les API de Google."""
+    if nom in donnees:
+        return donnees[nom]
+    morceaux = nom.split("_")
+    return donnees.get(morceaux[0] + "".join(m.capitalize() for m in morceaux[1:]), defaut)
+
+
+def lire_voix(donnees: dict) -> VoixBibliotheque:
+    """Une voix de l'API Voices → VoixBibliotheque (extrait audio décodé s'il est présent)."""
+    extrait = None
+    audio = _champ(donnees, "sample_audio")
+    if isinstance(audio, dict) and audio.get("data"):
+        try:
+            extrait = en_wav(base64.b64decode(audio["data"]), int(_champ(audio, "sample_rate") or FREQUENCE_TTS))
+        except (binascii.Error, ValueError, EOFError):
+            journal.warning("Extrait audio de la voix illisible", exc_info=True)
+    identifiant = str(donnees.get("id") or "")
+    return VoixBibliotheque(
+        identifiant=identifiant,
+        nom=str(_champ(donnees, "display_name") or identifiant),
+        description=str(donnees.get("description") or _champ(donnees.get("prompted") or {}, "input") or ""),
+        langue=str(_champ(donnees, "language_code") or ""),
+        region=str(_champ(donnees, "region_code") or ""),
+        accent=str(donnees.get("accent") or ""),
+        genre=str(donnees.get("gender") or "").lower(),
+        hauteur=str(donnees.get("pitch") or "").lower(),
+        persona=str(donnees.get("persona") or ""),
+        contexte=str(donnees.get("context") or ""),
+        type=str(donnees.get("type") or "prebuilt").lower(),
+        modele=str(donnees.get("model") or ""),
+        expire_le=str(_champ(donnees, "expire_time") or ""),
+        extrait_wav=extrait,
+    )
 
 
 def trouver_audio(donnees: dict) -> dict | None:

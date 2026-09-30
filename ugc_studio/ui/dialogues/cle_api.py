@@ -12,14 +12,14 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices, QStandardItemModel
-from PySide6.QtWidgets import QComboBox, QDialog, QHBoxLayout, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QVBoxLayout
 
 from ...connexions import Connexion, ErreurConnexion, GestionnaireConnexions, nettoyer_cle
 from ...fournisseurs import ADAPTATEURS, FOURNISSEURS_PREVUS, creer_adaptateur
 from ...fournisseurs.base import Adaptateur, ResultatTest
 from .. import taches
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle
+from ..composants.elements import bouton, libelle, liste_deroulante
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
 
@@ -54,7 +54,7 @@ class DialogueCle(QDialog):
         disposition.addWidget(libelle(titre, "titre-bloc"))
 
         # Fournisseur (les fournisseurs prévus plus tard sont visibles mais grisés)
-        self.fournisseur = QComboBox()
+        self.fournisseur = liste_deroulante()
         for identifiant, classe in ADAPTATEURS.items():
             self.fournisseur.addItem(classe.nom, identifiant)
         modele = self.fournisseur.model()

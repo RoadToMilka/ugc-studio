@@ -8,7 +8,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QTableWidget,
@@ -20,7 +19,7 @@ from PySide6.QtWidgets import (
 from ....couts import AppelApi, filtrer, totaux
 from ....fournisseurs.capacites import modele_connu
 from ....services import Services
-from ...composants.elements import bloc, libelle
+from ...composants.elements import bloc, libelle, liste_deroulante
 from ...composants.montant_label import MontantLabel
 from ...polices import police
 from ...theme import Dimensions, Espacements, Hauteurs, Typo
@@ -62,7 +61,7 @@ class OngletCouts(QWidget):
         # Filtres
         filtres = QHBoxLayout()
         filtres.setSpacing(Espacements.S)
-        self.periode = QComboBox()
+        self.periode = liste_deroulante()
         for texte, valeur in (
             ("Aujourd'hui", "jour"),
             ("Ce mois-ci", "mois"),
@@ -72,8 +71,8 @@ class OngletCouts(QWidget):
         ):
             self.periode.addItem(texte, valeur)
         self.periode.setCurrentIndex(1)
-        self.projet = QComboBox()
-        self.modele = QComboBox()
+        self.projet = liste_deroulante()
+        self.modele = liste_deroulante()
         for liste in (self.periode, self.projet, self.modele):
             liste.currentIndexChanged.connect(self.rafraichir)
             filtres.addWidget(liste)

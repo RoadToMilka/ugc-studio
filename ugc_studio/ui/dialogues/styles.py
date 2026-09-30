@@ -32,7 +32,7 @@ from ...styles import Style
 from ..composants.bouton import activer_avec_entree
 from ..composants.champ_style import ChampStyle
 from ..composants.conseils import ListeConseils
-from ..composants.elements import bouton, conteneur_vertical, libelle, separateur, vider_disposition
+from ..composants.elements import bouton, conteneur_vertical, libelle, liste_deroulante, separateur, vider_disposition
 from ..icones import icone_menu
 from ..pages.base import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs
@@ -83,20 +83,20 @@ class DialogueStyle(QDialog):
 
         self.nom = QLineEdit(style.nom)
         self.nom.setPlaceholderText("ex. Hook énergique")
-        self.categorie = QComboBox()
+        self.categorie = liste_deroulante()
         self.categorie.setEditable(True)
         self.categorie.addItems(services.styles.categories())
         self.categorie.setCurrentText(style.categorie or services.styles.categories()[0])
-        self.modele = QComboBox()
+        self.modele = liste_deroulante()
         for modele in MODELES_CONNUS:
             if Capacite.TTS in modele.capacites:
                 self.modele.addItem(modele.nom, modele.identifiant)
         self._choisir(self.modele, style.modele)
-        self.voix = QComboBox()
+        self.voix = liste_deroulante()
         for voix in VOIX_GOOGLE:
             self.voix.addItem(voix.libelle, voix.nom)
         self._choisir(self.voix, style.voix)
-        self.langue = QComboBox()
+        self.langue = liste_deroulante()
         for code, nom in LANGUES.items():
             self.langue.addItem(nom, code)
         self._choisir(self.langue, style.langue or LANGUE_PAR_DEFAUT)
@@ -278,6 +278,9 @@ class DialogueBibliothequeStyles(QDialog):
 
         self._lignes: list[LigneStyle] = []
         services.styles.abonner(self.rafraichir)
+        # Fenêtre détruite sans avoir été fermée normalement : on se désabonne quand même.
+        rappel = self.rafraichir
+        self.destroyed.connect(lambda: services.styles.desabonner(rappel))
         self.rafraichir()
 
     def done(self, resultat: int) -> None:

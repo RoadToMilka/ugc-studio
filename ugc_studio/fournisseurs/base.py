@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from ..journal import declarer_secret
 from .texte import RequeteTexte, ResultatTexte
-from .voix import RequeteVoix, ResultatVoix
+from .voix import RequeteVoiceDesign, RequeteVoix, ResultatVoix, VoixBibliotheque, VoixCreee
 
 
 class ErreurFournisseur(Exception):
@@ -77,3 +77,18 @@ class Adaptateur(ABC):
     def generer_texte(self, requete: RequeteTexte) -> ResultatTexte:
         """Génère du texte (ex. traduction d'un style en anglais)."""
         raise ErreurFournisseur(f"{self.nom} ne sait pas générer de texte.", "non_disponible")
+
+    def lister_voix(self, types: tuple[str, ...] = ("prebuilt",)) -> list[VoixBibliotheque]:
+        """Voix de la bibliothèque du fournisseur (« prebuilt ») ou voix créées (« prompted »…)."""
+        raise ErreurFournisseur(f"{self.nom} n'a pas de bibliothèque de voix.", "non_disponible")
+
+    def obtenir_voix(self, identifiant: str) -> VoixBibliotheque:
+        """Détail d'une voix, avec son extrait audio s'il existe."""
+        raise ErreurFournisseur(f"{self.nom} n'a pas de bibliothèque de voix.", "non_disponible")
+
+    def creer_voix(self, requete: RequeteVoiceDesign) -> VoixCreee:
+        """Crée une voix à partir d'une description (Voice Design)."""
+        raise ErreurFournisseur(f"{self.nom} ne sait pas créer de voix.", "non_disponible")
+
+    def supprimer_voix(self, identifiant: str) -> None:
+        raise ErreurFournisseur(f"{self.nom} ne sait pas supprimer de voix.", "non_disponible")

@@ -1,27 +1,21 @@
-"""Atelier de voix off (§5) : modèle et voix, script en répliques (chacune avec son style),
-dictionnaire de prononciation, génération, prises."""
+"""Atelier de voix off (§5) : modèle et voix (bibliothèque, favoris, voix créées), script en
+répliques (chacune avec son style), dictionnaire de prononciation, génération, prises."""
 
 from __future__ import annotations
 
-import hashlib
 import logging
-from dataclasses import replace
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QComboBox, QHBoxLayout
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QVBoxLayout
 
-from ....audio import en_wav
-from ....chemins import dossier_cache
 from ....conseils import CONSEILS_STYLE
 from ....estimation import estimer_repliques
 from ....fournisseurs.capacites import MODELES_CONNUS, Capacite, modeles_pour
-from ....fournisseurs.google_voix import VOIX_GOOGLE, VOIX_PAR_DEFAUT, phrase_extrait, voix_de_base
-from ....fournisseurs.voix import RequeteVoix
+from ....fournisseurs.google_voix import VOIX_GOOGLE, VOIX_PAR_DEFAUT, voix_de_base
+from ....fournisseurs.voix import VoixBibliotheque
 from ....generation import (
     enregistrer_prise,
-    noter_cout,
     preparer,
-    preparer_texte,
     produire_audio,
     repliques_api,
     tokens_par_seconde,
@@ -33,13 +27,15 @@ from ....services import Services
 from ... import taches
 from ...composants.conseils import ListeConseils
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import bloc, bouton, libelle
+from ...composants.elements import bloc, bouton, libelle, liste_deroulante
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...composants.palette_balises import PaletteBalises
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ...dialogues.prononciation import DialoguePrononciation
 from ...dialogues.styles import DialogueBibliothequeStyles
+from ...dialogues.voix import DialogueBibliothequeVoix
+from ...extraits import EcouteVoix, fichier_prononciation
 from ...theme import Dimensions, Espacements
 from ..base import Page
 from .prises import ListePrises, minutes_secondes
@@ -58,6 +54,7 @@ class AtelierVoix(Page):
         self._projet: Projet | None = None
         self._chargement = False
         self.lecteur = Lecteur(self)
+        self.ecoute = EcouteVoix(services, self.lecteur, self._afficher, self._occupe_ecoute)
 
         self._minuterie = QTimer(self)
         self._minuterie.setSingleShot(True)
@@ -68,16 +65,20 @@ class AtelierVoix(Page):
         cadre, d = bloc("Voix")
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
-        self.modele = QComboBox()
+        self.modele = liste_deroulante()
         self.modele.currentIndexChanged.connect(self._reglage_change)
         ligne.addWidget(self.modele, 1)
-        self.voix = QComboBox()
-        for voix in VOIX_GOOGLE:
-            self.voix.addItem(voix.libelle, voix.nom)
-        self.voix.currentIndexChanged.connect(self._reglage_change)
+        self.voix = liste_deroulante()
+        self.voix.setToolTip("Tes favoris ★ et tes voix créées d'abord, puis les 30 voix de base")
+        self.voix.currentIndexChanged.connect(self._voix_changee)
         ligne.addWidget(self.voix, 1)
-        self.bouton_extrait = bouton("Écouter la voix", nom_icone="play", action=self.ecouter_extrait)
-        self.bouton_extrait.setToolTip("Génère (une seule fois) une phrase d'exemple avec cette voix, puis la joue.")
+        self.bouton_bibliotheque_voix = bouton(
+            "", variante="icone", nom_icone="library", action=self.ouvrir_bibliotheque_voix
+        )
+        self.bouton_bibliotheque_voix.setToolTip("Bibliothèque de voix : toutes les voix de Google, favoris, Voice Design")
+        ligne.addWidget(self.bouton_bibliotheque_voix)
+        self.bouton_extrait = bouton("Écouter", nom_icone="play", action=self.ecouter_extrait)
+        self.bouton_extrait.setToolTip("Joue un extrait de cette voix (préparé une seule fois, puis gardé).")
         ligne.addWidget(self.bouton_extrait)
         d.addLayout(ligne)
         self.info_modeles = libelle("", "avertissement")
@@ -113,11 +114,6 @@ class AtelierVoix(Page):
         prononciation.setToolTip("Dictionnaire de prononciation : pour les mots que la voix prononce mal (noms de marque…)")
         outils.addWidget(prononciation)
         outils.addStretch(1)
-        self.estimation = libelle("", "legende", retour_a_la_ligne=False)
-        outils.addWidget(self.estimation)
-        self.cout_estime = MontantLabel(0)
-        self.cout_estime.setProperty("role", "legende")
-        outils.addWidget(self.cout_estime)
         d.addLayout(outils)
         d.addSpacing(Espacements.S)
         d.addWidget(libelle("Balises — clique dans le texte, puis sur une balise pour l'insérer", "legende"))
@@ -140,14 +136,26 @@ class AtelierVoix(Page):
         self.contenu.addWidget(cadre)
         self._afficher_conseils(bool(services.preferences.lire(CLE_CONSEILS_VISIBLES, True)))
 
-        # --- Générer ---
+        # --- Générer : bouton et estimation (caractères, durée, coût), puis l'avancement dessous ---
+        generation = QVBoxLayout()
+        generation.setSpacing(Espacements.S)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.M)
         self.bouton_generer = bouton("Générer la voix", variante="principal", nom_icone="audio-lines", action=self.generer)
         ligne.addWidget(self.bouton_generer)
+        estimation = QHBoxLayout()
+        estimation.setSpacing(Espacements.XS)
+        self.estimation = libelle("", "legende", retour_a_la_ligne=False)
+        estimation.addWidget(self.estimation)
+        self.cout_estime = MontantLabel(0)
+        self.cout_estime.setProperty("role", "legende")
+        estimation.addWidget(self.cout_estime)
+        ligne.addLayout(estimation)
+        ligne.addStretch(1)
+        generation.addLayout(ligne)
         self.statut = libelle("", "secondaire")
-        ligne.addWidget(self.statut, 1)
-        self.contenu.addLayout(ligne)
+        generation.addWidget(self.statut)
+        self.contenu.addLayout(generation)
 
         # --- Prises ---
         cadre, d = bloc("Prises")
@@ -158,7 +166,9 @@ class AtelierVoix(Page):
         services.projets.abonner(self._projet_change)
         services.connexions.abonner(self._remplir_modeles)
         services.prix.abonner(self._mettre_a_jour_estimation)
+        services.voix.abonner(self._remplir_voix)
         self._remplir_modeles()
+        self._remplir_voix()
         self._projet_change(services.projets.projet)
 
     @property
@@ -179,7 +189,7 @@ class AtelierVoix(Page):
         self._chargement = True
         self.titre.setText(f"Voix — {projet.nom}")
         self._choisir(self.modele, projet.voix.modele)
-        self._choisir(self.voix, projet.voix.voix if voix_de_base(projet.voix.voix) else VOIX_PAR_DEFAUT)
+        self._selectionner_voix(projet.voix.voix or VOIX_PAR_DEFAUT)
         self.repliques.definir(projet.repliques)
         self._chargement = False
         self.statut.setText(f"Langue du projet : {LANGUES.get(projet.langue, projet.langue)}")
@@ -213,6 +223,58 @@ class AtelierVoix(Page):
             self.info_modeles.show()
         self._choisir(self.modele, choix or "gemini-3.8-flash-tts")
         self.modele.blockSignals(False)
+
+    # --- Voix : favoris, voix créées, 30 voix de base ----------------------------------------
+
+    def _remplir_voix(self) -> None:
+        """Liste des voix : favoris ★, puis voix créées, puis voix de base (sans doublon)."""
+        gestion = self._services.voix
+        actuelle = self.voix.currentData() or (self._projet.voix.voix if self._projet else VOIX_PAR_DEFAUT)
+        favoris = gestion.favoris()
+        creees = [v.identifiant for v in gestion.voix_creees() if v.identifiant not in favoris]
+        base = [v.nom for v in VOIX_GOOGLE if v.nom not in favoris]
+        self.voix.blockSignals(True)
+        self.voix.clear()
+        for groupe, prefixe in ((favoris, "★ "), (creees, ""), (base, "")):
+            if not groupe:
+                continue
+            if self.voix.count():
+                self.voix.insertSeparator(self.voix.count())
+            for identifiant in groupe:
+                self.voix.addItem(prefixe + gestion.libelle(identifiant), identifiant)
+        self._selectionner_voix(actuelle, signaler=False)
+        self.voix.blockSignals(False)
+
+    def _selectionner_voix(self, identifiant: str, signaler: bool = True) -> None:
+        """Choisit une voix dans la liste (en l'ajoutant en tête si elle n'y est pas encore)."""
+        if self.voix.findData(identifiant) < 0:
+            self.voix.insertItem(0, self._services.voix.libelle(identifiant), identifiant)
+        if not signaler:
+            self.voix.setCurrentIndex(self.voix.findData(identifiant))
+            return
+        self._choisir(self.voix, identifiant)
+
+    def _voix_changee(self, *_args) -> None:
+        """Une voix créée l'a été avec un modèle précis : on prend ce modèle avec elle."""
+        voix = self._services.voix.voix(self.voix.currentData() or "")
+        if voix is not None and voix.creee and voix.modele and self.modele.findData(voix.modele) >= 0:
+            self._choisir(self.modele, voix.modele)
+        self._reglage_change()
+
+    def ouvrir_bibliotheque_voix(self) -> None:
+        dialogue = DialogueBibliothequeVoix(
+            self._services,
+            self.lecteur,
+            self.window(),
+            modele=self.modele.currentData() or "gemini-3.8-flash-tts",
+            langue=self._projet.langue if self._projet else "fr-FR",
+        )
+        if dialogue.exec() and dialogue.voix_choisie is not None:
+            self.choisir_voix(dialogue.voix_choisie)
+
+    def choisir_voix(self, voix: VoixBibliotheque) -> None:
+        self._selectionner_voix(voix.identifiant)
+        self._afficher(f"Voix choisie : {self._services.voix.nom(voix.identifiant)}.", "secondaire")
 
     # --- Modifications (enregistrées automatiquement) ----------------------------------------
 
@@ -295,9 +357,10 @@ class AtelierVoix(Page):
     def appliquer_style(self, carte: CarteReplique, style) -> None:
         carte.champ_style.definir(style.consigne, style.consigne_fr)
         details = []
-        if voix_de_base(style.voix) and style.voix != self.voix.currentData():
-            self._choisir(self.voix, style.voix)
-            details.append(f"voix {style.voix}")
+        connue = voix_de_base(style.voix) or self._services.voix.voix(style.voix)
+        if connue is not None and style.voix != self.voix.currentData():
+            self._selectionner_voix(style.voix)
+            details.append(f"voix {self._services.voix.nom(style.voix)}")
         if self.modele.findData(style.modele) >= 0 and style.modele != self.modele.currentData():
             self._choisir(self.modele, style.modele)
             details.append(self.modele.currentText())
@@ -363,42 +426,18 @@ class AtelierVoix(Page):
         self._occupe(False)
         self._afficher(message_erreur(erreur), "erreur")
 
-    def _dire(self, texte: str, operation: str, fichier, message: str) -> None:
-        """Fait dire une courte phrase par la voix choisie (une seule fois : l'audio est gardé en cache)."""
-        if fichier.exists():
-            self.lecteur.basculer(fichier)
-            return
-        try:
-            adaptateur = adaptateur_par_defaut(self._services)
-        except Exception as erreur:  # noqa: BLE001 — message clair affiché
-            self._afficher(message_erreur(erreur), "erreur")
-            return
-        commande = replace(
-            preparer_texte(FOURNISSEUR, self.modele.currentData(), self.voix.currentData(), texte, operation),
-            projet=self._projet.nom if self._projet else None,
-        )
-        self._occupe(True, message)
-
-        def fin(resultat) -> None:
-            self._occupe(False)
-            noter_cout(self._services, commande, resultat)
-            fichier.parent.mkdir(parents=True, exist_ok=True)
-            fichier.write_bytes(en_wav(resultat.audio_wav))
-            self.lecteur.basculer(fichier)
-
-        requete = RequeteVoix(commande.modele, commande.voix, commande.repliques)
-        taches.lancer(lambda: adaptateur.generer_voix(requete), fin, self._echec)
+    def _occupe_ecoute(self, occupe: bool) -> None:
+        self.bouton_extrait.setEnabled(not occupe)
 
     def ecouter_extrait(self) -> None:
-        """▶ : phrase d'exemple avec la voix choisie (générée une fois, puis gardée en cache)."""
-        modele, voix = self.modele.currentData(), self.voix.currentData()
+        """▶ : un extrait de la voix choisie (préparé une fois, puis gardé en cache)."""
         langue = self._projet.langue if self._projet else "fr-FR"
-        fichier = dossier_cache() / "extraits" / f"{modele}-{voix}-{langue}.wav"
-        self._dire(phrase_extrait(langue), "essai de voix", fichier, f"Préparation de l'extrait de {voix}…")
+        self.ecoute.ecouter(self.voix.currentData(), self.modele.currentData(), langue)
 
     def tester_prononciation(self, texte: str) -> None:
         """▶ du dictionnaire : la voix choisie dit la prononciation (gardée en cache)."""
         modele, voix = self.modele.currentData(), self.voix.currentData()
-        empreinte = hashlib.sha1(texte.encode("utf-8")).hexdigest()[:12]
-        fichier = dossier_cache() / "prononciations" / f"{modele}-{voix}-{empreinte}.wav"
-        self._dire(texte, "essai de prononciation", fichier, f"Prononciation de « {texte} »…")
+        self.ecoute.dire(
+            texte, voix, modele, "essai de prononciation", fichier_prononciation(voix, modele, texte),
+            f"Prononciation de « {texte} »…",
+        )

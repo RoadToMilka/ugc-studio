@@ -141,6 +141,7 @@ class Dimensions:
     DIALOGUE_LARGE_HAUTEUR = 560
     PANNEAU_CONSEILS_LARGEUR = 280  # colonne « Conseils Google » à côté d'un formulaire
     DIALOGUE_STYLE_LARGEUR = 880  # formulaire d'un style + colonne des conseils
+    CHAMP_DESCRIPTION_HAUTEUR = 88  # description d'une voix (Voice Design) : environ 3 lignes
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
@@ -153,6 +154,10 @@ class Dimensions:
     GLISSIERE_POIGNEE = 12
     ETOILE = 16  # étoiles de notation des prises
     CHAMP_STYLE_LARGEUR_MIN = 320
+    # Une liste déroulante prend la largeur de son plus long choix quand il y a de la place, mais
+    # peut rétrécir jusqu'à environ ce nombre de caractères (texte abrégé par « … ») : ainsi, un
+    # choix très long n'élargit jamais la page au-delà de la fenêtre.
+    LISTE_CARACTERES_MIN = 10
     FENETRE_LARGEUR = 1360
     FENETRE_HAUTEUR = 860
     FENETRE_LARGEUR_MIN = 960

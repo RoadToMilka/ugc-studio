@@ -10,14 +10,14 @@ from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QVBo
 
 from ...styles import EMOTIONS, INTENSITES, RYTHMES, assembler
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle
+from ..composants.elements import bouton, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 AUCUN = "—"
 
 
 def _liste(choix: tuple[tuple[str, str], ...], avec_aucun: bool) -> QComboBox:
-    liste = QComboBox()
+    liste = liste_deroulante()
     if avec_aucun:
         liste.addItem(AUCUN, "")
     for francais, _anglais in choix:

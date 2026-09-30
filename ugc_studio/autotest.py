@@ -15,17 +15,21 @@ import traceback
 from pathlib import Path
 
 import PySide6
-from PySide6.QtCore import QPoint, QTimer, qVersion
+from PySide6.QtCore import QPoint, Qt, QTimer, qVersion
 from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader
-from PySide6.QtWidgets import QApplication, QScrollArea
+from PySide6.QtWidgets import QApplication, QScrollArea, QWidget
 
 from . import __version__
 from .chemins import fichier_journal
 from .demo import SCRIPT_DEMO
 from .script import normaliser
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
+from .ui.dialogues.assistant_voix import DialogueAssistantVoix
 from .ui.dialogues.prononciation import DialoguePrononciation
 from .ui.dialogues.styles import DialogueBibliothequeStyles, DialogueStyle
+from .ui.dialogues.voice_design import DialogueVoiceDesign
+from .ui.dialogues.voix import DialogueBibliothequeVoix
+from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
@@ -47,7 +51,9 @@ VERIFICATIONS_OBLIGATOIRES = (
     "editeur_badges",
     "lecture_audio",
     "captures",
+    "sans_debordement",
 )
+ELEMENTS_SIGNALES_MAX = 6
 
 
 def _laisser_afficher(secondes: float = PAUSE_AFFICHAGE_S) -> None:
@@ -86,11 +92,99 @@ def _verifier_coffre_windows(rapport: dict) -> bool:
         return False
 
 
+def _description(element: QWidget) -> str:
+    """« Bouton « Écouter » (min. 118 px) » : pour savoir quel élément corriger."""
+    texte = ""
+    for nom in ("text", "currentText"):
+        methode = getattr(element, nom, None)
+        if callable(methode):
+            try:
+                texte = methode()
+            except TypeError:
+                continue
+            if isinstance(texte, str) and texte:
+                break
+            texte = ""
+    minimum = element.minimumSizeHint().width()
+    nom = type(element).__name__
+    return f"{nom} « {texte[:40]} » (min. {minimum} px)" if texte else f"{nom} (min. {minimum} px)"
+
+
+def _debordements(racine: QWidget, nom: str) -> list[str]:
+    """Contenus plus larges que la place disponible, dans une fenêtre ou une page.
+
+    - Zone défilante sans barre horizontale : si son contenu est plus large que la partie
+      visible, le bord droit est coupé (rien ne permet de le voir).
+    - Fenêtre dont la disposition demande plus de largeur qu'elle n'en a : les éléments sont
+      écrasés (textes abrégés, chevauchements).
+    Chaque problème cite les éléments qui dépassent, avec leur largeur minimale."""
+    problemes = []
+    disposition = racine.layout() if racine.isWindow() else None
+    if disposition is not None and disposition.minimumSize().width() > racine.width():
+        problemes.append(
+            f"{nom} : il faudrait {disposition.minimumSize().width()} px de large, la fenêtre en a {racine.width()}"
+        )
+    for zone in racine.findChildren(QScrollArea):
+        interieur = zone.widget()
+        if (
+            interieur is None
+            or not zone.isVisible()
+            or zone.horizontalScrollBarPolicy() != Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        ):
+            continue
+        visible = zone.viewport().width()
+        exces = interieur.width() - visible
+        if exces <= 0:
+            continue
+
+        def deborde(element: QWidget) -> bool:
+            return element.isVisible() and element.mapTo(zone.viewport(), QPoint(element.width(), 0)).x() > visible
+
+        # Les éléments « au bout de la chaîne » qui dépassent (pas leurs conteneurs).
+        coupables = [
+            element
+            for element in interieur.findChildren(QWidget)
+            if deborde(element)
+            and not any(
+                deborde(enfant)
+                for enfant in element.findChildren(QWidget, "", Qt.FindChildOption.FindDirectChildrenOnly)
+            )
+        ]
+        coupables.sort(key=lambda e: e.minimumSizeHint().width(), reverse=True)
+        problemes.append(
+            f"{nom} : contenu plus large que la partie visible de {exces} px — "
+            + ", ".join(_description(e) for e in coupables[:ELEMENTS_SIGNALES_MAX])
+        )
+    return problemes
+
+
 def _assistant_rempli(parent) -> DialogueAssistantStyle:
     """Assistant de style avec quelques choix faits, pour une capture parlante."""
     dialogue = DialogueAssistantStyle(parent)
     for liste, valeur in ((dialogue.emotion, "chaleureux"), (dialogue.emotion2, "enthousiaste"), (dialogue.rythme, "débit rapide")):
         liste.setCurrentIndex(liste.findData(valeur))
+    return dialogue
+
+
+def _assistant_voix_rempli(parent) -> DialogueAssistantVoix:
+    dialogue = DialogueAssistantVoix(parent)
+    for liste, valeur in (
+        (dialogue.age, "environ 25 ans"),
+        (dialogue.timbre, "chaleureuse"),
+        (dialogue.texture, "légèrement voilée"),
+        (dialogue.accent, "parisien"),
+        (dialogue.persona, "créateur·rice UGC"),
+    ):
+        liste.setCurrentIndex(liste.findData(valeur))
+    return dialogue
+
+
+def _voice_design_rempli(services, atelier, parent) -> DialogueVoiceDesign:
+    dialogue = DialogueVoiceDesign(services, atelier.ecoute, parent)
+    dialogue.nom.setText("Léa — créatrice UGC")
+    dialogue.description.definir(
+        *assembler_description("femme", "environ 25 ans", "chaleureuse", "légèrement voilée", "parisien", "créateur·rice UGC")
+    )
     return dialogue
 
 
@@ -140,6 +234,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             _laisser_afficher()
             rapport["taille_fenetre"] = [fenetre.width(), fenetre.height()]
             attendues = 0
+            debordements: list[str] = []
 
             def capturer(widget, nom: str) -> None:
                 nonlocal attendues
@@ -206,10 +301,32 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 ("dialogue-style", DialogueStyle(services, services.styles.styles[0], fenetre, "Modifier le style")),
                 ("assistant-style", _assistant_rempli(fenetre)),
                 ("dialogue-prononciation", DialoguePrononciation(services, None, fenetre)),
+                # Étape 5 : bibliothèque de voix (deux onglets), Voice Design et son assistant.
+                ("bibliotheque-voix", DialogueBibliothequeVoix(services, atelier.lecteur, fenetre)),
+                ("bibliotheque-voix-mes-voix", DialogueBibliothequeVoix(services, atelier.lecteur, fenetre, onglet=1)),
+                ("dialogue-voice-design", _voice_design_rempli(services, atelier, fenetre)),
+                ("assistant-voix", _assistant_voix_rempli(fenetre)),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)
+                debordements += _debordements(fenetre_dialogue, f"fenêtre {nom}")
                 fenetre_dialogue.reject()
+
+            # Fenêtre principale à sa largeur minimale : chaque page doit y tenir sans être coupée.
+            fenetre.resize(Dimensions.FENETRE_LARGEUR_MIN, fenetre.height())
+            for identifiant in fenetre.identifiants_modules():
+                fenetre.afficher_module(identifiant)
+                _laisser_afficher()
+                debordements += _debordements(fenetre, f"page {identifiant}")
+            fenetre.afficher_module("reglages")
+            for index in range(reglages.onglets.count()):
+                reglages.onglets.setCurrentIndex(index)
+                _laisser_afficher()
+                debordements += _debordements(fenetre, f"réglages, onglet « {reglages.onglets.tabText(index)} »")
+            reglages.onglets.setCurrentIndex(0)
+            fenetre.afficher_module("voix")
+            rapport["debordements"] = debordements
+            verifs["sans_debordement"] = not debordements
 
             galerie = GalerieComposants()
             galerie.show()

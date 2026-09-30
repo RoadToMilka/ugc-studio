@@ -154,6 +154,13 @@ def verifier_style(texte: str) -> list[Avertissement]:
 def verifier_description_voix(texte: str) -> list[Avertissement]:
     """Vérifications en direct de la description Voice Design (§5.4 bis)."""
     avertissements = []
+    if semble_francais(texte):
+        avertissements.append(
+            Avertissement(
+                "Description en français : Google conseille l'anglais. Clique sur « Traduire en anglais ».",
+                en_francais=True,
+            )
+        )
     phrases = [p for p in re.split(r"[.!?]+", texte) if p.strip()]
     if len(phrases) > PHRASES_MAX_DESCRIPTION or len(_mots(texte)) > MOTS_MAX_DESCRIPTION:
         avertissements.append(
