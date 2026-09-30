@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import sys
 import threading
+import traceback
 from collections.abc import Callable
 
 from PySide6.QtCore import QtMsgType, qInstallMessageHandler
@@ -25,6 +26,9 @@ _NIVEAUX_QT = {
 
 # Code de sortie de l'app quand une erreur survient pendant l'autotest.
 CODE_ERREUR_AUTOTEST = 3
+# Pendant l'autotest, chaque erreur inattendue est aussi notée ici : le rapport les reprend et
+# l'autotest échoue (sinon, une erreur survenue pendant une vérification passerait inaperçue).
+erreurs_autotest: list[str] = []
 
 
 def _message_qt(type_message, _contexte, message: str) -> None:
@@ -46,7 +50,9 @@ def installer_gestion_erreurs(ouvrir_journal: Callable[[], None], mode_autotest:
         if app is None:
             return
         if mode_autotest:
-            # Pendant l'autotest, personne ne peut cliquer sur « OK » : on arrête l'app avec un code d'erreur.
+            # Pendant l'autotest, personne ne peut cliquer sur « OK » : l'erreur est notée pour le
+            # rapport, et l'app s'arrête avec un code d'erreur.
+            erreurs_autotest.append("".join(traceback.format_exception(type_exception, valeur, trace)))
             app.exit(CODE_ERREUR_AUTOTEST)
             return
         if fenetre_ouverte:
@@ -76,6 +82,10 @@ def installer_gestion_erreurs(ouvrir_journal: Callable[[], None], mode_autotest:
             "Erreur inattendue dans une tâche de fond",
             exc_info=(arguments.exc_type, arguments.exc_value, arguments.exc_traceback),
         )
+        if mode_autotest:
+            erreurs_autotest.append(
+                "".join(traceback.format_exception(arguments.exc_type, arguments.exc_value, arguments.exc_traceback))
+            )
 
     sys.excepthook = crochet
     threading.excepthook = crochet_fil

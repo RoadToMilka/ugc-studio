@@ -16,10 +16,11 @@ from .fournisseurs.voix import VoixBibliotheque
 
 from .audio import FREQUENCE_TTS, wav_depuis_pcm
 from .chemins import dossier_projets_defaut
-from .projets import RepliqueProjet
+from .projets import DOSSIER_SOURCES, RepliqueProjet
 from .prononciation import Prononciation
 from .script import joindre_repliques
 from .services import Services
+from .transcription import Mot, Remplacement, Transcription
 
 CLE_DEMO = "AIzaDEMO-cle-de-demonstration-0000-4f2c"
 
@@ -40,6 +41,30 @@ REPLIQUES_DEMO = [
     RepliqueProjet([{"texte": "Le lien est juste en dessous."}], "warm and reassuring", "chaleureux et rassurant"),
 ]
 SCRIPT_DEMO = REPLIQUES_DEMO[0].script  # 1re réplique (vérifiée par l'autotest dans l'éditeur)
+
+# Transcription de démonstration (§6) : une vidéo verticale, avec une hésitation (« euh »).
+MOTS_DEMO = (
+    "Franchement, euh je n'y croyais pas… Mais ce Sérum Glowzy a vraiment changé ma peau "
+    "en deux semaines ! Le lien est juste en dessous."
+).split()
+DUREE_TRANSCRIPTION_DEMO = 7.4
+
+
+def transcription_demo() -> Transcription:
+    pas = DUREE_TRANSCRIPTION_DEMO / (len(MOTS_DEMO) + 1)
+    mots = [Mot(texte, round(0.2 + i * pas, 3), round(0.2 + i * pas + pas * 0.85, 3)) for i, texte in enumerate(MOTS_DEMO)]
+    return Transcription(
+        source="Vidéos/pub-glowzy-v1.mp4",
+        audio=f"{DOSSIER_SOURCES}/audio.wav",
+        duree_s=DUREE_TRANSCRIPTION_DEMO,
+        infos={"duree_s": DUREE_TRANSCRIPTION_DEMO, "video": True, "resolution": [1080, 1920], "images_par_seconde": 30, "codec_video": "H264"},
+        modele="gemini-3.5-transcribe",
+        langue="fr-FR",
+        texte=" ".join(MOTS_DEMO),
+        mots=mots,
+        date=datetime.now().astimezone().replace(microsecond=0).isoformat(),
+        cout_eur="0.0019",
+    )
 
 
 def son_de_demonstration(secondes: float, frequence: float = 220.0) -> bytes:
@@ -172,3 +197,10 @@ def remplir_donnees_demo(services: Services) -> None:
             if lettre == "B":
                 retenue = prise.identifiant
         services.projets.retenir(retenue)
+        # Transcription d'une vidéo (étape 7), avec sa piste son dans « sources ».
+        piste = projet.chemin(f"{DOSSIER_SOURCES}/audio.wav")
+        piste.parent.mkdir(parents=True, exist_ok=True)
+        piste.write_bytes(son_de_demonstration(DUREE_TRANSCRIPTION_DEMO, 175.0))
+        projet.transcription = transcription_demo()
+        projet.remplacements = [Remplacement("sérum glowzy", "Sérum Glowzy")]
+        services.projets.enregistrer()

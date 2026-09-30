@@ -12,14 +12,16 @@ from ..base import Page
 
 
 class SansProjet(Page):
-    def __init__(self, services: Services):
-        super().__init__("Voix", "Voix off générée par IA (TTS).")
+    """Affiché par les modules qui travaillent dans un projet (Voix, Transcription…)."""
+
+    def __init__(self, services: Services, titre: str = "Voix", sous_titre: str = "Voix off générée par IA (TTS)."):
+        super().__init__(titre, sous_titre)
         self._services = services
 
         cadre, d = bloc("Commence par un projet")
         d.addWidget(
             libelle(
-                "Un projet regroupe le script, les prises audio et les réglages d'une pub. "
+                "Un projet regroupe le script, les prises audio, la transcription et les réglages d'une pub. "
                 "Tout est enregistré automatiquement dans son dossier.",
                 "secondaire",
             )

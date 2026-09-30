@@ -15,6 +15,7 @@ from .composants.barre_laterale import BarreLaterale, Module
 from .composants.entete import Entete
 from .pages.page_a_venir import PageAVenir
 from .pages.reglages import PageReglages
+from .pages.transcription import PageTranscription
 from .pages.voix import PageVoix
 from .theme import Dimensions
 
@@ -31,17 +32,7 @@ MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
 def _creer_pages(services: Services) -> dict[str, QWidget]:
     return {
         "voix": PageVoix(services),
-        "transcription": PageAVenir(
-            "Transcription",
-            "Texte horodaté mot par mot à partir d'une vidéo ou d'un audio (STT).",
-            "Étape 7",
-            [
-                "Import d'une vidéo ou d'un audio par glisser-déposer",
-                "Transcription mot par mot avec horodatage",
-                "Séparation des voix et dictionnaire de remplacements",
-                "Éditeur de transcription synchronisé avec la lecture",
-            ],
-        ),
+        "transcription": PageTranscription(services),
         "sous-titres": PageAVenir(
             "Sous-titres",
             "Découpage, style et export des sous-titres.",

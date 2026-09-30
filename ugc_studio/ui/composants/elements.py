@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..theme import Dimensions, Espacements
 from .bouton import Bouton
@@ -78,6 +78,28 @@ def liste_deroulante(info: str | None = None) -> QComboBox:
     if info:
         liste.setToolTip(info)
     return liste
+
+
+def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, QCheckBox]:
+    """Case à cocher au texte court, avec son explication en légende dessous (alignée sur le
+    texte de la case). Renvoie la zone à placer dans la page et la case elle-même ; pour griser
+    la case, griser la zone (la légende l'est alors aussi).
+
+    Pourquoi ? Le texte d'une case à cocher ne passe jamais à la ligne : une longue phrase
+    imposerait sa largeur à toute la page, qui déborderait à droite dans une fenêtre étroite.
+    L'explication, elle, passe à la ligne. (Un test vérifie que le texte des cases reste court.)"""
+    zone = QWidget()
+    disposition = QVBoxLayout(zone)
+    disposition.setContentsMargins(0, 0, 0, 0)
+    disposition.setSpacing(Espacements.XS)
+    case = QCheckBox(texte)
+    disposition.addWidget(case)
+    if explication:
+        legende = libelle(explication, "legende")
+        # Retrait = case + espace avant son texte (voir QCheckBox dans la feuille de style).
+        legende.setContentsMargins(Dimensions.CASE_A_COCHER + Espacements.S, 0, 0, 0)
+        disposition.addWidget(legende)
+    return zone, case
 
 
 def bloc(titre: str | None = None, marges: int = Espacements.XL) -> tuple[QFrame, QVBoxLayout]:

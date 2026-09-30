@@ -15,6 +15,14 @@ SDK officiel google-genai 2.25 et guides officiels du « Gemini API Cookbook »
 - Texte (ex. Gemini 3.8 Flash) : même API ; la réponse contient des étapes (`steps`) dont la
   dernière « model_output » porte le texte. Niveau de réflexion dans
   `generation_config.thinking_level` (Gemini 3.8 Flash : « low », « medium » ou « high »).
+- Transcription (ex. Gemini 3.5 Transcribe) : l'audio est d'abord déposé avec l'API Files
+  (téléversement « resumable » : POST /upload/v1beta/files, puis envoi des octets à l'adresse
+  donnée dans l'en-tête `x-goog-upload-url` ; fichier gardé 48 h), puis POST /v1beta/interactions
+  avec `{"type": "audio", "uri": …}` et `generation_config.transcription_config` :
+  `language_codes` (vide = détection automatique) et `mode` (« smart », ou
+  `{"type": "verbatim", "timestamp_granularities": ["word"], "diarization_mode": "speaker"}`).
+  Les mots arrivent en annotations « word_info » du texte (`start_offset`, `end_offset` au format
+  « 1.250s », `speaker`). Le fichier déposé est supprimé ensuite.
 - Voix (API « Voices ») : GET /v1beta/voices (bibliothèque étendue, filtres `type`,
   `language_code`… répétables, pages de `page_size` voix), GET/DELETE /v1beta/voices/{id},
   POST /v1beta/voices pour Voice Design (`store: true`, `voice.type: "prompted"`,
@@ -39,6 +47,7 @@ from urllib.parse import quote, urlencode
 from ..audio import FREQUENCE_TTS, duree_wav, en_wav, lire_wav, wav_depuis_pcm
 from .base import Adaptateur, ErreurFournisseur, InfoModele
 from .http import EvenementSse, ReponseHttp, ouvrir_flux, requete
+from .stt import FichierTeleverse, MotTranscrit, RequeteTranscription, ResultatTranscription
 from .texte import RequeteTexte, ResultatTexte
 from .voix import (
     RecepteurAudio,
@@ -57,6 +66,10 @@ TAILLE_PAGE_VOIX = 1000  # maximum accepté par l'API Voices
 DELAI_CREATION_VOIX = 120  # secondes
 DELAI_GENERATION = 300  # secondes : une longue voix off peut prendre du temps
 DELAI_ENTRE_MORCEAUX = 120  # secondes : attente maximale entre deux morceaux d'une réponse en flux
+DELAI_TELEVERSEMENT = 300  # secondes : envoi d'un fichier audio
+DELAI_TRANSCRIPTION = 600  # secondes : une longue source peut prendre du temps
+ATTENTE_FICHIER_PRET = 2  # secondes entre deux vérifications d'un fichier en cours de préparation
+VERIFICATIONS_FICHIER_MAX = 60
 DELAI_TEXTE = 60  # secondes
 ESSAIS_SI_SURCHARGE = 2
 PAUSE_AVANT_NOUVEL_ESSAI = 3  # secondes
@@ -72,6 +85,9 @@ class AdaptateurGoogle(Adaptateur):
     def __init__(self, cle: str, url_api: str = URL_API):
         super().__init__(cle)
         self._url_api = url_api.rstrip("/")
+        # Téléversement des fichiers : même adresse, préfixée de « /upload » (…/upload/v1beta/files).
+        racine, version = self._url_api.rsplit("/", 1) if self._url_api.endswith("/v1beta") else (self._url_api, "")
+        self._url_televersement = f"{racine}/upload/{version}".rstrip("/")
 
     # --- Appels ------------------------------------------------------------------------------
 
@@ -178,6 +194,73 @@ class AdaptateurGoogle(Adaptateur):
         if requete_texte.consigne_systeme:
             corps["system_instruction"] = requete_texte.consigne_systeme
         return lire_resultat_texte(self._interaction(corps, DELAI_TEXTE))
+
+    # --- Transcription (STT) et fichiers ----------------------------------------------------------
+
+    def transcrire(self, requete: RequeteTranscription) -> ResultatTranscription:
+        fichier = self.televerser(requete.audio, requete.type_mime, requete.nom)
+        try:
+            corps = {
+                "model": requete.modele,
+                "input": [{"type": "audio", "uri": fichier.uri, "mime_type": requete.type_mime}],
+                "generation_config": {"transcription_config": config_transcription(requete)},
+            }
+            return lire_resultat_transcription(self._interaction(corps, DELAI_TRANSCRIPTION))
+        finally:
+            self.supprimer_fichier(fichier.nom)
+
+    def televerser(self, donnees: bytes, type_mime: str, nom: str) -> FichierTeleverse:
+        """Dépose un fichier avec l'API Files (téléversement « resumable » en une fois)."""
+        depart = requete(
+            "POST",
+            f"{self._url_televersement}/files",
+            entetes={
+                "x-goog-api-key": self._cle,
+                "X-Goog-Upload-Protocol": "resumable",
+                "X-Goog-Upload-Command": "start",
+                "X-Goog-Upload-Header-Content-Length": str(len(donnees)),
+                "X-Goog-Upload-Header-Content-Type": type_mime,
+            },
+            corps_json={"file": {"display_name": nom}},
+            delai=60,
+        )
+        if depart.statut >= 400:
+            raise traduire_erreur(depart)
+        adresse = next((v for k, v in depart.entetes.items() if k.lower() == "x-goog-upload-url"), "")
+        if not adresse:
+            raise ErreurFournisseur(
+                "Google n'a pas donné d'adresse pour envoyer le fichier. Réessaie dans un instant.",
+                "televersement",
+                f"en-têtes reçus : {sorted(depart.entetes)}",
+            )
+        envoi = requete(
+            "POST",
+            adresse,
+            entetes={"X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize"},
+            donnees=donnees,
+            delai=DELAI_TELEVERSEMENT,
+        )
+        if envoi.statut >= 400:
+            raise traduire_erreur(envoi)
+        try:
+            fichier = lire_fichier((envoi.json() or {}).get("file") or {})
+        except ValueError as erreur:
+            raise ErreurFournisseur("Réponse de Google illisible.", "reponse_illisible", str(erreur)) from erreur
+        for _ in range(VERIFICATIONS_FICHIER_MAX):
+            if fichier.etat in ("", "ACTIVE"):
+                return fichier
+            if fichier.etat == "FAILED":
+                raise ErreurFournisseur("Google n'a pas pu lire ce fichier audio.", "fichier_illisible", fichier.nom)
+            time.sleep(ATTENTE_FICHIER_PRET)
+            fichier = lire_fichier(self._appeler("GET", fichier.nom, delai=30))
+        raise ErreurFournisseur("Google met trop de temps à préparer le fichier. Réessaie.", "televersement", fichier.nom)
+
+    def supprimer_fichier(self, nom: str) -> None:
+        """Supprime un fichier déposé (sinon Google l'efface de lui-même au bout de 48 h)."""
+        try:
+            self._appeler("DELETE", nom, delai=30)
+        except ErreurFournisseur:
+            journal.warning("Fichier déposé non supprimé (Google l'effacera dans 48 h) : %s", nom)
 
     # --- Voix : bibliothèque et Voice Design --------------------------------------------------
 
@@ -442,6 +525,85 @@ def lire_resultat_voix(donnees: dict) -> ResultatVoix:
         raise ErreurFournisseur("Audio reçu de Google illisible.", "audio_illisible", str(erreur)) from erreur
     tokens_entree, tokens_sortie = _tokens(donnees)
     return ResultatVoix(wav, duree, tokens_entree, tokens_sortie, {"statut": statut, "usage": donnees.get("usage") or {}})
+
+
+def lire_fichier(donnees: dict) -> FichierTeleverse:
+    """Fichier de l'API Files : `name`, `uri`, `mime_type` / `mimeType`, `state`."""
+    fichier = FichierTeleverse(
+        nom=str(donnees.get("name") or ""),
+        uri=str(donnees.get("uri") or ""),
+        type_mime=str(_champ(donnees, "mime_type") or ""),
+        etat=str(donnees.get("state") or "").upper(),
+    )
+    if not fichier.nom or not fichier.uri:
+        raise ValueError(f"fichier sans nom ni adresse : {json.dumps(donnees)[:300]}")
+    return fichier
+
+
+def config_transcription(requete_stt: RequeteTranscription) -> dict:
+    """`generation_config.transcription_config` d'une demande de transcription."""
+    config: dict[str, Any] = {"language_codes": [requete_stt.langue] if requete_stt.langue else []}
+    if requete_stt.mode == "smart":
+        config["mode"] = "smart"  # incompatible avec les temps et la séparation des voix
+        return config
+    mode: dict[str, Any] = {"type": "verbatim"}
+    if requete_stt.horodatage:
+        mode["timestamp_granularities"] = ["word"]
+    if requete_stt.separation_voix:
+        mode["diarization_mode"] = "speaker"
+    config["mode"] = mode
+    return config
+
+
+def secondes(valeur: Any) -> float:
+    """Durée de Google → secondes : « 1.250s », un nombre, ou {"seconds": 1, "nanos": 250000000}."""
+    if isinstance(valeur, (int, float)):
+        return float(valeur)
+    if isinstance(valeur, dict):
+        return float(valeur.get("seconds") or 0) + float(valeur.get("nanos") or 0) / 1e9
+    texte = str(valeur or "").strip().removesuffix("s")
+    try:
+        return float(texte) if texte else 0.0
+    except ValueError:
+        return 0.0
+
+
+def lire_mots(donnees: dict) -> list[MotTranscrit]:
+    """Mots horodatés : annotations « word_info » des textes du modèle, dans l'ordre."""
+    mots: list[MotTranscrit] = []
+    for etape in donnees.get("steps") or []:
+        if not isinstance(etape, dict) or etape.get("type") not in (None, "model_output"):
+            continue
+        for element in etape.get("content") or []:
+            if not isinstance(element, dict) or element.get("type") != "text":
+                continue
+            for annotation in element.get("annotations") or []:
+                if not isinstance(annotation, dict) or annotation.get("type") != "word_info":
+                    continue
+                texte = " ".join(str(annotation.get("text") or "").split())
+                if texte:
+                    mots.append(
+                        MotTranscrit(
+                            texte,
+                            secondes(_champ(annotation, "start_offset")),
+                            secondes(_champ(annotation, "end_offset")),
+                            str(annotation.get("speaker") or ""),
+                        )
+                    )
+    return mots
+
+
+def lire_resultat_transcription(donnees: dict) -> ResultatTranscription:
+    """Réponse de l'API Interactions → texte, mots horodatés et tokens (pour le coût)."""
+    _verifier_statut(donnees, "la transcription")
+    texte = trouver_texte(donnees).strip()
+    mots = lire_mots(donnees)
+    if not texte and mots:
+        texte = " ".join(m.texte for m in mots)
+    tokens_entree, tokens_sortie = _tokens(donnees)
+    return ResultatTranscription(
+        texte, mots, tokens_entree, tokens_sortie, {"statut": donnees.get("status"), "usage": donnees.get("usage") or {}}
+    )
 
 
 def traduire_erreur(reponse: ReponseHttp) -> ErreurFournisseur:

@@ -32,6 +32,7 @@ from .ui.dialogues.variantes import ONGLET_MEMES_REGLAGES, ONGLET_PAR_VARIANTE, 
 from .ui.dialogues.voice_design import DialogueVoiceDesign
 from .ui.dialogues.voix import DialogueBibliothequeVoix
 from .ui.composants.choix_voix import choisir
+from .ui.erreurs import erreurs_autotest
 from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
@@ -41,9 +42,11 @@ from .ui.theme import Dimensions, Typo
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
 DELAI_MAX_MS = 120_000  # sécurité : l'autotest ne peut pas bloquer la fabrication
 PAUSE_AFFICHAGE_S = 0.4
+DELAI_DECODAGE_S = 15
 CODE_DELAI_DEPASSE = 4
 
 VERIFICATIONS_OBLIGATOIRES = (
+    "decodage_audio",
     "police_inter_chargee",
     "police_inter_utilisee",
     "icones_navigation",
@@ -157,6 +160,19 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
                 for enfant in element.findChildren(QWidget, "", Qt.FindChildOption.FindDirectChildrenOnly)
             )
         ]
+        if not coupables:
+            # Rien n'est encore coupé (la marge de droite a absorbé l'excès) : on cite les éléments
+            # visibles les plus larges, ceux qui imposent cette largeur (ex. une case à cocher au
+            # texte trop long, qui ne passe jamais à la ligne).
+            coupables = [
+                element
+                for element in interieur.findChildren(QWidget)
+                if element.isVisible()
+                and not any(
+                    enfant.isVisible()
+                    for enfant in element.findChildren(QWidget, "", Qt.FindChildOption.FindDirectChildrenOnly)
+                )
+            ]
         coupables.sort(key=lambda e: e.minimumSizeHint().width(), reverse=True)
         problemes.append(
             f"{nom} : contenu plus large que la partie visible de {exces} px — "
@@ -193,6 +209,32 @@ def _voice_design_rempli(services, atelier, parent) -> DialogueVoiceDesign:
         *assembler_description("femme", "environ 25 ans", "chaleureuse", "légèrement voilée", "parisien", "créateur·rice UGC")
     )
     return dialogue
+
+
+def _verifier_decodage_audio(dossier: Path, rapport: dict) -> bool:
+    """Décode un petit WAV avec Qt Multimedia (FFmpeg), comme pour une vidéo importée (§6.2) :
+    vérifie que le décodeur audio est bien embarqué dans le .exe."""
+    from .audio import FREQUENCE_TTS, lire_wav, wav_depuis_pcm
+    from .ui.extraction import ExtracteurAudio
+
+    source = dossier / "decodage-test.wav"
+    source.write_bytes(wav_depuis_pcm(b"\x10\x00" * FREQUENCE_TTS))  # 1 s
+    extracteur = ExtracteurAudio()
+    resultat: dict = {}
+    extracteur.termine.connect(lambda wav: resultat.setdefault("wav", wav))
+    extracteur.echec.connect(lambda raison: resultat.setdefault("erreur", raison))
+    extracteur._decoder(source)  # le chemin de Qt, même pour un WAV
+    fin = time.monotonic() + DELAI_DECODAGE_S
+    while not resultat and time.monotonic() < fin:
+        QApplication.processEvents()
+        time.sleep(0.02)
+    if "wav" in resultat:
+        pcm, frequence, canaux = lire_wav(resultat["wav"])
+        rapport["decodage_audio"] = f"{len(pcm) // 2 / frequence:.2f} s, {frequence} Hz, {canaux} canal"
+        return abs(len(pcm) // 2 / frequence - 1.0) < 0.1 and canaux == 1
+    rapport["decodage_audio"] = f"erreur : {resultat.get('erreur', 'délai dépassé')}"
+    extracteur.annuler()
+    return False
 
 
 def _variantes_remplies(services, atelier, parent, onglet: int) -> DialogueVariantes:
@@ -280,6 +322,19 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
             verifs["lecture_audio"] = atelier.lecteur._lecteur is not None  # Qt Multimedia embarqué
 
+            # Page Transcription (étape 7) : un mot choisi, et une capture par hauteur d'écran.
+            transcription = fenetre.page("transcription").atelier
+            fenetre.afficher_module("transcription")
+            transcription.choisir_mot(3)
+            defilement = transcription.findChild(QScrollArea)
+            if defilement is not None:
+                barre = defilement.verticalScrollBar()
+                for numero, position in enumerate(range(barre.pageStep(), barre.maximum() + barre.pageStep(), barre.pageStep()), 2):
+                    barre.setValue(min(position, barre.maximum()))
+                    capturer(fenetre, f"transcription-{numero}")
+                barre.setValue(0)
+            verifs["decodage_audio"] = _verifier_decodage_audio(dossier, rapport)
+
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")
             fenetre.afficher_module("reglages")
@@ -359,6 +414,9 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["captures"] = len(rapport["captures"]) == attendues
         except Exception:  # noqa: BLE001 — tout problème doit finir dans le rapport
             rapport["erreurs"].append(traceback.format_exc())
+        # Erreurs inattendues survenues ailleurs pendant l'autotest (ex. dans une réaction à un
+        # signal de Qt) : elles comptent aussi.
+        rapport["erreurs"] += erreurs_autotest
 
         rapport["succes"] = not rapport["erreurs"] and all(
             verifs.get(nom) for nom in VERIFICATIONS_OBLIGATOIRES

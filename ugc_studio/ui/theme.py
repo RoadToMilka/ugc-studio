@@ -299,6 +299,9 @@ QLabel[role="legende"] {
     color: $texte_secondaire;
     font-size: ${legende}px;
 }
+QLabel[role="legende"]:disabled {
+    color: $texte_desactive;
+}
 QLabel[role="discret"] {
     color: $texte_desactive;
     font-size: ${legende}px;
@@ -357,6 +360,15 @@ QFrame[role="separateur"] {
     border: none;
     min-height: ${bordure}px;
     max-height: ${bordure}px;
+}
+QFrame[role="depot"] {
+    background: transparent;
+    border: ${bordure}px dashed $texte_desactive;
+    border-radius: ${arrondi_bloc}px;
+}
+QFrame[role="depot"][survol="true"] {
+    border-color: $accent;
+    background: $teinte_selection;
 }
 QFrame[role="ligne"] {
     background: transparent;

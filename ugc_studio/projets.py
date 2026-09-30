@@ -9,6 +9,9 @@ Rouvrir un projet restaure son état complet. L'enregistrement est automatique.
 Format 2 (étape 4) : le script est découpé en **répliques**, chacune avec son style (§5.3).
 Un projet au format 1 (un seul script et un seul style) est converti à l'ouverture : il devient
 une seule réplique.
+
+Format 3 (étape 7) : la **transcription** (source importée, piste son extraite dans
+« sources\\ », mots horodatés) et le dictionnaire de remplacements du projet (§6).
 """
 
 from __future__ import annotations
@@ -26,11 +29,13 @@ from .chemins import dossier_donnees
 from .prononciation import Prononciation, depuis_liste
 from .script import joindre_repliques
 from .stockage import ecrire_json, lire_json
+from .transcription import Remplacement, Transcription, remplacements_depuis_liste
 
 journal = logging.getLogger(__name__)
 
 NOM_FICHIER = "projet.json"
 DOSSIER_PRISES = "prises"
+DOSSIER_SOURCES = "sources"  # piste son extraite de la vidéo importée (transcription, §6)
 NB_RECENTS = 10
 
 # §5.7 — Langues proposées (codes « langue-PAYS »).
@@ -125,8 +130,10 @@ class Projet:
     repliques: list[RepliqueProjet] = field(default_factory=lambda: [RepliqueProjet()])
     prononciations: list[Prononciation] = field(default_factory=list)  # dictionnaire du projet (§5.2)
     prises: list[Prise] = field(default_factory=list)
+    transcription: Transcription | None = None  # §6
+    remplacements: list[Remplacement] = field(default_factory=list)  # dictionnaire du projet (§6.3)
 
-    VERSION_FORMAT = 2
+    VERSION_FORMAT = 3
 
     @property
     def script(self) -> list[dict]:
@@ -151,6 +158,8 @@ class Projet:
             "repliques": [asdict(r) for r in self.repliques],
             "prononciations": [asdict(p) for p in self.prononciations],
             "prises": [asdict(p) for p in self.prises],
+            "transcription": self.transcription.en_dict() if self.transcription else None,
+            "remplacements": [asdict(r) for r in self.remplacements],
         }
 
     @classmethod
@@ -183,7 +192,19 @@ class Projet:
             repliques=repliques or [RepliqueProjet()],
             prononciations=depuis_liste(donnees.get("prononciations")),
             prises=prises,
+            transcription=_transcription(donnees.get("transcription")),
+            remplacements=remplacements_depuis_liste(donnees.get("remplacements")),
         )
+
+
+def _transcription(brut) -> Transcription | None:
+    if not isinstance(brut, dict):
+        return None
+    try:
+        return Transcription.depuis_dict(brut)
+    except (TypeError, ValueError) as erreur:
+        journal.warning("Transcription illisible ignorée (%s)", erreur)
+        return None
 
 
 class GestionnaireProjets:

@@ -95,3 +95,24 @@ def test_listes_deroulantes_creees_avec_liste_deroulante():
         if isinstance(noeud, ast.Call) and _nom_appel(noeud) == "QComboBox"
     ]
     assert not ecarts, "QComboBox() à remplacer par liste_deroulante() :\n" + "\n".join(ecarts)
+
+
+CASE_TEXTE_MAX = 48  # caractères
+
+
+def test_textes_des_cases_a_cocher_courts():
+    """Le texte d'une case à cocher ne passe jamais à la ligne : une longue phrase impose sa largeur
+    à toute la page, qui déborde à droite quand la fenêtre est étroite (960 px). Les explications
+    vont dans la légende de elements.case_a_cocher(), qui, elle, passe à la ligne."""
+    ecarts = [
+        f"{fichier.relative_to(RACINE)}:{noeud.lineno} « {noeud.args[0].value} »"
+        for fichier in _fichiers()
+        for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8")))
+        if isinstance(noeud, ast.Call)
+        and _nom_appel(noeud) in ("QCheckBox", "case_a_cocher")
+        and noeud.args
+        and isinstance(noeud.args[0], ast.Constant)
+        and isinstance(noeud.args[0].value, str)
+        and len(noeud.args[0].value) > CASE_TEXTE_MAX
+    ]
+    assert not ecarts, "Texte de case à cocher trop long (mettre l'explication en légende) :\n" + "\n".join(ecarts)
