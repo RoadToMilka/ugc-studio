@@ -73,3 +73,27 @@ def test_texte_complet_au_survol(app_configuree, qtbot):
     QApplication.sendEvent(tableau.viewport(), evenement)
     assert QToolTip.text() == "Brosse lissante chauffante pour cheveux"
     QToolTip.hideText()
+
+
+def test_montants_jamais_coupes(app_configuree, qtbot):
+    """Coûts au format §4.4 (petites décimales) : mesurés avec les polices qui les dessinent."""
+    from PySide6.QtWidgets import QStyleOptionViewItem
+
+    from ugc_studio.ui.composants.montant_label import ROLE_MONTANT, DelegueMontant
+
+    tableau = Tableau((Colonne("Projet", texte=True), Colonne("Coût", a_droite=True)))
+    qtbot.addWidget(tableau)
+    tableau.setItemDelegateForColumn(1, DelegueMontant(tableau))
+    tableau.setRowCount(2)
+    tableau.setItem(0, 0, QTableWidgetItem("Sérum Glowzy"))
+    for rang, montant in enumerate(("12.3456", "")):  # vide : prix inconnu
+        case = QTableWidgetItem()
+        case.setData(ROLE_MONTANT, montant)
+        tableau.setItem(rang, 1, case)
+    tableau.resize(200, 200)
+    tableau.show()
+    tableau.contenu_change()
+    delegue = tableau.itemDelegateForColumn(1)
+    besoin = max(delegue.sizeHint(QStyleOptionViewItem(), tableau.model().index(rang, 1)).width() for rang in range(2))
+    assert tableau.columnWidth(1) >= besoin and tableau.colonnes_coupees() == []
+    assert not tableau.grab().isNull()  # se dessine sans erreur

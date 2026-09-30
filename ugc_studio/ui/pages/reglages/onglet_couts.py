@@ -12,7 +12,7 @@ from ....fournisseurs.capacites import modele_connu
 from ....montants import nombre_lisible
 from ....services import Services
 from ...composants.elements import bloc, info, libelle, liste_deroulante
-from ...composants.montant_label import MontantLabel
+from ...composants.montant_label import ROLE_MONTANT, DelegueMontant, MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...theme import Dimensions, Espacements, Typo
 
@@ -99,6 +99,8 @@ class OngletCouts(QWidget):
         cadre, d = bloc(marges=Espacements.L)
         self.tableau = Tableau(COLONNES)
         self.tableau.setMinimumHeight(Dimensions.TABLEAU_HAUTEUR_MIN)
+        # Montants au format §4.4 (petites décimales), dessinés et mesurés par la même règle.
+        self.tableau.setItemDelegateForColumn(COLONNE_COUT, DelegueMontant(self.tableau))
         d.addWidget(self.tableau)
         self.vide = libelle(
             "Aucun appel payant sur cette période. Les coûts apparaîtront ici dès la première voix générée.",
@@ -188,14 +190,9 @@ class OngletCouts(QWidget):
                 if COLONNES[colonne].a_droite:
                     element.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self.tableau.setItem(ligne, colonne, element)
-            # Montant au format §4.4 (petites décimales) : dessiné par un élément à part.
-            if appel.cout_eur is None:
-                cout = libelle("prix inconnu", "avertissement", retour_a_la_ligne=False)
-            else:
-                cout = MontantLabel(appel.cout_eur)
-            cout.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            cout.setContentsMargins(Espacements.M, 0, Espacements.M, 0)
-            self.tableau.setCellWidget(ligne, COLONNE_COUT, cout)
+            cout = QTableWidgetItem()
+            cout.setData(ROLE_MONTANT, "" if appel.cout_eur is None else str(appel.cout_eur))  # vide : prix inconnu
+            self.tableau.setItem(ligne, COLONNE_COUT, cout)
         self.tableau.contenu_change()
         self.tableau.setVisible(bool(recents))
         self.vide.setVisible(not recents)
