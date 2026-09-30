@@ -92,6 +92,21 @@ def test_bibliotheque_chargee_puis_gardee(atelier, services, qtbot):
     assert ("lister", ("prebuilt",)) not in FauxGoogleVoix.appels  # gardée en mémoire une semaine
 
 
+def test_langue_du_projet_meme_si_mes_voix_arrivent_d_abord(atelier, services, qtbot, monkeypatch):
+    """Les deux listes (bibliothèque et « Mes voix ») sont demandées en même temps : la première
+    arrivée n'a pas forcément de langues. La langue du projet est choisie dès qu'elle apparaît."""
+    from ugc_studio.ui import taches
+
+    monkeypatch.setattr(taches, "lancer", lambda *_args: None)  # les réponses arrivent « à la main »
+    dialogue = _bibliotheque(services, atelier, qtbot)
+    services.voix.definir_voix_creees([VOIX_CREEE_DEMO])  # « Mes voix » d'abord : pas encore de langue
+    assert dialogue.filtre_langue.currentData() == ""
+    services.voix.definir_bibliotheque(VOIX_DEMO)  # puis la bibliothèque
+    assert dialogue.filtre_langue.currentData() == "fr-FR"
+    services.voix.definir_bibliotheque(VOIX_DEMO)  # une actualisation garde le choix
+    assert dialogue.filtre_langue.currentData() == "fr-FR"
+
+
 def test_filtres_recherche_et_favoris(atelier, services, qtbot):
     _caches_a_jour(services)
     dialogue = _bibliotheque(services, atelier, qtbot)
