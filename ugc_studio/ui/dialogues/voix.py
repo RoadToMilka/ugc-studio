@@ -142,6 +142,9 @@ class DialogueBibliothequeVoix(QDialog):
         self._modele = modele
         self._langue = langue
         self.voix_choisie: VoixBibliotheque | None = None
+        # Au départ, le filtre de langue montre la langue du projet… dès qu'elle est dans la liste :
+        # la bibliothèque peut arriver après la liste « Mes voix » (deux demandes en parallèle).
+        self._langue_en_attente = True
         self._lignes: list[LigneVoix] = []
         self._lignes_creees: list[LigneVoix] = []
         self._ecoute = EcouteVoix(services, lecteur, self._afficher)
@@ -210,6 +213,8 @@ class DialogueBibliothequeVoix(QDialog):
         self.filtre_accent = liste_deroulante("Accent")
         self.filtre_persona = liste_deroulante("Persona")
         self.filtre_contexte = liste_deroulante("Contexte d'usage")
+        # Langue choisie à la main : elle n'est plus remplacée par celle du projet.
+        self.filtre_langue.activated.connect(lambda _index: setattr(self, "_langue_en_attente", False))
         for rang, liste in enumerate(
             (
                 self.filtre_langue,
@@ -334,14 +339,16 @@ class DialogueBibliothequeVoix(QDialog):
         }
         for liste, (tous, choix, texte) in valeurs.items():
             actuel = liste.currentData()
+            if liste is self.filtre_langue and self._langue_en_attente:
+                actuel = self._langue  # au départ : la langue du projet
             liste.blockSignals(True)
             liste.clear()
             liste.addItem(tous, TOUS)
             for valeur in choix:
                 liste.addItem(texte(valeur), valeur)
             index = liste.findData(actuel) if actuel else -1
-            if liste is self.filtre_langue and actuel is None:
-                index = liste.findData(self._langue)  # au départ : la langue du projet
+            if liste is self.filtre_langue and index >= 0:
+                self._langue_en_attente = False
             liste.setCurrentIndex(max(0, index))
             liste.blockSignals(False)
         self._filtrer()
