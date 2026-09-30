@@ -5,7 +5,7 @@ import pytest
 import json
 
 from ugc_studio.audio import wav_depuis_pcm
-from ugc_studio.projets import ErreurProjet, GestionnaireProjets, RepliqueProjet, nom_de_dossier
+from ugc_studio.projets import ErreurProjet, GestionnaireProjets, Projet, RepliqueProjet, nom_de_dossier
 from ugc_studio.prononciation import Prononciation
 
 WAV = wav_depuis_pcm(b"\x00\x00" * 24_000)  # 1 seconde de silence
@@ -69,7 +69,9 @@ def test_projet_de_l_etape_3_converti(gestion, tmp_path):
     assert projet.voix.voix == "Leda" and projet.prononciations == []
     gestion.enregistrer()
     enregistre = json.loads((dossier / "projet.json").read_text(encoding="utf-8"))
-    assert enregistre["version_format"] == 2 and "script" not in enregistre and "style" not in enregistre["voix"]
+    assert enregistre["version_format"] == Projet.VERSION_FORMAT
+    assert "script" not in enregistre and "style" not in enregistre["voix"]
+    assert projet.transcription is None and projet.remplacements == []
 
 
 def test_nouveau_projet_avec_une_replique_vide(gestion, tmp_path):

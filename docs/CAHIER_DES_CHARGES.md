@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 2.3 — 30/09/2026 (étape 6 : variantes A/B, écoute comparative, écoute pendant la génération, §5.6)
+> Version du document : 2.4 — 30/09/2026 (étape 7 : transcription, §6 ; FFmpeg utilisé à travers Qt Multimedia, §2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -27,7 +27,7 @@ Application Windows de bureau pour produire des **publicités e-commerce UGC / i
 |---|---|---|
 | Langage | Python 3.12 | Lisible, grand écosystème audio/vidéo |
 | Interface | PySide6 (Qt) | Interface de bureau moderne, thème sombre personnalisable |
-| Audio / vidéo | FFmpeg (embarqué dans l'app) | Extraction audio, lecture des infos source, encodage |
+| Audio / vidéo | FFmpeg : pour la V1, celui de Qt Multimedia (déjà inclus avec Qt) ; FFmpeg en ligne de commande ajouté pour les exports vidéo (V3) | Extraction audio et lecture des infos source (V1), encodage (V3). Passer par Qt évite d'alourdir le `.exe` d'environ 80 Mo tant qu'on n'encode pas de vidéo |
 | Rendu des sous-titres | Dessin image par image en Python (Qt QPainter), puis assemblage par FFmpeg | Contrôle total du design ; aperçu identique à l'export |
 | Stockage des clés API | Coffre-fort Windows via la bibliothèque `keyring` | Clés chiffrées, jamais dans un fichier ni sur GitHub |
 | Données locales | Fichiers JSON dans `%APPDATA%\UGC Studio\` | Styles, préréglages, projets, historique des coûts |
@@ -53,8 +53,8 @@ Le `.exe` n'est pas signé : au premier lancement, Windows affiche « Windows a 
 
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
 
-- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises) et `prises\prise-001.wav`, `prise-002.wav`…
-- Format du fichier : version 2 depuis l'étape 4 (script en répliques). Un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
+- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription et dictionnaire de remplacements du projet), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite).
+- Format du fichier : version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
 - Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
 - Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
 - Au démarrage, le dernier projet utilisé est rouvert automatiquement.
@@ -339,7 +339,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 ### 6.2 Entrée
 
 - Glisser-déposer ou bouton : vidéo (MP4, MOV, MKV…) ou audio (WAV, MP3, M4A…).
-- Extraction automatique de la piste son via FFmpeg.
+- Extraction automatique de la piste son (décodage par FFmpeg, à travers Qt Multimedia).
 - Lecture des infos de la source (résolution, fps exacts, débit, codec, couleurs/HDR, durée) — réutilisées pour l'export.
 
 ### 6.3 Options
@@ -363,7 +363,7 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 ### 6.3 bis Limites et formats
 
 - Durée max : 1 h en texte seul, **30 min** avec horodatage ou séparation des voix. Au-delà, l'app découpe l'audio en morceaux et recolle les temps.
-- Formats acceptés par l'API : WAV, MP3, AIFF, AAC, OGG, FLAC, M4A, Opus, WebM… La vidéo n'est pas acceptée : l'app extrait toujours l'audio avec FFmpeg (en FLAC ou WAV, sans perte) avant l'envoi.
+- Formats acceptés par l'API : WAV, MP3, AIFF, AAC, OGG, FLAC, M4A, Opus, WebM… La vidéo n'est pas acceptée : l'app extrait toujours l'audio (WAV 16 kHz mono 16 bits, sans perte pour la parole) avant l'envoi.
 - Envoi via l'API Files (fichier téléversé puis référencé).
 
 ### 6.4 Éditeur de transcription
@@ -372,6 +372,21 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 - Clic sur un mot → la lecture saute à ce moment.
 - Corriger l'orthographe d'un mot sans perdre son timing ; fusionner / couper des mots ; ajuster finement début/fin d'un mot.
 - Le horodatage par mot dégrade légèrement la précision : l'édition manuelle est prévue pour ça.
+
+### 6.5 Mise en œuvre (étape 7)
+
+- **Import** : glisser-déposer sur la page (ou « Choisir un fichier… »). Vidéos MP4, MOV, MKV, M4V, WebM, AVI ; audios WAV, MP3, M4A, AAC, FLAC, OGG, Opus, AIFF, WMA.
+  - Piste son : un WAV 16 bits de moins de 5 min (ex. une prise) est préparé en Python ; tout le reste est décodé par Qt Multimedia (`QAudioDecoder`, qui s'appuie sur FFmpeg), directement en 16 kHz mono. Résultat rangé dans le projet : `sources\audio.wav`. La source d'origine n'est pas copiée (son chemin est gardé).
+  - Infos de la source lues par Qt Multimedia : durée, résolution, images par seconde, codecs, débits, HDR (Qt 6.8 et plus). Gardées dans `projet.json`.
+  - Une nouvelle source remplace la transcription actuelle, après confirmation.
+- **Envoi** : API Files de Google (téléversement « resumable » : `POST /upload/v1beta/files`, puis envoi des octets à l'adresse de l'en-tête `x-goog-upload-url`). Le fichier déposé est supprimé après la transcription (sinon Google l'efface au bout de 48 h).
+- **Requête** : `POST /v1beta/interactions`, entrée `{"type": "audio", "uri": …, "mime_type": "audio/wav"}`, `generation_config.transcription_config` : `language_codes` (vide = détection automatique) et `mode` : `{"type": "verbatim", "timestamp_granularities": ["word"]}` (+ `"diarization_mode": "speaker"` si les voix sont séparées), ou `"smart"` pour le texte seul.
+- **Réponse** : mots dans les annotations `word_info` du texte (`text`, `start_offset` / `end_offset` au format « 1.250s », `speaker`). Coût d'après `usage`, noté « transcription ». Estimation avant l'envoi : ≈ 25 tokens par seconde d'audio en entrée, ≈ 175 tokens de texte par minute en sortie.
+- **Longues sources** : au-delà de 30 min (1 h en texte seul), coupe toutes les 25 min, chaque coupure placée dans le passage le plus silencieux à ± 10 s ; temps recalés et recollés. Les numéros de personne peuvent changer d'un morceau à l'autre.
+- **Options** : modèle (ceux qui donnent le moment de chaque mot), langue (celle du projet au départ, ou « Détection automatique »), « Séparer les voix », « Texte seul, nettoyé » (mode smart : grise la séparation des voix ; pas de sous-titres possibles), « Remplacements », « Hésitations », « Masquer les hésitations dans les sous-titres » (coché au départ).
+- **Dictionnaire de remplacements** : fenêtre à deux onglets (« Ce projet » / « Tous les projets », `remplacements.json`). Suites de mots comparées sans majuscules ni ponctuation collée ; la plus longue d'abord ; le mot obtenu va du début du premier mot à la fin du dernier et garde la ponctuation qui suivait. Appliqué après chaque transcription, et tout de suite à la transcription actuelle quand on enregistre le dictionnaire.
+- **Hésitations** : liste par langue, modifiable (« Hésitations… », séparées par des virgules ; préférence `hesitations`). Au départ : français « euh, heu, euhm, hum, hmm, mmh, mh, bah » ; anglais « uh, um, uhm, er, erm, hmm, mm, mhm » ; espagnol, italien, néerlandais, allemand. Dans l'éditeur : en gris, barrées si elles sont masquées.
+- **Éditeur** : texte mot par mot (une personne par paragraphe « Personne 2 : » quand les voix sont séparées) ; mot en cours de lecture surligné en mauve léger, mot choisi en mauve. Clic sur un mot : il est choisi, et la lecture s'y place si elle est en cours (sinon, « ▶ » part de ce mot). Panneau du mot choisi : texte, début et fin (secondes, virgule acceptée) et « Appliquer » ; « Fusionner avec le suivant » (le texte réuni garde l'espace), « Couper en deux » (à l'espace, sinon au milieu ; temps partagé selon les lettres), « Supprimer ». Un ajustement ne chevauche jamais les voisins (ils sont raccourcis, 20 ms minimum par mot). « Copier le texte ».
 
 ---
 
@@ -587,7 +602,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Chaque version publiée = une **Release GitHub** avec le `.exe` construit automatiquement (GitHub Actions, machine Windows, PyInstaller).
 - Fabrication automatique à chaque envoi de code : tests, fabrication de `UGC-Studio.exe`, démarrage du `.exe` en mode autotest (vérifications + captures d'écran de chaque module), rapport joint au run.
 - Le numéro de version est dans `ugc_studio/__init__.py`. Quand il change sur la branche `main`, une Release `v<version>` est publiée automatiquement. Les versions `0.x` (étapes de la V1) sont marquées « pré-version ».
-- FFmpeg et la police Inter sont inclus dans l'app : rien à installer.
+- La police Inter et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer. FFmpeg en ligne de commande sera ajouté avec les exports vidéo (V3).
 - *(plus tard)* Installateur qui crée l'icône sur le bureau et dans le menu Démarrer.
 
 ---
@@ -617,7 +632,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 4. Voix : styles | 0.4.0 | Répliques, styles et assistant, traduction FR → EN, conseils Google, bibliothèque de styles, dictionnaire de prononciation, accentuation |
 | 5. Voix : bibliothèque | 0.5.0 | Bibliothèque étendue filtrable, favoris, écoute d'extraits, Voice Design |
 | 6. Voix : variantes | 0.6.0 | Variantes A/B (2 modes), écoute comparative, écoute pendant la génération |
-| 7. Transcription | 0.7.0 | Import, extraction FFmpeg, transcription mot par mot, options, éditeur |
+| 7. Transcription | 0.7.0 | Import, extraction de la piste son (FFmpeg via Qt), transcription mot par mot, options, éditeur |
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions et Release définitive |
 

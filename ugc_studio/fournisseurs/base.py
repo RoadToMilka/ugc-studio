@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 from ..journal import declarer_secret
+from .stt import RequeteTranscription, ResultatTranscription
 from .texte import RequeteTexte, ResultatTexte
 from .voix import RecepteurAudio, RequeteVoiceDesign, RequeteVoix, ResultatVoix, VoixBibliotheque, VoixCreee
 
@@ -74,6 +75,10 @@ class Adaptateur(ABC):
         """Génère une voix off (TTS). Avec `recevoir_audio`, l'audio est demandé « en flux » : chaque
         morceau lui est transmis dès son arrivée (pour l'écouter avant la fin du calcul)."""
         raise ErreurFournisseur(f"{self.nom} ne sait pas générer de voix.", "non_disponible")
+
+    def transcrire(self, requete: RequeteTranscription) -> ResultatTranscription:
+        """Transcrit un audio (STT), mot par mot avec les temps si demandé."""
+        raise ErreurFournisseur(f"{self.nom} ne sait pas transcrire.", "non_disponible")
 
     def generer_texte(self, requete: RequeteTexte) -> ResultatTexte:
         """Génère du texte (ex. traduction d'un style en anglais)."""

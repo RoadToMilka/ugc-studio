@@ -358,6 +358,15 @@ QFrame[role="separateur"] {
     min-height: ${bordure}px;
     max-height: ${bordure}px;
 }
+QFrame[role="depot"] {
+    background: transparent;
+    border: ${bordure}px dashed $texte_desactive;
+    border-radius: ${arrondi_bloc}px;
+}
+QFrame[role="depot"][survol="true"] {
+    border-color: $accent;
+    background: $teinte_selection;
+}
 QFrame[role="ligne"] {
     background: transparent;
     border: none;

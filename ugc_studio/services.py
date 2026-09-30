@@ -15,6 +15,7 @@ from .prix import CataloguePrix
 from .projets import GestionnaireProjets
 from .prononciation import DictionnaireGlobal
 from .styles import BibliothequeStyles
+from .transcription import DictionnaireRemplacements
 from .voix_locales import GestionnaireVoix
 
 
@@ -28,6 +29,7 @@ class Services:
     styles: BibliothequeStyles  # bibliothèque de styles personnalisés (§5.5)
     prononciations: DictionnaireGlobal  # dictionnaire de prononciation commun à tous les projets (§5.2)
     voix: GestionnaireVoix  # favoris, voix créées, bibliothèque de Google gardée en mémoire (§5.4)
+    remplacements: DictionnaireRemplacements  # remplacements après transcription, tous projets (§6.3)
 
 
 def creer_services(coffre: Coffre | None = None) -> Services:
@@ -43,4 +45,5 @@ def creer_services(coffre: Coffre | None = None) -> Services:
         styles=BibliothequeStyles(dossier / "styles.json"),
         prononciations=DictionnaireGlobal(dossier / "prononciations.json"),
         voix=GestionnaireVoix(dossier / "voix.json"),
+        remplacements=DictionnaireRemplacements(dossier / "remplacements.json"),
     )

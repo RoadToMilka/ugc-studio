@@ -41,9 +41,11 @@ from .ui.theme import Dimensions, Typo
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
 DELAI_MAX_MS = 120_000  # sécurité : l'autotest ne peut pas bloquer la fabrication
 PAUSE_AFFICHAGE_S = 0.4
+DELAI_DECODAGE_S = 15
 CODE_DELAI_DEPASSE = 4
 
 VERIFICATIONS_OBLIGATOIRES = (
+    "decodage_audio",
     "police_inter_chargee",
     "police_inter_utilisee",
     "icones_navigation",
@@ -195,6 +197,32 @@ def _voice_design_rempli(services, atelier, parent) -> DialogueVoiceDesign:
     return dialogue
 
 
+def _verifier_decodage_audio(dossier: Path, rapport: dict) -> bool:
+    """Décode un petit WAV avec Qt Multimedia (FFmpeg), comme pour une vidéo importée (§6.2) :
+    vérifie que le décodeur audio est bien embarqué dans le .exe."""
+    from .audio import FREQUENCE_TTS, lire_wav, wav_depuis_pcm
+    from .ui.extraction import ExtracteurAudio
+
+    source = dossier / "decodage-test.wav"
+    source.write_bytes(wav_depuis_pcm(b"\x10\x00" * FREQUENCE_TTS))  # 1 s
+    extracteur = ExtracteurAudio()
+    resultat: dict = {}
+    extracteur.termine.connect(lambda wav: resultat.setdefault("wav", wav))
+    extracteur.echec.connect(lambda raison: resultat.setdefault("erreur", raison))
+    extracteur._decoder(source)  # le chemin de Qt, même pour un WAV
+    fin = time.monotonic() + DELAI_DECODAGE_S
+    while not resultat and time.monotonic() < fin:
+        QApplication.processEvents()
+        time.sleep(0.02)
+    if "wav" in resultat:
+        pcm, frequence, canaux = lire_wav(resultat["wav"])
+        rapport["decodage_audio"] = f"{len(pcm) // 2 / frequence:.2f} s, {frequence} Hz, {canaux} canal"
+        return abs(len(pcm) // 2 / frequence - 1.0) < 0.1 and canaux == 1
+    rapport["decodage_audio"] = f"erreur : {resultat.get('erreur', 'délai dépassé')}"
+    extracteur.annuler()
+    return False
+
+
 def _variantes_remplies(services, atelier, parent, onglet: int) -> DialogueVariantes:
     """Variantes A/B : la B change de voix et de style (valeurs surlignées en mauve)."""
     dialogue = DialogueVariantes(services, atelier.reglages_de_base(), atelier._prononciations(), parent)
@@ -279,6 +307,19 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
             verifs["lecture_audio"] = atelier.lecteur._lecteur is not None  # Qt Multimedia embarqué
+
+            # Page Transcription (étape 7) : un mot choisi, et une capture par hauteur d'écran.
+            transcription = fenetre.page("transcription").atelier
+            fenetre.afficher_module("transcription")
+            transcription.choisir_mot(3)
+            defilement = transcription.findChild(QScrollArea)
+            if defilement is not None:
+                barre = defilement.verticalScrollBar()
+                for numero, position in enumerate(range(barre.pageStep(), barre.maximum() + barre.pageStep(), barre.pageStep()), 2):
+                    barre.setValue(min(position, barre.maximum()))
+                    capturer(fenetre, f"transcription-{numero}")
+                barre.setValue(0)
+            verifs["decodage_audio"] = _verifier_decodage_audio(dossier, rapport)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")

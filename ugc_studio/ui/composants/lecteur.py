@@ -28,6 +28,7 @@ class Lecteur(QObject):
         super().__init__(parent)
         self._chemin = ""
         self._lecteur = None
+        self._position_voulue: int | None = None  # à appliquer dès que le fichier est chargé
         if os.environ.get(VARIABLE_SANS_AUDIO):
             return  # tests automatiques : pas de lecture audio réelle
         try:
@@ -37,6 +38,7 @@ class Lecteur(QObject):
             self._sortie = QAudioOutput(self)
             self._lecteur.setAudioOutput(self._sortie)
             self._lecteur.playbackStateChanged.connect(self._etat_lecture)
+            self._lecteur.mediaStatusChanged.connect(self._etat_media)
             self._lecteur.positionChanged.connect(
                 lambda position: self.position_change.emit(position, self._lecteur.duration())
             )
@@ -74,6 +76,20 @@ class Lecteur(QObject):
             self._lecteur.setSource(QUrl.fromLocalFile(chemin))
         self._lecteur.play()
 
+    def jouer_depuis(self, chemin: str | Path, position_ms: int) -> None:
+        """Lance la lecture de ce fichier à partir d'un moment précis (ex. un mot cliqué)."""
+        chemin = str(chemin)
+        if self._lecteur is None:
+            self.basculer(chemin)
+            return
+        if chemin != self._chemin:
+            self._lecteur.stop()
+            self._chemin = chemin
+            self._position_voulue = position_ms  # appliquée quand le fichier sera chargé
+            self._lecteur.setSource(QUrl.fromLocalFile(chemin))
+        self._lecteur.setPosition(position_ms)
+        self._lecteur.play()
+
     def aller_a(self, position_ms: int) -> None:
         if self._lecteur is not None:
             self._lecteur.setPosition(position_ms)
@@ -84,6 +100,11 @@ class Lecteur(QObject):
             # Libère le fichier (sinon Windows empêche de le supprimer).
             self._lecteur.setSource(QUrl())
         self._chemin = ""
+
+    def _etat_media(self, statut) -> None:
+        if self._position_voulue is not None and statut.name in ("LoadedMedia", "BufferedMedia"):
+            position, self._position_voulue = self._position_voulue, None
+            self._lecteur.setPosition(position)
 
     def _etat_lecture(self, _etat) -> None:
         self.etat_change.emit(self._chemin, self.en_lecture())
