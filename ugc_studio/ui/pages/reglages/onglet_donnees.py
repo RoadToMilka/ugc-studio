@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from .... import NOM_APP, __version__
 from ....chemins import dossier_donnees, dossier_journal
-from ...composants.elements import bloc, bouton, libelle
+from ...composants.elements import bloc, bouton, info, libelle
 from ...ouvrir import ouvrir_dossier, ouvrir_journal
 from ...theme import Espacements
 from ..base import zone_defilante
@@ -27,7 +27,7 @@ class OngletDonnees(QWidget):
         # Journal d'erreurs
         cadre, d = bloc("Journal d'erreurs")
         d.addWidget(
-            libelle(
+            info(
                 "Si quelque chose ne fonctionne pas, ce fichier indique ce qui s'est passé. "
                 "Il ne contient jamais tes clés API.",
                 "secondaire",
@@ -39,7 +39,7 @@ class OngletDonnees(QWidget):
         boutons.addWidget(
             bouton(
                 "Ouvrir le dossier",
-                variante="discret",
+                variante="contour",
                 nom_icone="folder-open",
                 action=lambda: ouvrir_dossier(dossier_journal()),
             )
@@ -51,7 +51,7 @@ class OngletDonnees(QWidget):
         # Dossier de données
         cadre, d = bloc("Dossier de données")
         d.addWidget(
-            libelle(
+            info(
                 "Connexions (sans les clés), prix, historique des coûts, préférences de l'app.",
                 "secondaire",
             )

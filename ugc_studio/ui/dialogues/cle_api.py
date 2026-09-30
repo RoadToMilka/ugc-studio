@@ -19,7 +19,7 @@ from ...fournisseurs import ADAPTATEURS, FOURNISSEURS_PREVUS, creer_adaptateur
 from ...fournisseurs.base import Adaptateur, ResultatTest
 from .. import taches
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle, liste_deroulante
+from ..composants.elements import bouton, info, libelle, liste_deroulante
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
 
@@ -83,12 +83,12 @@ class DialogueCle(QDialog):
         classe = ADAPTATEURS[self._fournisseur_choisi()]
         aide = QHBoxLayout()
         aide.setSpacing(Espacements.S)
-        aide.addWidget(libelle(classe.aide_cle, "legende"), 1)
+        aide.addWidget(info(classe.aide_cle), 1)
         if classe.adresse_cles:
             aide.addWidget(
                 bouton(
                     "Ouvrir Google AI Studio",
-                    variante="discret",
+                    variante="contour",
                     nom_icone="external-link",
                     action=lambda: QDesktopServices.openUrl(QUrl(classe.adresse_cles)),
                 )
@@ -101,7 +101,7 @@ class DialogueCle(QDialog):
 
         boutons = QHBoxLayout()
         boutons.setSpacing(Espacements.S)
-        self.bouton_sans_test = bouton("Enregistrer sans tester", variante="discret", action=self._enregistrer_sans_test)
+        self.bouton_sans_test = bouton("Enregistrer sans tester", variante="contour", action=self._enregistrer_sans_test)
         self.bouton_sans_test.hide()
         boutons.addWidget(self.bouton_sans_test)
         boutons.addStretch(1)

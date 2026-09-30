@@ -22,7 +22,7 @@ from ...voix_locales import GENRES, MAX_VOIX_CREEES, date_lisible
 from .. import taches
 from ..composants.champ_style import ChampDescription
 from ..composants.conseils import ListeConseils
-from ..composants.elements import bouton, conteneur_vertical, libelle, liste_deroulante
+from ..composants.elements import bouton, conteneur_vertical, info, libelle, liste_deroulante
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
 from ..pages.base import zone_defilante
@@ -49,7 +49,7 @@ class LigneVersion(QFrame):
         ecouter.setToolTip("Réécouter l'extrait")
         disposition.addWidget(ecouter, 0, Qt.AlignmentFlag.AlignVCenter)
         self.bouton_supprimer = bouton(
-            "Supprimer", variante="discret", nom_icone="trash", action=lambda: dialogue.supprimer(self)
+            "Supprimer", variante="contour", nom_icone="trash", action=lambda: dialogue.supprimer(self)
         )
         disposition.addWidget(self.bouton_supprimer, 0, Qt.AlignmentFlag.AlignVCenter)
         disposition.addWidget(
@@ -81,7 +81,7 @@ class DialogueVoiceDesign(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Créer une voix (Voice Design)", "titre-bloc"))
         disposition.addWidget(
-            libelle(
+            info(
                 "Décris la voix : Google en crée une nouvelle et te fait écouter un extrait. Chaque création donne "
                 "une version un peu différente : crée-en plusieurs si besoin, puis garde ta préférée.",
                 "secondaire",

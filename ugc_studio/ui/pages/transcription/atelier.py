@@ -67,6 +67,7 @@ from ...composants.elements import (
     bouton,
     case_a_cocher,
     glissiere,
+    info,
     libelle,
     liste_deroulante,
     minutes_secondes,
@@ -126,7 +127,7 @@ class ZoneDepot(QFrame):
         disposition.setSpacing(Espacements.S)
         disposition.addWidget(libelle("Glisse une vidéo ou un audio ici", "intitule"), 0, Qt.AlignmentFlag.AlignHCenter)
         disposition.addWidget(
-            libelle("Vidéo (MP4, MOV, MKV…) ou audio (WAV, MP3, M4A…) : la piste son est extraite automatiquement.", "legende"),
+            info("Vidéo (MP4, MOV, MKV…) ou audio (WAV, MP3, M4A…) : la piste son est extraite automatiquement.", "legende"),
             0,
             Qt.AlignmentFlag.AlignHCenter,
         )
@@ -167,7 +168,7 @@ class AtelierTranscription(Page):
         self.ligne_source.setSpacing(Espacements.S)
         self.texte_source = libelle("", "secondaire")
         self.ligne_source.addWidget(self.texte_source, 1)
-        self.bouton_changer = bouton("Changer de source…", variante="discret", nom_icone="folder-open", action=self.choisir_fichier)
+        self.bouton_changer = bouton("Changer de source…", variante="contour", nom_icone="folder-open", action=self.choisir_fichier)
         self.ligne_source.addWidget(self.bouton_changer)
         d.addLayout(self.ligne_source)
         self.contenu.addWidget(cadre)
@@ -199,10 +200,10 @@ class AtelierTranscription(Page):
         d.addWidget(zone)
         outils = QHBoxLayout()
         outils.setSpacing(Espacements.S)
-        remplacements = bouton("Remplacements", variante="discret", nom_icone="book-a", action=self.ouvrir_remplacements)
+        remplacements = bouton("Remplacements", variante="contour", nom_icone="book-a", action=self.ouvrir_remplacements)
         remplacements.setToolTip("Dictionnaire de remplacements : corrige automatiquement les noms de marque…")
         outils.addWidget(remplacements)
-        hesitations = bouton("Hésitations", variante="discret", nom_icone="pencil", action=self.modifier_hesitations)
+        hesitations = bouton("Hésitations", variante="contour", nom_icone="pencil", action=self.modifier_hesitations)
         hesitations.setToolTip("Liste des hésitations (« euh », « hum »…) de la langue de la transcription")
         outils.addWidget(hesitations)
         outils.addStretch(1)
@@ -260,7 +261,7 @@ class AtelierTranscription(Page):
         self.panneau_mot = self._panneau_mot()
         d.addWidget(self.panneau_mot)
         copier = QHBoxLayout()
-        copier.addWidget(bouton("Copier le texte", variante="discret", nom_icone="copy", action=self.copier_texte))
+        copier.addWidget(bouton("Copier le texte", variante="contour", nom_icone="copy", action=self.copier_texte))
         copier.addStretch(1)
         d.addLayout(copier)
         self.contenu.addWidget(self.cadre_transcription)
@@ -279,7 +280,7 @@ class AtelierTranscription(Page):
         disposition = QVBoxLayout(panneau)
         disposition.setContentsMargins(0, Espacements.S, 0, 0)
         disposition.setSpacing(Espacements.S)
-        self.titre_mot = libelle("Clique sur un mot pour le corriger.", "legende")
+        self.titre_mot = info("Clique sur un mot pour le corriger.")
         disposition.addWidget(self.titre_mot)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
@@ -304,11 +305,11 @@ class AtelierTranscription(Page):
         disposition.addLayout(ligne)
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
-        self.bouton_fusionner = bouton("Fusionner avec le suivant", variante="discret", nom_icone="list-plus", action=self.fusionner_mot)
+        self.bouton_fusionner = bouton("Fusionner avec le suivant", variante="contour", nom_icone="list-plus", action=self.fusionner_mot)
         actions.addWidget(self.bouton_fusionner)
-        self.bouton_couper = bouton("Couper en deux", variante="discret", nom_icone="scissors", action=self.couper_mot)
+        self.bouton_couper = bouton("Couper en deux", variante="contour", nom_icone="scissors", action=self.couper_mot)
         actions.addWidget(self.bouton_couper)
-        self.bouton_supprimer = bouton("Supprimer", variante="discret", nom_icone="trash", action=self.supprimer_mot)
+        self.bouton_supprimer = bouton("Supprimer", variante="contour", nom_icone="trash", action=self.supprimer_mot)
         actions.addWidget(self.bouton_supprimer)
         actions.addStretch(1)
         disposition.addLayout(actions)
@@ -711,7 +712,7 @@ class AtelierTranscription(Page):
             return
         mot = transcription.mots[index]
         personne = f" · {nom_de_personne(mot.locuteur)}" if mot.locuteur else ""
-        self.titre_mot.setText(f"Mot {index + 1} sur {len(transcription.mots)}{personne}")
+        self.titre_mot.afficher_etat(f"Mot {index + 1} sur {len(transcription.mots)}{personne}")  # donnée : sans ampoule
         self.champ_mot.setText(mot.texte)
         self.champ_debut.setText(f"{mot.debut:.2f}")
         self.champ_fin.setText(f"{mot.fin:.2f}")

@@ -65,6 +65,9 @@ class Opacites:
     TEINTE = 0.18  # fond mauve du bouton principal
     TEINTE_SURVOL = 0.26
     TEINTE_PRESSEE = 0.34
+    # Bouton « contour » (outils dans un bloc) : contour gris (texte secondaire) bien visible.
+    CONTOUR_BOUTON = 0.35
+    CONTOUR_BOUTON_SURVOL = 0.60
     FOND_BADGE = 0.16  # fond coloré des badges de balises
     CONTOUR_BADGE = 0.55
     FOND_BADGE_SURVOL = 0.30
@@ -136,7 +139,6 @@ class Dimensions:
     POIGNEE_DEFILEMENT_MIN = 32
     # (Les pages ne sont plus limitées en largeur depuis la 1.0.1 : en plein écran, les blocs
     # prennent toute la place disponible.)
-    SOULIGNEMENT_ONGLET = 2  # trait mauve sous l'onglet sélectionné
     DIALOGUE_LARGEUR = 520
     DIALOGUE_LARGE_LARGEUR = 760  # bibliothèque de styles, dictionnaire de prononciation
     DIALOGUE_LARGE_HAUTEUR = 560
@@ -325,6 +327,10 @@ QLabel[role="legende-avertissement"] {
 QLabel[role="erreur"] {
     color: $erreur;
 }
+QLabel[role="legende-erreur"] {
+    color: $erreur;
+    font-size: ${legende}px;
+}
 QLabel[vide="true"] {
     color: $texte_secondaire;
 }
@@ -378,34 +384,6 @@ QFrame[role="ligne"] {
     background: transparent;
     border: none;
     border-bottom: ${bordure}px solid $couleur_bordure;
-}
-
-/* ---------- Onglets ---------- */
-QTabWidget::pane {
-    border: none;
-    border-top: ${bordure}px solid $couleur_bordure;
-    top: -${bordure}px;
-    background: transparent;
-}
-QTabBar {
-    background: transparent;
-}
-QTabBar::tab {
-    background: transparent;
-    color: $texte_secondaire;
-    border: none;
-    border-bottom: ${soulignement_onglet}px solid transparent;
-    padding: ${esp_s}px ${esp_xs}px;
-    margin-right: ${esp_xl}px;
-    font-family: "$famille_moyenne";
-    font-weight: $graisse_moyenne;
-}
-QTabBar::tab:hover {
-    color: $texte;
-}
-QTabBar::tab:selected {
-    color: $texte;
-    border-bottom-color: $accent;
 }
 
 /* ---------- Glissières (position de lecture) ---------- */
@@ -720,7 +698,6 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "arrondi_petit": Arrondis.PETIT,
         "rayon_etiquette": Dimensions.ETIQUETTE_HAUTEUR // 2,
         "etiquette_hauteur": Dimensions.ETIQUETTE_HAUTEUR,
-        "soulignement_onglet": Dimensions.SOULIGNEMENT_ONGLET,
         "glissiere": Dimensions.GLISSIERE_HAUTEUR,
         "rayon_glissiere": Dimensions.GLISSIERE_HAUTEUR // 2,
         "poignee_glissiere": Dimensions.GLISSIERE_POIGNEE,

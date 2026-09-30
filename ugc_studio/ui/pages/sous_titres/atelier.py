@@ -67,6 +67,7 @@ from ...composants.elements import (
     champ_decimal,
     champ_entier,
     glissiere,
+    info,
     libelle,
     liste_deroulante,
     minutes_secondes,
@@ -122,14 +123,14 @@ class AtelierSousTitres(Page):
         d.addWidget(self.texte_source)
         ligne = QHBoxLayout()
         self.bouton_corriger = bouton(
-            "Corriger les mots", variante="discret", nom_icone="pencil", action=lambda: self.corriger_demande.emit()
+            "Corriger les mots", variante="contour", nom_icone="pencil", action=lambda: self.corriger_demande.emit()
         )
         self.bouton_corriger.setToolTip("Corriger un mot ou son moment dans le module Transcription")
         ligne.addWidget(self.bouton_corriger)
         ligne.addStretch(1)
         d.addLayout(ligne)
         d.addWidget(
-            libelle(
+            info(
                 "Depuis une voix générée : la prise est transcrite (moment de chaque mot), puis calée sur son "
                 "script, dont l'orthographe exacte est gardée. Pour une vidéo, passe par le module Transcription.",
                 "legende",
@@ -185,7 +186,7 @@ class AtelierSousTitres(Page):
         self.bouton_exporter = bouton("Exporter en SRT…", variante="principal", nom_icone="download", action=self.exporter_srt)
         export.addWidget(self.bouton_exporter)
         export.addWidget(
-            libelle("Texte et temps de chaque sous-titre, sans style : pour Premiere Pro et la plupart des logiciels.", "legende"), 1
+            info("Texte et temps de chaque sous-titre, sans style : pour Premiere Pro et la plupart des logiciels.", "legende"), 1
         )
         d.addLayout(export)
         self.statut_export = libelle("", "secondaire")
@@ -246,7 +247,7 @@ class AtelierSousTitres(Page):
             "Masquer les hésitations", "« euh », « hum »… (même réglage que dans le module Transcription)."
         )
         d.addWidget(self.zone_masquer)
-        self.infos_ecran = libelle("", "legende")
+        self.infos_ecran = info()
         d.addWidget(self.infos_ecran)
 
         for champ in (self.caracteres, self.mots_max, self.lignes, self.duree_min, self.marge, self.taille):

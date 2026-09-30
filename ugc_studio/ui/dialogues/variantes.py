@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QMenu,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -51,8 +50,9 @@ from ...variantes import (
 )
 from ..composants.choix_voix import choisir, remplir_modeles_voix, remplir_voix
 from ..composants.editeur_script import EditeurScript
-from ..composants.elements import bouton, libelle, liste_deroulante, vider_disposition
+from ..composants.elements import bouton, info, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
+from ..composants.onglets import Onglets
 from ..pages.base import ZoneDefilante
 from ..theme import Dimensions, Espacements
 
@@ -106,14 +106,13 @@ class DialogueVariantes(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Variantes A/B", "titre-bloc"))
         disposition.addWidget(
-            libelle(
+            info(
                 "Génère plusieurs versions du même script en un seul lancement, puis compare-les à "
                 "l'écoute. Chaque variante devient une prise.",
                 "secondaire",
             )
         )
-        self.onglets = QTabWidget()
-        self.onglets.setDocumentMode(True)
+        self.onglets = Onglets()
         self.onglets.addTab(self._onglet_memes_reglages(), "Mêmes réglages")
         self.onglets.addTab(self._onglet_par_variante(), "Réglages par variante")
         self.onglets.currentChanged.connect(lambda _index: self._actualiser())
@@ -144,7 +143,7 @@ class DialogueVariantes(QDialog):
         disposition.setContentsMargins(0, Espacements.L, 0, 0)
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(
-            libelle(
+            info(
                 "Le modèle interprète le texte un peu différemment à chaque génération : génère "
                 "plusieurs prises avec exactement les mêmes réglages, écoute-les, puis garde la meilleure.",
                 "secondaire",
@@ -180,7 +179,7 @@ class DialogueVariantes(QDialog):
         disposition.setContentsMargins(0, Espacements.L, 0, 0)
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(
-            libelle(
+            info(
                 "Chaque colonne est une variante. Tout part des réglages de base : change seulement ce "
                 "que tu veux comparer (voix, style, modèle, texte d'une réplique…). Les valeurs "
                 "modifiées sont surlignées en mauve.",
@@ -190,7 +189,7 @@ class DialogueVariantes(QDialog):
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
         self.bouton_ajouter = bouton(
-            "Ajouter une variante", variante="discret", nom_icone="plus", action=self.ajouter_variante
+            "Ajouter une variante", variante="contour", nom_icone="plus", action=self.ajouter_variante
         )
         self.bouton_ajouter.setToolTip("Nouvelle variante, identique aux réglages de base (6 au maximum)")
         actions.addWidget(self.bouton_ajouter)
@@ -308,7 +307,7 @@ class DialogueVariantes(QDialog):
         disposition.addWidget(editeur)
         outils = QHBoxLayout()
         outils.setSpacing(Espacements.XS)
-        balise = bouton("Balise", variante="discret", nom_icone="plus")
+        balise = bouton("Balise", variante="contour", nom_icone="plus")
         balise.setToolTip("Insérer une balise (rire, pause…) à l'endroit du curseur")
         menu = QMenu(balise)
         for famille in FAMILLES:
@@ -320,7 +319,7 @@ class DialogueVariantes(QDialog):
                 action.triggered.connect(lambda _c=False, n=nom, e=editeur: e.inserer_balise(n))
         balise.setMenu(menu)
         outils.addWidget(balise)
-        accent = bouton("Accentuer", variante="discret", nom_icone="case-upper", action=editeur.basculer_accent)
+        accent = bouton("Accentuer", variante="contour", nom_icone="case-upper", action=editeur.basculer_accent)
         accent.setToolTip("Met le mot sélectionné en valeur (MAJUSCULES pour la voix)")
         outils.addWidget(accent)
         outils.addStretch(1)

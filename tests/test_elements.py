@@ -2,17 +2,19 @@
 
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
-from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QStyle, QStyleOptionButton, QVBoxLayout, QWidget
 
 from ugc_studio.ui.composants.elements import (
+    Info,
     case_a_cocher,
     champ_decimal,
     champ_entier,
     glissiere,
+    info,
     liste_deroulante,
     pastille,
 )
-from ugc_studio.ui.theme import Hauteurs
+from ugc_studio.ui.theme import Dimensions, Espacements, Hauteurs
 
 
 def _molette(element) -> QWheelEvent:
@@ -66,16 +68,50 @@ def test_champs_de_nombre(app_configuree, qtbot):
 
 
 def test_case_a_cocher_avec_explication(app_configuree, qtbot):
+    """L'explication d'une case est une info : ampoule sous la case, texte aligné sur celui de la case."""
     zone, case = case_a_cocher("Séparer les voix", "Chaque mot reçoit la personne qui parle.")
     qtbot.addWidget(zone)
+    zone.resize(zone.sizeHint())
+    zone.show()
+    (explication,) = zone.findChildren(Info)
     (legende,) = zone.findChildren(QLabel)
     assert case.text() == "Séparer les voix"
-    assert legende.wordWrap() and legende.contentsMargins().left() > 0  # alignée sur le texte de la case
+    assert legende.wordWrap() and explication.text() == "Chaque mot reçoit la personne qui parle."
+    option = QStyleOptionButton()
+    case.initStyleOption(option)
+    debut_texte_case = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, option, case).left()
+    assert abs(legende.mapTo(zone, QPoint(0, 0)).x() - (case.x() + debut_texte_case)) <= 1
+    ampoule = explication.ampoule.mapTo(zone, QPoint(0, 0)).x()
+    assert case.x() <= ampoule and ampoule + Dimensions.ICONE_PETITE <= case.x() + Dimensions.CASE_A_COCHER
     zone.setEnabled(False)  # griser la zone grise la case et son explication
-    assert not case.isEnabled() and not legende.isEnabled()
+    assert not case.isEnabled() and not legende.isEnabled() and not explication.ampoule.isEnabled()
     zone, case = case_a_cocher("Tout en majuscules")
     qtbot.addWidget(zone)
     assert zone.findChildren(QLabel) == []
+
+
+def test_info_avec_ampoule(app_configuree, qtbot):
+    """Une info commence par l'ampoule ; une donnée ou un message d'état s'affichent sans elle."""
+    aide = info("Une fin de phrase termine alors toujours le sous-titre.")
+    qtbot.addWidget(aide)
+    aide.show()
+    assert aide.ampoule.isVisible() and aide.etiquette.wordWrap()
+    assert aide.ampoule.width() == Dimensions.ICONE_PETITE  # même taille, donc même trait, que les icônes des boutons
+    assert aide.etiquette.x() == Dimensions.ICONE_PETITE + Espacements.S
+    assert not aide.grab().isNull()  # se dessine sans erreur
+
+    aide.afficher_etat("Récupération du taux auprès de la BCE…")
+    assert not aide.ampoule.isVisible() and aide.etiquette.property("role") == "legende"
+    aide.afficher_etat("Taux non récupéré : pas de réseau", erreur=True)
+    assert aide.etiquette.property("role") == "legende-erreur"
+    aide.setText("Taux de départ, à vérifier.")
+    assert aide.ampoule.isVisible() and aide.etiquette.property("role") == "legende"
+    assert aide.text() == "Taux de départ, à vérifier."
+
+    explication = info("Tes styles enregistrés, rangés par catégorie.", "secondaire")
+    qtbot.addWidget(explication)
+    explication.afficher_etat("Erreur", erreur=True)
+    assert explication.etiquette.property("role") == "erreur"
 
 
 def test_pastille(app_configuree, qtbot):

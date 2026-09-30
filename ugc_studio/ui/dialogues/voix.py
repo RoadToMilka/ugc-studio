@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMenu,
     QMessageBox,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -39,8 +38,16 @@ from ...voix_locales import (
     voix_de_base_en_bibliotheque,
 )
 from .. import taches
-from ..composants.elements import bouton, conteneur_vertical, libelle, liste_deroulante, vider_disposition
+from ..composants.elements import (
+    bouton,
+    conteneur_vertical,
+    info,
+    libelle,
+    liste_deroulante,
+    vider_disposition,
+)
 from ..composants.lecteur import Lecteur
+from ..composants.onglets import Onglets
 from ..connexion_ia import adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
 from ..icones import icone, icone_menu
@@ -155,8 +162,7 @@ class DialogueBibliothequeVoix(QDialog):
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Bibliothèque de voix", "titre-bloc"))
-        self.onglets = QTabWidget()
-        self.onglets.setDocumentMode(True)
+        self.onglets = Onglets()
         self.onglets.addTab(self._onglet_google(), "Voix Google")
         self.onglets.addTab(self._onglet_mes_voix(), "Mes voix")
         disposition.addWidget(self.onglets, 1)
@@ -198,7 +204,7 @@ class DialogueBibliothequeVoix(QDialog):
         self.favoris_seulement.toggled.connect(self._filtrer)
         ligne.addWidget(self.favoris_seulement)
         ligne.addWidget(
-            bouton("Actualiser", variante="discret", nom_icone="refresh-cw", action=lambda: self._charger_bibliotheque(True))
+            bouton("Actualiser", variante="contour", nom_icone="refresh-cw", action=lambda: self._charger_bibliotheque(True))
         )
         disposition.addLayout(ligne)
 
@@ -251,11 +257,11 @@ class DialogueBibliothequeVoix(QDialog):
         self.compteur = libelle("", "intitule", retour_a_la_ligne=False)
         textes.addWidget(self.compteur)
         textes.addWidget(
-            libelle("Voix créées avec Voice Design, ici ou dans Google AI Studio (même projet Google).", "legende")
+            info("Voix créées avec Voice Design, ici ou dans Google AI Studio (même projet Google).", "legende")
         )
         ligne.addLayout(textes, 1)
         ligne.addWidget(
-            bouton("Actualiser", variante="discret", nom_icone="refresh-cw", action=lambda: self._charger_voix_creees(True))
+            bouton("Actualiser", variante="contour", nom_icone="refresh-cw", action=lambda: self._charger_voix_creees(True))
         )
         ligne.addWidget(bouton("Créer une voix", variante="principal", nom_icone="plus", action=self.creer_voix))
         disposition.addLayout(ligne)
@@ -403,7 +409,7 @@ class DialogueBibliothequeVoix(QDialog):
         self.compteur.setText(f"{len(creees)} / {MAX_VOIX_CREEES} voix créées")
         if not creees:
             self._liste_creees.addWidget(
-                libelle("Aucune voix créée pour l'instant : « Créer une voix » pour décrire la tienne.", "secondaire")
+                libelle("Aucune voix créée pour l'instant : « Créer une voix » pour décrire la tienne.", "discret")
             )
         for voix in creees:
             ligne = LigneVoix(self, voix)

@@ -9,14 +9,15 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QFontMetricsF, QPainter, QPen
+from PySide6.QtCore import QRect, QRectF, QSize, Qt
+from PySide6.QtGui import QFontMetricsF, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFrame,
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QSlider,
@@ -25,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..icones import icone
 from ..polices import police
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .bouton import Bouton, dessiner_texte_centre_a_l_oeil
@@ -89,6 +91,83 @@ class Pastille(QLabel):
         peintre.end()
 
 
+class Ampoule(QWidget):
+    """Petite ampoule dessinée devant une info : l'icône Lucide « lightbulb », à la taille des
+    icônes de boutons (donc avec la même épaisseur de trait), dans la couleur du texte secondaire."""
+
+    def __init__(self):
+        super().__init__()
+        self._icone = icone("lightbulb", Couleurs.TEXTE_SECONDAIRE, taille=Dimensions.ICONE_PETITE)
+        self.setFixedSize(Dimensions.ICONE_PETITE, Dimensions.ICONE_PETITE)
+
+    def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        peintre = QPainter(self)
+        mode = QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled
+        self._icone.paint(peintre, QRect(0, 0, self.width(), self.height()), Qt.AlignmentFlag.AlignCenter, mode)
+        peintre.end()
+
+
+class Info(QWidget):
+    """Info placée sous un bloc ou un champ (§9) : une ampoule, puis le texte, qui passe à la ligne.
+    Toujours la même ampoule, dans toute l'app : on repère une info d'un coup d'œil.
+
+    `role` : « legende » (petit texte, sous un champ) ou « secondaire » (texte courant gris, pour
+    une explication en haut d'un bloc ou d'une fenêtre).
+
+    Le même emplacement peut aussi montrer une donnée ou un message d'état (« Mot 3 sur 120 »,
+    « Récupération… », une erreur) : afficher_etat() l'écrit alors sans ampoule, car ce n'est pas une
+    aide ; setText() remet l'info avec son ampoule."""
+
+    def __init__(self, texte: str = "", role: str = "legende"):
+        super().__init__()
+        self._role = role
+        disposition = QHBoxLayout(self)
+        disposition.setContentsMargins(0, 0, 0, 0)
+        disposition.setSpacing(Espacements.S)
+        self.ampoule = Ampoule()
+        self.etiquette = libelle(texte, role)
+        # L'ampoule est centrée sur la première ligne du texte (le texte peut en avoir plusieurs).
+        taille = Typo.LEGENDE if role == "legende" else Typo.COURANT
+        ligne = QFontMetricsF(police(taille)).lineSpacing()
+        ecart = round(abs(ligne - Dimensions.ICONE_PETITE) / 2)
+        colonne = QVBoxLayout()
+        colonne.setContentsMargins(0, ecart if ligne > Dimensions.ICONE_PETITE else 0, 0, 0)
+        colonne.addWidget(self.ampoule)
+        colonne.addStretch(1)
+        self.etiquette.setContentsMargins(0, ecart if ligne < Dimensions.ICONE_PETITE else 0, 0, 0)
+        disposition.addLayout(colonne)
+        disposition.addWidget(self.etiquette, 1)
+
+    def text(self) -> str:
+        return self.etiquette.text()
+
+    def setText(self, texte: str) -> None:  # noqa: N802 — même nom que chez QLabel
+        """Affiche une info : avec l'ampoule, dans le style choisi à la création."""
+        self._afficher(texte, self._role, avec_ampoule=True)
+
+    def afficher_etat(self, texte: str, erreur: bool = False) -> None:
+        """Affiche une donnée ou un message d'état à la place de l'info, sans ampoule.
+        `erreur=True` : message d'erreur, en rouge (à la taille de l'info)."""
+        role = self._role
+        if erreur:
+            role = "legende-erreur" if self._role == "legende" else "erreur"
+        self._afficher(texte, role, avec_ampoule=False)
+
+    def _afficher(self, texte: str, role: str, avec_ampoule: bool) -> None:
+        self.etiquette.setText(texte)
+        if self.etiquette.property("role") != role:
+            self.etiquette.setProperty("role", role)
+            self.etiquette.style().unpolish(self.etiquette)  # applique le nouveau style
+            self.etiquette.style().polish(self.etiquette)
+        self.ampoule.setVisible(avec_ampoule)
+
+
+def info(texte: str = "", role: str = "legende") -> Info:
+    """Info avec son ampoule (voir Info). Pour toute phrase d'aide sous un bloc ou un champ ; pas
+    pour un nom de champ, une donnée (durée, coût…), une traduction ni un message d'état."""
+    return Info(texte, role)
+
+
 def pastille(texte: str) -> Pastille:
     """Petite étiquette arrondie (ex. « Étape 2 »)."""
     return Pastille(texte)
@@ -100,8 +179,9 @@ def bouton(
     nom_icone: str | None = None,
     action: Callable[[], None] | None = None,
 ) -> Bouton:
-    """Bouton de l'app (voir composants/bouton.py). Variantes : None (normal), « principal »
-    (contour mauve), « discret » (sans cadre), « icone » (petit bouton carré, icône seule)."""
+    """Bouton de l'app (voir composants/bouton.py). Variantes : « principal » (l'action principale
+    d'une zone), None (normal, dit secondaire), « contour » (outils dans un bloc), « icone » (petit
+    bouton carré, icône seule)."""
     resultat = Bouton(texte, variante, nom_icone)
     if action is not None:
         resultat.clicked.connect(action)
@@ -160,9 +240,9 @@ def glissiere() -> QSlider:
 
 
 def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, QCheckBox]:
-    """Case à cocher au texte court, avec son explication en légende dessous (alignée sur le
-    texte de la case). Renvoie la zone à placer dans la page et la case elle-même ; pour griser
-    la case, griser la zone (la légende l'est alors aussi).
+    """Case à cocher au texte court, avec son explication dessous : une info (ampoule sous la case,
+    texte aligné sur celui de la case). Renvoie la zone à placer dans la page et la case elle-même ;
+    pour griser la case, griser la zone (l'explication l'est alors aussi).
 
     Pourquoi ? Le texte d'une case à cocher ne passe jamais à la ligne : une longue phrase
     imposerait sa largeur à toute la page, qui déborderait à droite dans une fenêtre étroite.
@@ -174,10 +254,12 @@ def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, 
     case = QCheckBox(texte)
     disposition.addWidget(case)
     if explication:
-        legende = libelle(explication, "legende")
-        # Retrait = case + espace avant son texte (voir QCheckBox dans la feuille de style).
-        legende.setContentsMargins(Dimensions.CASE_A_COCHER + Espacements.S, 0, 0, 0)
-        disposition.addWidget(legende)
+        explication_info = info(explication)
+        # Texte de l'info aligné sur celui de la case : la case et l'espace avant son texte (voir
+        # QCheckBox dans la feuille de style), moins l'ampoule et son espace ; l'ampoule tombe
+        # ainsi sous la case.
+        explication_info.setContentsMargins(Dimensions.CASE_A_COCHER - Dimensions.ICONE_PETITE, 0, 0, 0)
+        disposition.addWidget(explication_info)
     return zone, case
 
 

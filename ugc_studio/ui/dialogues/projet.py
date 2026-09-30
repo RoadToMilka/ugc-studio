@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QVBo
 from ...chemins import dossier_projets_defaut
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES, ErreurProjet, GestionnaireProjets, Projet
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle, liste_deroulante
+from ..composants.elements import bouton, info, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 
@@ -27,7 +27,7 @@ class DialogueNouveauProjet(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Nouveau projet", "titre-bloc"))
         disposition.addWidget(
-            libelle("Un projet regroupe le script, les prises audio et les réglages d'une pub.", "secondaire")
+            info("Un projet regroupe le script, les prises audio et les réglages d'une pub.", "secondaire")
         )
 
         disposition.addWidget(libelle("Nom du projet", "legende"))
@@ -47,7 +47,7 @@ class DialogueNouveauProjet(QDialog):
         ligne.setSpacing(Espacements.S)
         self.chemin = libelle(str(self._emplacement), "secondaire", selectionnable=True)
         ligne.addWidget(self.chemin, 1)
-        ligne.addWidget(bouton("Changer…", variante="discret", nom_icone="folder-open", action=self._choisir_dossier))
+        ligne.addWidget(bouton("Changer…", variante="contour", nom_icone="folder-open", action=self._choisir_dossier))
         disposition.addLayout(ligne)
 
         self.statut = libelle("", "erreur")

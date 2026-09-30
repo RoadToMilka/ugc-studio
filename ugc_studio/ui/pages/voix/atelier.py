@@ -40,7 +40,7 @@ from ...composants.choix_voix import (
 )
 from ...composants.conseils import ListeConseils
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import bloc, bouton, libelle, liste_deroulante, minutes_secondes
+from ...composants.elements import bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
 from ...composants.lecteur import Lecteur
 from ...composants.lecteur_flux import LecteurFlux
 from ...composants.montant_label import MontantLabel
@@ -125,7 +125,7 @@ class AtelierVoix(Page):
         # --- Script : répliques, outils, palette de balises ---
         cadre, d = bloc("Script")
         d.addWidget(
-            libelle(
+            info(
                 "Découpe en répliques quand l'émotion change (ex. hook énergique, puis témoignage calme) : "
                 "chaque réplique a son propre style. Tout part dans la même génération.",
                 "legende",
@@ -138,15 +138,15 @@ class AtelierVoix(Page):
         outils = QHBoxLayout()
         outils.setSpacing(Espacements.S)
         outils.addWidget(
-            bouton("Ajouter une réplique", variante="discret", nom_icone="list-plus", action=self.ajouter_replique)
+            bouton("Ajouter une réplique", variante="contour", nom_icone="list-plus", action=self.ajouter_replique)
         )
-        accent = bouton("Accentuer", variante="discret", nom_icone="case-upper", action=self.accentuer)
+        accent = bouton("Accentuer", variante="contour", nom_icone="case-upper", action=self.accentuer)
         accent.setToolTip(
             "Met le mot sélectionné en valeur : le modèle appuie sur les mots en MAJUSCULES. "
             "Les sous-titres gardent l'écriture d'origine."
         )
         outils.addWidget(accent)
-        prononciation = bouton("Prononciation", variante="discret", nom_icone="book-a", action=self.ouvrir_prononciation)
+        prononciation = bouton("Prononciation", variante="contour", nom_icone="book-a", action=self.ouvrir_prononciation)
         prononciation.setToolTip("Dictionnaire de prononciation : pour les mots que la voix prononce mal (noms de marque…)")
         outils.addWidget(prononciation)
         outils.addStretch(1)
@@ -154,7 +154,7 @@ class AtelierVoix(Page):
         d.addSpacing(Espacements.S)
         # « Balises » est un sous-titre du bloc (comme « Découpage » dans Sous-titres), l'aide en dessous.
         d.addWidget(libelle("Balises", "intitule"))
-        d.addWidget(libelle("Clique dans le texte, puis sur une balise pour l'insérer.", "legende"))
+        d.addWidget(info("Clique dans le texte, puis sur une balise pour l'insérer.", "legende"))
         self.palette = PaletteBalises()
         self.palette.balise_choisie.connect(lambda nom: self.editeur.inserer_balise(nom))
         d.addWidget(self.palette)
@@ -166,7 +166,7 @@ class AtelierVoix(Page):
         entete.setSpacing(Espacements.S)
         entete.addWidget(libelle("Conseils Google pour les styles", "titre-bloc", retour_a_la_ligne=False))
         entete.addStretch(1)
-        self.bouton_conseils = bouton("", variante="discret", action=self.basculer_conseils)
+        self.bouton_conseils = bouton("", variante="contour", action=self.basculer_conseils)
         entete.addWidget(self.bouton_conseils)
         d.addLayout(entete)
         self.conseils = ListeConseils(CONSEILS_STYLE)

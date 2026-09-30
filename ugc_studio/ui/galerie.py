@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLine
 
 from ..script import depuis_texte
 from .composants.editeur_script import EditeurScript
-from .composants.elements import bloc, bouton, champ_decimal, champ_entier, libelle, liste_deroulante, pastille
+from .composants.elements import bloc, bouton, champ_decimal, champ_entier, info, libelle, liste_deroulante, pastille
 from .composants.montant_label import MontantLabel
 from .theme import Dimensions, Espacements, Typo
 
@@ -47,23 +47,31 @@ class GalerieComposants(QFrame):
 
         # Boutons
         cadre, d = bloc("Boutons")
+        # Les quatre styles (§9.4 bis), du plus important au moins important, puis l'état
+        # « sélectionné » (onglet actif) et les boutons désactivés.
         ligne = QHBoxLayout()
-        ligne.addWidget(bouton("Générer", variante="principal", nom_icone="mic"))
+        ligne.addWidget(bouton("Générer l'audio", variante="principal", nom_icone="audio-lines"))
         ligne.addWidget(bouton("Tester la clé", nom_icone="key-round"))
-        ligne.addWidget(bouton("Annuler", variante="discret"))
-        ligne.addWidget(bouton("Ouvrir le dossier", variante="discret", nom_icone="folder-open"))
+        ligne.addWidget(bouton("Accentuer", variante="contour", nom_icone="case-upper"))
         ligne.addWidget(bouton("", variante="icone", nom_icone="ellipsis"))
         ligne.addStretch(1)
         d.addLayout(ligne)
         ligne = QHBoxLayout()
-        inactif = bouton("Désactivé")
-        inactif.setEnabled(False)
-        ligne.addWidget(inactif)
-        inactif_principal = bouton("Principal désactivé", variante="principal")
-        inactif_principal.setEnabled(False)
-        ligne.addWidget(inactif_principal)
+        selectionne = bouton("Onglet actif", variante="contour")
+        selectionne.setCheckable(True)
+        selectionne.setChecked(True)
+        ligne.addWidget(selectionne)
+        ligne.addWidget(bouton("Autre onglet", variante="contour"))
         ligne.addStretch(1)
         d.addLayout(ligne)
+        ligne = QHBoxLayout()
+        for texte_bouton, variante in (("Désactivé", None), ("Principal désactivé", "principal"), ("Contour désactivé", "contour")):
+            inactif = bouton(texte_bouton, variante=variante)
+            inactif.setEnabled(False)
+            ligne.addWidget(inactif)
+        ligne.addStretch(1)
+        d.addLayout(ligne)
+        d.addWidget(info("Info : une phrase d'aide, toujours précédée de l'ampoule."))
         d.addStretch(1)
         grille.addWidget(cadre, 0, 1)
 

@@ -88,6 +88,8 @@ CREES_PAR_ELEMENTS = {
     "QSlider": "glissiere()",
     "QSpinBox": "champ_entier()",
     "QDoubleSpinBox": "champ_decimal()",
+    # Onglets standard de Qt : trait mauve qui effaçait la ligne de séparation, réglage difficile.
+    "QTabWidget": "Onglets() (composants/onglets.py)",
 }
 
 
@@ -176,3 +178,57 @@ def test_aucun_tiret_long_dans_les_textes_de_l_interface():
             ):
                 ecarts.append(f"{fichier.relative_to(RACINE)}:{noeud.lineno} « {noeud.value[:50]} »")
     assert not ecarts, "Tiret long dans un texte de l'interface :\n" + "\n".join(ecarts)
+
+
+# Lignes grises qui ne sont pas des infos : exemples de la galerie des styles, crédits.
+TEXTES_QUI_NE_SONT_PAS_DES_INFOS = {
+    "Texte secondaire : explications et descriptions.",
+    "Légende : 12 px, pour les petites indications.",
+    "Icônes Lucide (licence ISC) · Police Inter (licence SIL OFL 1.1).",
+}
+MOTS_D_UNE_PHRASE = 5  # à partir de 5 mots, avec un point final, un texte gris est une phrase d'aide
+FICHIERS_AVEC_AMPOULE = {Path("ui") / "composants" / "elements.py"}
+
+
+def _texte_ecrit(noeud: ast.AST) -> str | None:
+    """Texte écrit tel quel dans le code : « "…" », ou « f"…{x}…" » (chaque {x} compte pour un mot)."""
+    if isinstance(noeud, ast.Constant) and isinstance(noeud.value, str):
+        return noeud.value
+    if isinstance(noeud, ast.JoinedStr):
+        return "".join(v.value if isinstance(v, ast.Constant) else "x" for v in noeud.values)
+    return None
+
+
+def _role(appel: ast.Call) -> str | None:
+    if len(appel.args) > 1 and isinstance(appel.args[1], ast.Constant):
+        return appel.args[1].value
+    for argument in appel.keywords:
+        if argument.arg == "role" and isinstance(argument.value, ast.Constant):
+            return argument.value.value
+    return None
+
+
+def test_les_phrases_d_aide_sont_des_infos():
+    """Chaque phrase d'aide grise (sous un bloc, un champ, en haut d'une fenêtre) commence par la
+    même ampoule (§9.4 bis). Elle s'écrit donc avec info() de elements.py, jamais avec un simple
+    libelle() gris : ce test signale les libelle() « legende » ou « secondaire » dont le texte est
+    une phrase. Et l'ampoule n'est dessinée que par elements.py : pas d'autre façon d'écrire une
+    info. (Les listes vides ont leur propre style, « discret » : ce ne sont pas des infos.)"""
+    ecarts = []
+    for fichier in _fichiers():
+        source = fichier.read_text(encoding="utf-8")
+        if fichier.relative_to(RACINE) not in FICHIERS_AVEC_AMPOULE and '"lightbulb"' in source:
+            ecarts.append(f"{fichier.relative_to(RACINE)} dessine l'ampoule : utiliser info()")
+        for noeud in ast.walk(ast.parse(source)):
+            if not (isinstance(noeud, ast.Call) and _nom_appel(noeud) == "libelle" and noeud.args):
+                continue
+            texte = _texte_ecrit(noeud.args[0])
+            if (
+                texte is not None
+                and _role(noeud) in ("legende", "secondaire")
+                and texte.rstrip().endswith(".")
+                and len(re.findall(r"\w+", texte)) >= MOTS_D_UNE_PHRASE
+                and texte not in TEXTES_QUI_NE_SONT_PAS_DES_INFOS
+            ):
+                ecarts.append(f"{fichier.relative_to(RACINE)}:{noeud.lineno} « {texte[:60]} »")
+    assert not ecarts, "Phrase d'aide à écrire avec info() (ampoule devant) :\n" + "\n".join(ecarts)

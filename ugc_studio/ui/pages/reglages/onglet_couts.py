@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from ....couts import AppelApi, filtrer, totaux
 from ....fournisseurs.capacites import modele_connu
 from ....services import Services
-from ...composants.elements import bloc, libelle, liste_deroulante
+from ...composants.elements import bloc, info, libelle, liste_deroulante
 from ...composants.montant_label import MontantLabel
 from ...polices import police
 from ...theme import Dimensions, Espacements, Hauteurs, Typo
@@ -128,7 +128,7 @@ class OngletCouts(QWidget):
         disposition.addWidget(cadre, 1)
 
         disposition.addWidget(
-            libelle(
+            info(
                 "L'app compte ce qu'elle a consommé ; elle ne connaît pas le solde de ton compte Google.",
                 "legende",
             )
