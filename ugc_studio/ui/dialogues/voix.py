@@ -13,9 +13,9 @@ from __future__ import annotations
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLineEdit,
@@ -39,7 +39,7 @@ from ...voix_locales import (
     voix_de_base_en_bibliotheque,
 )
 from .. import taches
-from ..composants.elements import bouton, conteneur_vertical, libelle, vider_disposition
+from ..composants.elements import bouton, conteneur_vertical, libelle, liste_deroulante, vider_disposition
 from ..composants.lecteur import Lecteur
 from ..connexion_ia import adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
@@ -48,6 +48,7 @@ from ..pages.base import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements
 
 MAX_LIGNES = 100  # au-delà, on invite à affiner les filtres (une liste de centaines de lignes serait lente)
+FILTRES_PAR_LIGNE = 3
 TOUS = ""
 
 
@@ -198,25 +199,31 @@ class DialogueBibliothequeVoix(QDialog):
         )
         disposition.addLayout(ligne)
 
-        filtres = QHBoxLayout()
-        filtres.setSpacing(Espacements.S)
-        self.filtre_langue = QComboBox()
-        self.filtre_genre = QComboBox()
-        self.filtre_hauteur = QComboBox()
-        self.filtre_accent = QComboBox()
-        self.filtre_persona = QComboBox()
-        self.filtre_contexte = QComboBox()
-        for liste, info in (
-            (self.filtre_langue, "Langue"),
-            (self.filtre_genre, "Genre"),
-            (self.filtre_hauteur, "Hauteur de la voix"),
-            (self.filtre_accent, "Accent"),
-            (self.filtre_persona, "Persona"),
-            (self.filtre_contexte, "Contexte d'usage"),
+        # Six filtres sur deux lignes de trois : sur une seule ligne, chaque liste serait trop
+        # étroite pour lire son choix (« Toutes les hauteurs » deviendrait « Toute… »).
+        filtres = QGridLayout()
+        filtres.setHorizontalSpacing(Espacements.S)
+        filtres.setVerticalSpacing(Espacements.S)
+        self.filtre_langue = liste_deroulante("Langue")
+        self.filtre_genre = liste_deroulante("Genre")
+        self.filtre_hauteur = liste_deroulante("Hauteur de la voix")
+        self.filtre_accent = liste_deroulante("Accent")
+        self.filtre_persona = liste_deroulante("Persona")
+        self.filtre_contexte = liste_deroulante("Contexte d'usage")
+        for rang, liste in enumerate(
+            (
+                self.filtre_langue,
+                self.filtre_genre,
+                self.filtre_hauteur,
+                self.filtre_accent,
+                self.filtre_persona,
+                self.filtre_contexte,
+            )
         ):
-            liste.setToolTip(info)
             liste.currentIndexChanged.connect(self._filtrer)
-            filtres.addWidget(liste, 1)
+            filtres.addWidget(liste, rang // FILTRES_PAR_LIGNE, rang % FILTRES_PAR_LIGNE)
+        for colonne in range(FILTRES_PAR_LIGNE):
+            filtres.setColumnStretch(colonne, 1)
         disposition.addLayout(filtres)
 
         self.info_liste = libelle("", "legende")

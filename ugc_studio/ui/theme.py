@@ -154,6 +154,10 @@ class Dimensions:
     GLISSIERE_POIGNEE = 12
     ETOILE = 16  # étoiles de notation des prises
     CHAMP_STYLE_LARGEUR_MIN = 320
+    # Une liste déroulante prend la largeur de son plus long choix quand il y a de la place, mais
+    # peut rétrécir jusqu'à environ ce nombre de caractères (texte abrégé par « … ») : ainsi, un
+    # choix très long n'élargit jamais la page au-delà de la fenêtre.
+    LISTE_CARACTERES_MIN = 10
     FENETRE_LARGEUR = 1360
     FENETRE_HAUTEUR = 860
     FENETRE_LARGEUR_MIN = 960

@@ -9,9 +9,9 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from ..theme import Espacements
+from ..theme import Dimensions, Espacements
 from .bouton import Bouton
 
 
@@ -58,6 +58,20 @@ def bouton(
     if action is not None:
         resultat.clicked.connect(action)
     return resultat
+
+
+def liste_deroulante(info: str | None = None) -> QComboBox:
+    """Liste déroulante de l'app (toujours créée ici, jamais avec QComboBox() directement).
+
+    Elle prend la largeur de son plus long choix quand il y a de la place, et peut rétrécir sinon
+    (texte abrégé par « … » ; le menu ouvert montre toujours les textes en entier). Sans cela, un
+    choix très long (ex. le nom d'une voix créée) élargirait toute la page au-delà de la fenêtre,
+    et le bord droit serait coupé. `info` : texte de l'infobulle."""
+    liste = QComboBox()
+    liste.setMinimumContentsLength(Dimensions.LISTE_CARACTERES_MIN)
+    if info:
+        liste.setToolTip(info)
+    return liste
 
 
 def bloc(titre: str | None = None, marges: int = Espacements.XL) -> tuple[QFrame, QVBoxLayout]:

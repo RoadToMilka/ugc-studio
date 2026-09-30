@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QComboBox, QDialog, QFileDialog, QHBoxLayout, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QVBoxLayout
 
 from ...chemins import dossier_projets_defaut
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES, ErreurProjet, GestionnaireProjets, Projet
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle
+from ..composants.elements import bouton, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 
@@ -36,7 +36,7 @@ class DialogueNouveauProjet(QDialog):
         disposition.addWidget(self.nom)
 
         disposition.addWidget(libelle("Langue de la voix off", "legende"))
-        self.langue = QComboBox()
+        self.langue = liste_deroulante()
         for code, nom in LANGUES.items():
             self.langue.addItem(nom, code)
         self.langue.setCurrentIndex(self.langue.findData(LANGUE_PAR_DEFAUT))

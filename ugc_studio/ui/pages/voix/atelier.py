@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QComboBox, QHBoxLayout
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QVBoxLayout
 
 from ....conseils import CONSEILS_STYLE
 from ....estimation import estimer_repliques
@@ -27,7 +27,7 @@ from ....services import Services
 from ... import taches
 from ...composants.conseils import ListeConseils
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import bloc, bouton, libelle
+from ...composants.elements import bloc, bouton, libelle, liste_deroulante
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...composants.palette_balises import PaletteBalises
@@ -65,10 +65,10 @@ class AtelierVoix(Page):
         cadre, d = bloc("Voix")
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
-        self.modele = QComboBox()
+        self.modele = liste_deroulante()
         self.modele.currentIndexChanged.connect(self._reglage_change)
         ligne.addWidget(self.modele, 1)
-        self.voix = QComboBox()
+        self.voix = liste_deroulante()
         self.voix.setToolTip("Tes favoris ★ et tes voix créées d'abord, puis les 30 voix de base")
         self.voix.currentIndexChanged.connect(self._voix_changee)
         ligne.addWidget(self.voix, 1)
@@ -114,11 +114,6 @@ class AtelierVoix(Page):
         prononciation.setToolTip("Dictionnaire de prononciation : pour les mots que la voix prononce mal (noms de marque…)")
         outils.addWidget(prononciation)
         outils.addStretch(1)
-        self.estimation = libelle("", "legende", retour_a_la_ligne=False)
-        outils.addWidget(self.estimation)
-        self.cout_estime = MontantLabel(0)
-        self.cout_estime.setProperty("role", "legende")
-        outils.addWidget(self.cout_estime)
         d.addLayout(outils)
         d.addSpacing(Espacements.S)
         d.addWidget(libelle("Balises — clique dans le texte, puis sur une balise pour l'insérer", "legende"))
@@ -141,14 +136,26 @@ class AtelierVoix(Page):
         self.contenu.addWidget(cadre)
         self._afficher_conseils(bool(services.preferences.lire(CLE_CONSEILS_VISIBLES, True)))
 
-        # --- Générer ---
+        # --- Générer : bouton et estimation (caractères, durée, coût), puis l'avancement dessous ---
+        generation = QVBoxLayout()
+        generation.setSpacing(Espacements.S)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.M)
         self.bouton_generer = bouton("Générer la voix", variante="principal", nom_icone="audio-lines", action=self.generer)
         ligne.addWidget(self.bouton_generer)
+        estimation = QHBoxLayout()
+        estimation.setSpacing(Espacements.XS)
+        self.estimation = libelle("", "legende", retour_a_la_ligne=False)
+        estimation.addWidget(self.estimation)
+        self.cout_estime = MontantLabel(0)
+        self.cout_estime.setProperty("role", "legende")
+        estimation.addWidget(self.cout_estime)
+        ligne.addLayout(estimation)
+        ligne.addStretch(1)
+        generation.addLayout(ligne)
         self.statut = libelle("", "secondaire")
-        ligne.addWidget(self.statut, 1)
-        self.contenu.addLayout(ligne)
+        generation.addWidget(self.statut)
+        self.contenu.addLayout(generation)
 
         # --- Prises ---
         cadre, d = bloc("Prises")

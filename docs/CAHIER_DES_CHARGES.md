@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 2.1 — 30/09/2026 (étape 5 : bibliothèque de voix, favoris, écoute des extraits, Voice Design)
+> Version du document : 2.2 — 30/09/2026 (étape 5 : bibliothèque de voix, favoris, écoute des extraits, Voice Design ; tout tient dans la largeur minimale de la fenêtre, §9.6)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -547,6 +547,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Barre latérale gauche : Voix, Transcription, Sous-titres, Réglages (icônes + libellés).
 - En haut : nom du projet, **compteur de coût de la session** (format §4.4).
 - Zone centrale : contenu du module.
+- **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent.
 
 ### 9.7 Valeurs complémentaires
 

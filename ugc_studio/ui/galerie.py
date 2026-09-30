@@ -6,9 +6,9 @@ d'écran à chaque version). Elle n'apparaît pas dans l'app.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QTextEdit, QVBoxLayout
 
-from .composants.elements import bloc, bouton, libelle, pastille
+from .composants.elements import bloc, bouton, libelle, liste_deroulante, pastille
 from .composants.montant_label import MontantLabel
 from .theme import Dimensions, Espacements, Typo
 
@@ -72,7 +72,7 @@ class GalerieComposants(QFrame):
         vide = QLineEdit()
         vide.setPlaceholderText("Nom de la clé (ex. « Google perso »)")
         d.addWidget(vide)
-        liste = QComboBox()
+        liste = liste_deroulante()
         liste.addItems(["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"])
         d.addWidget(liste)
         inactif_champ = QLineEdit("Champ désactivé")

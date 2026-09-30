@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QDialog, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout
 
 from ...conseils import CONSEILS_VOIX
 from ...fournisseurs.capacites import MODELES_CONNUS, Capacite
@@ -22,7 +22,7 @@ from ...voix_locales import GENRES, MAX_VOIX_CREEES, date_lisible
 from .. import taches
 from ..composants.champ_style import ChampDescription
 from ..composants.conseils import ListeConseils
-from ..composants.elements import bouton, conteneur_vertical, libelle
+from ..composants.elements import bouton, conteneur_vertical, libelle, liste_deroulante
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
 from ..pages.base import zone_defilante
@@ -97,14 +97,14 @@ class DialogueVoiceDesign(QDialog):
         formulaire.setVerticalSpacing(Espacements.S)
         self.nom = QLineEdit()
         self.nom.setPlaceholderText("ex. Léa — créatrice UGC")
-        self.langue = QComboBox()
+        self.langue = liste_deroulante()
         for code, nom in LANGUES.items():
             self.langue.addItem(nom, code)
         self.langue.setCurrentIndex(max(0, self.langue.findData(langue)))
-        self.genre = QComboBox()
+        self.genre = liste_deroulante()
         for code, nom in GENRES.items():
             self.genre.addItem(nom, code)
-        self.modele = QComboBox()
+        self.modele = liste_deroulante()
         for connu in MODELES_CONNUS:
             if Capacite.TTS_VOICE_DESIGN in connu.capacites:
                 self.modele.addItem(connu.nom, connu.identifiant)
