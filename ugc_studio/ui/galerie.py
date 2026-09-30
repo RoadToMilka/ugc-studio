@@ -6,8 +6,10 @@ d'écran à chaque version). Elle n'apparaît pas dans l'app.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout
 
+from ..script import depuis_texte
+from .composants.editeur_script import EditeurScript
 from .composants.elements import bloc, bouton, champ_decimal, champ_entier, libelle, liste_deroulante, pastille
 from .composants.montant_label import MontantLabel
 from .theme import Dimensions, Espacements, Typo
@@ -88,7 +90,7 @@ class GalerieComposants(QFrame):
         nombres.addStretch(1)
         d.addLayout(nombres)
         cases = QHBoxLayout()
-        coche = QCheckBox("TOUT EN MAJUSCULES")
+        coche = QCheckBox("Tout en majuscules")
         coche.setChecked(True)
         cases.addWidget(coche)
         cases.addWidget(QCheckBox("Masquer les hésitations"))
@@ -101,13 +103,14 @@ class GalerieComposants(QFrame):
         grille.addWidget(cadre, 1, 0)
 
         # Montants et texte long
-        cadre, d = bloc("Montants (§4.4) et texte")
+        cadre, d = bloc("Montants (§4.4) et script avec balises")
         montants = QVBoxLayout()
         for valeur, taille in ((0, Typo.COURANT), (0.0071, Typo.TITRE_BLOC), (12.3456, Typo.TITRE_PAGE), (0.000042, Typo.GRAND_CHIFFRE)):
             montants.addWidget(MontantLabel(valeur, taille))
         d.addLayout(montants)
-        texte = QTextEdit()
-        texte.setPlainText("Salut ! <laugh> J'ai testé ce sérum pendant deux semaines…")
+        # Éditeur de script : badges de balises (nom français, texte centré à l'œil).
+        texte = EditeurScript()
+        texte.definir_segments(depuis_texte("Salut ! <laugh> J'ai testé <short pause> ce sérum pendant deux semaines… <sigh>"))
         d.addWidget(texte)
         d.addStretch(1)
         grille.addWidget(cadre, 1, 1)

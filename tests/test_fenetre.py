@@ -91,6 +91,7 @@ def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path,
     fenetre = _fenetre(qtbot)
     services = fenetre.services
     services.projets.creer("Sérum", tmp_path)
+    assert fenetre.windowTitle() == "UGC Studio / Sérum"  # barre de titre : l'app, puis le projet
     prise = services.projets.ajouter_prise(
         wav_depuis_pcm(b"\x00\x00" * 24_000), modele="m", voix="Kore", style="", texte_api="Bonjour",
         script=[{"texte": "Bonjour"}], duree_s=1.0,

@@ -181,7 +181,7 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
             coupables = blocs[:2] + feuilles[: ELEMENTS_SIGNALES_MAX - 2]
         coupables.sort(key=lambda e: e.minimumSizeHint().width(), reverse=True)
         problemes.append(
-            f"{nom} : contenu plus large que la partie visible de {exces} px — "
+            f"{nom} : contenu plus large que la partie visible de {exces} px : "
             + ", ".join(_description(e) for e in coupables[:ELEMENTS_SIGNALES_MAX])
         )
     return problemes
@@ -210,7 +210,7 @@ def _assistant_voix_rempli(parent) -> DialogueAssistantVoix:
 
 def _voice_design_rempli(services, atelier, parent) -> DialogueVoiceDesign:
     dialogue = DialogueVoiceDesign(services, atelier.ecoute, parent)
-    dialogue.nom.setText("Léa — créatrice UGC")
+    dialogue.nom.setText("Léa, créatrice UGC")
     dialogue.description.definir(
         *assembler_description("femme", "environ 25 ans", "chaleureuse", "légèrement voilée", "parisien", "créateur·rice UGC")
     )

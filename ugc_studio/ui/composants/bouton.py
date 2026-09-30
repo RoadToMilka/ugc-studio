@@ -39,6 +39,30 @@ def hauteur_majuscules(mesures: QFontMetricsF) -> float:
     return mesures.capHeight() or mesures.tightBoundingRect("H").height()
 
 
+def ligne_de_base_minuscules(zone: QRectF, mesures: QFontMetricsF) -> float:
+    """Ligne de base d'un texte surtout en minuscules (noms de balises, « Retenue »…) centré à
+    l'œil dans `zone` : le milieu de la hauteur des minuscules (« x ») tombe au milieu de la zone.
+
+    Pourquoi ? Qt centre la « boîte » de la police, qui garde de la place au-dessus des lettres
+    pour les majuscules et les accents : un mot en minuscules paraît alors 1 à 2 px trop bas
+    (plus d'espace au-dessus qu'en dessous). Avec la police Inter, centrer les minuscules laisse
+    aussi autant de place au-dessus des lettres hautes (« h », « l ») qu'en dessous des lettres
+    qui descendent (« p », « g »)."""
+    return round(zone.center().y() + mesures.xHeight() / 2)
+
+
+def dessiner_texte_centre_minuscules(
+    peintre: QPainter, zone: QRectF, texte: str, police_texte: QFont, couleur: QColor
+) -> None:
+    """Dessine `texte` centré dans `zone` : au milieu en largeur, centré à l'œil en hauteur
+    (voir ligne_de_base_minuscules)."""
+    mesures = QFontMetricsF(police_texte)
+    x = round(zone.center().x() - mesures.horizontalAdvance(texte) / 2)
+    peintre.setFont(police_texte)
+    peintre.setPen(couleur)
+    peintre.drawText(QPointF(x, ligne_de_base_minuscules(zone, mesures)), texte)
+
+
 def largeur_icone_et_texte(mesures: QFontMetricsF, texte: str, cote_icone: int) -> float:
     """Largeur occupée par l'icône (0 si aucune), l'écart et le texte."""
     largeur_texte = mesures.horizontalAdvance(texte) if texte else 0.0

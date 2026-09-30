@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 3.0 — 30/09/2026 (V1 complète, version 1.0.0 ; molette de la souris, §9.6)
+> Version du document : 3.1, 30/09/2026 (V1.1 en cours, lot 1 : textes et titres, balises en français, pastilles centrées, pleine largeur ; voir §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -120,7 +120,7 @@ Un modèle absent du tableau mais accessible avec une clé est reconnu d'après 
 
 ### 4.2 Catalogue des modèles et prix
 
-- Liste des modèles connus avec leurs capacités.
+- Liste des modèles connus avec leurs capacités. Sous le nom de chaque modèle, une courte description ; l'identifiant technique (`gemini-3.8-flash-tts`) ne s'affiche qu'au survol du nom (il faisait doublon).
 - **Prix par défaut = tarifs officiels de Google** ([page des tarifs](https://ai.google.dev/gemini-api/docs/pricing?hl=fr), tarif « Standard » du niveau payant), vérifiés le 30/09/2026, en $ par million de tokens :
 
 | Modèle | Entrée | Sortie | Ordre de grandeur (Google) |
@@ -173,20 +173,21 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 - Grand champ de texte.
 - **Insertion de balises à la position du curseur** : on clique dans le texte, puis sur une balise de la palette.
-- Les balises s'affichent comme des **badges colorés** (pastille arrondie) ; le texte envoyé à l'API contient la vraie balise (`<laugh>`).
+- Les balises s'affichent comme des **badges colorés** (pastille arrondie) avec leur **nom français** (« rire ») ; le texte envoyé à l'API contient la vraie balise, en anglais (`<laugh>`). Le nom anglais s'affiche au survol d'un badge ou d'une balise de la palette (« Envoyé à Google : <laugh> »).
+- Le nom du badge est **centré à l'œil** : le milieu des minuscules tombe au milieu de la pastille (centré par Qt, il paraissait 1 à 2 px trop bas). Même règle pour les autres pastilles (« Retenue », « Par défaut »).
 - Un badge se supprime comme un caractère (retour arrière) et se déplace par couper/coller.
 - **Couleur par famille** :
 
-| Famille | Balises |
+| Famille | Balises : nom affiché (`nom envoyé à Google`) |
 |---|---|
-| Pauses | `<short pause>` `<long pause>` |
-| Rires | `<laugh>` `<laughter>` `<giggle>` `<chuckle>` `<chuckles>` `<snicker>` `<cackle>` |
-| Souffle | `<breath>` `<heavy breath>` `<exhales>` `<sigh>` `<sighs>` `<phew>` `<pff>` `<pant>` `<yawn>` |
-| Réactions | `<gasp>` `<cheer>` `<shout>` `<scream>` `<shriek>` `<argh>` `<groan>` `<grunt>` `<tsk>` `<snort>` |
-| Voix | `<whispers>` `<whispering>` `<throat-clearing>` `<cough>` `<sneeze>` |
-| Émotions fortes | `<cry>` `<sob>` `<whimper>` `<moan>` `<growl>` `<grr>` `<hiss>` |
+| Pauses | pause courte (`short pause`), pause longue (`long pause`) |
+| Rires | rire (`laugh`), éclats de rire (`laughter`), gloussement (`giggle`), petit rire (`chuckle`), rit doucement (`chuckles`), ricanement (`snicker`), rire strident (`cackle`) |
+| Souffle | respiration (`breath`), respiration lourde (`heavy breath`), souffle (`exhales`), soupir (`sigh`), soupire (`sighs`), ouf (`phew`), pff (`pff`), halètement (`pant`), bâillement (`yawn`) |
+| Réactions | souffle coupé (`gasp`), cri de joie (`cheer`), cri (`shout`), hurlement (`scream`), cri perçant (`shriek`), argh (`argh`), plainte (`groan`), grognement (`grunt`), tss (`tsk`), reniflement (`snort`) |
+| Voix | chuchote (`whispers`), en chuchotant (`whispering`), raclement de gorge (`throat-clearing`), toux (`cough`), éternuement (`sneeze`) |
+| Émotions fortes | pleurs (`cry`), sanglot (`sob`), geignement (`whimper`), gémissement (`moan`), grondement (`growl`), grr (`grr`), sifflement (`hiss`) |
 
-(Liste issue de la doc officielle Gemini TTS ; les balises restent en anglais même pour un texte français.)
+(Liste issue de la doc officielle Gemini TTS. Les balises sont **envoyées en anglais**, même pour un texte français : la documentation de Google le demande, « If your transcript is in a non-English language, continue to use English inline tags for best results ». Elles sont enregistrées en anglais dans les projets, et affichées en français dans l'app : palette, badges, menu « Balise » des variantes, bibliothèque de styles, champ « Balises souvent utilisées », messages. Noms français validés le 30/09/2026, rangés dans `balises.py`.)
 
 - **Dictionnaire de prononciation (mots de marque)** : l'API n'a pas de paramètre dédié aux noms de marque. L'app garde donc une liste « mot écrit → façon de le prononcer » (ex. « Glowzy » → « Glo-zi »). Au moment de générer, **seul le texte envoyé au TTS** est remplacé ; le script affiché et les sous-titres gardent l'orthographe correcte (grâce à l'alignement sur le script, §3.3). Bouton ▶ pour tester la prononciation d'un mot seul (coût minime, noté « essai de prononciation » ; l'audio est gardé en cache). Dictionnaires globaux (`prononciations.json`) ou par projet ; pour un même mot, celui du projet l'emporte.
   - Remplacement : mots entiers, sans tenir compte des majuscules ; le mot le plus long d'abord (« Glowzy Pro » avant « Glowzy ») ; les balises ne sont jamais modifiées.
@@ -194,7 +195,7 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 - **Aide à l'accentuation** : bouton « Accentuer » qui met le mot sélectionné en MAJUSCULES (le modèle appuie sur les mots en capitales). Ces majuscules n'impactent pas les sous-titres (le texte des sous-titres est géré séparément, cf. §7.2).
 - Compteur de caractères et **estimation du coût** avant génération : tokens d'entrée ≈ caractères ÷ 4 ; durée d'après le nombre de mots (≈ 160 mots/min) et les pauses ; tokens audio ≈ durée × tokens par seconde. Ce dernier chiffre (25 au départ, d'après la page des tarifs de Google) est **ajusté automatiquement** après chaque génération avec les vrais nombres renvoyés par Google.
 - Affichage d'un mot accentué : en MAJUSCULES et en mauve dans l'éditeur ; l'écriture d'origine est conservée pour les sous-titres.
-- Copier/coller : entre éditeurs de l'app, badges et accents sont conservés ; un texte collé depuis un autre logiciel voit ses balises `<laugh>`… transformées en badges.
+- Copier/coller : entre éditeurs de l'app, badges et accents sont conservés ; un texte collé depuis un autre logiciel voit ses balises transformées en badges, qu'elles soient écrites en anglais (`<laugh>`) ou en français (`<rire>`, avec ou sans accents ni majuscules). Vers un autre logiciel, les balises sont copiées avec leur vrai nom anglais.
 
 ### 5.3 Découpage en répliques
 
@@ -259,7 +260,7 @@ Actions : créer, modifier, dupliquer, supprimer, **appliquer en un clic**. Quel
 
 Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe).
 
-**Assistant de style structuré** : style = *émotion / attitude* + *rythme / prosodie* (optionnel), ex. « chaleureux et enthousiaste, débit rapide », « chuchoté, complice ». Champs guidés assemblés en une consigne courte, modifiable en texte libre.
+**Assistant de style structuré** : style = *émotion / attitude* + *rythme / prosodie* (optionnel), ex. « chaleureux et enthousiaste, débit rapide », « chuchoté, complice ». Champs guidés assemblés en une consigne courte, modifiable en texte libre. Il s'ouvre avec le bouton **crayon** à côté du champ style (comme l'assistant de description de Voice Design) : une baguette magique faisait penser à une génération automatique.
 
 **Panneau « Conseils Google »** (visible dans l'éditeur de styles et sous le script, repliable — le choix est retenu) :
 - Style **court** (quelques mots) : émotion, attitude, rythme, volume, hauteur/inflexion.
@@ -288,7 +289,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 
 ### 5.6 Génération et prises
 
-- Bouton **Générer** → lecture immédiate dans l'app.
+- Bouton **« Générer l'audio »** → lecture immédiate dans l'app. (Il s'appelait « Générer la voix » jusqu'à la 1.0.0 : on le confondait avec « Créer une voix ».)
 - Chaque génération = une **prise** conservée dans le projet (horodatée, avec voix/style/coût utilisés).
 - Comparer, renommer, noter (★), supprimer les prises.
 - Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3 (encodeur LAME, 192 kb/s).
@@ -303,7 +304,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
   - Chaque variante devient une prise normale (§5.6).
 - **Écoute pendant la génération** (streaming) : option pour entendre le début avant la fin du calcul.
 - Mise en œuvre (étape 6) :
-  - Bouton **« Variantes… »** à côté de « Générer la voix ». Fenêtre à deux onglets :
+  - Bouton **« Variantes… »** à côté de « Générer l'audio ». Fenêtre à deux onglets :
     - « Mêmes réglages » : de 2 à 6 variantes (lettres A à F) ;
     - « Réglages par variante » : colonne « Réglages de base » (ceux de l'atelier), puis une colonne par variante (2 au départ, A et B, identiques à la base). Lignes : modèle, voix, puis pour chaque réplique son style et son texte (sous chaque texte : menu « Balise » par famille et « Accentuer »). Choisir une voix créée choisit aussi son modèle, comme dans l'atelier. Icônes « Dupliquer la variante » et « Supprimer » (au moins 2 variantes) en tête de colonne, « Ajouter » à droite.
     - En bas : coût total estimé (prix de chaque modèle, dictionnaire de prononciation compris) et « Générer les N variantes ».
@@ -406,7 +407,7 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 ### 7.2 Texte affiché
 
 - Le texte des sous-titres est distinct du texte TTS (pas de balises, pas de majuscules d'accentuation).
-- Option **TOUT EN MAJUSCULES** (affichage uniquement).
+- Option **« Tout en majuscules »** (affichage uniquement ; le nom de l'option, lui, n'est pas écrit en capitales).
 - Typographie automatique selon la langue (ex. français : espace insécable avant `! ? : ;`).
 - Ponctuation affichée ou masquée (option).
 
@@ -479,7 +480,7 @@ Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Cré
 
 **Réglages par défaut** : 24 caractères (espaces comprises) et 5 mots au plus par sous-titre, 2 lignes au plus, coupe de préférence après la ponctuation, durée minimale 0,6 s ; ponctuation affichée, pas de majuscules, hésitations masquées (réglage partagé avec la transcription) ; format « celui de la vidéo » (sinon 9:16), zone de sécurité TikTok, marge maximum 5 %, texte à 4 % de la hauteur de la vidéo.
 
-**Texte affiché (§7.2)** : sans les hésitations masquées ; une ponctuation transcrite à part rejoint son mot ; ponctuation masquée = retirée autour des mots (gardée à l'intérieur : « l'huile », « anti-rides », « 3.5 ») ; typographie : en français, espace insécable avant « ! ? ; : » (pas dans « 10:30 ») et à l'intérieur des guillemets « », dans les autres langues pas d'espace avant ; jamais d'espace avant « , . … ». TOUT EN MAJUSCULES à la fin. Les temps des mots ne changent jamais.
+**Texte affiché (§7.2)** : sans les hésitations masquées ; une ponctuation transcrite à part rejoint son mot ; ponctuation masquée = retirée autour des mots (gardée à l'intérieur : « l'huile », « anti-rides », « 3.5 ») ; typographie : en français, espace insécable avant « ! ? ; : » (pas dans « 10:30 ») et à l'intérieur des guillemets « », dans les autres langues pas d'espace avant ; jamais d'espace avant « , . … ». « Tout en majuscules » à la fin. Les temps des mots ne changent jamais.
 
 **Découpage (§7.3)** :
 - Un sous-titre se termine toujours : après une fin de phrase (« . ! ? … », si « couper sur la ponctuation » est coché), à un changement de personne, ou après un silence de plus de 0,8 s.
@@ -616,7 +617,9 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 
 - Barre latérale gauche : Voix, Transcription, Sous-titres, Réglages (icônes + libellés).
 - En haut : nom du projet, **compteur de coût de la session** (format §4.4).
-- Zone centrale : contenu du module.
+- Zone centrale : contenu du module. Titre de page : **« Module / Projet »** (ex. « Voix / Sérum Glowzy ») ; barre de titre de Windows : « UGC Studio / Sérum Glowzy ».
+- **Pleine largeur** : les blocs prennent toute la largeur disponible, dans tous les modules (jusqu'à la 1.0.0, les pages étaient bridées à 960 px et calées à gauche : en plein écran, un grand vide restait à droite).
+- **Pas de tiret long** (« — ») comme séparateur dans l'interface : « / » entre un module et un projet, ailleurs la ponctuation qui convient (parenthèses, point médian « · », deux-points, virgule). Ex. « Prise 5 (variante C) », « Kore · Ferme · féminine ». Les noms donnés automatiquement par la v1.0.0 (« Prise 5 — variante C ») et le message de test de clé enregistré sont corrigés à la lecture ; un nom choisi à la main ne change jamais. Vérifié par un test.
 - **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test).
 - **Molette de la souris** : faire défiler une page ne change jamais une valeur au passage. Listes déroulantes, champs de nombre et barres de lecture ne réagissent à la molette qu'après un clic dedans ; sinon la page défile. Ils se créent toujours avec `liste_deroulante()`, `champ_entier()`, `champ_decimal()` et `glissiere()` (vérifié par un test).
 - Le texte d'une case à cocher ne passe jamais à la ligne : il reste court (48 caractères au plus, vérifié par un test) et l'explication va dans une légende dessous, qui passe à la ligne (`case_a_cocher()`). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent (ou, si rien n'est encore coupé, les plus larges). Toute erreur inattendue pendant l'autotest le fait échouer.
@@ -677,7 +680,22 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). Suite prévue : V2 — Studio de style.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). Suite : V1.1 (retouches de l'interface, §12.2), puis V2, Studio de style.
+
+#### 12.2 V1.1 : retouches de l'interface
+
+Demandes de l'utilisateur du 30/09/2026, réécrites et validées dans le document « UGC Studio - V1.1.0 Retouches interface » (projet ECOM BUILDR). Réalisées en lots ; chaque lot est publié (Pull Request + Release) pour être testé au fur et à mesure.
+
+| Lot | Version | Contenu |
+|---|---|---|
+| 1 | 1.0.1 | Titres « Module / Projet », plus de tiret long, « Voix et modèle », « Générer l'audio », « Tout en majuscules », sous-titre « Balises », balises en français (nom anglais au survol et envoyé à Google), pastilles centrées à l'œil, crayon à la place de la baguette magique, pages en pleine largeur, identifiant du modèle au survol |
+| 2 | 1.0.2 | Quatre styles de boutons, onglets en boutons, infos avec une ampoule |
+| 3 | 1.0.3 | Bouton « Conseils » et fenêtres de conseils (modules et fenêtres), en français |
+| 4 | 1.0.4 | Fondu en haut et en bas, listes déroulantes intégrées au champ, bibliothèque de voix plus rapide, tableaux quand la fenêtre rétrécit |
+| 5 | 1.0.5 | Modèles chargés, fenêtre « Choisir les modèles », colonne « Utilisé dans » |
+| 6 | 1.1.0 | Réorganisation des sous-titres à la main |
+
+Coins arrondis de la fenêtre : non pour le moment (Windows 10 dessine des coins carrés ; les arrondir demanderait de redessiner toute la barre de titre, avec un vrai risque de bugs).
 
 ### V2 — Studio de style
 - Style du texte complet (§7.4), mot actif (§7.5), préréglages de style (§7.6).

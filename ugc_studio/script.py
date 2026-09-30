@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 
-from .balises import MOTIF_BALISE, est_balise
+from .balises import MOTIF_BALISE_SAISIE, balise_depuis_nom, nom_affiche
 
 Segment = dict
 
@@ -40,31 +40,44 @@ def normaliser(segments: list[Segment]) -> list[Segment]:
 
 
 def depuis_texte(texte: str) -> list[Segment]:
-    """Texte brut (ex. collé depuis ailleurs) → segments ; les balises connues deviennent des badges."""
+    """Texte brut (ex. collé depuis ailleurs) → segments ; les balises connues deviennent des badges.
+
+    Une balise peut être écrite en anglais (« <laugh> ») ou en français (« <rire> ») : le segment
+    garde toujours le nom anglais, celui qui est envoyé à Google."""
     segments: list[Segment] = []
     position = 0
-    for trouve in MOTIF_BALISE.finditer(texte):
-        nom = " ".join(trouve.group(1).lower().split())
-        if not est_balise(nom):
+    for trouve in MOTIF_BALISE_SAISIE.finditer(texte):
+        balise = balise_depuis_nom(trouve.group(1))
+        if balise is None:
             continue  # « <truc> » inconnu : laissé tel quel dans le texte
         segments.append({"texte": texte[position : trouve.start()]})
-        segments.append({"balise": nom})
+        segments.append({"balise": balise})
         position = trouve.end()
     segments.append({"texte": texte[position:]})
     return normaliser(segments)
 
 
-def texte_pour_api(segments: list[Segment]) -> str:
-    """Texte exact envoyé au TTS : balises entre chevrons, mots accentués en majuscules."""
+def _texte(segments: list[Segment], nom_de_balise) -> str:
     morceaux = []
     for segment in segments:
         if "balise" in segment:
-            morceaux.append(f"<{segment['balise']}>")
+            morceaux.append(f"<{nom_de_balise(segment['balise'])}>")
         elif segment.get("accentue"):
             morceaux.append(segment["texte"].upper())
         else:
             morceaux.append(segment["texte"])
     return "".join(morceaux)
+
+
+def texte_pour_api(segments: list[Segment]) -> str:
+    """Texte exact envoyé au TTS : balises entre chevrons (noms anglais), mots accentués en majuscules."""
+    return _texte(segments, lambda balise: balise)
+
+
+def texte_pour_affichage(segments: list[Segment]) -> str:
+    """Même texte que pour l'API, mais avec le nom français des balises (« <rire> ») : pour
+    afficher un script sur une ligne de texte simple, là où il n'y a pas de badges."""
+    return _texte(segments, nom_affiche)
 
 
 def texte_brut(segments: list[Segment]) -> str:

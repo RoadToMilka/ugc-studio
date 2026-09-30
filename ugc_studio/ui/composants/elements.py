@@ -6,9 +6,11 @@ Le style lui-même est dans theme.py : ici, on se contente d'indiquer le « rôl
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QFontMetricsF, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QCheckBox,
@@ -23,8 +25,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..theme import Dimensions, Espacements
-from .bouton import Bouton
+from ..polices import police
+from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
+from .bouton import Bouton, dessiner_texte_centre_minuscules
 
 
 def libelle(
@@ -55,13 +58,40 @@ def minutes_secondes(secondes: float) -> str:
     return f"{secondes // 60}:{secondes % 60:02d}"
 
 
-def pastille(texte: str) -> QLabel:
+class Pastille(QLabel):
+    """Petite étiquette arrondie (ex. « Retenue », « Par défaut ») : contour mauve, fond mauve
+    léger. Dessinée ici plutôt que par la feuille de style, pour centrer le texte à l'œil (voir
+    bouton.ligne_de_base_minuscules) : centré par Qt, il paraissait 1 à 2 px trop bas."""
+
+    def __init__(self, texte: str):
+        super().__init__(texte)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self._police = police(Typo.LEGENDE, Typo.GRAISSE_MOYENNE)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        largeur = QFontMetricsF(self._police).horizontalAdvance(self.text())
+        return QSize(math.ceil(largeur) + 2 * (Espacements.S + Dimensions.BORDURE), Hauteurs.PASTILLE)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        return self.sizeHint()
+
+    def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        peintre = QPainter(self)
+        peintre.setRenderHint(QPainter.RenderHint.Antialiasing)
+        demi = Dimensions.BORDURE / 2
+        zone = QRectF(self.rect()).adjusted(demi, demi, -demi, -demi)
+        peintre.setPen(QPen(qcolor(Couleurs.ACCENT), Dimensions.BORDURE))
+        peintre.setBrush(qcolor(Couleurs.ACCENT, Opacites.TEINTE_SELECTION))
+        peintre.drawRoundedRect(zone, zone.height() / 2, zone.height() / 2)
+        couleur = Couleurs.ACCENT_SURVOL if self.isEnabled() else Couleurs.TEXTE_DESACTIVE
+        dessiner_texte_centre_minuscules(peintre, QRectF(self.rect()), self.text(), self._police, qcolor(couleur))
+        peintre.end()
+
+
+def pastille(texte: str) -> Pastille:
     """Petite étiquette arrondie (ex. « Étape 2 »)."""
-    etiquette = QLabel(texte)
-    etiquette.setTextFormat(Qt.TextFormat.PlainText)
-    etiquette.setProperty("role", "pastille")
-    etiquette.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    return etiquette
+    return Pastille(texte)
 
 
 def bouton(

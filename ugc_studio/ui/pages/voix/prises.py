@@ -181,7 +181,7 @@ class ListePrises(QWidget):
         prises = list(reversed(projet.prises)) if projet else []
         if not prises:
             self._lignes.addWidget(
-                libelle("Aucune prise pour l'instant : écris ton script puis clique sur « Générer la voix ».", "discret")
+                libelle("Aucune prise pour l'instant : écris ton script puis clique sur « Générer l'audio ».", "discret")
             )
         for prise in prises:
             self._lignes.addWidget(LignePrise(self, prise))

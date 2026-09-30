@@ -197,7 +197,7 @@ class OngletCouts(QWidget):
             connu = modele_connu(appel.modele)
             valeurs = (
                 appel.date.strftime("%d/%m/%Y %H:%M"),
-                appel.projet or "—",
+                appel.projet or "Sans projet",
                 connu.nom if connu else appel.modele,
                 appel.operation,
                 _nombre(appel.tokens_entree),

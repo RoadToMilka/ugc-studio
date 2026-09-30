@@ -115,7 +115,7 @@ def test_generer_une_serie_puis_comparer(atelier, qtbot, services):
     qtbot.waitUntil(lambda: atelier.comparaison is not None, timeout=5000)
 
     a, b = services.projets.serie(1)
-    assert (a.nom, a.voix, b.nom, b.voix) == ("Prise 1 — variante A", "Kore", "Prise 2 — variante B", "Puck")
+    assert (a.nom, a.voix, b.nom, b.voix) == ("Prise 1 (variante A)", "Kore", "Prise 2 (variante B)", "Puck")
     assert atelier.statut.property("role") == "succes" and "2 variantes prêtes" in atelier.statut.text()
     assert atelier.bouton_variantes.isVisible() and not atelier.bouton_arreter.isVisible()
     assert [ecoute for _requete, ecoute in FauxFlux.appels] == [False, False]

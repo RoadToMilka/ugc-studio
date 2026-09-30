@@ -4,7 +4,15 @@ from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
-from ugc_studio.ui.composants.elements import case_a_cocher, champ_decimal, champ_entier, glissiere, liste_deroulante
+from ugc_studio.ui.composants.elements import (
+    case_a_cocher,
+    champ_decimal,
+    champ_entier,
+    glissiere,
+    liste_deroulante,
+    pastille,
+)
+from ugc_studio.ui.theme import Hauteurs
 
 
 def _molette(element) -> QWheelEvent:
@@ -65,6 +73,16 @@ def test_case_a_cocher_avec_explication(app_configuree, qtbot):
     assert legende.wordWrap() and legende.contentsMargins().left() > 0  # alignée sur le texte de la case
     zone.setEnabled(False)  # griser la zone grise la case et son explication
     assert not case.isEnabled() and not legende.isEnabled()
-    zone, case = case_a_cocher("TOUT EN MAJUSCULES")
+    zone, case = case_a_cocher("Tout en majuscules")
     qtbot.addWidget(zone)
     assert zone.findChildren(QLabel) == []
+
+
+def test_pastille(app_configuree, qtbot):
+    """Pastille (« Retenue », « Par défaut ») : dessinée par l'app pour centrer son texte à l'œil ;
+    elle reste une étiquette de texte (QLabel), à la hauteur du thème."""
+    retenue = pastille("Retenue")
+    qtbot.addWidget(retenue)
+    assert isinstance(retenue, QLabel) and retenue.text() == "Retenue"
+    assert retenue.sizeHint().height() == Hauteurs.PASTILLE
+    assert not retenue.grab().isNull()  # se dessine sans erreur

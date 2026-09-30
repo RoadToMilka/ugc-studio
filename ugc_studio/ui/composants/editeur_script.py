@@ -1,12 +1,14 @@
 """Éditeur de script avec badges de balises (§5.2).
 
-- Les balises (<laugh>, <sigh>…) apparaissent comme des pastilles colorées par famille. Techniquement,
-  chaque badge est un seul « caractère objet » du document : il s'efface d'un retour arrière et se
-  déplace par couper/coller comme une lettre.
+- Les balises (<laugh>, <sigh>…) apparaissent comme des pastilles colorées par famille, avec leur
+  nom français (« rire », « soupir »…) ; leur vrai nom, celui envoyé à Google, s'affiche au survol.
+  Techniquement, chaque badge est un seul « caractère objet » du document : il s'efface d'un
+  retour arrière et se déplace par couper/coller comme une lettre.
 - Le bouton « Accentuer » met un mot en valeur : il s'affiche en MAJUSCULES (et en mauve) et sera
   envoyé en majuscules au TTS, mais le texte d'origine est conservé pour les sous-titres.
 - Copier/coller : entre deux éditeurs de l'app, badges et accents sont conservés ; depuis un autre
-  logiciel, les balises écrites « <laugh> » deviennent automatiquement des badges.
+  logiciel, les balises écrites « <laugh> » ou « <rire> » deviennent automatiquement des badges.
+  Vers un autre logiciel, les balises sont copiées avec leur vrai nom anglais (« <laugh> »).
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ import json
 
 import math
 
-from PySide6.QtCore import QMimeData, QRectF, QSizeF, Qt, Signal
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QRectF, QSizeF, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QFont,
@@ -26,14 +28,14 @@ from PySide6.QtGui import (
     QTextCharFormat,
     QTextCursor,
     QTextFormat,
-    QTextOption,
 )
-from PySide6.QtWidgets import QTextEdit
+from PySide6.QtWidgets import QTextEdit, QToolTip
 
-from ...balises import famille_de
+from ...balises import famille_de, info_balise, nom_affiche
 from ...script import depuis_texte, normaliser, texte_pour_api
 from ..polices import police
 from ..theme import Couleurs, CouleursBalises, Dimensions, Hauteurs, Opacites, Typo, qcolor
+from .bouton import dessiner_texte_centre_minuscules
 
 CARACTERE_OBJET = "￼"  # caractère « objet » (remplacé à l'écran par le dessin du badge)
 TYPE_BALISE = int(QTextFormat.ObjectTypes.UserObject.value) + 1
@@ -43,20 +45,23 @@ TYPE_MIME_SCRIPT = "application/x-ugc-studio-script"
 
 
 class DessinBadge(QPyTextObject):
-    """Dessine un badge de balise dans le texte."""
+    """Dessine un badge de balise dans le texte : le nom français, centré à l'œil."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._police = police(Typo.LEGENDE, Typo.GRAISSE_MOYENNE)
 
+    def largeur(self, balise: str) -> float:
+        """Largeur occupée dans le texte par le badge de cette balise (espaces autour compris)."""
+        largeur_nom = QFontMetricsF(self._police).horizontalAdvance(nom_affiche(balise))
+        return largeur_nom + 2 * Dimensions.BADGE_MARGE_HORIZONTALE + 2 * Dimensions.BADGE_ECART
+
     def intrinsicSize(self, _document, _position, format_texte) -> QSizeF:
-        nom = str(format_texte.property(PROP_BALISE) or "")
-        largeur = QFontMetricsF(self._police).horizontalAdvance(nom)
-        return QSizeF(largeur + 2 * Dimensions.BADGE_MARGE_HORIZONTALE + 2 * Dimensions.BADGE_ECART, Hauteurs.PASTILLE)
+        return QSizeF(self.largeur(str(format_texte.property(PROP_BALISE) or "")), Hauteurs.PASTILLE)
 
     def drawObject(self, peintre: QPainter, zone: QRectF, _document, _position, format_texte) -> None:
-        nom = str(format_texte.property(PROP_BALISE) or "")
-        famille = famille_de(nom)
+        balise = str(format_texte.property(PROP_BALISE) or "")
+        famille = famille_de(balise)
         couleur = CouleursBalises.de(famille.identifiant if famille else "")
         pastille = QRectF(zone).adjusted(Dimensions.BADGE_ECART, 0, -Dimensions.BADGE_ECART, 0)
         rayon = pastille.height() / 2
@@ -65,9 +70,7 @@ class DessinBadge(QPyTextObject):
         peintre.setPen(QPen(qcolor(couleur, Opacites.CONTOUR_BADGE), Dimensions.BORDURE))
         peintre.setBrush(QBrush(qcolor(couleur, Opacites.FOND_BADGE)))
         peintre.drawRoundedRect(pastille, rayon, rayon)
-        peintre.setFont(self._police)
-        peintre.setPen(qcolor(couleur))
-        peintre.drawText(pastille, nom, QTextOption(Qt.AlignmentFlag.AlignCenter))
+        dessiner_texte_centre_minuscules(peintre, pastille, nom_affiche(balise), self._police, qcolor(couleur))
         peintre.restore()
 
 
@@ -164,6 +167,42 @@ class EditeurScript(QTextEdit):
 
     def texte_api(self) -> str:
         return texte_pour_api(self.segments())
+
+    # --- Infobulle des badges : le vrai nom de la balise -------------------------------------
+
+    def balise_sous(self, point: QPoint) -> str | None:
+        """Nom anglais de la balise dont le badge est sous `point` (coordonnées de la zone de
+        texte), ou None s'il n'y a pas de badge à cet endroit."""
+        curseur = self.cursorForPosition(point)
+        derniere = self.document().characterCount() - 1  # la fin du document
+        texte = self.document().toPlainText()
+        for position in (curseur.position() - 1, curseur.position()):
+            if not 0 <= position < min(derniere, len(texte)) or texte[position] != CARACTERE_OBJET:
+                continue
+            caractere = QTextCursor(self.document())
+            caractere.setPosition(position)
+            caractere.setPosition(position + 1, QTextCursor.MoveMode.KeepAnchor)
+            format_car = caractere.charFormat()
+            if format_car.objectType() != TYPE_BALISE:
+                continue
+            balise = str(format_car.property(PROP_BALISE))
+            caractere.setPosition(position)
+            debut = self.cursorRect(caractere)  # la ligne du badge ; son bord gauche
+            badge = QRectF(debut.left(), debut.top(), self._dessin.largeur(balise), debut.height())
+            if badge.contains(point.x(), point.y()):
+                return balise
+        return None
+
+    def viewportEvent(self, evenement) -> bool:  # noqa: N802 — nom imposé par Qt
+        if evenement.type() == QEvent.Type.ToolTip:
+            balise = self.balise_sous(evenement.pos())
+            if balise:
+                QToolTip.showText(evenement.globalPos(), info_balise(balise), self.viewport())
+            else:
+                QToolTip.hideText()
+                evenement.ignore()
+            return True
+        return super().viewportEvent(evenement)
 
     def position_curseur(self) -> int:
         """Position du curseur, en caractères (un badge compte pour 1), pour « Découper ici »."""

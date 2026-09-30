@@ -7,7 +7,13 @@ from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QFontMetricsF, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import QDialog, QLineEdit, QMenu, QVBoxLayout
 
-from ugc_studio.ui.composants.bouton import VARIANTES, Bouton, activer_avec_entree, dessiner_icone_et_texte
+from ugc_studio.ui.composants.bouton import (
+    VARIANTES,
+    Bouton,
+    activer_avec_entree,
+    dessiner_icone_et_texte,
+    dessiner_texte_centre_minuscules,
+)
 from ugc_studio.ui.composants.elements import bouton
 from ugc_studio.ui.polices import police
 from ugc_studio.ui.theme import Dimensions, Espacements, Hauteurs, Typo
@@ -94,6 +100,22 @@ def test_icone_a_droite_meme_ecart(app_configuree):
     _tg, _th, td, _tb = _boite(image, _est_texte)
     marge_h = QFontMetricsF(police(Typo.COURANT, Typo.GRAISSE_MOYENNE)).rightBearing("H")
     assert abs((ig - td - 1) - (Dimensions.ECART_ICONE_TEXTE + marge_h)) <= 1
+
+
+def test_texte_en_minuscules_centre_a_l_oeil(app_configuree):
+    """Badges de balises et pastilles (§5.2) : le milieu des minuscules tombe au milieu de la
+    pastille. Avant, Qt centrait la « boîte » de la police et le texte paraissait trop bas."""
+    largeur, hauteur = 120, Hauteurs.PASTILLE
+    image = QImage(largeur, hauteur, QImage.Format.Format_ARGB32)
+    image.fill(Qt.GlobalColor.black)
+    peintre = QPainter(image)
+    zone = QRectF(0, 0, largeur, hauteur)
+    # « xxx » : l'encre va exactement du haut des minuscules à la ligne de base.
+    dessiner_texte_centre_minuscules(peintre, zone, "xxx", police(Typo.LEGENDE, Typo.GRAISSE_MOYENNE), VERT)
+    peintre.end()
+    gauche, haut, droite, bas = _boite(image, _est_texte)
+    assert abs((haut + bas + 1) / 2 - hauteur / 2) <= 0.75
+    assert abs((gauche + droite + 1) / 2 - largeur / 2) <= 1
 
 
 @pytest.mark.parametrize("variante", VARIANTES)

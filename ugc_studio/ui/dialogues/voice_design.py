@@ -42,7 +42,7 @@ class LigneVersion(QFrame):
         expiration = date_lisible(voix.expire_le)
         textes = QVBoxLayout()
         textes.setSpacing(0)
-        textes.addWidget(libelle(f"Version {numero} — {voix.nom}", "intitule", retour_a_la_ligne=False))
+        textes.addWidget(libelle(f"Version {numero} : {voix.nom}", "intitule", retour_a_la_ligne=False))
         textes.addWidget(libelle(f"Gardée par Google jusqu'au {expiration}" if expiration else voix.identifiant, "legende"))
         disposition.addLayout(textes, 1)
         ecouter = bouton("", variante="icone", nom_icone="play", action=lambda: dialogue.ecouter(voix))
@@ -96,7 +96,7 @@ class DialogueVoiceDesign(QDialog):
         formulaire.setHorizontalSpacing(Espacements.M)
         formulaire.setVerticalSpacing(Espacements.S)
         self.nom = QLineEdit()
-        self.nom.setPlaceholderText("ex. Léa — créatrice UGC")
+        self.nom.setPlaceholderText("ex. Léa, créatrice UGC")
         self.langue = liste_deroulante()
         for code, nom in LANGUES.items():
             self.langue.addItem(nom, code)
@@ -148,7 +148,7 @@ class DialogueVoiceDesign(QDialog):
         self.statut = libelle("", "secondaire")
         bas.addWidget(self.statut, 1)
         bas.addWidget(bouton("Fermer", action=self.reject))
-        self.bouton_creer = bouton("Créer la voix", variante="principal", nom_icone="wand-sparkles", action=self.creer)
+        self.bouton_creer = bouton("Créer la voix", variante="principal", nom_icone="plus", action=self.creer)
         bas.addWidget(self.bouton_creer)
         disposition.addLayout(bas)
 

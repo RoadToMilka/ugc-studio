@@ -129,3 +129,50 @@ def test_textes_des_cases_a_cocher_courts():
         and len(noeud.args[0].value) > CASE_TEXTE_MAX
     ]
     assert not ecarts, "Texte de case à cocher trop long (mettre l'explication en légende) :\n" + "\n".join(ecarts)
+
+
+# Constantes qui contiennent un tiret long pour une bonne raison : la ponctuation reconnue dans une
+# transcription, et les anciens noms et messages de la v1.0.0, relus pour leur retirer ce tiret.
+CONSTANTES_AVEC_TIRET = {"PONCTUATION", "_ANCIEN_NOM_DE_VARIANTE", "_ANCIEN_MESSAGE_CLE_VALIDE"}
+
+
+def _textes_hors_interface(arbre: ast.AST) -> set[int]:
+    """Textes qui ne s'affichent jamais dans l'interface : docstrings, messages du journal
+    technique, et constantes de CONSTANTES_AVEC_TIRET."""
+    ignores: set[int] = set()
+    for noeud in ast.walk(arbre):
+        if isinstance(noeud, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            premier = noeud.body[0] if noeud.body else None
+            if isinstance(premier, ast.Expr) and isinstance(premier.value, ast.Constant):
+                ignores.add(id(premier.value))
+        elif (
+            isinstance(noeud, ast.Call)
+            and isinstance(noeud.func, ast.Attribute)
+            and isinstance(noeud.func.value, ast.Name)
+            and noeud.func.value.id in ("journal", "logging")
+        ):
+            ignores.update(id(sous) for sous in ast.walk(noeud))
+        elif isinstance(noeud, ast.Assign) and any(
+            isinstance(cible, ast.Name) and cible.id in CONSTANTES_AVEC_TIRET for cible in noeud.targets
+        ):
+            ignores.update(id(sous) for sous in ast.walk(noeud.value))
+    return ignores
+
+
+def test_aucun_tiret_long_dans_les_textes_de_l_interface():
+    """En français, le tiret long (« — ») ne sert pas de séparateur (décision du 30/09/2026) :
+    l'interface met « / » entre un module et un projet (« Voix / Sérum Glowzy »), et ailleurs la
+    ponctuation qui convient à l'endroit : parenthèses, point médian « · », deux-points, virgule."""
+    ecarts = []
+    for fichier in sorted(RACINE.rglob("*.py")):
+        arbre = ast.parse(fichier.read_text(encoding="utf-8"))
+        ignores = _textes_hors_interface(arbre)
+        for noeud in ast.walk(arbre):
+            if (
+                isinstance(noeud, ast.Constant)
+                and isinstance(noeud.value, str)
+                and ("—" in noeud.value or "–" in noeud.value)
+                and id(noeud) not in ignores
+            ):
+                ecarts.append(f"{fichier.relative_to(RACINE)}:{noeud.lineno} « {noeud.value[:50]} »")
+    assert not ecarts, "Tiret long dans un texte de l'interface :\n" + "\n".join(ecarts)

@@ -97,7 +97,7 @@ def test_serie_de_prises(services, tmp_path):
     puck.voix = "Puck"
     a = _generer(services, base, 1, "A")
     b = _generer(services, puck, 1, "B")
-    assert (a.nom, b.nom) == ("Prise 1 — variante A", "Prise 2 — variante B")
+    assert (a.nom, b.nom) == ("Prise 1 (variante A)", "Prise 2 (variante B)")
     assert projets.nouvelle_serie() == 2
     assert [p.variante for p in projets.serie(1)] == ["A", "B"]
     assert projets.serie(0) == []

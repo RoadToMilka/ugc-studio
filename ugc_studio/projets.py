@@ -186,9 +186,12 @@ class Projet:
         prises = []
         for brut in donnees.get("prises", []):
             try:
-                prises.append(Prise(**{k: v for k, v in brut.items() if k in Prise.__dataclass_fields__}))
+                prise = Prise(**{k: v for k, v in brut.items() if k in Prise.__dataclass_fields__})
             except TypeError as erreur:
                 journal.warning("Prise illisible ignorée (%s)", erreur)
+                continue
+            prise.nom = _nom_sans_tiret(prise.nom)
+            prises.append(prise)
         return cls(
             dossier=dossier,
             nom=donnees.get("nom") or dossier.name,
@@ -203,6 +206,22 @@ class Projet:
             remplacements=remplacements_depuis_liste(donnees.get("remplacements")),
             sous_titres=ReglagesSousTitres.depuis_dict(donnees.get("sous_titres")),
         )
+
+
+def nom_de_prise(numero: int, variante: str = "") -> str:
+    """« Prise 3 », ou « Prise 3 (variante B) » pour une prise d'une série de variantes."""
+    return f"Prise {numero} (variante {variante})" if variante else f"Prise {numero}"
+
+
+# Nom donné automatiquement aux variantes jusqu'à la v1.0.0 : « Prise 3 — variante B ».
+_ANCIEN_NOM_DE_VARIANTE = re.compile(r"Prise (\d+) — variante ([A-Z])")
+
+
+def _nom_sans_tiret(nom: str) -> str:
+    """Les noms donnés automatiquement par la v1.0.0 (« Prise 3 — variante B ») prennent la forme
+    actuelle (« Prise 3 (variante B) »). Un nom choisi à la main n'est jamais modifié."""
+    ancien = _ANCIEN_NOM_DE_VARIANTE.fullmatch(nom)
+    return nom_de_prise(int(ancien.group(1)), ancien.group(2)) if ancien else nom
 
 
 def _transcription(brut) -> Transcription | None:
@@ -292,9 +311,7 @@ class GestionnaireProjets:
             relatif = f"{DOSSIER_PRISES}/prise-{numero:03d}.wav"
         projet.chemin(relatif).parent.mkdir(parents=True, exist_ok=True)
         projet.chemin(relatif).write_bytes(audio_wav)
-        nom = f"Prise {numero}"
-        if infos.get("variante"):
-            nom += f" — variante {infos['variante']}"
+        nom = nom_de_prise(numero, infos.get("variante") or "")
         prise = Prise(
             identifiant=uuid.uuid4().hex[:12],
             nom=nom,

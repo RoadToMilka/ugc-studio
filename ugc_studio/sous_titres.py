@@ -45,11 +45,11 @@ FORMATS: dict[str, tuple[int, int]] = {
 FORMAT_PAR_DEFAUT = "9:16"
 NOMS_FORMATS = {
     FORMAT_AUTO: "Celui de la vidéo (sinon 9:16)",
-    "9:16": "9:16 — TikTok, Reels, Snap, Shorts",
-    "4:5": "4:5 — fil Facebook, Instagram",
+    "9:16": "9:16 (TikTok, Reels, Snap, Shorts)",
+    "4:5": "4:5 (fil Facebook, Instagram)",
     "3:4": "3:4",
-    "1:1": "1:1 — carré",
-    "16:9": "16:9 — horizontal",
+    "1:1": "1:1 (carré)",
+    "16:9": "16:9 (horizontal)",
 }
 
 
@@ -115,7 +115,7 @@ class ReglagesSousTitres:
     lignes_max: int = 2
     couper_sur_ponctuation: bool = True
     duree_min_s: float = 0.6
-    majuscules: bool = False  # TOUT EN MAJUSCULES (affichage seulement)
+    majuscules: bool = False  # « Tout en majuscules » (affichage seulement)
     ponctuation: bool = True  # ponctuation affichée
     format: str = FORMAT_AUTO
     plateforme: str = PLATEFORME_PAR_DEFAUT

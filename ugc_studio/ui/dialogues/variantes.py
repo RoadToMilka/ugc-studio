@@ -29,11 +29,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...balises import FAMILLES
+from ...balises import FAMILLES, info_balise, nom_affiche
 from ...fournisseurs.capacites import modele_connu
 from ...generation import tokens_par_seconde
 from ...prononciation import Prononciation
-from ...script import normaliser, texte_pour_api
+from ...script import normaliser, texte_pour_affichage
 from ...services import Services
 from ...variantes import (
     LETTRES,
@@ -265,7 +265,7 @@ class DialogueVariantes(QDialog):
                 textes.append(self._avec_outils(texte))
             base_style = replique.style.strip() or "sans style"
             rang = self._ligne("Style", base_style, styles, rang)
-            rang = self._ligne("Texte", texte_pour_api(normaliser(replique.script)) or "—", textes, rang)
+            rang = self._ligne("Texte", texte_pour_affichage(normaliser(replique.script)) or "Aucun texte", textes, rang)
 
         self._grille.setColumnMinimumWidth(0, Dimensions.COLONNE_TITRES_VARIANTES_LARGEUR)
         for colonne in range(1, 2 + len(self._variantes)):
@@ -313,8 +313,11 @@ class DialogueVariantes(QDialog):
         menu = QMenu(balise)
         for famille in FAMILLES:
             sous_menu = menu.addMenu(famille.nom)
+            sous_menu.setToolTipsVisible(True)  # le vrai nom de la balise au survol
             for nom in famille.balises:
-                sous_menu.addAction(nom).triggered.connect(lambda _c=False, n=nom, e=editeur: e.inserer_balise(n))
+                action = sous_menu.addAction(nom_affiche(nom))
+                action.setToolTip(info_balise(nom))
+                action.triggered.connect(lambda _c=False, n=nom, e=editeur: e.inserer_balise(n))
         balise.setMenu(menu)
         outils.addWidget(balise)
         accent = bouton("Accentuer", variante="discret", nom_icone="case-upper", action=editeur.basculer_accent)

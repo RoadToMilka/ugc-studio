@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 import pytest
+from PySide6.QtCore import QPoint
 from PySide6.QtGui import QTextCursor
 
 from ugc_studio.audio import duree_wav, wav_depuis_pcm
@@ -79,6 +80,23 @@ def test_ajouter_une_replique_et_y_inserer_une_balise(atelier, qtbot):
     assert seconde.editeur.segments() == [{"balise": "laugh"}]
     assert premiere.editeur.segments() == _texte("Premier bloc.")
     assert premiere.bouton_plus.menu().actions()[1].isEnabled() is False  # « Monter » impossible pour la 1re
+
+
+def test_balises_en_francais_avec_le_vrai_nom_au_survol(atelier):
+    """§5.2 : la palette et les badges du script montrent le nom français de la balise ; son vrai
+    nom, celui envoyé à Google, apparaît au survol."""
+    bouton = atelier.palette.boutons["laugh"]
+    assert bouton.text() == "rire" and bouton.toolTip() == "Envoyé à Google : <laugh>"
+    editeur = atelier.editeur
+    editeur.definir_segments([{"texte": "Salut "}, {"balise": "laugh"}, {"texte": " toi"}])
+    curseur = QTextCursor(editeur.document())
+    curseur.setPosition(len("Salut "))
+    bord_gauche = editeur.cursorRect(curseur)  # bord gauche du badge, sur sa ligne
+    milieu = QPoint(bord_gauche.left() + round(editeur._dessin.largeur("laugh") / 2), bord_gauche.center().y())
+    assert editeur.balise_sous(milieu) == "laugh"
+    curseur.setPosition(1)
+    assert editeur.balise_sous(editeur.cursorRect(curseur).center()) is None  # sur « Salut »
+    assert editeur.texte_api() == "Salut <laugh> toi"  # Google reçoit le nom anglais
 
 
 def test_decouper_une_replique_au_curseur(atelier):
@@ -207,7 +225,7 @@ def test_creer_un_style(app_configuree, qtbot, services):
     dialogue.balises.setText("sigh, truc")
     dialogue.valider()
     assert "truc" in dialogue.statut.text()  # balise inconnue refusée
-    dialogue.balises.setText("sigh, <short pause>")
+    dialogue.balises.setText("soupir, <short pause>")  # nom français ou anglais
     dialogue.valider()
     cree = next(s for s in services.styles.styles if s.nom == "Témoignage doux")
     assert (cree.consigne, cree.consigne_fr, cree.voix, cree.balises) == (
@@ -216,6 +234,9 @@ def test_creer_un_style(app_configuree, qtbot, services):
         "Leda",
         ["sigh", "short pause"],
     )
+    relu = DialogueStyle(services, cree)
+    qtbot.addWidget(relu)
+    assert relu.balises.text() == "soupir, pause courte"  # enregistrées en anglais, affichées en français
     assert len(liste.lignes()) == len(EXEMPLES) + 1  # la liste ouverte s'est mise à jour
     liste.reject()
     services.styles.dupliquer(cree.identifiant)  # liste fermée : plus de mise à jour (pas d'erreur)

@@ -127,7 +127,7 @@ class GestionnaireVoix:
             self._enregistrer()
 
     def libelle(self, identifiant: str) -> str:
-        """Texte d'une voix dans les listes, ex. « Kore — Ferme · féminine » ou « Léa (ma voix) »."""
+        """Texte d'une voix dans les listes, ex. « Kore · Ferme · féminine » ou « Léa (ma voix) »."""
         base = voix_de_base(identifiant)
         if base is not None and identifiant not in self._noms:
             return base.libelle
@@ -138,7 +138,7 @@ class GestionnaireVoix:
         if voix.creee:
             return f"{nom} (ma voix)"
         details = [d for d in (GENRES.get(voix.genre, ""), voix.accent or voix.langue) if d]
-        return f"{nom} — {' · '.join(details)}" if details else nom
+        return " · ".join([nom, *details])
 
     # --- Bibliothèque de Google et voix créées (gardées en mémoire) ---------------------------
 

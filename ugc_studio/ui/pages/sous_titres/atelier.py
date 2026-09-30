@@ -107,7 +107,7 @@ class AtelierSousTitres(Page):
     corriger_demande = Signal()  # « Corriger les mots » : ouvrir le module Transcription
 
     def __init__(self, services: Services):
-        super().__init__(TITRE, SOUS_TITRE, largeur_max=Dimensions.CONTENU_LARGEUR_MAX)
+        super().__init__(TITRE, SOUS_TITRE)
         self._services = services
         self._projet: Projet | None = None
         self._occupe = False
@@ -238,7 +238,7 @@ class AtelierSousTitres(Page):
             "Couper de préférence après la ponctuation", "Une fin de phrase termine alors toujours le sous-titre."
         )
         d.addWidget(zone)
-        zone, self.majuscules = case_a_cocher("TOUT EN MAJUSCULES", "Affichage seulement : le texte des mots ne change pas.")
+        zone, self.majuscules = case_a_cocher("Tout en majuscules", "Affichage seulement : le texte des mots ne change pas.")
         d.addWidget(zone)
         zone, self.ponctuation = case_a_cocher("Afficher la ponctuation")
         d.addWidget(zone)
@@ -304,7 +304,7 @@ class AtelierSousTitres(Page):
         self._projet = projet
         if projet is None:
             return
-        self.titre.setText(f"{TITRE} — {projet.nom}")
+        self.titre.setText(f"{TITRE} / {projet.nom}")
         self._afficher("", "secondaire")
         self.statut_export.clear()
         self.rafraichir()

@@ -44,7 +44,7 @@ class VoixDeBase:
     @property
     def libelle(self) -> str:
         genre = {"F": "féminine", "M": "masculine"}.get(self.genre, "")
-        return f"{self.nom} — {self.caractere}" + (f" · {genre}" if genre else "")
+        return f"{self.nom} · {self.caractere}" + (f" · {genre}" if genre else "")
 
 
 # --- Bibliothèque de voix et Voice Design (§5.4, §5.4 bis) ----------------------------------

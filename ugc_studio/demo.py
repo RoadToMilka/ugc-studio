@@ -93,7 +93,7 @@ VOIX_DEMO = [
 ]
 VOIX_CREEE_DEMO = VoixBibliotheque(
     "voice_demo_lea",
-    "Léa — créatrice UGC (démo)",
+    "Léa, créatrice UGC (démo)",
     "A young woman in her mid-20s with a warm, slightly husky voice and a Parisian French accent. "
     "Spontaneous and playful, like a creator talking to a friend on camera.",
     "fr-FR",
@@ -110,7 +110,7 @@ def remplir_donnees_demo(services: Services) -> None:
         connexions.enregistrer_test(
             perso.identifiant,
             True,
-            "Clé valide — 42 modèles accessibles.",
+            "Clé valide, 42 modèles accessibles.",
             [
                 "gemini-3.8-flash-tts",
                 "gemini-3.8-flash-lite-tts",

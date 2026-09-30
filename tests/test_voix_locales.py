@@ -31,8 +31,8 @@ def test_libelles(tmp_path):
     voix = GestionnaireVoix(tmp_path / "voix.json")
     voix.definir_bibliotheque([CAMILLE, LEA])  # une voix créée n'entre pas dans la bibliothèque
     voix.definir_voix_creees([LEA])
-    assert voix.libelle("Kore") == "Kore — Ferme · féminine"
-    assert voix.libelle("camille") == "Camille — féminine · Parisian"
+    assert voix.libelle("Kore") == "Kore · Ferme · féminine"
+    assert voix.libelle("camille") == "Camille · féminine · Parisian"
     assert voix.libelle("voice_lea") == "Léa (ma voix)"
     assert voix.libelle("inconnue") == "inconnue"
     assert [v.identifiant for v in voix.bibliotheque()] == ["camille"]

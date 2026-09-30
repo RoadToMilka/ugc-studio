@@ -15,7 +15,7 @@ CLE = "AIza" + "T" * 31 + "4f2c"
 class FauxAdaptateur(Adaptateur):
     identifiant = "google"
     nom = "Google (Gemini)"
-    resultat = ResultatTest(True, "Clé valide — 1 modèles accessibles.", [InfoModele("gemini-3.8-flash-tts")])
+    resultat = ResultatTest(True, "Clé valide, 1 modèles accessibles.", [InfoModele("gemini-3.8-flash-tts")])
 
     def lister_modeles(self):
         return self.resultat.modeles
