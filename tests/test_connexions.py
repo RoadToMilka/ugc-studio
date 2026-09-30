@@ -92,6 +92,16 @@ def test_rechargement_depuis_le_fichier(tmp_path, coffre):
     assert rechargee.modeles == ["m1"]
 
 
+def test_message_de_test_de_la_v1_0_0_sans_tiret(tmp_path, coffre):
+    """Le résultat d'un test enregistré par la v1.0.0 (« Clé valide — 42 modèles accessibles. »)
+    s'affiche avec la ponctuation actuelle."""
+    premiere = GestionnaireConnexions(tmp_path / "c.json", coffre)
+    connexion = premiere.ajouter("google", "A", CLE)
+    premiere.enregistrer_test(connexion.identifiant, True, "Clé valide — 42 modèles accessibles.", ["m1"])
+    seconde = GestionnaireConnexions(tmp_path / "c.json", coffre)
+    assert seconde.connexion(connexion.identifiant).dernier_test.message == "Clé valide, 42 modèles accessibles."
+
+
 def test_cle_absente_du_coffre(gestion, coffre):
     connexion = gestion.ajouter("google", "A", CLE)
     coffre.secrets.clear()

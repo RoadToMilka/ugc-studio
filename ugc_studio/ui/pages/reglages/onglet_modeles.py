@@ -237,9 +237,14 @@ class OngletModeles(QWidget):
         nom.setSpacing(0)
         # Le nom peut passer à la ligne : sur une fenêtre étroite, un long nom (« Gemini 2.5 Flash
         # Preview TTS ») élargirait sinon tout l'onglet au-delà de la partie visible.
-        nom.addWidget(libelle(connu.nom if connu else identifiant))
+        # L'identifiant technique (« gemini-3.8-flash-tts ») ferait doublon avec le nom : il reste
+        # lisible au survol du nom, utile en cas de souci.
+        titre = libelle(connu.nom if connu else identifiant)
+        titre.setToolTip(f"Identifiant du modèle chez Google : {identifiant}")
+        nom.addWidget(titre)
         note = connu.note if connu else "Détecté avec ta clé : renseigne ses prix."
-        nom.addWidget(libelle(f"{identifiant} — {note}" if note else identifiant, "legende"))
+        if note:
+            nom.addWidget(libelle(note, "legende"))
         self._grille.addLayout(nom, rang, 0)
         self._grille.addWidget(libelle(" · ".join(LIBELLES[c] for c in sorted(capacites)), "legende"), rang, 1)
         if accessible:

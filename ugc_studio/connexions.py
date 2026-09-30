@@ -112,6 +112,10 @@ def nettoyer_cle(cle: str) -> str:
     return "".join(cle.split())
 
 
+# Début du message d'un test réussi, tel que la v1.0.0 l'enregistrait (avec un tiret long).
+_ANCIEN_MESSAGE_CLE_VALIDE = "Clé valide — "
+
+
 @dataclass
 class ResultatDernierTest:
     date: str
@@ -275,6 +279,9 @@ class GestionnaireConnexions:
         for brut in donnees.get("connexions", []) if isinstance(donnees, dict) else []:
             try:
                 test = brut.get("dernier_test")
+                if test and isinstance(test.get("message"), str):
+                    # Message enregistré par la v1.0.0 : « Clé valide — 42 modèles accessibles. »
+                    test = {**test, "message": test["message"].replace(_ANCIEN_MESSAGE_CLE_VALIDE, "Clé valide, ", 1)}
                 connexions.append(
                     Connexion(
                         identifiant=brut["identifiant"],

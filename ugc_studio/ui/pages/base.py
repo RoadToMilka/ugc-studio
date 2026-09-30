@@ -23,14 +23,14 @@ class ZoneDefilante(QScrollArea):
 
 
 def zone_defilante(
-    largeur_max: int | None = Dimensions.CONTENU_LARGEUR_MAX,
+    largeur_max: int | None = None,
     marges: tuple[int, int, int, int] = (0, 0, 0, 0),
 ) -> tuple[QScrollArea, QVBoxLayout]:
     """Zone qui défile verticalement quand son contenu est trop haut.
 
     Renvoie la zone et la disposition verticale où ajouter le contenu. La colonne de contenu
-    occupe toute la largeur disponible sans dépasser `largeur_max` (au-delà, les lignes de
-    texte deviennent trop longues à lire), et reste calée à gauche.
+    occupe toute la largeur disponible (en plein écran, les blocs s'étirent jusqu'au bord droit),
+    sauf si `largeur_max` la limite ; elle reste alors calée à gauche.
     """
     zone = ZoneDefilante()
     zone.setWidgetResizable(True)
@@ -82,7 +82,7 @@ class Page(QWidget):
     Les pages ajoutent leurs éléments dans `self.contenu` (une disposition verticale).
     """
 
-    def __init__(self, titre: str, sous_titre: str, largeur_max: int | None = Dimensions.CONTENU_LARGEUR_MAX):
+    def __init__(self, titre: str, sous_titre: str, largeur_max: int | None = None):
         super().__init__()
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)

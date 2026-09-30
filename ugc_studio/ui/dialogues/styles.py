@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ...balises import est_balise
+from ...balises import balise_depuis_nom, nom_affiche
 from ...conseils import CONSEILS_STYLE
 from ...fournisseurs.capacites import MODELES_CONNUS, Capacite, modele_connu
 from ...fournisseurs.google_voix import VOIX_GOOGLE, voix_de_base
@@ -39,21 +39,33 @@ from ..theme import Couleurs, Dimensions, Espacements, Hauteurs
 
 
 def description(style: Style) -> str:
-    """« Kore · Gemini 3.8 Flash TTS · balises : laugh, short pause »."""
+    """« Kore · Gemini 3.8 Flash TTS · balises : rire, pause courte »."""
     connu = modele_connu(style.modele)
     morceaux = [style.voix, connu.nom if connu else style.modele]
     if style.balises:
-        morceaux.append("balises : " + ", ".join(style.balises))
+        morceaux.append("balises : " + noms_de_balises(style.balises))
     return "  ·  ".join(morceaux)
 
 
+def noms_de_balises(balises: list[str]) -> str:
+    """[« laugh », « short pause »] → « rire, pause courte » (noms affichés dans l'app)."""
+    return ", ".join(nom_affiche(balise) for balise in balises)
+
+
 def lire_balises(texte: str) -> tuple[list[str], list[str]]:
-    """« laugh, short pause, truc » → (balises connues, noms inconnus)."""
+    """« rire, short pause, truc » → (noms anglais des balises connues, noms inconnus).
+
+    Une balise peut être écrite en français (nom de la palette) ou en anglais."""
     connues, inconnues = [], []
     for morceau in texte.replace("<", " ").replace(">", " ").split(","):
-        nom = " ".join(morceau.lower().split())
-        if nom:
-            (connues if est_balise(nom) else inconnues).append(nom)
+        nom = " ".join(morceau.split())
+        if not nom:
+            continue
+        balise = balise_depuis_nom(nom)
+        if balise is None:
+            inconnues.append(nom)
+        elif balise not in connues:
+            connues.append(balise)
     return connues, inconnues
 
 
@@ -102,8 +114,8 @@ class DialogueStyle(QDialog):
         self._choisir(self.langue, style.langue or LANGUE_PAR_DEFAUT)
         self.champ_style = ChampStyle(services, avec_bibliotheque=False)
         self.champ_style.definir(style.consigne, style.consigne_fr)
-        self.balises = QLineEdit(", ".join(style.balises))
-        self.balises.setPlaceholderText("ex. laugh, short pause")
+        self.balises = QLineEdit(noms_de_balises(style.balises))
+        self.balises.setPlaceholderText("ex. rire, pause courte")
 
         for rang, (titre, element) in enumerate(
             (
@@ -175,7 +187,7 @@ class DialogueStyle(QDialog):
         elif not style.consigne:
             erreur = "Écris la consigne de style (en anglais), ou utilise l'assistant."
         elif inconnues:
-            erreur = "Balises inconnues : " + ", ".join(inconnues) + ". Utilise les noms de la palette (ex. laugh)."
+            erreur = "Balises inconnues : " + ", ".join(inconnues) + ". Utilise les noms de la palette (ex. rire)."
         else:
             self._services.styles.enregistrer_style(style)
             self.accept()

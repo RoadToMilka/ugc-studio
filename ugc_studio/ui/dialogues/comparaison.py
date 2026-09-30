@@ -99,7 +99,7 @@ class DialogueComparaison(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle(f"Comparer les variantes — série {serie}", "titre-bloc"))
+        disposition.addWidget(libelle(f"Comparer les variantes de la série {serie}", "titre-bloc"))
         disposition.addWidget(
             libelle(
                 "« Lecture enchaînée » joue A, puis B, puis C… Pendant l'écoute, clique sur une lettre "

@@ -52,7 +52,7 @@ from ...dialogues.styles import DialogueBibliothequeStyles
 from ...dialogues.variantes import DialogueVariantes
 from ...dialogues.voix import DialogueBibliothequeVoix
 from ...extraits import EcouteVoix, fichier_prononciation
-from ...theme import Dimensions, Espacements
+from ...theme import Espacements
 from ..base import Page
 from .prises import ListePrises
 from .repliques import CarteReplique, ListeRepliques
@@ -80,7 +80,7 @@ class SerieEnCours:
 
 class AtelierVoix(Page):
     def __init__(self, services: Services):
-        super().__init__("Voix", "Voix off générée par IA (TTS).", largeur_max=Dimensions.CONTENU_LARGEUR_MAX)
+        super().__init__("Voix", "Voix off générée par IA (TTS).")
         self._services = services
         self._projet: Projet | None = None
         self._chargement = False
@@ -97,8 +97,8 @@ class AtelierVoix(Page):
         self._minuterie.setInterval(DELAI_ENREGISTREMENT_MS)
         self._minuterie.timeout.connect(self._enregistrer)
 
-        # --- Voix : modèle et voix ---
-        cadre, d = bloc("Voix")
+        # --- Voix et modèle ---
+        cadre, d = bloc("Voix et modèle")
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.modele = liste_deroulante()
@@ -152,7 +152,9 @@ class AtelierVoix(Page):
         outils.addStretch(1)
         d.addLayout(outils)
         d.addSpacing(Espacements.S)
-        d.addWidget(libelle("Balises — clique dans le texte, puis sur une balise pour l'insérer", "legende"))
+        # « Balises » est un sous-titre du bloc (comme « Découpage » dans Sous-titres), l'aide en dessous.
+        d.addWidget(libelle("Balises", "intitule"))
+        d.addWidget(libelle("Clique dans le texte, puis sur une balise pour l'insérer.", "legende"))
         self.palette = PaletteBalises()
         self.palette.balise_choisie.connect(lambda nom: self.editeur.inserer_balise(nom))
         d.addWidget(self.palette)
@@ -177,7 +179,8 @@ class AtelierVoix(Page):
         generation.setSpacing(Espacements.S)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.M)
-        self.bouton_generer = bouton("Générer la voix", variante="principal", nom_icone="audio-lines", action=self.generer)
+        # « Générer l'audio » (et non « Générer la voix ») : on ne le confond pas avec « Créer une voix ».
+        self.bouton_generer = bouton("Générer l'audio", variante="principal", nom_icone="audio-lines", action=self.generer)
         ligne.addWidget(self.bouton_generer)
         self.bouton_variantes = bouton("Variantes…", nom_icone="git-compare-arrows", action=self.ouvrir_variantes)
         self.bouton_variantes.setToolTip(
@@ -242,7 +245,7 @@ class AtelierVoix(Page):
         if projet is None:
             return
         self._chargement = True
-        self.titre.setText(f"Voix — {projet.nom}")
+        self.titre.setText(f"Voix / {projet.nom}")
         choisir(self.modele, projet.voix.modele)
         self._selectionner_voix(projet.voix.voix or VOIX_PAR_DEFAUT)
         self.repliques.definir(projet.repliques)

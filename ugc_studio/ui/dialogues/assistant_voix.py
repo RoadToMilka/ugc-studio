@@ -13,7 +13,7 @@ from ..composants.bouton import activer_avec_entree
 from ..composants.elements import bouton, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
-AUCUN = "—"
+AUCUN = "Aucun choix"
 
 
 def _liste(choix: list[str], avec_aucun: bool = True) -> QComboBox:
@@ -79,7 +79,7 @@ class DialogueAssistantVoix(QDialog):
         boutons.addStretch(1)
         boutons.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_utiliser = bouton(
-            "Utiliser cette description", variante="principal", nom_icone="wand-sparkles", action=self.accept
+            "Utiliser cette description", variante="principal", nom_icone="check", action=self.accept
         )
         activer_avec_entree(self.bouton_utiliser, self)
         boutons.addWidget(self.bouton_utiliser)

@@ -96,7 +96,7 @@ class FenetrePrincipale(QMainWindow):
 
     def _projet_change(self, projet: Projet | None) -> None:
         self.entete.definir_projet(projet.nom if projet else None)
-        self.setWindowTitle(f"{projet.nom} — {NOM_APP}" if projet else NOM_APP)
+        self.setWindowTitle(f"{NOM_APP} / {projet.nom}" if projet else NOM_APP)
 
     def _rouvrir_dernier_projet(self) -> None:
         """Au démarrage, le dernier projet utilisé est rouvert automatiquement."""

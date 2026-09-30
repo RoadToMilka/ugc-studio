@@ -16,6 +16,7 @@ import html
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
 
+from ...balises import nom_affiche
 from ...conseils import Avertissement, verifier_description_voix, verifier_style
 from ...services import Services
 from ...traduction import MODELE_TRADUCTION, traduire_en_anglais
@@ -30,7 +31,7 @@ class ChampConsigne(QWidget):
 
     modifie = Signal()  # consigne ou traduction changées
     bibliotheque_demandee = Signal()
-    balise_suggeree = Signal(str)  # « Insérer <laugh> » proposé par les vérifications
+    balise_suggeree = Signal(str)  # « Insérer la balise « rire » » proposé par les vérifications (nom anglais)
     assistant_utilise = Signal(object)  # la fenêtre de l'assistant, après « Utiliser »
 
     INDICATION = ""
@@ -59,7 +60,8 @@ class ChampConsigne(QWidget):
         if self.PLUSIEURS_LIGNES:
             # Boutons en face de la 1re ligne du champ (et non au milieu de sa hauteur).
             aides.setContentsMargins(0, Espacements.XS, 0, 0)
-        self.bouton_assistant = bouton("", variante="icone", nom_icone="wand-sparkles", action=self.ouvrir_assistant)
+        # Crayon (et non baguette magique) : l'assistant aide à écrire, il ne génère rien tout seul.
+        self.bouton_assistant = bouton("", variante="icone", nom_icone="pencil", action=self.ouvrir_assistant)
         self.bouton_assistant.setToolTip(self.AIDE_ASSISTANT)
         aides.addWidget(self.bouton_assistant)
         self.bouton_traduire = bouton("", variante="icone", nom_icone="languages", action=self.traduire)
@@ -153,7 +155,8 @@ class ChampConsigne(QWidget):
             texte = html.escape(avertissement.message)
             if avertissement.balise_suggeree:
                 nom = avertissement.balise_suggeree
-                texte += f' <a href="{html.escape(nom)}">Insérer &lt;{html.escape(nom)}&gt; dans le texte</a>'
+                affiche = html.escape(nom_affiche(nom))
+                texte += f' <a href="{html.escape(nom)}">Insérer la balise « {affiche} » dans le texte</a>'
             etiquette = QLabel(texte)
             etiquette.setTextFormat(Qt.TextFormat.RichText)
             etiquette.setWordWrap(True)
@@ -215,8 +218,8 @@ class ChampConsigne(QWidget):
 class ChampStyle(ChampConsigne):
     """Style d'une réplique ou d'un style enregistré (§5.5)."""
 
-    INDICATION = "Style (facultatif), en anglais — ex. warm and enthusiastic, fast-paced"
-    AIDE_ASSISTANT = "Assistant de style : choisis en français, l'app écrit la consigne en anglais"
+    INDICATION = "Style (facultatif), en anglais. Ex. : warm and enthusiastic, fast-paced"
+    AIDE_ASSISTANT = "Écrire le style avec l'assistant : tu choisis en français, l'app écrit la consigne en anglais"
     AIDE_BIBLIOTHEQUE = "Choisir un style dans la bibliothèque"
     TEXTE_A_TRADUIRE = "Écris d'abord le style en français, puis clique ici pour le traduire."
 
@@ -235,8 +238,11 @@ class ChampStyle(ChampConsigne):
 class ChampDescription(ChampConsigne):
     """Description d'une voix à créer (Voice Design, §5.4 bis) : 1 à 2 phrases, en anglais."""
 
-    INDICATION = "Description en anglais, 1 à 2 phrases — ex. A young woman in her mid-20s with a warm voice…"
-    AIDE_ASSISTANT = "Assistant : choisis âge, timbre, accent… en français, l'app écrit la description en anglais"
+    INDICATION = "Description en anglais, 1 à 2 phrases. Ex. : A young woman in her mid-20s with a warm voice…"
+    AIDE_ASSISTANT = (
+        "Écrire la description avec l'assistant : tu choisis âge, timbre, accent… en français, "
+        "l'app écrit la description en anglais"
+    )
     TEXTE_A_TRADUIRE = "Écris d'abord la description en français, puis clique ici pour la traduire."
     PLUSIEURS_LIGNES = True
 

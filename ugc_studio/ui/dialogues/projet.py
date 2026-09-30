@@ -32,7 +32,7 @@ class DialogueNouveauProjet(QDialog):
 
         disposition.addWidget(libelle("Nom du projet", "legende"))
         self.nom = QLineEdit()
-        self.nom.setPlaceholderText("ex. « Sérum Glowzy — hook témoignage »")
+        self.nom.setPlaceholderText("ex. « Sérum Glowzy, hook témoignage »")
         disposition.addWidget(self.nom)
 
         disposition.addWidget(libelle("Langue de la voix off", "legende"))

@@ -108,7 +108,7 @@ def test_page_voix_sans_puis_avec_projet(app_configuree, qtbot, services, tmp_pa
     assert page.currentWidget() is page.sans_projet
     services.projets.creer("Sérum Glowzy", tmp_path)
     assert page.currentWidget() is page.atelier
-    assert page.atelier.titre.text() == "Voix — Sérum Glowzy"
+    assert page.atelier.titre.text() == "Voix / Sérum Glowzy"
 
 
 def _atelier_pret(services, qtbot, tmp_path, monkeypatch):

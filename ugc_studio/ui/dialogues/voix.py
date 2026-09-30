@@ -257,7 +257,7 @@ class DialogueBibliothequeVoix(QDialog):
         ligne.addWidget(
             bouton("Actualiser", variante="discret", nom_icone="refresh-cw", action=lambda: self._charger_voix_creees(True))
         )
-        ligne.addWidget(bouton("Créer une voix", variante="principal", nom_icone="wand-sparkles", action=self.creer_voix))
+        ligne.addWidget(bouton("Créer une voix", variante="principal", nom_icone="plus", action=self.creer_voix))
         disposition.addLayout(ligne)
         zone, contenu = zone_defilante(largeur_max=None)
         self._liste_creees_widget, self._liste_creees = conteneur_vertical(0)

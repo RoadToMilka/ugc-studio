@@ -59,7 +59,7 @@ class DialogueCle(QDialog):
             self.fournisseur.addItem(classe.nom, identifiant)
         modele = self.fournisseur.model()
         for prevu in FOURNISSEURS_PREVUS:
-            self.fournisseur.addItem(f"{prevu.nom} — bientôt ({prevu.version})", prevu.identifiant)
+            self.fournisseur.addItem(f"{prevu.nom} (bientôt, {prevu.version})", prevu.identifiant)
             if isinstance(modele, QStandardItemModel):
                 modele.item(self.fournisseur.count() - 1).setEnabled(False)
         if remplacement:

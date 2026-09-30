@@ -76,6 +76,22 @@ def test_projet_de_l_etape_3_converti(gestion, tmp_path):
     assert projet.sous_titres == ReglagesSousTitres()  # format 4 : réglages par défaut
 
 
+def test_noms_de_variantes_de_la_v1_0_0_sans_tiret(gestion, tmp_path):
+    """Jusqu'à la v1.0.0, une variante s'appelait « Prise 3 — variante B » : à l'ouverture, elle
+    prend la forme actuelle, « Prise 3 (variante B) ». Un nom choisi à la main ne change jamais."""
+    dossier = tmp_path / "Ancien"
+    dossier.mkdir()
+    prises = [
+        dict(identifiant="a", nom="Prise 3 — variante B", fichier="prises/prise-003.wav", date="", **_infos()),
+        dict(identifiant="b", nom="Mon essai — final", fichier="prises/prise-004.wav", date="", **_infos()),
+    ]
+    (dossier / "projet.json").write_text(
+        json.dumps({"version_format": 4, "nom": "Ancien", "prises": prises}), encoding="utf-8"
+    )
+    projet = gestion.ouvrir(dossier)
+    assert [p.nom for p in projet.prises] == ["Prise 3 (variante B)", "Mon essai — final"]
+
+
 def test_reglages_des_sous_titres_enregistres(gestion, tmp_path):
     projet = gestion.creer("Sous-titres", tmp_path)
     projet.sous_titres.majuscules, projet.sous_titres.lignes_max = True, 1

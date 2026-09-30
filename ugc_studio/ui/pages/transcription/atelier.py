@@ -144,11 +144,7 @@ class ZoneDepot(QFrame):
 
 class AtelierTranscription(Page):
     def __init__(self, services: Services):
-        super().__init__(
-            "Transcription",
-            "Le texte d'une vidéo ou d'un audio, mot par mot, pour créer les sous-titres.",
-            largeur_max=Dimensions.CONTENU_LARGEUR_MAX,
-        )
+        super().__init__("Transcription", "Le texte d'une vidéo ou d'un audio, mot par mot, pour créer les sous-titres.")
         self._services = services
         self._projet: Projet | None = None
         self._source_en_cours: Path | None = None
@@ -331,7 +327,7 @@ class AtelierTranscription(Page):
         self._source_en_cours = None
         if projet is None:
             return
-        self.titre.setText(f"Transcription — {projet.nom}")
+        self.titre.setText(f"Transcription / {projet.nom}")
         transcription = projet.transcription
         choisir(self.langue, transcription.langue if transcription and transcription.date else projet.langue)
         if transcription and transcription.modele:

@@ -67,7 +67,7 @@ class Adaptateur(ABC):
             modeles = self.lister_modeles()
         except ErreurFournisseur as erreur:
             return ResultatTest(False, erreur.message, code=erreur.code)
-        return ResultatTest(True, f"Clé valide — {len(modeles)} modèles accessibles.", modeles)
+        return ResultatTest(True, f"Clé valide, {len(modeles)} modèles accessibles.", modeles)
 
     # --- Fonctions des tâches (chaque fournisseur n'implémente que ce qu'il sait faire) -------
 

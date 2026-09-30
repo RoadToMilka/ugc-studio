@@ -134,7 +134,8 @@ class Dimensions:
     CASE_A_COCHER = 18
     BARRE_DEFILEMENT = 16
     POIGNEE_DEFILEMENT_MIN = 32
-    CONTENU_LARGEUR_MAX = 960  # largeur maximale des pages de type « formulaire »
+    # (Les pages ne sont plus limitées en largeur depuis la 1.0.1 : en plein écran, les blocs
+    # prennent toute la place disponible.)
     SOULIGNEMENT_ONGLET = 2  # trait mauve sous l'onglet sélectionné
     DIALOGUE_LARGEUR = 520
     DIALOGUE_LARGE_LARGEUR = 760  # bibliothèque de styles, dictionnaire de prononciation
@@ -323,18 +324,6 @@ QLabel[role="legende-avertissement"] {
 }
 QLabel[role="erreur"] {
     color: $erreur;
-}
-QLabel[role="pastille"] {
-    color: $accent_survol;
-    background: $teinte_selection;
-    border: ${bordure}px solid $accent;
-    border-radius: ${rayon_pastille}px;
-    padding: 0px ${esp_s}px;
-    font-size: ${legende}px;
-    font-family: "$famille_moyenne";
-    font-weight: $graisse_moyenne;
-    min-height: ${hauteur_interne_pastille}px;
-    max-height: ${hauteur_interne_pastille}px;
 }
 QLabel[vide="true"] {
     color: $texte_secondaire;
@@ -729,7 +718,6 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "arrondi_controle": Arrondis.CONTROLE,
         "arrondi_bloc": Arrondis.BLOC,
         "arrondi_petit": Arrondis.PETIT,
-        "rayon_pastille": Hauteurs.PASTILLE // 2,
         "rayon_etiquette": Dimensions.ETIQUETTE_HAUTEUR // 2,
         "etiquette_hauteur": Dimensions.ETIQUETTE_HAUTEUR,
         "soulignement_onglet": Dimensions.SOULIGNEMENT_ONGLET,
@@ -741,7 +729,6 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         # Qt compte la hauteur sans les bordures : 36 px au total = 34 px + 2 × 1 px de bordure.
         "hauteur_interne_controle": Hauteurs.CONTROLE - 2 * Dimensions.BORDURE,
         "hauteur_interne_petit_bouton": Hauteurs.PETIT_BOUTON - 2 * Dimensions.BORDURE,
-        "hauteur_interne_pastille": Hauteurs.PASTILLE - 2 * Dimensions.BORDURE,
         "icone_petite": Dimensions.ICONE_PETITE,
         # Menus : Qt place le texte à « taille d'icône + 4 px » du début de la zone de texte.
         # Cette marge gauche pose l'icône à 12 px du bord et son texte à ECART_ICONE_TEXTE
