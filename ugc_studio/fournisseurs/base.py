@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from ..journal import declarer_secret
 from .texte import RequeteTexte, ResultatTexte
-from .voix import RequeteVoiceDesign, RequeteVoix, ResultatVoix, VoixBibliotheque, VoixCreee
+from .voix import RecepteurAudio, RequeteVoiceDesign, RequeteVoix, ResultatVoix, VoixBibliotheque, VoixCreee
 
 
 class ErreurFournisseur(Exception):
@@ -70,8 +70,9 @@ class Adaptateur(ABC):
 
     # --- Fonctions des tâches (chaque fournisseur n'implémente que ce qu'il sait faire) -------
 
-    def generer_voix(self, requete: RequeteVoix) -> ResultatVoix:
-        """Génère une voix off (TTS)."""
+    def generer_voix(self, requete: RequeteVoix, recevoir_audio: RecepteurAudio | None = None) -> ResultatVoix:
+        """Génère une voix off (TTS). Avec `recevoir_audio`, l'audio est demandé « en flux » : chaque
+        morceau lui est transmis dès son arrivée (pour l'écouter avant la fin du calcul)."""
         raise ErreurFournisseur(f"{self.nom} ne sait pas générer de voix.", "non_disponible")
 
     def generer_texte(self, requete: RequeteTexte) -> ResultatTexte:

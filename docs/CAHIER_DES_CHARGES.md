@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 2.2 — 30/09/2026 (étape 5 : bibliothèque de voix, favoris, écoute des extraits, Voice Design ; tout tient dans la largeur minimale de la fenêtre, §9.6)
+> Version du document : 2.3 — 30/09/2026 (étape 6 : variantes A/B, écoute comparative, écoute pendant la génération, §5.6)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -83,6 +83,7 @@ Un **tableau de capacités** décrit chaque modèle :
 | `tts_balises` | balises `<laugh>` supportées |
 | `tts_voice_design` | création de voix par description |
 | `tts_multi_voix` | 2 voix dans une requête |
+| `tts_flux` | audio envoyé par morceaux pendant le calcul (écoute pendant la génération, §5.6) |
 | `stt` | Gemini 3.5 Transcribe |
 | `stt_mots_horodates` | horodatage par mot (obligatoire pour l'animation) |
 | `stt_vocabulaire` | vocabulaire personnalisé |
@@ -296,6 +297,21 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
   - Écoute comparative : lecture enchaînée ou bascule instantanée A/B au même moment du texte ; note ★ et choix de la variante retenue.
   - Chaque variante devient une prise normale (§5.6).
 - **Écoute pendant la génération** (streaming) : option pour entendre le début avant la fin du calcul.
+- Mise en œuvre (étape 6) :
+  - Bouton **« Variantes… »** à côté de « Générer la voix ». Fenêtre à deux onglets :
+    - « Mêmes réglages » : de 2 à 6 variantes (lettres A à F) ;
+    - « Réglages par variante » : colonne « Réglages de base » (ceux de l'atelier), puis une colonne par variante (2 au départ, A et B, identiques à la base). Lignes : modèle, voix, puis pour chaque réplique son style et son texte (sous chaque texte : menu « Balise » par famille et « Accentuer »). Choisir une voix créée choisit aussi son modèle, comme dans l'atelier. Icônes « Dupliquer la variante » et « Supprimer » (au moins 2 variantes) en tête de colonne, « Ajouter » à droite.
+    - En bas : coût total estimé (prix de chaque modèle, dictionnaire de prononciation compris) et « Générer les N variantes ».
+  - Génération : les variantes partent **l'une après l'autre** (pour rester sous les limites de débit de Google). Chacune devient une prise « Prise N — variante B », marquée de sa série (`serie`, `variante` dans `projet.json`). Bouton « Arrêter » pendant la série : elle s'arrête après la variante en cours. Si une variante échoue, la série s'arrête ; les variantes déjà prêtes sont gardées.
+  - **Écoute comparative** : fenêtre « Comparer les variantes » ouverte à la fin de la série (au moins 2 variantes prêtes), et depuis le menu ⋯ d'une prise de la série.
+    - « Lecture enchaînée » : A, puis B, puis C… (0,6 s de silence entre deux).
+    - Bascule : clic sur une lettre, ou touches A à F (ou 1 à 6). La variante choisie reprend **au même moment du texte** : même proportion de sa durée, puisque les variantes n'ont pas exactement la même durée. Chaque variante a son propre lecteur, chargé à l'ouverture : la bascule est immédiate. Espace : lecture ou pause.
+    - Chaque ligne montre ce qui distingue la variante (réglages qui changent dans la série ; « Mêmes réglages » sinon), sa durée, sa note ★ et « Garder » : une seule variante retenue par série, signalée par la pastille « Retenue » dans la liste des prises.
+  - **Écoute pendant la génération** : case « Écouter pendant la génération » sous le bouton (cochée au départ ; le choix est retenu). Pour les modèles qui envoient leur audio en flux (capacité « Écoute en direct » : Gemini 3.8 Flash TTS et Flash-Lite TTS), la requête part avec `stream: true`.
+    - Google envoie des événements (server-sent events) : des « step.delta » portent chacun un morceau d'audio (PCM brut `audio/l16`, 24 kHz, mono, 16 bits little-endian, en base64), puis « interaction.completed » donne le statut et les tokens (coût) ; le flux se termine par « [DONE] ».
+    - La lecture démarre dès 0,3 s d'avance. L'audio est converti au format de la carte son si elle n'accepte pas celui du TTS (fréquence, stéréo, nombres à virgule).
+    - Sans sortie audio utilisable : génération d'un bloc et lecture de la prise à la fin, comme avant. Une prise lancée à la main arrête l'écoute en cours.
+    - Les variantes A/B ne sont pas écoutées pendant leur génération : on les compare ensuite.
 
 ### 5.6 bis Limites du modèle (doc officielle)
 

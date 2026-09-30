@@ -107,6 +107,11 @@ class Prise:
     cout_eur: str | None = None
     note: int = 0  # 0 à 5 étoiles
     repliques: list[dict] = field(default_factory=list)  # [{"texte_api", "style"}] envoyées à Google
+    # Variantes A/B (§5.6) : prises générées ensemble forment une « série » (numéro > 0), chacune
+    # avec sa lettre ; la variante retenue après l'écoute comparative est marquée.
+    serie: int = 0
+    variante: str = ""
+    retenue: bool = False
 
 
 @dataclass
@@ -258,9 +263,12 @@ class GestionnaireProjets:
             relatif = f"{DOSSIER_PRISES}/prise-{numero:03d}.wav"
         projet.chemin(relatif).parent.mkdir(parents=True, exist_ok=True)
         projet.chemin(relatif).write_bytes(audio_wav)
+        nom = f"Prise {numero}"
+        if infos.get("variante"):
+            nom += f" — variante {infos['variante']}"
         prise = Prise(
             identifiant=uuid.uuid4().hex[:12],
-            nom=f"Prise {numero}",
+            nom=nom,
             fichier=relatif,
             date=_maintenant(),
             **infos,
@@ -268,6 +276,25 @@ class GestionnaireProjets:
         projet.prises.append(prise)
         self.enregistrer()
         return prise
+
+    def nouvelle_serie(self) -> int:
+        """Numéro de la prochaine série de variantes (1, 2, 3…)."""
+        return 1 + max((p.serie for p in self._projet_ouvert().prises), default=0)
+
+    def serie(self, numero: int) -> list[Prise]:
+        """Prises d'une série de variantes, dans l'ordre des lettres (A, B, C…)."""
+        if numero <= 0:
+            return []
+        return sorted((p for p in self._projet_ouvert().prises if p.serie == numero), key=lambda p: p.variante)
+
+    def retenir(self, identifiant: str) -> None:
+        """Marque la variante retenue de sa série (une seule par série) ; la retire si elle l'était déjà."""
+        prise = self.prise(identifiant)
+        deja = prise.retenue
+        for autre in self.serie(prise.serie):
+            autre.retenue = False
+        prise.retenue = not deja
+        self.enregistrer()
 
     def prise(self, identifiant: str) -> Prise:
         for prise in self._projet_ouvert().prises:

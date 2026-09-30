@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
 from ..composants.elements import libelle
 from ..theme import Dimensions, Espacements
+
+
+class ZoneDefilante(QScrollArea):
+    """Zone qui défile, dont la hauteur « souhaitée » reste modeste.
+
+    Sans cela, Qt prend la hauteur du contenu (jusqu'à 24 lignes de texte) comme hauteur
+    souhaitée. Dans une fenêtre à onglets contenant des textes sur plusieurs lignes, Qt en déduit
+    même une hauteur *minimale* de fenêtre, qui peut dépasser l'écran d'un ordinateur portable
+    (les boutons du bas deviennent inaccessibles). Le contenu, lui, défile comme avant."""
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        taille = super().sizeHint()
+        return QSize(taille.width(), min(taille.height(), Dimensions.ZONE_DEFILANTE_HAUTEUR_SOUHAITEE))
 
 
 def zone_defilante(
@@ -19,7 +32,7 @@ def zone_defilante(
     occupe toute la largeur disponible sans dépasser `largeur_max` (au-delà, les lignes de
     texte deviennent trop longues à lire), et reste calée à gauche.
     """
-    zone = QScrollArea()
+    zone = ZoneDefilante()
     zone.setWidgetResizable(True)
     zone.setFrameShape(QFrame.Shape.NoFrame)
     zone.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)

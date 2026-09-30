@@ -17,7 +17,7 @@ from pathlib import Path
 import PySide6
 from PySide6.QtCore import QPoint, Qt, QTimer, qVersion
 from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader
-from PySide6.QtWidgets import QApplication, QScrollArea, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QScrollArea, QWidget
 
 from . import __version__
 from .chemins import fichier_journal
@@ -25,10 +25,13 @@ from .demo import SCRIPT_DEMO
 from .script import normaliser
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
+from .ui.dialogues.comparaison import DialogueComparaison
 from .ui.dialogues.prononciation import DialoguePrononciation
 from .ui.dialogues.styles import DialogueBibliothequeStyles, DialogueStyle
+from .ui.dialogues.variantes import ONGLET_MEMES_REGLAGES, ONGLET_PAR_VARIANTE, DialogueVariantes
 from .ui.dialogues.voice_design import DialogueVoiceDesign
 from .ui.dialogues.voix import DialogueBibliothequeVoix
+from .ui.composants.choix_voix import choisir
 from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
@@ -117,8 +120,12 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
       visible, le bord droit est coupé (rien ne permet de le voir).
     - Fenêtre dont la disposition demande plus de largeur qu'elle n'en a : les éléments sont
       écrasés (textes abrégés, chevauchements).
+    - Fenêtre de dialogue plus haute que l'écran d'un portable : ses boutons du bas seraient
+      inaccessibles.
     Chaque problème cite les éléments qui dépassent, avec leur largeur minimale."""
     problemes = []
+    if isinstance(racine, QDialog) and racine.height() > Dimensions.DIALOGUE_HAUTEUR_MAX:
+        problemes.append(f"{nom} : {racine.height()} px de haut (au plus {Dimensions.DIALOGUE_HAUTEUR_MAX})")
     disposition = racine.layout() if racine.isWindow() else None
     if disposition is not None and disposition.minimumSize().width() > racine.width():
         problemes.append(
@@ -185,6 +192,16 @@ def _voice_design_rempli(services, atelier, parent) -> DialogueVoiceDesign:
     dialogue.description.definir(
         *assembler_description("femme", "environ 25 ans", "chaleureuse", "légèrement voilée", "parisien", "créateur·rice UGC")
     )
+    return dialogue
+
+
+def _variantes_remplies(services, atelier, parent, onglet: int) -> DialogueVariantes:
+    """Variantes A/B : la B change de voix et de style (valeurs surlignées en mauve)."""
+    dialogue = DialogueVariantes(services, atelier.reglages_de_base(), atelier._prononciations(), parent)
+    dialogue.onglets.setCurrentIndex(onglet)
+    colonne_b = dialogue.colonnes()[1]
+    choisir(colonne_b.voix, "Puck")
+    colonne_b.styles[0].setText("warm and confident, slower")
     return dialogue
 
 
@@ -306,6 +323,13 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 ("bibliotheque-voix-mes-voix", DialogueBibliothequeVoix(services, atelier.lecteur, fenetre, onglet=1)),
                 ("dialogue-voice-design", _voice_design_rempli(services, atelier, fenetre)),
                 ("assistant-voix", _assistant_voix_rempli(fenetre)),
+                # Étape 6 : variantes A/B (deux onglets) et écoute comparative de la série de démonstration.
+                ("dialogue-variantes", _variantes_remplies(services, atelier, fenetre, ONGLET_PAR_VARIANTE)),
+                (
+                    "dialogue-variantes-memes-reglages",
+                    _variantes_remplies(services, atelier, fenetre, ONGLET_MEMES_REGLAGES),
+                ),
+                ("dialogue-comparaison", DialogueComparaison(services, 1, fenetre)),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)

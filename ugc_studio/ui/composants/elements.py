@@ -37,6 +37,12 @@ def libelle(
     return etiquette
 
 
+def minutes_secondes(secondes: float) -> str:
+    """Durée lisible : 75,4 s → « 1:15 »."""
+    secondes = max(0, round(secondes))
+    return f"{secondes // 60}:{secondes % 60:02d}"
+
+
 def pastille(texte: str) -> QLabel:
     """Petite étiquette arrondie (ex. « Étape 2 »)."""
     etiquette = QLabel(texte)

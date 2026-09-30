@@ -41,12 +41,17 @@ def duree_wav(donnees: bytes) -> float:
         return entree.getnframes() / float(entree.getframerate())
 
 
+def silence_pcm(secondes: float, frequence: int = FREQUENCE_TTS, canaux: int = CANAUX_TTS) -> bytes:
+    """Échantillons PCM 16 bits d'un silence de cette durée."""
+    return b"\x00" * int(secondes * frequence) * canaux * OCTETS_PAR_ECHANTILLON
+
+
 def concatener_wav(morceaux: list[bytes], silence_s: float = 0.0) -> bytes:
     """Recolle plusieurs WAV de même format (ex. un script long généré en plusieurs fois)."""
     if not morceaux:
         raise ValueError("Aucun morceau à recoller.")
     _, frequence, canaux = lire_wav(morceaux[0])
-    silence = b"\x00" * int(silence_s * frequence) * canaux * OCTETS_PAR_ECHANTILLON
+    silence = silence_pcm(silence_s, frequence, canaux)
     pcm = []
     for index, morceau in enumerate(morceaux):
         echantillons, f, c = lire_wav(morceau)

@@ -141,10 +141,15 @@ class Dimensions:
     DIALOGUE_LARGE_HAUTEUR = 560
     PANNEAU_CONSEILS_LARGEUR = 280  # colonne « Conseils Google » à côté d'un formulaire
     DIALOGUE_STYLE_LARGEUR = 880  # formulaire d'un style + colonne des conseils
+    DIALOGUE_VARIANTES_LARGEUR = 1000  # variantes A/B : une colonne par variante (le tableau défile)
+    COLONNE_VARIANTE_LARGEUR = 240
+    COLONNE_TITRES_VARIANTES_LARGEUR = 104  # « Modèle », « Voix », « Style », « Texte »
     CHAMP_DESCRIPTION_HAUTEUR = 88  # description d'une voix (Voice Design) : environ 3 lignes
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
+    ZONE_DEFILANTE_HAUTEUR_SOUHAITEE = 160  # voir ZoneDefilante (ui/pages/base.py)
+    DIALOGUE_HAUTEUR_MAX = 680  # une fenêtre de dialogue doit tenir sur l'écran d'un portable (768 px)
     EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
     EDITEUR_REPLIQUE_HAUTEUR_MIN = 88  # éditeur d'une réplique (grandit ensuite avec son texte)
     # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
@@ -503,6 +508,11 @@ QTextEdit:disabled, QPlainTextEdit:disabled {
 QLineEdit[invalide="true"] {
     border-color: $erreur;
 }
+/* Variantes A/B (§5.6) : valeur modifiée par rapport aux réglages de base, surlignée en mauve */
+QLineEdit[modifie="true"], QComboBox[modifie="true"], QTextEdit[modifie="true"] {
+    border-color: $accent;
+    background: $teinte_selection;
+}
 QComboBox {
     padding-right: ${esp_xxl}px;
 }
@@ -603,6 +613,10 @@ QScrollBar::add-line, QScrollBar::sub-line {
 }
 QScrollBar::add-page, QScrollBar::sub-page {
     background: none;
+}
+QAbstractScrollArea::corner {
+    background: transparent;
+    border: none;
 }
 
 /* ---------- Menus et infobulles ---------- */

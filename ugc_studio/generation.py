@@ -17,10 +17,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from .audio import concatener_wav, duree_wav
+from .audio import FREQUENCE_TTS, concatener_wav, duree_wav, silence_pcm
 from .estimation import TOKENS_AUDIO_PAR_SECONDE_DEFAUT, ajuster_tokens_par_seconde, regrouper
 from .fournisseurs.base import Adaptateur
-from .fournisseurs.voix import Replique, RequeteVoix, ResultatVoix
+from .fournisseurs.voix import RecepteurAudio, Replique, RequeteVoix, ResultatVoix
 from .projets import Prise, RepliqueProjet
 from .prononciation import Prononciation, appliquer
 from .script import est_vide, joindre_repliques, texte_pour_api
@@ -95,10 +95,27 @@ def tokens_par_seconde(services: Services, modele: str) -> float:
         return TOKENS_AUDIO_PAR_SECONDE_DEFAUT
 
 
-def produire_audio(adaptateur: Adaptateur, commande: Commande, tokens_seconde: float) -> ResultatVoix:
-    """Appel(s) au fournisseur — à lancer en tâche de fond."""
+def produire_audio(
+    adaptateur: Adaptateur,
+    commande: Commande,
+    tokens_seconde: float,
+    recevoir_audio: RecepteurAudio | None = None,
+) -> ResultatVoix:
+    """Appel(s) au fournisseur — à lancer en tâche de fond.
+
+    `recevoir_audio` : écoute pendant la génération ; l'audio est alors demandé en flux et chaque
+    morceau lui est transmis dès son arrivée (avec, entre deux requêtes d'un script long, le même
+    silence que dans la prise recollée)."""
     groupes = regrouper(commande.repliques, tokens_seconde)
-    resultats = [adaptateur.generer_voix(RequeteVoix(commande.modele, commande.voix, groupe)) for groupe in groupes]
+    resultats = []
+    for index, groupe in enumerate(groupes):
+        requete = RequeteVoix(commande.modele, commande.voix, groupe)
+        if recevoir_audio is None:
+            resultats.append(adaptateur.generer_voix(requete))
+            continue
+        if index:
+            recevoir_audio(silence_pcm(PAUSE_ENTRE_MORCEAUX_S), FREQUENCE_TTS)
+        resultats.append(adaptateur.generer_voix(requete, recevoir_audio=recevoir_audio))
     if len(resultats) == 1:
         return resultats[0]
     wav = concatener_wav([r.audio_wav for r in resultats], PAUSE_ENTRE_MORCEAUX_S)
@@ -131,8 +148,12 @@ def noter_cout(services: Services, commande: Commande, resultat: ResultatVoix) -
     return appel.cout_eur
 
 
-def enregistrer_prise(services: Services, commande: Commande, resultat: ResultatVoix) -> Prise:
-    """Dans la tâche principale : coût noté, prise rangée dans le projet."""
+def enregistrer_prise(
+    services: Services, commande: Commande, resultat: ResultatVoix, serie: int = 0, variante: str = ""
+) -> Prise:
+    """Dans la tâche principale : coût noté, prise rangée dans le projet.
+
+    `serie` et `variante` : pour une prise d'une série de variantes A/B (§5.6)."""
     cout = noter_cout(services, commande, resultat)
     return services.projets.ajouter_prise(
         resultat.audio_wav,
@@ -146,4 +167,6 @@ def enregistrer_prise(services: Services, commande: Commande, resultat: Resultat
         tokens_sortie=resultat.tokens_sortie,
         cout_eur=None if cout is None else format(cout, "f"),
         repliques=[{"texte_api": r.texte, "style": r.style} for r in commande.repliques],
+        serie=serie,
+        variante=variante,
     )
