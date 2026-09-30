@@ -17,7 +17,7 @@ from pathlib import Path
 import PySide6
 from PySide6.QtCore import QPoint, Qt, QTimer, qVersion
 from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader
-from PySide6.QtWidgets import QApplication, QScrollArea, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QScrollArea, QWidget
 
 from . import __version__
 from .chemins import fichier_journal
@@ -120,8 +120,12 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
       visible, le bord droit est coupé (rien ne permet de le voir).
     - Fenêtre dont la disposition demande plus de largeur qu'elle n'en a : les éléments sont
       écrasés (textes abrégés, chevauchements).
+    - Fenêtre de dialogue plus haute que l'écran d'un portable : ses boutons du bas seraient
+      inaccessibles.
     Chaque problème cite les éléments qui dépassent, avec leur largeur minimale."""
     problemes = []
+    if isinstance(racine, QDialog) and racine.height() > Dimensions.DIALOGUE_HAUTEUR_MAX:
+        problemes.append(f"{nom} : {racine.height()} px de haut (au plus {Dimensions.DIALOGUE_HAUTEUR_MAX})")
     disposition = racine.layout() if racine.isWindow() else None
     if disposition is not None and disposition.minimumSize().width() > racine.width():
         problemes.append(

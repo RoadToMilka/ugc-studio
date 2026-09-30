@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QMenu,
-    QScrollArea,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -54,6 +53,7 @@ from ..composants.choix_voix import choisir, remplir_modeles_voix, remplir_voix
 from ..composants.editeur_script import EditeurScript
 from ..composants.elements import bouton, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
+from ..pages.base import ZoneDefilante
 from ..theme import Dimensions, Espacements
 
 ONGLET_MEMES_REGLAGES = 0
@@ -197,7 +197,7 @@ class DialogueVariantes(QDialog):
         actions.addStretch(1)
         disposition.addLayout(actions)
         # Le tableau peut être plus large que la fenêtre (jusqu'à 6 variantes) : il défile.
-        zone = QScrollArea()
+        zone = ZoneDefilante()
         zone.setWidgetResizable(True)
         zone.setFrameShape(QFrame.Shape.NoFrame)
         interieur = QWidget()
