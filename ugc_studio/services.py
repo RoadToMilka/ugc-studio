@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from .chemins import dossier_donnees, fichier_preferences
 from .connexions import Coffre, CoffreWindows, GestionnaireConnexions
 from .couts import JournalCouts
+from .modeles_charges import ModelesCharges
 from .preferences import Preferences
 from .prix import CataloguePrix
 from .projets import GestionnaireProjets
@@ -30,20 +31,24 @@ class Services:
     prononciations: DictionnaireGlobal  # dictionnaire de prononciation commun à tous les projets (§5.2)
     voix: GestionnaireVoix  # favoris, voix créées, bibliothèque de Google gardée en mémoire (§5.4)
     remplacements: DictionnaireRemplacements  # remplacements après transcription, tous projets (§6.3)
+    modeles: ModelesCharges  # modèles chargés dans l'app, et où ils servent (§4.2 bis)
 
 
 def creer_services(coffre: Coffre | None = None) -> Services:
     """`coffre` : coffre-fort des clés (par défaut celui de Windows)."""
     dossier = dossier_donnees()
     prix = CataloguePrix(dossier / "prix.json")
+    styles = BibliothequeStyles(dossier / "styles.json")
+    voix = GestionnaireVoix(dossier / "voix.json")
     return Services(
         preferences=Preferences(fichier_preferences()),
         connexions=GestionnaireConnexions(dossier / "connexions.json", coffre or CoffreWindows()),
         prix=prix,
         couts=JournalCouts(dossier / "couts", prix),
         projets=GestionnaireProjets(dossier / "projets_recents.json"),
-        styles=BibliothequeStyles(dossier / "styles.json"),
+        styles=styles,
         prononciations=DictionnaireGlobal(dossier / "prononciations.json"),
-        voix=GestionnaireVoix(dossier / "voix.json"),
+        voix=voix,
         remplacements=DictionnaireRemplacements(dossier / "remplacements.json"),
+        modeles=ModelesCharges(dossier / "modeles.json", voix, styles),
     )

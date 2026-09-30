@@ -28,6 +28,7 @@ from .ui.composants.conseils import DialogueConseils
 from .ui.composants.tableau import Tableau
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
+from .ui.dialogues.choix_modeles import DialogueChoixModeles
 from .ui.dialogues.comparaison import DialogueComparaison
 from .ui.dialogues.prononciation import DialoguePrononciation
 from .ui.dialogues.styles import DialogueBibliothequeStyles, DialogueStyle
@@ -448,6 +449,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 # V1.1, lot 3 : fenêtres « Conseils » (un module, une fenêtre).
                 ("conseils-voix", DialogueConseils(PAGES["voix"], fenetre)),
                 ("conseils-creer-une-voix", DialogueConseils(PAGES["creer-une-voix"], fenetre)),
+                # V1.1, lot 5 : modèles chargés.
+                ("dialogue-choix-modeles", DialogueChoixModeles(services, fenetre)),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)

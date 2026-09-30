@@ -59,6 +59,67 @@ def libelle(
     return etiquette
 
 
+class EtiquetteAbregee(QLabel):
+    """Texte sur une seule ligne, abrégé par « … » quand la place manque, texte complet au survol
+    (ex. le nom d'un modèle dans Réglages → Modèles et prix, à la plus petite largeur de fenêtre).
+    text() renvoie toujours le texte complet ; definir_aide() ajoute une infobulle permanente
+    (ex. l'identifiant technique d'un modèle), sous le texte complet quand il est abrégé."""
+
+    def __init__(self, texte: str = "", role: str | None = None):
+        super().__init__()
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        if role:
+            self.setProperty("role", role)
+        # Peut se resserrer jusqu'à « … » (voir minimumSizeHint) : le texte est alors abrégé.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self._complet = texte
+        self._aide = ""
+        self._mettre_a_jour()
+
+    def definir_aide(self, aide: str) -> None:
+        self._aide = aide
+        self._mettre_a_jour()
+
+    def text(self) -> str:
+        return self._complet
+
+    def setText(self, texte: str) -> None:  # noqa: N802 — même nom que chez QLabel
+        self._complet = texte
+        self._mettre_a_jour()
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        taille = super().sizeHint()
+        marges = self.contentsMargins()
+        largeur = self.fontMetrics().horizontalAdvance(self._complet) + marges.left() + marges.right()
+        return QSize(largeur, taille.height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        return QSize(self.fontMetrics().horizontalAdvance("…"), super().minimumSizeHint().height())
+
+    def resizeEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        super().resizeEvent(evenement)
+        self._mettre_a_jour()
+
+    def changeEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        super().changeEvent(evenement)
+        if evenement.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._mettre_a_jour()  # la feuille de style a changé la taille du texte
+
+    def _mettre_a_jour(self) -> None:
+        affiche = self.fontMetrics().elidedText(self._complet, Qt.TextElideMode.ElideRight, self.contentsRect().width())
+        if QLabel.text(self) != affiche:
+            QLabel.setText(self, affiche)
+        infobulle = [self._complet] if affiche != self._complet else []
+        if self._aide:
+            infobulle.append(self._aide)
+        self.setToolTip("\n".join(infobulle))
+
+
+def libelle_abrege(texte: str, role: str | None = None) -> EtiquetteAbregee:
+    """Texte sur une seule ligne, abrégé par « … » s'il manque de place (voir EtiquetteAbregee)."""
+    return EtiquetteAbregee(texte, role)
+
+
 def minutes_secondes(secondes: float) -> str:
     """Durée lisible : 75,4 s → « 1:15 »."""
     secondes = max(0, round(secondes))

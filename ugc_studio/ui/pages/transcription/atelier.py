@@ -34,6 +34,7 @@ from ....audio import duree_wav
 from ....chemins import dossier_documents
 from ....fournisseurs.capacites import MODELES_CONNUS, Capacite, modele_connu, modeles_pour
 from ....fournisseurs.stt import MODE_SMART, MODE_VERBATIM
+from ....modeles_charges import TRANSCRIPTION
 from ....prix import lire_decimal
 from ....projets import FICHIER_AUDIO, LANGUES, Projet
 from ....services import Services
@@ -60,7 +61,7 @@ from ....transcription import (
     supprimer,
 )
 from ... import taches
-from ...composants.choix_voix import choisir
+from ...composants.choix_voix import choisir, propose
 from ...composants.editeur_transcription import EditeurTranscription, nom_de_personne
 from ...composants.elements import (
     bloc,
@@ -183,6 +184,7 @@ class AtelierTranscription(Page):
         grille.setHorizontalSpacing(Espacements.M)
         grille.setVerticalSpacing(Espacements.S)
         self.modele = liste_deroulante("Modèle de transcription")
+        self.modele.currentIndexChanged.connect(lambda _index: self._modele_change())
         self.langue = liste_deroulante("Langue parlée dans la source")
         self.langue.addItem("Détection automatique", AUTO)
         for code, nom in LANGUES.items():
@@ -347,10 +349,15 @@ class AtelierTranscription(Page):
         self.rafraichir()
 
     def _remplir_modeles(self) -> None:
-        """Modèles de transcription accessibles avec les clés (ceux qui donnent le moment de chaque mot)."""
-        actuel = self.modele.currentData()
+        """Modèles de transcription chargés et accessibles avec les clés (ceux qui donnent le moment
+        de chaque mot)."""
+        actuel = self.modele.currentData() or MODELE_PAR_DEFAUT
         disponibles = self._services.connexions.modeles_disponibles(FOURNISSEUR)
-        choix = [c for c in modeles_pour({Capacite.STT, Capacite.STT_MOTS_HORODATES}, disponibles) if c.compatible]
+        choix = [
+            c
+            for c in modeles_pour({Capacite.STT, Capacite.STT_MOTS_HORODATES}, disponibles)
+            if c.compatible and propose(self._services, c.identifiant, actuel)
+        ]
         self.modele.blockSignals(True)
         self.modele.clear()
         if choix:
@@ -358,10 +365,15 @@ class AtelierTranscription(Page):
                 self.modele.addItem(c.nom, c.identifiant)
         else:
             for connu in MODELES_CONNUS:
-                if Capacite.STT in connu.capacites and connu.principal:
+                if Capacite.STT in connu.capacites and propose(self._services, connu.identifiant, actuel):
                     self.modele.addItem(connu.nom, connu.identifiant)
-        choisir(self.modele, actuel or MODELE_PAR_DEFAUT)
+        choisir(self.modele, actuel)
         self.modele.blockSignals(False)
+        self._modele_change()
+
+    def _modele_change(self) -> None:
+        """Réglages → Modèles et prix, colonne « Utilisé dans » : le modèle choisi ici."""
+        self._services.modeles.choisir(TRANSCRIPTION, self.modele.currentData())
 
     # --- Affichage ---------------------------------------------------------------------------
 

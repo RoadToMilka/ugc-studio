@@ -20,6 +20,7 @@ from ...services import Services
 from ...voix_locales import GENRES, MAX_VOIX_CREEES, date_lisible
 from .. import taches
 from ..composants.champ_style import ChampDescription
+from ..composants.choix_voix import propose
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, conteneur_vertical, info, libelle, liste_deroulante
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
@@ -101,8 +102,8 @@ class DialogueVoiceDesign(QDialog):
         for code, nom in GENRES.items():
             self.genre.addItem(nom, code)
         self.modele = liste_deroulante()
-        for connu in MODELES_CONNUS:
-            if Capacite.TTS_VOICE_DESIGN in connu.capacites:
+        for connu in MODELES_CONNUS:  # modèles chargés qui savent créer une voix
+            if Capacite.TTS_VOICE_DESIGN in connu.capacites and propose(services, connu.identifiant, modele):
                 self.modele.addItem(connu.nom, connu.identifiant)
         self.modele.setCurrentIndex(max(0, self.modele.findData(modele)))
         self.description = ChampDescription(services)

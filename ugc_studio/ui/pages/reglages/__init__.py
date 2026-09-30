@@ -35,4 +35,6 @@ class PageReglages(QWidget):
         self.onglets.addTab(self.modeles, "Modèles et prix")
         self.onglets.addTab(self.couts, "Suivi des coûts")
         self.onglets.addTab(self.donnees, "Journal et données")
+        # « Choisir les modèles » sans clé testée : on va tester une clé.
+        self.modeles.connexions_demandees.connect(lambda: self.onglets.setCurrentIndex(0))
         disposition.addWidget(self.onglets, 1)

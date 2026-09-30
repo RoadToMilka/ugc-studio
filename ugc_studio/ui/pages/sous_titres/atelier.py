@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from ....chemins import dossier_documents
 from ....fournisseurs.stt import MODE_VERBATIM
+from ....modeles_charges import SOUS_TITRES
 from ....projets import FICHIER_AUDIO, ErreurProjet, Projet, nom_de_dossier
 from ....script import texte_brut
 from ....services import Services
@@ -296,6 +297,7 @@ class AtelierSousTitres(Page):
         self.lecteur.arreter()
         self._projet = projet
         if projet is None:
+            self._services.modeles.choisir(SOUS_TITRES, None)
             return
         self.titre.setText(f"{TITRE} / {projet.nom}")
         self._afficher("", "secondaire")
@@ -319,6 +321,8 @@ class AtelierSousTitres(Page):
 
     def rafraichir(self) -> None:
         """Met toute la page à jour : source des mots, prises, réglages, sous-titres."""
+        # Réglages → Modèles et prix, « Utilisé dans » : le modèle qui transcrit une prise.
+        self._services.modeles.choisir(SOUS_TITRES, self._modele() if self._projet else None)
         if self._projet is None:
             return
         transcription = self.transcription

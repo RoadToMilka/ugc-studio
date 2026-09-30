@@ -19,13 +19,21 @@ def choisir(liste: QComboBox, valeur: str) -> None:
         liste.setCurrentIndex(index)
 
 
-def remplir_modeles_voix(liste: QComboBox, services: Services, actuel: str | None) -> bool:
-    """Modèles de voix accessibles avec les clés testées (croisement avec les capacités, §3.4).
+def propose(services: Services, identifiant: str, actuel: str | None = None) -> bool:
+    """Un modèle n'est proposé dans les listes « Modèle » que s'il est chargé (Réglages → Modèles
+    et prix, « Choisir les modèles… ») ; le modèle déjà choisi reste toujours dans la liste."""
+    return services.modeles.est_charge(identifiant) or identifiant == actuel
 
-    Sans clé testée : les modèles principaux du catalogue, et la fonction renvoie False (l'atelier
+
+def remplir_modeles_voix(liste: QComboBox, services: Services, actuel: str | None) -> bool:
+    """Modèles de voix chargés et accessibles avec les clés testées (croisement avec les capacités, §3.4).
+
+    Sans clé testée : les modèles chargés du catalogue, et la fonction renvoie False (l'atelier
     invite alors à tester une clé)."""
     disponibles = services.connexions.modeles_disponibles(FOURNISSEUR)
-    compatibles = [c for c in modeles_pour({Capacite.TTS}, disponibles) if c.compatible]
+    compatibles = [
+        c for c in modeles_pour({Capacite.TTS}, disponibles) if c.compatible and propose(services, c.identifiant, actuel)
+    ]
     liste.blockSignals(True)
     liste.clear()
     if compatibles:
@@ -33,7 +41,7 @@ def remplir_modeles_voix(liste: QComboBox, services: Services, actuel: str | Non
             liste.addItem(choix.nom, choix.identifiant)
     else:
         for modele in MODELES_CONNUS:
-            if Capacite.TTS in modele.capacites and modele.principal:
+            if Capacite.TTS in modele.capacites and propose(services, modele.identifiant, actuel):
                 liste.addItem(modele.nom, modele.identifiant)
     choisir(liste, actuel or MODELE_VOIX_PAR_DEFAUT)
     liste.blockSignals(False)
