@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 2.0 — 30/09/2026 (étape 4 : répliques et styles, traduction, bibliothèque de styles, dictionnaire de prononciation)
+> Version du document : 2.1 — 30/09/2026 (étape 5 : bibliothèque de voix, favoris, écoute des extraits, Voice Design)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -202,8 +202,12 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 - **Voix de base** (30 voix Google) avec leur caractère (Puck — Upbeat, Kore — Firm, Leda — Youthful…).
 - **Bibliothèque étendue** interrogée via l'API (`voices.list`) avec **filtres** : langue, accent, genre, hauteur (grave/moyenne/aiguë), persona, contexte d'usage, recherche texte.
-- Bouton **▶ écouter** un extrait pour chaque voix (génération d'une phrase test, coût affiché). L'extrait est généré une seule fois par modèle, voix et langue, puis gardé en cache ; son coût est noté « essai de voix ».
-- **Favoris** de voix.
+  - Requête : `GET /v1beta/voices?page_size=1000&type=prebuilt` (pages suivantes avec `page_token`). La bibliothèque (plusieurs centaines de voix) est gardée une semaine dans `voix.json` ; bouton « Actualiser ».
+  - Les filtres agissent dans l'app, instantanément ; au départ, la langue du projet est choisie. Au plus 100 lignes affichées (au-delà : « affine les filtres »).
+  - Fenêtre « Bibliothèque de voix » (bouton 📚 à côté de la liste des voix) : onglets « Voix Google » et « Mes voix » ; chaque voix s'écoute (▶) et se choisit en un clic.
+- Bouton **▶ écouter** un extrait pour chaque voix. Voix créées et voix de la bibliothèque étendue : l'extrait fourni par Google (`GET /v1beta/voices/{id}`, gratuit) s'il existe. 30 voix de base (elles parlent toutes les langues) : une phrase d'exemple générée dans la langue du projet, coût noté « essai de voix ». Chaque extrait est gardé en cache.
+- **Favoris** de voix (★) : en tête de la liste des voix de l'atelier (puis les voix créées, puis les 30 voix de base) et filtre « Favoris seulement » dans la bibliothèque.
+- Choisir une voix créée choisit aussi le modèle avec lequel elle a été créée.
 - *(V4)* Voice Replication (clonage à partir de 30 s, **uniquement avec l'accord de la personne**).
 
 ### 5.4 bis Voice Design — créer ses voix (V1)
@@ -216,6 +220,13 @@ Création de voix personnalisées **dans l'app** (API `POST /v1beta/voices`, `ty
 - Gestion : liste, réécoute (`voices.get` renvoie l'extrait), renommage, suppression, **date d'expiration** affichée (conservation 1 an), compteur **x / 200 voix**.
 - Les voix créées dans Google AI Studio (même projet) apparaissent aussi dans l'app.
 - Coût éventuel de création : à vérifier au moment du code ; affiché s'il existe.
+- Mise en œuvre (étape 5) :
+  - Création : `POST /v1beta/voices` avec `store: true`, `voice.type: "prompted"`, `display_name`, `language_code`, `gender`, `model`, `prompted.input` (la description, en anglais). La réponse contient l'identifiant `voice_…`, `expire_time`, un extrait (`sample_audio`, joué aussitôt) et `usage` : les tokens sont comptés au prix du modèle, opération « création de voix ».
+  - Chaque création donne une version un peu différente : la fenêtre « Créer une voix » liste les versions créées (▶, Supprimer, « Utiliser cette voix »), et « Créer une autre version » en crée une nouvelle avec la même description.
+  - La description suit les mêmes règles que les styles : envoyée en anglais, traduction française affichée, bouton « Traduire en anglais », vérifications en direct (dont description en français).
+  - L'assistant de description propose genre, âge, timbre, texture, accent régional et rôle ; il assemble 1 à 2 phrases en anglais (ex. « A young woman in her mid-20s with a warm, slightly husky voice and a Parisian French accent. Spontaneous and playful, like a creator talking to a friend on camera. ») et reporte le genre dans le formulaire.
+  - Renommer : l'API ne permet pas de renommer une voix ; le nouveau nom est gardé dans l'app (`voix.json`).
+  - Liste « Mes voix » : `GET /v1beta/voices?type=prompted&type=replicated`, redemandée au plus toutes les heures (et sur « Actualiser »).
 
 **Panneau « Conseils Google »** (toujours visible à côté du formulaire) :
 - Mettre ici les **traits permanents** : âge, genre, timbre, texture vocale, accent régional.
@@ -617,7 +628,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 - Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
 - Syntaxe exacte des API au moment du code (la doc évolue vite — toujours vérifier la doc officielle avant d'écrire un adaptateur). Les prix de Gemini 3.5 Transcribe sont connus depuis la v1.9 (§4.2).
 - Valeurs précises des **zones de sécurité** par plateforme (à documenter au moment de la V2).
-- **Durée de conservation des voix créées** (Voice Design) : le guide officiel « Get_Started_Voices » indique 7 jours (`expire_time`), le §5.4 bis 1 an. L'app affichera la date renvoyée par Google (à vérifier à l'étape 5).
+- **Durée de conservation des voix créées** (Voice Design) : la documentation officielle « Voice Design » indique 1 an et 200 voix par projet ; le guide « Get_Started_Voices » indique 7 jours. L'app affiche la date renvoyée par Google (`expire_time`).
 
 ---
 

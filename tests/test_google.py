@@ -223,3 +223,95 @@ def test_traduction_d_un_style(serveur):
     assert corps["model"] == MODELE_TRADUCTION == "gemini-3.8-flash"
     assert corps["input"][0]["text"] == "chuchoté, complice"
     assert "English" in corps["system_instruction"]
+
+
+# --- Voix : bibliothèque étendue et Voice Design (API Voices) -----------------------------------
+
+
+def _voix_json(identifiant, **extra):
+    return {"id": identifiant, "display_name": identifiant.title(), "type": "prebuilt", **extra}
+
+
+def test_liste_des_voix_sur_plusieurs_pages(serveur):
+    serveur.programmer(
+        200,
+        {
+            "voices": [
+                _voix_json("kore", language_code="fr-FR", gender="FEMALE", pitch="medium", accent="Parisian"),
+            ],
+            "next_page_token": "p2",
+        },
+    )
+    # Deuxième page écrite en « camelCase » : les deux écritures sont acceptées.
+    serveur.programmer(200, {"voices": [{"id": "puck", "displayName": "Puck", "languageCode": "en-US"}]})
+    voix = AdaptateurGoogle(CLE, url_api=serveur.url).lister_voix(("prebuilt",))
+    assert [(v.identifiant, v.nom, v.langue) for v in voix] == [("kore", "Kore", "fr-FR"), ("puck", "Puck", "en-US")]
+    assert (voix[0].genre, voix[0].hauteur, voix[0].accent) == ("female", "medium", "Parisian")
+    premiere, seconde = serveur.requetes
+    assert premiere["chemin"] == "/voices?page_size=1000&type=prebuilt"
+    assert seconde["chemin"] == "/voices?page_size=1000&type=prebuilt&page_token=p2"
+
+
+def test_liste_des_voix_creees(serveur):
+    serveur.programmer(200, {"voices": [_voix_json("voice_abc", type="prompted", expire_time="2027-09-30T10:00:00Z")]})
+    (voix,) = AdaptateurGoogle(CLE, url_api=serveur.url).lister_voix(("prompted", "replicated"))
+    assert voix.creee and voix.expire_le == "2027-09-30T10:00:00Z"
+    assert serveur.requetes[0]["chemin"] == "/voices?page_size=1000&type=prompted&type=replicated"
+
+
+def test_obtenir_une_voix_avec_son_extrait(serveur):
+    extrait = {"data": base64.b64encode(wav_depuis_pcm(PCM)).decode(), "mime_type": "audio/wav"}
+    serveur.programmer(200, _voix_json("voice_abc", type="prompted", sample_audio=extrait))
+    voix = AdaptateurGoogle(CLE, url_api=serveur.url).obtenir_voix("voice_abc")
+    assert voix.extrait_wav[:4] == b"RIFF"
+    assert serveur.requetes[0]["chemin"] == "/voices/voice_abc"
+
+
+def test_creer_une_voix(serveur):
+    from ugc_studio.fournisseurs.voix import RequeteVoiceDesign
+
+    extrait = {"data": base64.b64encode(wav_depuis_pcm(PCM)).decode(), "mime_type": "audio/wav"}
+    serveur.programmer(
+        200,
+        {
+            "id": "voice_new",
+            "display_name": "Léa",
+            "type": "prompted",
+            "model": "gemini-3.8-flash-tts",
+            "expire_time": "2027-09-30T10:00:00Z",
+            "sample_audio": extrait,
+            "usage": {"total_input_tokens": 40, "total_output_tokens": 300},
+        },
+    )
+    requete = RequeteVoiceDesign("gemini-3.8-flash-tts", "Léa", "A young woman in her mid-20s.", "fr-FR", "female")
+    creee = AdaptateurGoogle(CLE, url_api=serveur.url).creer_voix(requete)
+    envoi = serveur.requetes[0]
+    assert (envoi["methode"], envoi["chemin"]) == ("POST", "/voices")
+    assert json.loads(envoi["corps"]) == {
+        "store": True,
+        "voice": {
+            "model": "gemini-3.8-flash-tts",
+            "type": "prompted",
+            "display_name": "Léa",
+            "prompted": {"input": "A young woman in her mid-20s."},
+            "language_code": "fr-FR",
+            "gender": "female",
+        },
+    }
+    assert creee.voix.identifiant == "voice_new" and creee.voix.extrait_wav[:4] == b"RIFF"
+    assert (creee.tokens_entree, creee.tokens_sortie) == (40, 300)
+
+
+def test_trop_de_voix_creees(serveur):
+    from ugc_studio.fournisseurs.voix import RequeteVoiceDesign
+
+    serveur.programmer(429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Stored voice quota exceeded"}})
+    with pytest.raises(ErreurFournisseur) as erreur:
+        AdaptateurGoogle(CLE, url_api=serveur.url).creer_voix(RequeteVoiceDesign("m", "x", "d"))
+    assert erreur.value.code == "quota_voix" and "200" in erreur.value.message
+
+
+def test_supprimer_une_voix(serveur):
+    serveur.programmer(200, {})
+    AdaptateurGoogle(CLE, url_api=serveur.url).supprimer_voix("voice_abc")
+    assert (serveur.requetes[0]["methode"], serveur.requetes[0]["chemin"]) == ("DELETE", "/voices/voice_abc")

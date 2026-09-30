@@ -24,8 +24,12 @@ from .chemins import fichier_journal
 from .demo import SCRIPT_DEMO
 from .script import normaliser
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
+from .ui.dialogues.assistant_voix import DialogueAssistantVoix
 from .ui.dialogues.prononciation import DialoguePrononciation
 from .ui.dialogues.styles import DialogueBibliothequeStyles, DialogueStyle
+from .ui.dialogues.voice_design import DialogueVoiceDesign
+from .ui.dialogues.voix import DialogueBibliothequeVoix
+from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
@@ -91,6 +95,28 @@ def _assistant_rempli(parent) -> DialogueAssistantStyle:
     dialogue = DialogueAssistantStyle(parent)
     for liste, valeur in ((dialogue.emotion, "chaleureux"), (dialogue.emotion2, "enthousiaste"), (dialogue.rythme, "débit rapide")):
         liste.setCurrentIndex(liste.findData(valeur))
+    return dialogue
+
+
+def _assistant_voix_rempli(parent) -> DialogueAssistantVoix:
+    dialogue = DialogueAssistantVoix(parent)
+    for liste, valeur in (
+        (dialogue.age, "environ 25 ans"),
+        (dialogue.timbre, "chaleureuse"),
+        (dialogue.texture, "légèrement voilée"),
+        (dialogue.accent, "parisien"),
+        (dialogue.persona, "créateur·rice UGC"),
+    ):
+        liste.setCurrentIndex(liste.findData(valeur))
+    return dialogue
+
+
+def _voice_design_rempli(services, atelier, parent) -> DialogueVoiceDesign:
+    dialogue = DialogueVoiceDesign(services, atelier.ecoute, parent)
+    dialogue.nom.setText("Léa — créatrice UGC")
+    dialogue.description.definir(
+        *assembler_description("femme", "environ 25 ans", "chaleureuse", "légèrement voilée", "parisien", "créateur·rice UGC")
+    )
     return dialogue
 
 
@@ -206,6 +232,11 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 ("dialogue-style", DialogueStyle(services, services.styles.styles[0], fenetre, "Modifier le style")),
                 ("assistant-style", _assistant_rempli(fenetre)),
                 ("dialogue-prononciation", DialoguePrononciation(services, None, fenetre)),
+                # Étape 5 : bibliothèque de voix (deux onglets), Voice Design et son assistant.
+                ("bibliotheque-voix", DialogueBibliothequeVoix(services, atelier.lecteur, fenetre)),
+                ("bibliotheque-voix-mes-voix", DialogueBibliothequeVoix(services, atelier.lecteur, fenetre, onglet=1)),
+                ("dialogue-voice-design", _voice_design_rempli(services, atelier, fenetre)),
+                ("assistant-voix", _assistant_voix_rempli(fenetre)),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)

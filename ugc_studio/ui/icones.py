@@ -8,6 +8,7 @@ Lucide, rangés dans ugc_studio/ressources/icones/. Ils sont dessinés avec la c
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
@@ -59,7 +60,16 @@ def icone(
     """Icône Qt prête à l'emploi.
 
     `couleur_active` : couleur quand l'élément est sélectionné / coché (état « On »).
+    Chaque icône n'est dessinée qu'une fois (8 zooms × 4 états) : une liste de 100 voix réutilise
+    les mêmes images au lieu de les redessiner 100 fois.
     """
+    return QIcon(_icone_dessinee(nom, couleur, couleur_active, couleur_desactivee, taille, rempli))
+
+
+@lru_cache(maxsize=512)
+def _icone_dessinee(
+    nom: str, couleur: str, couleur_active: str | None, couleur_desactivee: str, taille: int, rempli: bool
+) -> QIcon:
     resultat = QIcon()
     variantes = [
         (QIcon.Mode.Normal, QIcon.State.Off, couleur),

@@ -278,6 +278,9 @@ class DialogueBibliothequeStyles(QDialog):
 
         self._lignes: list[LigneStyle] = []
         services.styles.abonner(self.rafraichir)
+        # Fenêtre détruite sans avoir été fermée normalement : on se désabonne quand même.
+        rappel = self.rafraichir
+        self.destroyed.connect(lambda: services.styles.desabonner(rappel))
         self.rafraichir()
 
     def done(self, resultat: int) -> None:

@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import math
 import struct
+from dataclasses import replace
 from datetime import datetime, timedelta
+
+from .fournisseurs.voix import VoixBibliotheque
 
 from .audio import FREQUENCE_TTS, wav_depuis_pcm
 from .chemins import dossier_projets_defaut
@@ -50,6 +53,31 @@ def son_de_demonstration(secondes: float, frequence: float = 220.0) -> bytes:
     return wav_depuis_pcm(bytes(echantillons))
 
 
+# Bibliothèque de voix de démonstration (noms marqués « démo » : ce ne sont pas de vraies voix Google).
+VOIX_DEMO = [
+    VoixBibliotheque("demo-camille", "Camille (démo)", "Warm and friendly narrator with a clear, smiling delivery.",
+                     "fr-FR", "FR", "Parisian", "female", "medium", "Warm, Friendly", "Commercial"),
+    VoixBibliotheque("demo-hugo", "Hugo (démo)", "Deep, confident voice for premium product launches.",
+                     "fr-FR", "FR", "Standard French", "male", "low", "Confident", "Narration"),
+    VoixBibliotheque("demo-ines", "Inès (démo)", "Bright and playful voice, perfect for social media hooks.",
+                     "fr-FR", "FR", "Southern French", "female", "high", "Playful", "Social media"),
+    VoixBibliotheque("demo-lucas", "Lucas (démo)", "Relaxed, conversational voice with a soft Belgian accent.",
+                     "fr-BE", "BE", "Belgian", "male", "medium", "Friendly", "Conversational"),
+    VoixBibliotheque("demo-ava", "Ava (démo)", "Energetic American voice for upbeat ads.",
+                     "en-US", "US", "American", "female", "medium", "Energetic", "Commercial"),
+]
+VOIX_CREEE_DEMO = VoixBibliotheque(
+    "voice_demo_lea",
+    "Léa — créatrice UGC (démo)",
+    "A young woman in her mid-20s with a warm, slightly husky voice and a Parisian French accent. "
+    "Spontaneous and playful, like a creator talking to a friend on camera.",
+    "fr-FR",
+    genre="female",
+    type="prompted",
+    modele="gemini-3.8-flash-tts",
+)
+
+
 def remplir_donnees_demo(services: Services) -> None:
     connexions = services.connexions
     if not connexions.lister():
@@ -84,6 +112,18 @@ def remplir_donnees_demo(services: Services) -> None:
     if not services.couts.lire():
         for modele, operation, entree, sortie, projet, anciennete in appels:
             services.couts.enregistrer("google", modele, operation, entree, sortie, projet, maintenant - anciennete)
+
+    if not services.voix.bibliotheque():
+        services.voix.definir_bibliotheque(VOIX_DEMO)
+        expiration = (datetime.now().astimezone() + timedelta(days=365)).isoformat(timespec="seconds")
+        services.voix.definir_voix_creees([replace(VOIX_CREEE_DEMO, expire_le=expiration)])
+        services.voix.definir_description_fr(
+            VOIX_CREEE_DEMO.identifiant,
+            "Jeune femme d'environ 25 ans, voix chaleureuse et légèrement voilée, accent parisien. "
+            "Spontanée et complice, comme face caméra avec une amie.",
+        )
+        services.voix.basculer_favori("Puck")
+        services.voix.basculer_favori("demo-camille")
 
     if services.projets.projet is None and not services.projets.recents():
         projet = services.projets.creer("Sérum Glowzy", dossier_projets_defaut())
