@@ -93,7 +93,7 @@ def _verifier_coffre_windows(rapport: dict) -> bool:
 
 
 def _description(element: QWidget) -> str:
-    """« Bouton « Écouter la voix » (min. 165 px) » : pour savoir quel élément corriger."""
+    """« Bouton « Écouter » (min. 118 px) » : pour savoir quel élément corriger."""
     texte = ""
     for nom in ("text", "currentText"):
         methode = getattr(element, nom, None)

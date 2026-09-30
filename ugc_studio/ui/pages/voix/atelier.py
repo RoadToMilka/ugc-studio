@@ -77,7 +77,7 @@ class AtelierVoix(Page):
         )
         self.bouton_bibliotheque_voix.setToolTip("Bibliothèque de voix : toutes les voix de Google, favoris, Voice Design")
         ligne.addWidget(self.bouton_bibliotheque_voix)
-        self.bouton_extrait = bouton("Écouter la voix", nom_icone="play", action=self.ecouter_extrait)
+        self.bouton_extrait = bouton("Écouter", nom_icone="play", action=self.ecouter_extrait)
         self.bouton_extrait.setToolTip("Joue un extrait de cette voix (préparé une seule fois, puis gardé).")
         ligne.addWidget(self.bouton_extrait)
         d.addLayout(ligne)

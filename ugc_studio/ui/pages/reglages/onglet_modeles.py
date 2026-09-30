@@ -235,7 +235,9 @@ class OngletModeles(QWidget):
         # Ligne 1
         nom = QVBoxLayout()
         nom.setSpacing(0)
-        nom.addWidget(libelle(connu.nom if connu else identifiant, retour_a_la_ligne=False))
+        # Le nom peut passer à la ligne : sur une fenêtre étroite, un long nom (« Gemini 2.5 Flash
+        # Preview TTS ») élargirait sinon tout l'onglet au-delà de la partie visible.
+        nom.addWidget(libelle(connu.nom if connu else identifiant))
         note = connu.note if connu else "Détecté avec ta clé : renseigne ses prix."
         nom.addWidget(libelle(f"{identifiant} — {note}" if note else identifiant, "legende"))
         self._grille.addLayout(nom, rang, 0)
