@@ -142,8 +142,7 @@ class Dimensions:
     DIALOGUE_LARGEUR = 520
     DIALOGUE_LARGE_LARGEUR = 760  # bibliothèque de styles, dictionnaire de prononciation
     DIALOGUE_LARGE_HAUTEUR = 560
-    PANNEAU_CONSEILS_LARGEUR = 280  # colonne « Conseils Google » à côté d'un formulaire
-    DIALOGUE_STYLE_LARGEUR = 880  # formulaire d'un style + colonne des conseils
+    DIALOGUE_CONSEILS_LARGEUR = 640  # fenêtre « Conseils » : des lignes de texte faciles à lire
     DIALOGUE_VARIANTES_LARGEUR = 1000  # variantes A/B : une colonne par variante (le tableau défile)
     COLONNE_VARIANTE_LARGEUR = 240
     COLONNE_TITRES_VARIANTES_LARGEUR = 104  # « Modèle », « Voix », « Style », « Texte »
@@ -151,7 +150,7 @@ class Dimensions:
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
-    ZONE_DEFILANTE_HAUTEUR_SOUHAITEE = 160  # voir ZoneDefilante (ui/pages/base.py)
+    ZONE_DEFILANTE_HAUTEUR_SOUHAITEE = 160  # voir ZoneDefilante (ui/composants/defilement.py)
     DIALOGUE_HAUTEUR_MAX = 680  # une fenêtre de dialogue doit tenir sur l'écran d'un portable (768 px)
     EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
     APERCU_SOUS_TITRE_HAUTEUR = 96  # sous-titre en cours, pendant l'écoute (page Sous-titres)

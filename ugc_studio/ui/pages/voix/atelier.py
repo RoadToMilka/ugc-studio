@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout
 
-from ....conseils import CONSEILS_STYLE
 from ....estimation import estimer_repliques
 from ....fournisseurs.base import Adaptateur
 from ....fournisseurs.capacites import Capacite, deviner_capacites
@@ -38,7 +37,6 @@ from ...composants.choix_voix import (
     remplir_voix,
     selectionner_voix,
 )
-from ...composants.conseils import ListeConseils
 from ...composants.editeur_script import EditeurScript
 from ...composants.elements import bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
 from ...composants.lecteur import Lecteur
@@ -60,7 +58,6 @@ from .repliques import CarteReplique, ListeRepliques
 journal = logging.getLogger(__name__)
 
 DELAI_ENREGISTREMENT_MS = 800  # enregistrement automatique après une pause dans la frappe
-CLE_CONSEILS_VISIBLES = "conseils_styles_visibles"
 CLE_ECOUTE_DIRECTE = "ecoute_pendant_generation"
 
 
@@ -80,7 +77,7 @@ class SerieEnCours:
 
 class AtelierVoix(Page):
     def __init__(self, services: Services):
-        super().__init__("Voix", "Voix off générée par IA (TTS).")
+        super().__init__("Voix", "Voix off générée par IA (TTS).", conseils="voix")
         self._services = services
         self._projet: Projet | None = None
         self._chargement = False
@@ -159,20 +156,6 @@ class AtelierVoix(Page):
         self.palette.balise_choisie.connect(lambda nom: self.editeur.inserer_balise(nom))
         d.addWidget(self.palette)
         self.contenu.addWidget(cadre)
-
-        # --- Conseils Google pour les styles (repliables) ---
-        cadre, d = bloc()
-        entete = QHBoxLayout()
-        entete.setSpacing(Espacements.S)
-        entete.addWidget(libelle("Conseils Google pour les styles", "titre-bloc", retour_a_la_ligne=False))
-        entete.addStretch(1)
-        self.bouton_conseils = bouton("", variante="contour", action=self.basculer_conseils)
-        entete.addWidget(self.bouton_conseils)
-        d.addLayout(entete)
-        self.conseils = ListeConseils(CONSEILS_STYLE)
-        d.addWidget(self.conseils)
-        self.contenu.addWidget(cadre)
-        self._afficher_conseils(bool(services.preferences.lire(CLE_CONSEILS_VISIBLES, True)))
 
         # --- Générer : boutons et estimation (caractères, durée, coût), option d'écoute, avancement ---
         generation = QVBoxLayout()
@@ -346,16 +329,6 @@ class AtelierVoix(Page):
 
     def accentuer(self) -> None:
         self.editeur.basculer_accent()
-
-    def basculer_conseils(self) -> None:
-        visibles = self.conseils.isHidden()
-        self._afficher_conseils(visibles)
-        self._services.preferences.ecrire(CLE_CONSEILS_VISIBLES, visibles)
-        self._services.preferences.enregistrer()
-
-    def _afficher_conseils(self, visibles: bool) -> None:
-        self.conseils.setVisible(visibles)
-        self.bouton_conseils.setText("Masquer" if visibles else "Afficher")
 
     def ouvrir_bibliotheque(self, carte: CarteReplique) -> None:
         """📚 d'une réplique : choisir un style enregistré ; il s'applique à cette réplique,

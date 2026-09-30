@@ -108,7 +108,7 @@ class AtelierSousTitres(Page):
     corriger_demande = Signal()  # « Corriger les mots » : ouvrir le module Transcription
 
     def __init__(self, services: Services):
-        super().__init__(TITRE, SOUS_TITRE)
+        super().__init__(TITRE, SOUS_TITRE, conseils="sous-titres")
         self._services = services
         self._projet: Projet | None = None
         self._occupe = False

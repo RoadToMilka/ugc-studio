@@ -14,8 +14,14 @@ from ..base import Page
 class SansProjet(Page):
     """Affiché par les modules qui travaillent dans un projet (Voix, Transcription…)."""
 
-    def __init__(self, services: Services, titre: str = "Voix", sous_titre: str = "Voix off générée par IA (TTS)."):
-        super().__init__(titre, sous_titre)
+    def __init__(
+        self,
+        services: Services,
+        titre: str = "Voix",
+        sous_titre: str = "Voix off générée par IA (TTS).",
+        conseils: str = "voix",
+    ):
+        super().__init__(titre, sous_titre, conseils=conseils)
         self._services = services
 
         cadre, d = bloc("Commence par un projet")

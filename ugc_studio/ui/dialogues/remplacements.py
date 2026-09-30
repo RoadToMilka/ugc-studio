@@ -12,9 +12,10 @@ from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLineEdit, QVBo
 from ...services import Services
 from ...transcription import Remplacement, nettoyer_remplacements
 from ..composants.bouton import activer_avec_entree
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, libelle
 from ..composants.onglets import Onglets
-from ..pages.base import zone_defilante
+from ..composants.defilement import zone_defilante
 from ..theme import Dimensions, Espacements
 
 
@@ -81,7 +82,7 @@ class DialogueRemplacements(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Dictionnaire de remplacements", "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre("Dictionnaire de remplacements", "remplacements"))
         disposition.addWidget(
             info(
                 "Pour les mots que la transcription écrit mal (noms de marque, produits…) : écris-les tels "

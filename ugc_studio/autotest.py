@@ -21,8 +21,10 @@ from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidge
 
 from . import __version__
 from .chemins import fichier_journal
+from .conseils_des_pages import PAGES
 from .demo import SCRIPT_DEMO
 from .script import normaliser
+from .ui.composants.conseils import DialogueConseils
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
 from .ui.dialogues.comparaison import DialogueComparaison
@@ -406,6 +408,9 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     _variantes_remplies(services, atelier, fenetre, ONGLET_MEMES_REGLAGES),
                 ),
                 ("dialogue-comparaison", DialogueComparaison(services, 1, fenetre)),
+                # V1.1, lot 3 : fenêtres « Conseils » (un module, une fenêtre).
+                ("conseils-voix", DialogueConseils(PAGES["voix"], fenetre)),
+                ("conseils-creer-une-voix", DialogueConseils(PAGES["creer-une-voix"], fenetre)),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)

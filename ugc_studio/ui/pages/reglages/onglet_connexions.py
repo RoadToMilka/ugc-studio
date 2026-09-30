@@ -16,7 +16,7 @@ from ...composants.elements import bloc, bouton, info, libelle, pastille, vider_
 from ...dialogues.cle_api import DialogueCle
 from ...icones import icone, icone_menu
 from ...theme import Couleurs, Dimensions, Espacements
-from ..base import zone_defilante
+from ...composants.defilement import zone_defilante
 
 
 def date_lisible(texte_iso: str) -> str:

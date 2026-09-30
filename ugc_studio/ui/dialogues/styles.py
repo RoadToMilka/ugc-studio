@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
 )
 
 from ...balises import balise_depuis_nom, nom_affiche
-from ...conseils import CONSEILS_STYLE
 from ...fournisseurs.capacites import MODELES_CONNUS, Capacite, modele_connu
 from ...fournisseurs.google_voix import VOIX_GOOGLE, voix_de_base
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES
@@ -31,7 +30,7 @@ from ...services import Services
 from ...styles import Style
 from ..composants.bouton import activer_avec_entree
 from ..composants.champ_style import ChampStyle
-from ..composants.conseils import ListeConseils
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
     bouton,
     conteneur_vertical,
@@ -42,7 +41,7 @@ from ..composants.elements import (
     vider_disposition,
 )
 from ..icones import icone_menu
-from ..pages.base import zone_defilante
+from ..composants.defilement import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs
 
 
@@ -88,15 +87,13 @@ class DialogueStyle(QDialog):
         self._services = services
         self._style = style
         self.setWindowTitle(titre)
-        self.setMinimumSize(Dimensions.DIALOGUE_STYLE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
+        self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle(titre, "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre(titre, "style"))
 
-        colonnes = QHBoxLayout()
-        colonnes.setSpacing(Espacements.XL)
         formulaire = QGridLayout()
         formulaire.setHorizontalSpacing(Espacements.M)
         formulaire.setVerticalSpacing(Espacements.S)
@@ -143,16 +140,7 @@ class DialogueStyle(QDialog):
             formulaire.addWidget(element, rang, 1, Qt.AlignmentFlag.AlignTop)
         formulaire.setColumnStretch(1, 1)
         formulaire.setRowStretch(formulaire.rowCount(), 1)  # l'espace libre va sous les champs
-        colonnes.addLayout(formulaire, 1)
-
-        # Conseils Google : colonne de largeur fixe, qui défile si besoin.
-        zone, conseils = zone_defilante(largeur_max=None)
-        zone.setFixedWidth(Dimensions.PANNEAU_CONSEILS_LARGEUR)
-        conseils.setSpacing(Espacements.S)
-        conseils.addWidget(libelle("Conseils Google", "intitule"))
-        conseils.addWidget(ListeConseils(CONSEILS_STYLE))
-        colonnes.addWidget(zone)
-        disposition.addLayout(colonnes, 1)
+        disposition.addLayout(formulaire, 1)
 
         self.statut = libelle("", "erreur")
         self.statut.hide()
@@ -271,16 +259,7 @@ class DialogueBibliothequeStyles(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        entete = QHBoxLayout()
-        entete.setSpacing(Espacements.S)
-        entete.addWidget(libelle("Bibliothèque de styles", "titre-bloc", retour_a_la_ligne=False))
-        entete.addStretch(1)
-        if style_actuel[0]:
-            entete.addWidget(
-                bouton("Enregistrer le style actuel", variante="contour", nom_icone="plus", action=self.enregistrer_actuel)
-            )
-        entete.addWidget(bouton("Nouveau style", nom_icone="plus", action=self.nouveau))
-        disposition.addLayout(entete)
+        disposition.addLayout(entete_de_fenetre("Bibliothèque de styles", "bibliotheque-styles"))
         explication = "Tes styles enregistrés, rangés par catégorie."
         if cible:
             explication += f" « Appliquer » met le style sur la {cible} et choisit sa voix et son modèle."
@@ -291,7 +270,14 @@ class DialogueBibliothequeStyles(QDialog):
         contenu.addWidget(self._liste_widget)
         disposition.addWidget(zone, 1)
 
+        # En bas : créer un style à gauche, fermer à droite (le coin en haut à droite est pour « Conseils »).
         boutons = QHBoxLayout()
+        boutons.setSpacing(Espacements.S)
+        boutons.addWidget(bouton("Nouveau style", nom_icone="plus", action=self.nouveau))
+        if style_actuel[0]:
+            boutons.addWidget(
+                bouton("Enregistrer le style actuel", variante="contour", nom_icone="plus", action=self.enregistrer_actuel)
+            )
         boutons.addStretch(1)
         boutons.addWidget(bouton("Fermer", action=self.reject))
         disposition.addLayout(boutons)

@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 3.2, 30/09/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; voir §12.2)
+> Version du document : 3.3, 30/09/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; voir §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -235,7 +235,7 @@ Création de voix personnalisées **dans l'app** (API `POST /v1beta/voices`, `ty
   - Renommer : l'API ne permet pas de renommer une voix ; le nouveau nom est gardé dans l'app (`voix.json`).
   - Liste « Mes voix » : `GET /v1beta/voices?type=prompted&type=replicated`, redemandée au plus toutes les heures (et sur « Actualiser »).
 
-**Panneau « Conseils Google »** (toujours visible à côté du formulaire) :
+**Conseils de Google** (fenêtre « Conseils » de « Créer une voix », en français ; jusqu'à la 1.0.2, une colonne à côté du formulaire) :
 - Mettre ici les **traits permanents** : âge, genre, timbre, texture vocale, accent régional.
 - Description **courte et précise : 1 à 2 phrases**.
 - Éviter les paragraphes longs et les descriptions **contradictoires**.
@@ -256,13 +256,13 @@ Un **style** enregistré contient :
 Actions : créer, modifier, dupliquer, supprimer, **appliquer en un clic**. Quelques exemples fournis au départ (modifiables/supprimables).
 - Rangement : `styles.json` dans le dossier de données de l'app.
 - Accès : bouton 📚 à côté du champ style de chaque réplique. « Appliquer » met la consigne (et sa traduction) sur la réplique, et choisit la voix et le modèle du style. « Enregistrer le style actuel » crée un style à partir de celui de la réplique.
-- Fenêtre de création / modification : nom, catégorie (liste modifiable), modèle, voix, langue, style (avec assistant et traduction), balises souvent utilisées (noms de la palette, vérifiés), et le panneau « Conseils Google » à côté.
+- Fenêtre de création / modification : nom, catégorie (liste modifiable), modèle, voix, langue, style (avec assistant et traduction), balises souvent utilisées (noms de la palette, vérifiés) ; les conseils de Google sont derrière le bouton « Conseils » de la fenêtre.
 
 Les styles sont liés à un fournisseur (chaque fournisseur a sa propre syntaxe).
 
 **Assistant de style structuré** : style = *émotion / attitude* + *rythme / prosodie* (optionnel), ex. « chaleureux et enthousiaste, débit rapide », « chuchoté, complice ». Champs guidés assemblés en une consigne courte, modifiable en texte libre. Il s'ouvre avec le bouton **crayon** à côté du champ style (comme l'assistant de description de Voice Design) : une baguette magique faisait penser à une génération automatique.
 
-**Panneau « Conseils Google »** (visible dans l'éditeur de styles et sous le script, repliable — le choix est retenu) :
+**Conseils de Google pour les styles** (fenêtres « Conseils » du module Voix et de la fenêtre d'un style, en français ; jusqu'à la 1.0.2, un bloc repliable sous le script et une colonne à côté du formulaire) :
 - Style **court** (quelques mots) : émotion, attitude, rythme, volume, hauteur/inflexion.
 - **Tester d'abord sans style** : la plupart des générations n'en ont pas besoin.
 - Pour une ambiance constante, **réutiliser exactement la même consigne** d'une réplique à l'autre.
@@ -284,7 +284,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
   - Modèle : `gemini-3.8-flash`, avec le niveau de réflexion le plus bas qu'il accepte (`thinking_level: "low"` ; « minimal » n'existe pas pour ce modèle), et une consigne système qui demande une traduction fidèle et courte. Coût noté « traduction » dans le suivi (ordre de grandeur : 0,0002 € par style).
   - Un style modifié à la main après traduction perd sa traduction affichée (elle ne lui correspond plus).
   - Vérification en direct supplémentaire : un style qui semble écrit en français (accents, mots français courants) est signalé, avec l'invitation à le traduire.
-- Les exemples et conseils Google sont affichés **en anglais d'origine**, avec leur traduction française.
+- Les conseils de Google s'affichent **en français** (fenêtres « Conseils ») ; seul l'exemple de style reste en anglais, puisque c'est ce qui est envoyé.
 - Le texte du script (ce que la voix prononce) reste bien sûr dans la langue du projet.
 
 ### 5.6 Génération et prises
@@ -621,6 +621,14 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - **Infos avec une ampoule** : chaque phrase d'aide (sous un bloc, un champ ou une case à cocher, en haut d'une fenêtre) commence par l'icône Lucide « lightbulb », à la taille des icônes des boutons (16 px, donc le même trait), dans la couleur du texte secondaire, à 8 px du texte et centrée sur sa première ligne. Sous une case à cocher, l'ampoule tombe sous la case et le texte s'aligne sur celui de la case.
 - Pas d'ampoule pour un nom de champ, une donnée (durée, coût, détails d'une voix, « Mot 3 sur 120 »), une traduction, un message d'état (en cours, succès, erreur en rouge), un avertissement orange ni une liste vide (texte « discret »).
 - Un seul composant, `info()` de `elements.py` : un test signale toute phrase d'aide grise écrite autrement.
+
+### 9.4 quater Bouton « Conseils »
+
+- Bouton **« Conseils »** (ampoule, style contour) **en haut à droite**, sur la ligne du titre : dans chaque module (Voix, Transcription, Sous-titres, Réglages, avec ou sans projet ouvert) et dans les fenêtres qui ont quelque chose à expliquer : Créer une voix, Style (nouveau ou modifié), Assistant de style, Assistant de description, Bibliothèque de voix, Bibliothèque de styles, Prononciation, Remplacements, Variantes A/B, Comparer les variantes, Ajouter une clé API. Pas de bouton dans les petites fenêtres (nouveau projet, renommer, confirmations).
+- Il ouvre la fenêtre « Voix / Conseils » (ou « Créer une voix / Conseils »…) : des rubriques, chacune avec quelques conseils courts, **en français seulement** (seul un exemple de style reste en anglais, puisque c'est ce qui est envoyé à Google). Les textes sont rangés dans `conseils_des_pages.py` ; un test vérifie que chaque bouton ouvre une page qui existe et que chaque page sert.
+- Ce qui disparaît : le bloc « Conseils Google pour les styles » sous le script (et son bouton Masquer / Afficher), et la colonne « Conseils Google » en anglais des fenêtres Style et Créer une voix (ces fenêtres passent à 760 px de large). Leur contenu, traduit, est dans les fenêtres « Conseils ».
+- Bibliothèque de styles : « Nouveau style » et « Enregistrer le style actuel » passent en bas à gauche, le coin en haut à droite étant pour « Conseils ».
+- Les avertissements en direct sous les champs (style trop long, trait permanent…) ne changent pas.
 
 ### 9.5 Typographie
 

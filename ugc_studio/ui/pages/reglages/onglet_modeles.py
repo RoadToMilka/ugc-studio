@@ -28,7 +28,7 @@ from ...composants.elements import bloc, bouton, info, libelle, separateur, vide
 from ...composants.montant_label import MontantLabel
 from ...ouvrir import ouvrir_page_web
 from ...theme import Dimensions, Espacements, Typo
-from ..base import zone_defilante
+from ...composants.defilement import zone_defilante
 
 NATURES = {"texte": "texte envoyé", "audio": "audio"}
 COLONNES = ("Modèle", "Capacités", "Accès", "Entrée $/M", "Sortie $/M")

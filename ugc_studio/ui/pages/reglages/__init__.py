@@ -20,9 +20,11 @@ class PageReglages(QWidget):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XXL, Espacements.XL, Espacements.XXL, 0)
         disposition.setSpacing(Espacements.L)
-        disposition.addLayout(
-            entete_de_page("Réglages", "Connexions API, modèles et prix, suivi des coûts, journal et données.")
+        entete = entete_de_page(
+            "Réglages", "Connexions API, modèles et prix, suivi des coûts, journal et données.", "reglages"
         )
+        self.bouton_conseils = entete.conseils
+        disposition.addLayout(entete)
 
         self.onglets = Onglets()
         self.connexions = OngletConnexions(services)

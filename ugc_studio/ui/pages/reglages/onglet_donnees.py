@@ -13,7 +13,7 @@ from ....chemins import dossier_donnees, dossier_journal
 from ...composants.elements import bloc, bouton, info, libelle
 from ...ouvrir import ouvrir_dossier, ouvrir_journal
 from ...theme import Espacements
-from ..base import zone_defilante
+from ...composants.defilement import zone_defilante
 
 
 class OngletDonnees(QWidget):

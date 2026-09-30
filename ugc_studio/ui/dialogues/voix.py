@@ -38,6 +38,7 @@ from ...voix_locales import (
     voix_de_base_en_bibliotheque,
 )
 from .. import taches
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
     bouton,
     conteneur_vertical,
@@ -51,7 +52,7 @@ from ..composants.onglets import Onglets
 from ..connexion_ia import adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
 from ..icones import icone, icone_menu
-from ..pages.base import zone_defilante
+from ..composants.defilement import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements
 
 MAX_LIGNES = 100  # au-delà, on invite à affiner les filtres (une liste de centaines de lignes serait lente)
@@ -161,7 +162,7 @@ class DialogueBibliothequeVoix(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Bibliothèque de voix", "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre("Bibliothèque de voix", "bibliotheque-voix"))
         self.onglets = Onglets()
         self.onglets.addTab(self._onglet_google(), "Voix Google")
         self.onglets.addTab(self._onglet_mes_voix(), "Mes voix")

@@ -50,10 +50,11 @@ from ...variantes import (
 )
 from ..composants.choix_voix import choisir, remplir_modeles_voix, remplir_voix
 from ..composants.editeur_script import EditeurScript
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
-from ..pages.base import ZoneDefilante
+from ..composants.defilement import ZoneDefilante
 from ..theme import Dimensions, Espacements
 
 ONGLET_MEMES_REGLAGES = 0
@@ -104,7 +105,7 @@ class DialogueVariantes(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Variantes A/B", "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre("Variantes A/B", "variantes"))
         disposition.addWidget(
             info(
                 "Génère plusieurs versions du même script en un seul lancement, puis compare-les à "

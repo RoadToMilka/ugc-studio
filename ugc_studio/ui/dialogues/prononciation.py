@@ -15,9 +15,10 @@ from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLineEdit, QVBo
 from ...prononciation import Prononciation, nettoyer
 from ...services import Services
 from ..composants.bouton import activer_avec_entree
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, libelle
 from ..composants.onglets import Onglets
-from ..pages.base import zone_defilante
+from ..composants.defilement import zone_defilante
 from ..theme import Dimensions, Espacements
 
 
@@ -92,7 +93,7 @@ class DialoguePrononciation(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Dictionnaire de prononciation", "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre("Dictionnaire de prononciation", "prononciation"))
         disposition.addWidget(
             info(
                 "Pour les mots que la voix prononce mal (noms de marque…) : écris le mot comme dans le script, "
