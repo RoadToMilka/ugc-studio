@@ -19,13 +19,10 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QMessageBox,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
 )
@@ -74,10 +71,11 @@ from ...composants.elements import (
 )
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
+from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ...icones import icone
 from ...mesure_texte import mesure_sous_titres
-from ...theme import Couleurs, Dimensions, Espacements, Hauteurs, qcolor
+from ...theme import Couleurs, Dimensions, Espacements, qcolor
 from ..base import Page
 from ..transcription.atelier import description_source
 
@@ -85,7 +83,14 @@ journal = logging.getLogger(__name__)
 
 TITRE = "Sous-titres"
 SOUS_TITRE = "Découpage des sous-titres et export SRT, depuis une prise de voix ou une transcription."
-COLONNES = ("N°", "Temps", "Texte", "Remarque")
+# Le texte d'un sous-titre garde ses 2 lignes (sa vraie mise en page) ; les autres cases tiennent
+# sur une ligne (voir composants/tableau.py).
+COLONNES = (
+    Colonne("N°", a_droite=True),
+    Colonne("Temps"),
+    Colonne("Texte", texte=True, etiree=True),
+    Colonne("Remarque", texte=True),
+)
 COLONNE_TEXTE = 2
 COLONNE_REMARQUE = 3
 
@@ -275,22 +280,9 @@ class AtelierSousTitres(Page):
         colonne.addStretch(1)
         return colonne
 
-    def _tableau(self) -> QTableWidget:
-        tableau = QTableWidget(0, len(COLONNES))
-        tableau.setHorizontalHeaderLabels(COLONNES)
-        tableau.verticalHeader().hide()
-        tableau.verticalHeader().setDefaultSectionSize(Hauteurs.CONTROLE)
-        tableau.setShowGrid(False)
-        tableau.setWordWrap(True)
-        tableau.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        tableau.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        tableau.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        tableau.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    def _tableau(self) -> Tableau:
+        tableau = Tableau(COLONNES)
         tableau.setMinimumHeight(Dimensions.TABLEAU_HAUTEUR_MIN)
-        entete = tableau.horizontalHeader()
-        entete.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        entete.setSectionResizeMode(COLONNE_TEXTE, QHeaderView.ResizeMode.Stretch)
-        entete.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         tableau.cellClicked.connect(lambda rang, _colonne: self.choisir_sous_titre(rang))
         return tableau
 
@@ -473,6 +465,8 @@ class AtelierSousTitres(Page):
             )
             for colonne, texte in enumerate(valeurs):
                 element = QTableWidgetItem(texte)
+                if COLONNES[colonne].a_droite:
+                    element.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 if sous_titre.signale:
                     element.setForeground(orange)
                     element.setToolTip(
@@ -480,7 +474,7 @@ class AtelierSousTitres(Page):
                         "Raccourcis-le, ou baisse la taille du texte."
                     )
                 self.tableau.setItem(rang, colonne, element)
-        self.tableau.resizeRowsToContents()
+        self.tableau.contenu_change()
 
     # --- Sous-titre choisi / en cours de lecture ---------------------------------------------
 

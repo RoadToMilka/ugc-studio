@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 3.3, 30/09/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; voir §12.2)
+> Version du document : 3.4, 01/10/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; lot 4, fondu, listes déroulantes intégrées, bibliothèque de voix plus rapide, tableaux ; voir §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -209,8 +209,9 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 - **Voix de base** (30 voix Google) avec leur caractère (Puck — Upbeat, Kore — Firm, Leda — Youthful…).
 - **Bibliothèque étendue** interrogée via l'API (`voices.list`) avec **filtres** : langue, accent, genre, hauteur (grave/moyenne/aiguë), persona, contexte d'usage, recherche texte.
-  - Requête : `GET /v1beta/voices?page_size=1000&type=prebuilt` (pages suivantes avec `page_token`). La bibliothèque (plusieurs centaines de voix) est gardée une semaine dans `voix.json` ; bouton « Actualiser ».
-  - Les filtres agissent dans l'app, instantanément ; au départ, la langue du projet est choisie. Au plus 100 lignes affichées (au-delà : « affine les filtres »).
+  - Requête : `GET /v1beta/voices?page_size=1000&type=prebuilt` (pages suivantes avec `page_token`). La bibliothèque (plus de 2 000 voix) est gardée une semaine dans son propre fichier, `bibliotheque_voix.json` ; bouton « Actualiser ». Favoris, noms, traductions et voix créées sont dans `voix.json`, un petit fichier (jusqu'à la 1.0.3, la bibliothèque y était aussi, et chaque ★ réécrivait tout ; elle est déplacée automatiquement à la première ouverture).
+  - Les filtres agissent dans l'app ; au départ, la langue du projet est choisie. Le nombre exact de voix trouvées est affiché (« 81 voix (sur 2 089) »). **20 voix affichées**, puis « Afficher 20 voix de plus » (avec le nombre restant), autant de fois que voulu ; changer un filtre revient aux 20 premières. La recherche attend une courte pause dans la frappe (0,3 s).
+  - Rapidité (1.0.4) : ★ ne change que l'étoile de sa ligne ; chaque changement ne prévient que les écrans concernés (la réponse de « Mes voix » ne reconstruit pas la liste des voix de Google) ; les voix sont rangées par identifiant (une recherche parmi 2 000 voix sans les parcourir).
   - Fenêtre « Bibliothèque de voix » (bouton 📚 à côté de la liste des voix) : onglets « Voix Google » et « Mes voix » ; chaque voix s'écoute (▶) et se choisit en un clic.
 - Bouton **▶ écouter** un extrait pour chaque voix. Voix créées et voix de la bibliothèque étendue : l'extrait fourni par Google (`GET /v1beta/voices/{id}`, gratuit) s'il existe. 30 voix de base (elles parlent toutes les langues) : une phrase d'exemple générée dans la langue du projet, coût noté « essai de voix ». Chaque extrait est gardé en cache.
 - **Favoris** de voix (★) : en tête de la liste des voix de l'atelier (puis les voix créées, puis les 30 voix de base) et filtre « Favoris seulement » dans la bibliothèque.
@@ -629,6 +630,27 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - Ce qui disparaît : le bloc « Conseils Google pour les styles » sous le script (et son bouton Masquer / Afficher), et la colonne « Conseils Google » en anglais des fenêtres Style et Créer une voix (ces fenêtres passent à 760 px de large). Leur contenu, traduit, est dans les fenêtres « Conseils ».
 - Bibliothèque de styles : « Nouveau style » et « Enregistrer le style actuel » passent en bas à gauche, le coin en haut à droite étant pour « Conseils ».
 - Les avertissements en direct sous les champs (style trop long, trait permanent…) ne changent pas.
+
+### 9.4 quinquies Listes déroulantes intégrées au champ
+
+- Au clic, la liste s'ouvre **collée sous le champ, de la même largeur**, par-dessus ce qui est dessous (rien ne bouge). Le **choix actuel reste en haut** : c'est le champ lui-même, au contour mauve ; la liste, bordée de mauve elle aussi, montre les **autres choix, décalés vers la droite**, dans leur ordre habituel. Près du bas de l'écran, elle s'ouvre vers le haut.
+- **8 choix visibles** au plus (le style « Fusion » de Qt pouvait prendre toute la hauteur de l'écran et posait la liste par-dessus le champ) ; au-delà, une barre de défilement fine (10 px), arrondie et légèrement transparente, et un fondu en haut et en bas de la liste.
+- Clavier : ↑ ↓, Entrée, Échap, et une lettre pour sauter au premier choix qui commence par elle.
+- Texte trop long, dans le champ fermé comme dans la liste : abrégé par « … » (Qt le coupait au milieu d'une lettre), texte complet au survol. Les séparations (favoris, voix créées, voix de base) restent : une fine ligne.
+- Un seul endroit : `liste_deroulante()` (toutes les listes de l'app) et `composants/liste_deroulante.py`. Filet de sécurité : `LISTES_INTEGREES = False` dans `theme.py` remet la liste standard de Qt.
+
+### 9.4 sexies Fondu en haut et en bas
+
+- Quand une page, un onglet, une fenêtre ou une liste défile, un dégradé de **24 px** de la couleur du fond adoucit le bord où du contenu est caché : pas de fondu en haut quand on est tout en haut. Il laisse passer les clics. (`composants/defilement.py`, pour toutes les zones qui défilent.)
+
+### 9.4 septies Tableaux
+
+Suivi des coûts et liste des sous-titres (un seul composant, `composants/tableau.py`) :
+1. **Une seule ligne par case** : un texte trop long finit par « … », texte complet au survol. Seule exception : le texte d'un sous-titre sur 2 lignes, qui montre sa vraie mise en page.
+2. Quand la place manque, les **colonnes de texte** (projet, modèle, opération, texte, remarque) se resserrent d'abord, jusqu'à 88 px. Les dates, nombres et montants gardent **toujours** leur largeur complète.
+3. En dernier recours, une **barre de défilement horizontale** fine apparaît en bas du tableau : aucune colonne n'est jamais cachée sans moyen d'aller la voir. L'autotest vérifie chaque tableau à la plus petite largeur de la fenêtre.
+- Suivi des coûts : colonnes « Entrée » et « Sortie » (tokens, détail au survol du titre) au lieu de « Tokens entrée » et « Tokens sortie », pour que le tableau tienne en entier à 960 px, coût compris.
+- Modèles et prix (nom du modèle sur une seule ligne) : avec le lot 5, qui refait ce tableau.
 
 ### 9.5 Typographie
 

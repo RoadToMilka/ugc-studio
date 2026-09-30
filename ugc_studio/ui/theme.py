@@ -71,6 +71,9 @@ class Opacites:
     FOND_BADGE = 0.16  # fond coloré des badges de balises
     CONTOUR_BADGE = 0.55
     FOND_BADGE_SURVOL = 0.30
+    # Barre de défilement fine des listes (listes déroulantes, tableaux) : légèrement transparente.
+    POIGNEE_FINE = 0.35
+    POIGNEE_FINE_SURVOL = 0.60
 
 
 class Espacements:
@@ -102,6 +105,7 @@ class Hauteurs:
     CONTROLE = 36  # boutons et champs
     PETIT_BOUTON = 28  # petits boutons (icônes)
     PASTILLE = 20  # pastilles d'information (ex. « Étape 2 »)
+    CHOIX_LISTE = 32  # un choix dans une liste déroulante ouverte
 
 
 class Typo:
@@ -117,6 +121,10 @@ class Typo:
     GRAISSE_MOYENNE = 500
     GRAISSE_FORTE = 600
 
+
+# Listes déroulantes intégrées au champ (V1.1, §9.4 quinquies). Filet de sécurité : False remet
+# la liste standard de Qt (posée par-dessus le champ), sans rien changer d'autre dans l'app.
+LISTES_INTEGREES = True
 
 # §4.4 — Montants : la partie entière et les 2 premières décimales sont en taille et couleur
 # normales ; les décimales suivantes (3e, 4e…) sont plus petites (~70 %) et plus sombres.
@@ -137,6 +145,13 @@ class Dimensions:
     CASE_A_COCHER = 18
     BARRE_DEFILEMENT = 16
     POIGNEE_DEFILEMENT_MIN = 32
+    # Barre fine (listes déroulantes, barre horizontale des tableaux) : 10 px, poignée de 6 px.
+    BARRE_DEFILEMENT_FINE = 10
+    MARGE_POIGNEE_FINE = 2
+    FONDU = 24  # dégradé en haut et en bas d'une zone qui défile, quand du contenu y est caché
+    LISTE_CHOIX_VISIBLES = 8  # choix visibles d'un coup dans une liste déroulante ouverte
+    RETRAIT_CHOIX = Espacements.XL  # les choix de la liste ouverte, décalés vers la droite
+    SEPARATEUR_LISTE = 2 * Espacements.XS + BORDURE  # séparation entre deux groupes de choix
     # (Les pages ne sont plus limitées en largeur depuis la 1.0.1 : en plein écran, les blocs
     # prennent toute la place disponible.)
     DIALOGUE_LARGEUR = 520
@@ -150,6 +165,7 @@ class Dimensions:
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
+    COLONNE_TEXTE_MIN = 88  # une colonne de texte d'un tableau ne se resserre pas en dessous
     ZONE_DEFILANTE_HAUTEUR_SOUHAITEE = 160  # voir ZoneDefilante (ui/composants/defilement.py)
     DIALOGUE_HAUTEUR_MAX = 680  # une fenêtre de dialogue doit tenir sur l'écran d'un portable (768 px)
     EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
@@ -436,6 +452,18 @@ QTableCornerButton::section {
     background: transparent;
     border: none;
 }
+/* Barre horizontale d'un tableau trop large (dernier recours) : fine, comme celle des listes. */
+QTableView QScrollBar:horizontal {
+    height: ${barre_fine}px;
+}
+QTableView QScrollBar::handle:horizontal {
+    background: $poignee_fine;
+    border-radius: ${rayon_poignee_fine}px;
+    margin: ${marge_poignee_fine}px;
+}
+QTableView QScrollBar::handle:horizontal:hover {
+    background: $poignee_fine_survol;
+}
 
 /* ---------- Boutons des fenêtres standard de Qt (messages, saisie d'un nom…) ----------
    Les boutons de l'app elle-même sont dessinés par ui/composants/bouton.py. */
@@ -524,14 +552,45 @@ QComboBox::down-arrow {
 QComboBox::down-arrow:disabled {
     image: url("$icone_fleche_desactivee");
 }
+/* Liste ouverte : sous le champ (combobox-popup: 0), bordée de mauve comme le champ ouvert ;
+   les choix sont décalés vers la droite (voir ui/composants/liste_deroulante.py). */
+QComboBox {
+    combobox-popup: $liste_popup;
+}
+QComboBox:on {
+    border-color: $accent;
+}
 QComboBox QAbstractItemView {
     background: $surface_elevee;
     color: $texte;
-    border: ${bordure}px solid $couleur_bordure;
-    padding: ${esp_xs}px;
+    border: ${bordure}px solid $accent;
+    padding: ${esp_xs}px 0px;
     outline: none;
     selection-background-color: $teinte;
     selection-color: $texte;
+}
+QComboBox QAbstractItemView::item {
+    padding: 0px ${esp_m}px 0px ${retrait_choix}px;
+    min-height: ${hauteur_choix}px;
+    border: none;
+}
+QComboBox QAbstractItemView::item:selected {
+    background: $teinte;
+    color: $texte;
+}
+QComboBox QAbstractItemView::item:disabled {
+    color: $texte_desactive;
+}
+QComboBox QAbstractItemView QScrollBar:vertical {
+    width: ${barre_fine}px;
+}
+QComboBox QAbstractItemView QScrollBar::handle:vertical {
+    background: $poignee_fine;
+    border-radius: ${rayon_poignee_fine}px;
+    margin: ${marge_poignee_fine}px;
+}
+QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {
+    background: $poignee_fine_survol;
 }
 
 /* ---------- Cases à cocher ---------- */
@@ -672,6 +731,8 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "teinte": rgba(Couleurs.ACCENT, Opacites.TEINTE),
         "teinte_survol": rgba(Couleurs.ACCENT, Opacites.TEINTE_SURVOL),
         "teinte_pressee": rgba(Couleurs.ACCENT, Opacites.TEINTE_PRESSEE),
+        "poignee_fine": rgba(Couleurs.TEXTE_SECONDAIRE, Opacites.POIGNEE_FINE),
+        "poignee_fine_survol": rgba(Couleurs.TEXTE_SECONDAIRE, Opacites.POIGNEE_FINE_SURVOL),
         # typographie
         "famille": Typo.FAMILLE,
         "legende": Typo.LEGENDE,
@@ -714,6 +775,12 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "apercu_sous_titre": Dimensions.APERCU_SOUS_TITRE_HAUTEUR,
         "barre_defilement": Dimensions.BARRE_DEFILEMENT,
         "poignee_min": Dimensions.POIGNEE_DEFILEMENT_MIN,
+        "barre_fine": Dimensions.BARRE_DEFILEMENT_FINE,
+        "marge_poignee_fine": Dimensions.MARGE_POIGNEE_FINE,
+        "rayon_poignee_fine": (Dimensions.BARRE_DEFILEMENT_FINE - 2 * Dimensions.MARGE_POIGNEE_FINE) // 2,
+        "liste_popup": 0 if LISTES_INTEGREES else 1,
+        "retrait_choix": Dimensions.RETRAIT_CHOIX,
+        "hauteur_choix": Hauteurs.CHOIX_LISTE,
         # images
         "icone_fleche": icones["fleche"],
         "icone_fleche_desactivee": icones["fleche_desactivee"],

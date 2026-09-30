@@ -27,6 +27,57 @@ def test_favoris_et_noms_gardes(tmp_path):
     assert voix.basculer_favori("Kore") is False
 
 
+def test_un_clic_sur_etoile_ne_reecrit_pas_la_bibliotheque(tmp_path, monkeypatch):
+    """La bibliothèque de Google (plus de 2 000 voix) a son propre fichier : un favori ne réécrit
+    que le petit fichier voix.json."""
+    voix = GestionnaireVoix(tmp_path / "voix.json")
+    voix.definir_bibliotheque([CAMILLE])
+    assert (tmp_path / "bibliotheque_voix.json").exists()
+    ecrits = []
+    monkeypatch.setattr(voix_locales, "ecrire_json", lambda chemin, _donnees: ecrits.append(chemin.name))
+    voix.basculer_favori("camille")
+    voix.renommer("camille", "Camille FR")
+    assert ecrits == ["voix.json", "voix.json"]
+
+
+def test_seuls_les_ecrans_concernes_sont_prevenus(tmp_path):
+    voix = GestionnaireVoix(tmp_path / "voix.json")
+    appels = []
+    voix.abonner(lambda: appels.append("bibliotheque"), {voix_locales.BIBLIOTHEQUE})
+    voix.abonner(lambda: appels.append("mes voix"), {voix_locales.VOIX_CREEES, voix_locales.NOMS})
+    voix.abonner(lambda: appels.append("tout"))
+    voix.basculer_favori("Kore")
+    assert appels == ["tout"]
+    appels.clear()
+    voix.definir_voix_creees([LEA])
+    assert appels == ["mes voix", "tout"]
+    appels.clear()
+    voix.definir_bibliotheque([CAMILLE])
+    assert appels == ["bibliotheque", "tout"]
+
+
+def test_bibliotheque_de_la_1_0_3_deplacee(tmp_path):
+    """Jusqu'à la 1.0.3, la bibliothèque était rangée dans voix.json : elle passe dans son fichier."""
+    from ugc_studio.stockage import ecrire_json, lire_json
+
+    date = datetime.now().astimezone().isoformat(timespec="seconds")
+    ecrire_json(
+        tmp_path / "voix.json",
+        {
+            "version_format": 1,
+            "favoris": ["camille"],
+            "bibliotheque": {"date": date, "voix": [{"identifiant": "camille", "nom": "Camille"}]},
+        },
+    )
+    voix = GestionnaireVoix(tmp_path / "voix.json")
+    assert [v.identifiant for v in voix.bibliotheque()] == ["camille"] and voix.bibliotheque_a_jour()
+    assert voix.est_favori("camille")
+    assert "bibliotheque" not in lire_json(tmp_path / "voix.json", {})
+    assert lire_json(tmp_path / "bibliotheque_voix.json", {})["voix"][0]["identifiant"] == "camille"
+    relu = GestionnaireVoix(tmp_path / "voix.json")
+    assert [v.identifiant for v in relu.bibliotheque()] == ["camille"]
+
+
 def test_libelles(tmp_path):
     voix = GestionnaireVoix(tmp_path / "voix.json")
     voix.definir_bibliotheque([CAMILLE, LEA])  # une voix créée n'entre pas dans la bibliothèque

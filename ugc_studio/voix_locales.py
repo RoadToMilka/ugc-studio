@@ -1,14 +1,20 @@
 """Ce que l'app retient des voix (§5.4) : favoris, noms donnés dans l'app, traduction française des
-descriptions, et la bibliothèque de Google gardée en mémoire.
+descriptions, voix créées, et la bibliothèque de Google gardée en mémoire.
 
-Rangement : %APPDATA%\\UGC Studio\\voix.json. La bibliothèque de Google (plusieurs centaines de voix)
-n'est redemandée qu'une fois par semaine, ou sur demande (« Actualiser ») ; les extraits audio,
-eux, sont rangés à part, dans le cache.
+Rangement, dans %APPDATA%\\UGC Studio\\ :
+- voix.json : favoris, noms, traductions et voix créées. Petit fichier, réécrit à chaque changement.
+- bibliotheque_voix.json : la bibliothèque de Google (plus de 2 000 voix). Réécrite seulement quand
+  elle est redemandée (une fois par semaine, ou « Actualiser »).
+
+Pourquoi deux fichiers ? Jusqu'à la 1.0.3, la bibliothèque était dans voix.json : chaque clic sur ★
+réécrivait tout le fichier (plus de 2 000 voix), puis chaque écran ouvert se reconstruisait. Chaque
+changement dit maintenant ce qu'il touche (favoris, bibliothèque…), et seuls les écrans concernés
+sont prévenus. Les extraits audio, eux, sont rangés à part, dans le cache.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, fields, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,10 +26,19 @@ from .stockage import ecrire_json, lire_json
 DUREE_BIBLIOTHEQUE = timedelta(days=7)
 DUREE_VOIX_CREEES = timedelta(hours=1)  # la liste des voix créées est redemandée au plus toutes les heures
 MAX_VOIX_CREEES = 200  # documentation Google (Voice Design) : 200 voix enregistrées par projet
+FICHIER_BIBLIOTHEQUE = "bibliotheque_voix.json"
 _CHAMPS = {f.name for f in fields(VoixBibliotheque)} - {"extrait_wav"}
 
 GENRES = {"female": "féminine", "male": "masculine", "neutral": "neutre"}
 HAUTEURS = {"low": "grave", "medium": "moyenne", "high": "aiguë"}
+
+# Ce qui a changé : chaque écran ne s'abonne qu'à ce qui le concerne.
+FAVORIS = "favoris"
+NOMS = "noms"
+TRADUCTIONS = "traductions"
+BIBLIOTHEQUE = "bibliotheque"
+VOIX_CREEES = "voix_creees"
+TOUT = frozenset({FAVORIS, NOMS, TRADUCTIONS, BIBLIOTHEQUE, VOIX_CREEES})
 
 
 def _en_dict(voix: VoixBibliotheque) -> dict:
@@ -69,6 +84,7 @@ def est_expiree(voix: VoixBibliotheque) -> bool:
 class GestionnaireVoix:
     def __init__(self, chemin: Path):
         self._chemin = chemin
+        self._chemin_bibliotheque = chemin.with_name(FICHIER_BIBLIOTHEQUE)
         donnees = lire_json(chemin, {})
         donnees = donnees if isinstance(donnees, dict) else {}
         self._favoris: list[str] = [str(v) for v in donnees.get("favoris") or [] if v]
@@ -76,12 +92,23 @@ class GestionnaireVoix:
         self._descriptions_fr: dict[str, str] = {
             str(k): str(v) for k, v in (donnees.get("descriptions_fr") or {}).items() if v
         }
-        bibliotheque = donnees.get("bibliotheque") or {}
-        self._bibliotheque = [v for v in map(_depuis_dict, bibliotheque.get("voix") or []) if v]
-        self._bibliotheque_date = str(bibliotheque.get("date") or "")
         self._creees = [v for v in map(_depuis_dict, donnees.get("voix_creees") or []) if v]
         self._creees_date = str(donnees.get("voix_creees_date") or "")
-        self._abonnes: list[Callable[[], None]] = []
+
+        bibliotheque = lire_json(self._chemin_bibliotheque, None)
+        ancienne = donnees.get("bibliotheque")  # 1.0.3 et avant : dans voix.json
+        a_deplacer = isinstance(ancienne, dict)
+        if not isinstance(bibliotheque, dict):
+            bibliotheque = ancienne if a_deplacer else {}
+        self._bibliotheque = [v for v in map(_depuis_dict, bibliotheque.get("voix") or []) if v]
+        self._bibliotheque_date = str(bibliotheque.get("date") or "")
+        self._abonnes: list[tuple[Callable[[], None], frozenset[str]]] = []
+        self._index: dict[str, VoixBibliotheque] = {}
+        self._indexer()
+        if a_deplacer:
+            # Rangement de la 1.0.4 : la bibliothèque passe dans son propre fichier, une seule fois.
+            self._enregistrer_bibliotheque()
+            self._enregistrer()
 
     # --- Favoris -----------------------------------------------------------------------------
 
@@ -97,7 +124,7 @@ class GestionnaireVoix:
             self._favoris.remove(identifiant)
         else:
             self._favoris.append(identifiant)
-        self._enregistrer()
+        self._enregistrer(FAVORIS)
         return identifiant in self._favoris
 
     # --- Noms et descriptions ----------------------------------------------------------------
@@ -116,7 +143,7 @@ class GestionnaireVoix:
             self._noms[identifiant] = nom
         else:
             self._noms.pop(identifiant, None)
-        self._enregistrer()
+        self._enregistrer(NOMS)
 
     def description_fr(self, identifiant: str) -> str:
         return self._descriptions_fr.get(identifiant, "")
@@ -124,7 +151,7 @@ class GestionnaireVoix:
     def definir_description_fr(self, identifiant: str, texte: str) -> None:
         if texte.strip():
             self._descriptions_fr[identifiant] = texte.strip()
-            self._enregistrer()
+            self._enregistrer(TRADUCTIONS)
 
     def libelle(self, identifiant: str) -> str:
         """Texte d'une voix dans les listes, ex. « Kore · Ferme · féminine » ou « Léa (ma voix) »."""
@@ -154,7 +181,9 @@ class GestionnaireVoix:
     def definir_bibliotheque(self, voix: list[VoixBibliotheque]) -> None:
         self._bibliotheque = [replace(v, extrait_wav=None) for v in voix if not v.creee]
         self._bibliotheque_date = _maintenant().isoformat(timespec="seconds")
-        self._enregistrer()
+        self._indexer()
+        self._enregistrer_bibliotheque()
+        self._prevenir({BIBLIOTHEQUE})
 
     def voix_creees(self) -> list[VoixBibliotheque]:
         return list(self._creees)
@@ -162,12 +191,14 @@ class GestionnaireVoix:
     def definir_voix_creees(self, voix: list[VoixBibliotheque]) -> None:
         self._creees = [replace(v, extrait_wav=None) for v in voix if v.creee]
         self._creees_date = _maintenant().isoformat(timespec="seconds")
-        self._enregistrer()
+        self._indexer()
+        self._enregistrer(VOIX_CREEES)
 
     def ajouter_voix_creee(self, voix: VoixBibliotheque) -> None:
         self._creees = [v for v in self._creees if v.identifiant != voix.identifiant]
         self._creees.insert(0, replace(voix, extrait_wav=None))
-        self._enregistrer()
+        self._indexer()
+        self._enregistrer(VOIX_CREEES)
 
     def retirer_voix(self, identifiant: str) -> None:
         self._creees = [v for v in self._creees if v.identifiant != identifiant]
@@ -175,43 +206,66 @@ class GestionnaireVoix:
             self._favoris.remove(identifiant)
         self._noms.pop(identifiant, None)
         self._descriptions_fr.pop(identifiant, None)
-        self._enregistrer()
+        self._indexer()
+        self._enregistrer(VOIX_CREEES, FAVORIS, NOMS, TRADUCTIONS)
 
     def voix(self, identifiant: str) -> VoixBibliotheque | None:
         """Voix connue de l'app : créée, de la bibliothèque, ou l'une des 30 voix de base."""
-        for voix in (*self._creees, *self._bibliotheque):
-            if voix.identifiant == identifiant:
-                return voix
+        connue = self._index.get(identifiant)
+        if connue is not None:
+            return connue
         base = voix_de_base(identifiant)
         if base is not None:
             genre = {"F": "female", "M": "male"}.get(base.genre, "")
             return VoixBibliotheque(base.nom, base.nom, base.caractere, genre=genre)
         return None
 
-    # --- Notifications et fichier -------------------------------------------------------------
+    def _indexer(self) -> None:
+        """Voix rangées par identifiant (une recherche parmi plus de 2 000 voix, sans les parcourir).
+        Une voix créée l'emporte sur une voix de la bibliothèque qui aurait le même identifiant."""
+        self._index = {v.identifiant: v for v in self._bibliotheque}
+        self._index.update((v.identifiant, v) for v in self._creees)
 
-    def abonner(self, fonction: Callable[[], None]) -> None:
-        self._abonnes.append(fonction)
+    # --- Notifications et fichiers ------------------------------------------------------------
+
+    def abonner(self, fonction: Callable[[], None], sujets: Iterable[str] = TOUT) -> None:
+        """`fonction` est appelée après chaque changement de l'un des `sujets` (FAVORIS, NOMS,
+        TRADUCTIONS, BIBLIOTHEQUE, VOIX_CREEES ; tous par défaut)."""
+        self._abonnes.append((fonction, frozenset(sujets)))
 
     def desabonner(self, fonction: Callable[[], None]) -> None:
-        if fonction in self._abonnes:
-            self._abonnes.remove(fonction)
+        self._abonnes = [(f, s) for f, s in self._abonnes if f != fonction]
 
-    def _enregistrer(self) -> None:
+    def _prevenir(self, sujets: set[str]) -> None:
+        for fonction, suivis in list(self._abonnes):
+            if suivis & sujets:
+                fonction()
+
+    def _enregistrer(self, *sujets: str) -> None:
+        """Écrit le petit fichier (tout sauf la bibliothèque), puis prévient les écrans concernés."""
         ecrire_json(
             self._chemin,
             {
-                "version_format": 1,
+                "version_format": 2,
                 "favoris": self._favoris,
                 "noms": self._noms,
                 "descriptions_fr": self._descriptions_fr,
-                "bibliotheque": {"date": self._bibliotheque_date, "voix": [_en_dict(v) for v in self._bibliotheque]},
                 "voix_creees": [_en_dict(v) for v in self._creees],
                 "voix_creees_date": self._creees_date,
             },
         )
-        for fonction in list(self._abonnes):
-            fonction()
+        if sujets:
+            self._prevenir(set(sujets))
+
+    def _enregistrer_bibliotheque(self) -> None:
+        ecrire_json(
+            self._chemin_bibliotheque,
+            {
+                "version_format": 1,
+                "date": self._bibliotheque_date,
+                "voix": [_en_dict(v) for v in self._bibliotheque],
+            },
+        )
 
 
 def voix_de_base_en_bibliotheque() -> list[VoixBibliotheque]:

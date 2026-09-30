@@ -16,7 +16,7 @@ from pathlib import Path
 
 import PySide6
 from PySide6.QtCore import QPoint, Qt, QTimer, qVersion
-from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader
+from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader, QPainter
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidget
 
 from . import __version__
@@ -25,6 +25,7 @@ from .conseils_des_pages import PAGES
 from .demo import SCRIPT_DEMO
 from .script import normaliser
 from .ui.composants.conseils import DialogueConseils
+from .ui.composants.tableau import Tableau
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
 from .ui.dialogues.comparaison import DialogueComparaison
@@ -132,6 +133,8 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
       écrasés (textes abrégés, chevauchements).
     - Fenêtre de dialogue plus haute que l'écran d'un portable : ses boutons du bas seraient
       inaccessibles.
+    - Tableau (§9.4 septies) : colonne de dates, nombres ou montants coupée, ou colonnes cachées à
+      droite sans barre de défilement pour aller les voir.
     Chaque problème cite les éléments qui dépassent, avec leur largeur minimale."""
     problemes = []
     if isinstance(racine, QDialog) and racine.height() > Dimensions.DIALOGUE_HAUTEUR_MAX:
@@ -141,6 +144,15 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
         problemes.append(
             f"{nom} : il faudrait {disposition.minimumSize().width()} px de large, la fenêtre en a {racine.width()}"
         )
+    for tableau in racine.findChildren(Tableau):
+        if not tableau.isVisible() or tableau.rowCount() == 0:
+            continue
+        coupees = tableau.colonnes_coupees()
+        if coupees:
+            problemes.append(f"{nom} : tableau, colonnes coupées : {', '.join(coupees)}")
+        largeur, visible = tableau.horizontalHeader().length(), tableau.viewport().width()
+        if largeur > visible and tableau.horizontalScrollBar().maximum() == 0:
+            problemes.append(f"{nom} : tableau de {largeur} px dans {visible} px, sans barre de défilement")
     for zone in racine.findChildren(QScrollArea):
         interieur = zone.widget()
         if (
@@ -311,6 +323,21 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 if widget.grab().save(str(chemin)):
                     rapport["captures"].append(chemin.name)
 
+            def capturer_avec_liste(liste, nom: str) -> None:
+                """Capture de la fenêtre avec la liste déroulante ouverte : la liste est une petite
+                fenêtre à part, posée ici par-dessus, à sa place."""
+                nonlocal attendues
+                attendues += 1
+                _laisser_afficher()
+                image = fenetre.grab()
+                conteneur = liste.view().window()
+                peintre = QPainter(image)
+                peintre.drawPixmap(fenetre.mapFromGlobal(conteneur.mapToGlobal(QPoint(0, 0))), conteneur.grab())
+                peintre.end()
+                chemin = dossier / f"{nom}.png"
+                if image.save(str(chemin)):
+                    rapport["captures"].append(chemin.name)
+
             for identifiant in fenetre.identifiants_modules():
                 fenetre.afficher_module(identifiant)
                 capturer(fenetre, f"module-{identifiant}")
@@ -326,6 +353,16 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     barre.setValue(min(position, barre.maximum()))
                     capturer(fenetre, f"voix-{numero}")
                 barre.setValue(0)
+            # Liste déroulante ouverte (V1.1, lot 4) : le choix actuel reste dans le champ, les autres
+            # choix s'ouvrent dessous (favoris, voix créées, voix de base, séparés d'une ligne).
+            atelier.voix.showPopup()
+            capturer_avec_liste(atelier.voix, "liste-deroulante-ouverte")
+            rapport["liste_ouverte"] = {
+                "choix_actuel_cache": atelier.voix.view().isRowHidden(atelier.voix.currentIndex()),
+                "sous_le_champ": atelier.voix.view().window().mapToGlobal(QPoint(0, 0)).y()
+                - atelier.voix.mapToGlobal(QPoint(0, atelier.voix.height())).y(),
+            }
+            atelier.voix.hidePopup()
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
             verifs["lecture_audio"] = atelier.lecteur._lecteur is not None  # Qt Multimedia embarqué
@@ -428,7 +465,15 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 reglages.onglets.setCurrentIndex(index)
                 _laisser_afficher()
                 debordements += _debordements(fenetre, f"réglages, onglet « {reglages.onglets.tabText(index)} »")
+                if reglages.onglets.widget(index) is reglages.couts:
+                    capturer(fenetre, "reglages-couts-etroit")  # tableau à la plus petite largeur
             reglages.onglets.setCurrentIndex(0)
+            fenetre.afficher_module("sous-titres")
+            defilement = sous_titres.findChild(QScrollArea)
+            if defilement is not None:
+                defilement.ensureWidgetVisible(sous_titres.tableau)
+                capturer(fenetre, "sous-titres-etroit")
+                defilement.verticalScrollBar().setValue(0)
             fenetre.afficher_module("voix")
             rapport["debordements"] = debordements
             verifs["sans_debordement"] = not debordements

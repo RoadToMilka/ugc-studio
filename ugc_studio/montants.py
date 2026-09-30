@@ -66,3 +66,9 @@ def formater_montant(valeur: Montant) -> str:
     """Texte simple du montant, ex. « 0.0071 € » (espace insécable avant €)."""
     principal, petites = decouper_montant(valeur)
     return f"{principal}{petites}\u00a0€"
+
+
+def nombre_lisible(nombre: int) -> str:
+    """1234567 → « 1 234 567 » : milliers séparés par une espace fine insécable, à la française
+    (elle ne coupe jamais un nombre en fin de ligne)."""
+    return f"{nombre:,}".replace(",", "\u202f")

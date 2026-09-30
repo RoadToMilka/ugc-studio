@@ -100,7 +100,7 @@ def test_langue_du_projet_meme_si_mes_voix_arrivent_d_abord(atelier, services, q
     monkeypatch.setattr(taches, "lancer", lambda *_args: None)  # les réponses arrivent « à la main »
     dialogue = _bibliotheque(services, atelier, qtbot)
     services.voix.definir_voix_creees([VOIX_CREEE_DEMO])  # « Mes voix » d'abord : pas encore de langue
-    assert dialogue.filtre_langue.currentData() == ""
+    assert dialogue.filtre_langue.findData("fr-FR") < 0  # (et la liste des voix de Google n'est pas reconstruite)
     services.voix.definir_bibliotheque(VOIX_DEMO)  # puis la bibliothèque
     assert dialogue.filtre_langue.currentData() == "fr-FR"
     services.voix.definir_bibliotheque(VOIX_DEMO)  # une actualisation garde le choix
@@ -118,9 +118,12 @@ def test_filtres_recherche_et_favoris(atelier, services, qtbot):
     assert [ligne.voix.identifiant for ligne in dialogue.lignes()] == ["demo-hugo"]
     dialogue.filtre_genre.setCurrentIndex(0)
     dialogue.filtre_hauteur.setCurrentIndex(0)
+    # La recherche attend une courte pause dans la frappe avant de filtrer.
     dialogue.recherche.setText("social")
-    assert [ligne.voix.identifiant for ligne in dialogue.lignes()] == ["demo-ines"]
+    assert len(dialogue.lignes()) == len(VOIX_DEMO)
+    qtbot.waitUntil(lambda: [ligne.voix.identifiant for ligne in dialogue.lignes()] == ["demo-ines"], timeout=2000)
     dialogue.recherche.clear()
+    qtbot.waitUntil(lambda: len(dialogue.lignes()) == len(VOIX_DEMO), timeout=2000)
     # Favori ★ : la voix passe en tête, et le filtre « Favoris seulement » la garde seule.
     ava = next(ligne for ligne in dialogue.lignes() if ligne.voix.identifiant == "demo-ava")
     dialogue.basculer_favori(ava)
@@ -253,3 +256,64 @@ def test_description_en_francais_signalee(atelier, services, qtbot):
     assert any("anglais" in message for message in dialogue.description.avertissements())
     dialogue.description.champ.setPlainText("One. Two. Three sentences here.")
     assert any("longue" in message for message in dialogue.description.avertissements())
+
+
+# --- Bibliothèque plus rapide (V1.1, lot 4) ---------------------------------------------------
+
+
+def _beaucoup_de_voix(nombre: int) -> list[VoixBibliotheque]:
+    return [
+        VoixBibliotheque(f"voix-{n:03d}", f"Voix {n:03d}", "", "fr-FR", genre="female" if n % 2 else "male")
+        for n in range(nombre)
+    ]
+
+
+def test_vingt_voix_puis_vingt_de_plus(atelier, services, qtbot):
+    services.voix.definir_bibliotheque(_beaucoup_de_voix(45))
+    services.voix.definir_voix_creees([])
+    dialogue = _bibliotheque(services, atelier, qtbot)
+    assert len(dialogue.lignes()) == 20
+    assert dialogue.info_liste.text() == "45 voix."
+    assert dialogue.bouton_plus.text() == "Afficher 20 voix de plus (25 restantes)"
+    premieres = dialogue.lignes()
+    dialogue.bouton_plus.click()
+    assert len(dialogue.lignes()) == 40 and dialogue.lignes()[:20] == premieres  # rien n'est reconstruit
+    assert dialogue.bouton_plus.text() == "Afficher les 5 dernières voix"
+    dialogue.bouton_plus.click()
+    assert len(dialogue.lignes()) == 45 and dialogue.bouton_plus.isHidden()
+    # Un filtre change : le nombre exact de voix trouvées, et de nouveau les 20 premières.
+    dialogue.filtre_genre.setCurrentIndex(dialogue.filtre_genre.findData("female"))
+    assert dialogue.info_liste.text() == "22 voix (sur 45)."
+    assert len(dialogue.lignes()) == 20 and not dialogue.bouton_plus.isHidden()
+
+
+def test_une_etoile_ne_reconstruit_rien(atelier, services, qtbot):
+    _caches_a_jour(services)
+    dialogue = _bibliotheque(services, atelier, qtbot)
+    lignes = dialogue.lignes()
+    dialogue.basculer_favori(lignes[1])
+    assert dialogue.lignes() == lignes  # mêmes lignes : seule l'étoile a changé
+    assert services.voix.est_favori(lignes[1].voix.identifiant)
+    assert lignes[1].etoile.toolTip() == "Retirer des favoris"
+
+
+def test_une_seule_construction_a_l_ouverture(atelier, services, qtbot, monkeypatch):
+    """« Mes voix » est redemandée à Google à l'ouverture (au plus une fois par heure) : sa réponse
+    ne reconstruit pas la liste des voix de Google."""
+    from ugc_studio.ui import taches
+    from ugc_studio.ui.dialogues import voix as module
+
+    services.voix.definir_bibliotheque(VOIX_DEMO)  # bibliothèque à jour, « Mes voix » à redemander
+    construites = []
+
+    class LigneComptee(module.LigneVoix):
+        def __init__(self, dialogue, voix):
+            construites.append(voix.identifiant)
+            super().__init__(dialogue, voix)
+
+    monkeypatch.setattr(module, "LigneVoix", LigneComptee)
+    dialogue = _bibliotheque(services, atelier, qtbot)
+    qtbot.waitUntil(lambda: services.voix.voix_creees_a_jour() and taches.en_cours() == 0, timeout=5000)
+    google = [identifiant for identifiant in construites if identifiant.startswith("demo-")]
+    assert sorted(google) == sorted(ligne.voix.identifiant for ligne in dialogue.lignes())  # une seule fois chacune
+    assert [ligne.voix.identifiant for ligne in dialogue.lignes_creees()] == ["voice_demo_lea"]

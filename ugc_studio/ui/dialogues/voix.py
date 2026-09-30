@@ -1,8 +1,10 @@
 """Bibliothèque de voix (§5.4) : les voix de Google, filtrables, et « Mes voix » (Voice Design).
 
-- « Voix Google » : la bibliothèque étendue (plusieurs centaines de voix), avec filtres (langue,
-  genre, hauteur, accent, persona, contexte, recherche) et favoris ★. Elle est gardée en mémoire une
-  semaine ; « Actualiser » la redemande à Google.
+- « Voix Google » : la bibliothèque étendue (plus de 2 000 voix), avec filtres (langue, genre,
+  hauteur, accent, persona, contexte, recherche) et favoris ★. Elle est gardée en mémoire une
+  semaine ; « Actualiser » la redemande à Google. 20 voix s'affichent, puis 20 de plus à chaque clic
+  sur « Afficher 20 voix de plus » : construire des centaines de lignes d'un coup rendait la
+  fenêtre lente.
 - « Mes voix » : les voix créées avec Voice Design (ici ou dans Google AI Studio), avec leur date
   d'expiration et le compteur x / 200. On peut les écouter, les renommer, les supprimer.
 Chaque voix s'écoute (▶) et se choisit pour le projet en un clic.
@@ -10,7 +12,7 @@ Chaque voix s'écoute (▶) et se choisit pour le projet en un clic.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -27,12 +29,17 @@ from PySide6.QtWidgets import (
 
 from ...fournisseurs.capacites import modele_connu
 from ...fournisseurs.voix import VoixBibliotheque
+from ...montants import nombre_lisible
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES
 from ...services import Services
 from ...voix_locales import (
+    BIBLIOTHEQUE,
     GENRES,
     HAUTEURS,
     MAX_VOIX_CREEES,
+    NOMS,
+    TRADUCTIONS,
+    VOIX_CREEES,
     date_lisible,
     est_expiree,
     voix_de_base_en_bibliotheque,
@@ -55,7 +62,8 @@ from ..icones import icone, icone_menu
 from ..composants.defilement import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements
 
-MAX_LIGNES = 100  # au-delà, on invite à affiner les filtres (une liste de centaines de lignes serait lente)
+LIGNES_PAR_PAGE = 20  # voix affichées d'un coup ; « Afficher 20 voix de plus » ajoute les suivantes
+DELAI_RECHERCHE_MS = 300  # la recherche attend une courte pause dans la frappe avant de filtrer
 FILTRES_PAR_LIGNE = 3
 TOUS = ""
 
@@ -155,6 +163,7 @@ class DialogueBibliothequeVoix(QDialog):
         self._langue_en_attente = True
         self._lignes: list[LigneVoix] = []
         self._lignes_creees: list[LigneVoix] = []
+        self._filtrees: list[VoixBibliotheque] = []
         self._ecoute = EcouteVoix(services, lecteur, self._afficher)
         self.setWindowTitle("Bibliothèque de voix")
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
@@ -175,16 +184,24 @@ class DialogueBibliothequeVoix(QDialog):
         bas.addWidget(bouton("Fermer", action=self.reject))
         disposition.addLayout(bas)
 
-        services.voix.abonner(self._voix_changees)
+        # Chaque liste ne se reconstruit que quand ce qu'elle montre change (un favori ne
+        # reconstruit rien : seule l'étoile de sa ligne change).
+        self._abonnements = (
+            (self._remplir_filtres, {BIBLIOTHEQUE}),
+            (self._remplir_voix_creees, {VOIX_CREEES, NOMS, TRADUCTIONS}),
+        )
+        for fonction, sujets in self._abonnements:
+            services.voix.abonner(fonction, sujets)
         # Fenêtre détruite sans avoir été fermée normalement : on se désabonne quand même.
-        rappel = self._voix_changees
-        self.destroyed.connect(lambda: services.voix.desabonner(rappel))
+        abonnements = self._abonnements
+        self.destroyed.connect(lambda: [services.voix.desabonner(fonction) for fonction, _s in abonnements])
         self._charger_bibliotheque(forcer=False)
         self._charger_voix_creees(forcer=False)
         self.onglets.setCurrentIndex(onglet)
 
     def done(self, resultat: int) -> None:
-        self.services.voix.desabonner(self._voix_changees)
+        for fonction, _sujets in self._abonnements:
+            self.services.voix.desabonner(fonction)
         super().done(resultat)
 
     # --- Construction ------------------------------------------------------------------------
@@ -199,7 +216,11 @@ class DialogueBibliothequeVoix(QDialog):
         ligne.setSpacing(Espacements.S)
         self.recherche = QLineEdit()
         self.recherche.setPlaceholderText("Rechercher dans les noms et descriptions…")
-        self.recherche.textChanged.connect(self._filtrer)
+        self._minuteur_recherche = QTimer(self)
+        self._minuteur_recherche.setSingleShot(True)
+        self._minuteur_recherche.setInterval(DELAI_RECHERCHE_MS)
+        self._minuteur_recherche.timeout.connect(self._filtrer)
+        self.recherche.textChanged.connect(lambda _texte: self._minuteur_recherche.start())
         ligne.addWidget(self.recherche, 1)
         self.favoris_seulement = QCheckBox("Favoris seulement")
         self.favoris_seulement.toggled.connect(self._filtrer)
@@ -243,6 +264,9 @@ class DialogueBibliothequeVoix(QDialog):
         zone, contenu = zone_defilante(largeur_max=None)
         self._liste_widget, self._liste = conteneur_vertical(0)
         contenu.addWidget(self._liste_widget)
+        self.bouton_plus = bouton("", variante="contour", nom_icone="chevron-down", action=self.afficher_plus)
+        self.bouton_plus.hide()
+        contenu.addWidget(self.bouton_plus, 0, Qt.AlignmentFlag.AlignLeft)
         disposition.addWidget(zone, 1)
         return onglet
 
@@ -321,10 +345,6 @@ class DialogueBibliothequeVoix(QDialog):
 
         taches.lancer(lambda: adaptateur.lister_voix(("prompted", "replicated")), fin, echec)
 
-    def _voix_changees(self) -> None:
-        self._remplir_filtres()
-        self._remplir_voix_creees()
-
     # --- Voix Google : filtres et liste ---------------------------------------------------------
 
     def _toutes(self) -> list[VoixBibliotheque]:
@@ -383,20 +403,36 @@ class DialogueBibliothequeVoix(QDialog):
         return sorted(resultat, key=lambda v: (not self.services.voix.est_favori(v.identifiant), v.nom.lower()))
 
     def _filtrer(self, *_args) -> None:
+        """Nouveaux filtres : le nombre exact de voix trouvées, puis les 20 premières."""
+        self._minuteur_recherche.stop()  # recherche en attente : elle est faite maintenant
+        self._filtrees = self.voix_filtrees()
         vider_disposition(self._liste)
         self._lignes = []
-        voix = self.voix_filtrees()
-        for element in voix[:MAX_LIGNES]:
-            ligne = LigneVoix(self, element)
+        self.afficher_plus()
+        trouvees, total = len(self._filtrees), len(self._toutes())
+        if not trouvees:
+            self.info_liste.setText(f"Aucune voix ne correspond à ces filtres (sur {nombre_lisible(total)}).")
+        elif trouvees == total:
+            self.info_liste.setText(f"{nombre_lisible(total)} voix.")
+        else:
+            self.info_liste.setText(f"{nombre_lisible(trouvees)} voix (sur {nombre_lisible(total)}).")
+
+    def afficher_plus(self) -> None:
+        """Ajoute les 20 voix suivantes sous celles déjà affichées (sans reconstruire ces dernières)."""
+        debut = len(self._lignes)
+        for voix in self._filtrees[debut : debut + LIGNES_PAR_PAGE]:
+            ligne = LigneVoix(self, voix)
             self._lignes.append(ligne)
             self._liste.addWidget(ligne)
-        total = len(self._toutes())
-        if not voix:
-            self.info_liste.setText(f"Aucune voix ne correspond à ces filtres (sur {total}).")
-        elif len(voix) > MAX_LIGNES:
-            self.info_liste.setText(f"{len(voix)} voix sur {total} : affine les filtres pour voir les autres.")
+        restantes = len(self._filtrees) - len(self._lignes)
+        if restantes > LIGNES_PAR_PAGE:
+            texte = f"Afficher {LIGNES_PAR_PAGE} voix de plus ({nombre_lisible(restantes)} restantes)"
+        elif restantes > 1:
+            texte = f"Afficher les {restantes} dernières voix"
         else:
-            self.info_liste.setText(f"{len(voix)} voix sur {total}.")
+            texte = "Afficher la dernière voix"
+        self.bouton_plus.setText(texte)
+        self.bouton_plus.setVisible(restantes > 0)
 
     def lignes(self) -> list[LigneVoix]:
         return list(self._lignes)
@@ -423,8 +459,11 @@ class DialogueBibliothequeVoix(QDialog):
     # --- Actions -----------------------------------------------------------------------------
 
     def basculer_favori(self, ligne: LigneVoix) -> None:
+        """★ : seule l'étoile change (celle de la voix dans les deux onglets), rien n'est reconstruit."""
         favori = self.services.voix.basculer_favori(ligne.voix.identifiant)
-        ligne.afficher_favori(favori)
+        for autre in (*self._lignes, *self._lignes_creees):
+            if autre.voix.identifiant == ligne.voix.identifiant:
+                autre.afficher_favori(favori)
 
     def ecouter(self, voix: VoixBibliotheque) -> None:
         modele = voix.modele if voix.creee and voix.modele else self._modele

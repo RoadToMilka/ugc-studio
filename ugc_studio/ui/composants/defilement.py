@@ -1,20 +1,101 @@
-"""Zone qui défile (pages, onglets, fenêtres) : la même partout dans l'app."""
+"""Zone qui défile (pages, onglets, fenêtres) : la même partout dans l'app, avec un fondu en haut
+et en bas (V1.1, §9.4 sexies).
+
+Le fondu : quand du contenu est caché en haut ou en bas, un dégradé de 24 px de la couleur du fond
+adoucit ce bord, pour qu'on devine qu'il y a une suite. Il n'apparaît que de ce côté-là (pas de
+fondu en haut quand on est tout en haut), et il laisse passer les clics.
+"""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt
+from PySide6.QtGui import QLinearGradient, QPainter
+from PySide6.QtWidgets import QAbstractScrollArea, QDialog, QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
-from ..theme import Dimensions, Espacements
+from ..theme import Couleurs, Dimensions, Espacements, qcolor
+
+
+def couleur_du_fond(element: QWidget) -> str:
+    """Couleur du fond derrière `element` : celle des fenêtres de dialogue, sinon celle de l'app
+    (voir QDialog et QMainWindow dans la feuille de style)."""
+    parent = element
+    while parent is not None:
+        if isinstance(parent, QDialog):
+            return Couleurs.SURFACE_ELEVEE
+        parent = parent.parentWidget()
+    return Couleurs.FOND
+
+
+class _Degrade(QWidget):
+    """Le dégradé d'un bord (haut ou bas), posé par-dessus le contenu qui défile."""
+
+    def __init__(self, zone: QAbstractScrollArea, en_haut: bool, fondus: Fondus):
+        super().__init__(zone)
+        self._en_haut = en_haut
+        self._fondus = fondus
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)  # ne bloque aucun clic
+        self.hide()
+
+    def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        couleur = self._fondus.couleur()
+        opaque, invisible = qcolor(couleur), qcolor(couleur, 0)
+        degrade = QLinearGradient(0, 0, 0, self.height())
+        degrade.setColorAt(0, opaque if self._en_haut else invisible)
+        degrade.setColorAt(1, invisible if self._en_haut else opaque)
+        peintre = QPainter(self)
+        peintre.fillRect(self.rect(), degrade)
+        peintre.end()
+
+
+class Fondus(QObject):
+    """Fondus en haut et en bas d'une zone qui défile (page, fenêtre, liste déroulante).
+
+    `couleur` : couleur du fond de la zone ; par défaut, celle de la fenêtre qui la contient."""
+
+    def __init__(self, zone: QAbstractScrollArea, couleur: str | None = None):
+        super().__init__(zone)
+        self._zone = zone
+        self._couleur = couleur
+        self.haut = _Degrade(zone, True, self)
+        self.bas = _Degrade(zone, False, self)
+        barre = zone.verticalScrollBar()
+        barre.valueChanged.connect(self.placer)
+        barre.rangeChanged.connect(self.placer)
+        # La partie visible change de taille avec la zone, et quand la barre de défilement apparaît.
+        zone.installEventFilter(self)
+        zone.viewport().installEventFilter(self)
+
+    def couleur(self) -> str:
+        return self._couleur or couleur_du_fond(self._zone)
+
+    def eventFilter(self, _objet, evenement) -> bool:  # noqa: N802 — nom imposé par Qt
+        if evenement.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+            self.placer()
+        return False
+
+    def placer(self, *_args) -> None:
+        visible = self._zone.viewport().geometry()
+        hauteur = min(Dimensions.FONDU, visible.height() // 2)
+        self.haut.setGeometry(QRect(visible.left(), visible.top(), visible.width(), hauteur))
+        self.bas.setGeometry(QRect(visible.left(), visible.bottom() + 1 - hauteur, visible.width(), hauteur))
+        barre = self._zone.verticalScrollBar()
+        self.haut.setVisible(barre.value() > barre.minimum())  # du contenu est caché au-dessus
+        self.bas.setVisible(barre.value() < barre.maximum())  # … ou en dessous
+        self.haut.raise_()
+        self.bas.raise_()
 
 
 class ZoneDefilante(QScrollArea):
-    """Zone qui défile, dont la hauteur « souhaitée » reste modeste.
+    """Zone qui défile, avec ses fondus, et dont la hauteur « souhaitée » reste modeste.
 
     Sans cela, Qt prend la hauteur du contenu (jusqu'à 24 lignes de texte) comme hauteur
     souhaitée. Dans une fenêtre à onglets contenant des textes sur plusieurs lignes, Qt en déduit
     même une hauteur *minimale* de fenêtre, qui peut dépasser l'écran d'un ordinateur portable
     (les boutons du bas deviennent inaccessibles). Le contenu, lui, défile comme avant."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.fondus = Fondus(self)
 
     def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
         taille = super().sizeHint()
