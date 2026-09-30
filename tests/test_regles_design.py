@@ -82,19 +82,32 @@ def test_aucune_couleur_ni_taille_en_dur():
     assert not ecarts, "Valeurs de design écrites en dur (à déplacer dans ui/theme.py) :\n" + "\n".join(ecarts)
 
 
-def test_listes_deroulantes_creees_avec_liste_deroulante():
-    """Une QComboBox créée directement prend comme largeur *minimale* celle de son plus long choix :
-    un choix long (nom d'une voix…) élargit alors toute la page au-delà de la fenêtre et le bord
-    droit est coupé. Les listes se créent donc toujours avec elements.liste_deroulante()."""
+# Éléments qui se créent toujours avec une fonction de ui/composants/elements.py.
+CREES_PAR_ELEMENTS = {
+    "QComboBox": "liste_deroulante()",
+    "QSlider": "glissiere()",
+    "QSpinBox": "champ_entier()",
+    "QDoubleSpinBox": "champ_decimal()",
+}
+
+
+def test_elements_crees_avec_les_fonctions_de_l_app():
+    """- Une QComboBox créée directement prend comme largeur *minimale* celle de son plus long
+      choix : un choix long (nom d'une voix…) élargit toute la page au-delà de la fenêtre et le
+      bord droit est coupé.
+    - Listes, barres de lecture et champs de nombre créés directement changent de valeur quand la
+      molette de la souris passe dessus pendant qu'on fait défiler la page (et bloquent le
+      défilement).
+    Ils se créent donc toujours avec les fonctions de elements.py, qui règlent ces deux points."""
     autorise = RACINE / "ui" / "composants" / "elements.py"
     ecarts = [
-        f"{fichier.relative_to(RACINE)}:{noeud.lineno}"
+        f"{fichier.relative_to(RACINE)}:{noeud.lineno} {_nom_appel(noeud)}() → {CREES_PAR_ELEMENTS[_nom_appel(noeud)]}"
         for fichier in _fichiers()
         if fichier != autorise
         for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8")))
-        if isinstance(noeud, ast.Call) and _nom_appel(noeud) == "QComboBox"
+        if isinstance(noeud, ast.Call) and _nom_appel(noeud) in CREES_PAR_ELEMENTS
     ]
-    assert not ecarts, "QComboBox() à remplacer par liste_deroulante() :\n" + "\n".join(ecarts)
+    assert not ecarts, "Éléments à créer avec les fonctions de elements.py :\n" + "\n".join(ecarts)
 
 
 CASE_TEXTE_MAX = 48  # caractères

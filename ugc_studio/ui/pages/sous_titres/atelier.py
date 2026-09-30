@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QMessageBox,
-    QSlider,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -67,6 +66,7 @@ from ...composants.elements import (
     case_a_cocher,
     champ_decimal,
     champ_entier,
+    glissiere,
     libelle,
     liste_deroulante,
     minutes_secondes,
@@ -169,7 +169,7 @@ class AtelierSousTitres(Page):
         lecture.setSpacing(Espacements.M)
         self.bouton_lecture = bouton("", variante="icone", action=self.basculer_lecture)
         lecture.addWidget(self.bouton_lecture)
-        self.position = QSlider(Qt.Orientation.Horizontal)
+        self.position = glissiere()
         self.position.sliderMoved.connect(self.lecteur.aller_a)
         lecture.addWidget(self.position, 1)
         self.temps = libelle("0:00 / 0:00", "legende", retour_a_la_ligne=False)
@@ -212,7 +212,7 @@ class AtelierSousTitres(Page):
                 "Découpage",
                 (("Caractères au plus", self.caracteres), ("Mots au plus", self.mots_max), ("Lignes au plus", self.lignes), ("Durée minimale", self.duree_min)),
             ),
-            1,
+            0,  # colonne de champs de nombre : sa largeur naturelle ; le reste va aux listes de l'écran
         )
 
         self.format = liste_deroulante("Format de la vidéo (les tailles sont proportionnelles à sa hauteur)")

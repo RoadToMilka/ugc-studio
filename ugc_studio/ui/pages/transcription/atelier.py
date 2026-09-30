@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
-    QSlider,
     QVBoxLayout,
 )
 
@@ -63,7 +62,15 @@ from ....transcription import (
 from ... import taches
 from ...composants.choix_voix import choisir
 from ...composants.editeur_transcription import EditeurTranscription, nom_de_personne
-from ...composants.elements import bloc, bouton, case_a_cocher, libelle, liste_deroulante, minutes_secondes
+from ...composants.elements import (
+    bloc,
+    bouton,
+    case_a_cocher,
+    glissiere,
+    libelle,
+    liste_deroulante,
+    minutes_secondes,
+)
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
@@ -241,7 +248,7 @@ class AtelierTranscription(Page):
         lecture.setSpacing(Espacements.M)
         self.bouton_lecture = bouton("", variante="icone", action=self.basculer_lecture)
         lecture.addWidget(self.bouton_lecture)
-        self.position = QSlider(Qt.Orientation.Horizontal)
+        self.position = glissiere()
         self.position.sliderMoved.connect(self.lecteur.aller_a)
         lecture.addWidget(self.position, 1)
         self.temps = libelle("0:00 / 0:00", "legende", retour_a_la_ligne=False)

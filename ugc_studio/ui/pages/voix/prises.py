@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QMenu,
     QMessageBox,
-    QSlider,
     QVBoxLayout,
     QWidget,
 )
@@ -26,7 +25,7 @@ from ....fournisseurs.capacites import modele_connu
 from ....projets import Prise, copier_fichier
 from ....services import Services
 from ... import taches
-from ...composants.elements import bouton, libelle, minutes_secondes, pastille, vider_disposition
+from ...composants.elements import bouton, glissiere, libelle, minutes_secondes, pastille, vider_disposition
 from ...composants.etoiles import boutons_etoiles
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
@@ -155,7 +154,7 @@ class ListePrises(QWidget):
         barre.setSpacing(Espacements.M)
         self.titre_lecture = libelle("", "secondaire", retour_a_la_ligne=False)
         barre.addWidget(self.titre_lecture)
-        self.position = QSlider(Qt.Orientation.Horizontal)
+        self.position = glissiere()
         self.position.sliderMoved.connect(self.lecteur.aller_a)
         barre.addWidget(self.position, 1)
         self.temps = libelle("0:00 / 0:00", "legende", retour_a_la_ligne=False)
