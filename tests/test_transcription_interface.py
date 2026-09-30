@@ -83,6 +83,7 @@ def _transcription(services) -> Transcription:
 def test_page_sans_puis_avec_projet(app_configuree, qtbot, services, tmp_path):
     page = PageTranscription(services)
     qtbot.addWidget(page)
+    page.show()
     assert page.currentWidget() is page.sans_projet
     assert page.sans_projet.titre.text() == "Transcription"
     services.projets.creer("Sérum", tmp_path)
