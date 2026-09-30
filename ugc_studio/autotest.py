@@ -17,7 +17,7 @@ from pathlib import Path
 import PySide6
 from PySide6.QtCore import QPoint, Qt, QTimer, qVersion
 from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader
-from PySide6.QtWidgets import QApplication, QDialog, QScrollArea, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidget
 
 from . import __version__
 from .chemins import fichier_journal
@@ -114,6 +114,10 @@ def _description(element: QWidget) -> str:
             texte = ""
     minimum = element.minimumSizeHint().width()
     nom = type(element).__name__
+    if not texte and element.property("role") == "bloc":
+        # Un bloc : on le reconnaît à son titre (ex. bloc « Réglages »).
+        titres = [e for e in element.findChildren(QLabel) if e.property("role") == "titre-bloc"]
+        nom, texte = "bloc", titres[0].text() if titres else ""
     return f"{nom} « {texte[:40]} » (min. {minimum} px)" if texte else f"{nom} (min. {minimum} px)"
 
 
@@ -162,18 +166,19 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
             )
         ]
         if not coupables:
-            # Rien n'est encore coupé (la marge de droite a absorbé l'excès) : on cite les éléments
-            # visibles les plus larges, ceux qui imposent cette largeur (ex. une case à cocher au
-            # texte trop long, qui ne passe jamais à la ligne).
-            coupables = [
-                element
-                for element in interieur.findChildren(QWidget)
-                if element.isVisible()
-                and not any(
-                    enfant.isVisible()
-                    for enfant in element.findChildren(QWidget, "", Qt.FindChildOption.FindDirectChildrenOnly)
-                )
+            # Rien n'est encore coupé (la marge de droite a absorbé l'excès) : on cite les blocs
+            # les plus larges (celui qui impose la largeur vient en premier), puis les éléments
+            # visibles les plus larges (ex. une case à cocher au texte trop long).
+            visibles = [e for e in interieur.findChildren(QWidget) if e.isVisible()]
+            blocs = [e for e in visibles if e.property("role") == "bloc"]
+            feuilles = [
+                e
+                for e in visibles
+                if not any(enfant.isVisible() for enfant in e.findChildren(QWidget, "", Qt.FindChildOption.FindDirectChildrenOnly))
             ]
+            blocs.sort(key=lambda e: e.minimumSizeHint().width(), reverse=True)
+            feuilles.sort(key=lambda e: e.minimumSizeHint().width(), reverse=True)
+            coupables = blocs[:2] + feuilles[: ELEMENTS_SIGNALES_MAX - 2]
         coupables.sort(key=lambda e: e.minimumSizeHint().width(), reverse=True)
         problemes.append(
             f"{nom} : contenu plus large que la partie visible de {exces} px — "

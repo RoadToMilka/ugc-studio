@@ -104,7 +104,7 @@ def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path,
     assert actions[0] == "Créer les sous-titres de cette prise"
     demandes = []
     monkeypatch.setattr(fenetre.page("sous-titres").atelier, "creer_depuis_prise", demandes.append)
-    qtbot.mouseClick(ligne.bouton_sous_titres, Qt.MouseButton.LeftButton)  # bouton de la prise
+    ligne.findChild(QMenu).actions()[0].trigger()
     assert fenetre.module_actuel() == "sous-titres" and demandes == [prise.identifiant]
     # « Corriger les mots » : dans le module Transcription.
     fenetre.page("sous-titres").atelier.corriger_demande.emit()

@@ -205,9 +205,7 @@ class AtelierSousTitres(Page):
 
         self.caracteres = champ_entier(*LIMITES["caracteres_max"], info="Nombre maximum de caractères par sous-titre, espaces comprises")
         self.mots_max = champ_entier(*LIMITES["mots_max"], info="Nombre maximum de mots par sous-titre")
-        self.lignes = liste_deroulante("Nombre maximum de lignes : jamais dépassé")
-        self.lignes.addItem("1 ligne", 1)
-        self.lignes.addItem("2 lignes", 2)
+        self.lignes = champ_entier(*LIMITES["lignes_max"], info="Nombre maximum de lignes (1 ou 2) : jamais dépassé")
         self.duree_min = champ_decimal(*LIMITES["duree_min_s"], 0.1, 1, " s", "Durée minimale d'affichage d'un sous-titre")
         colonnes.addLayout(
             self._grille(
@@ -251,9 +249,9 @@ class AtelierSousTitres(Page):
         self.infos_ecran = libelle("", "legende")
         d.addWidget(self.infos_ecran)
 
-        for champ in (self.caracteres, self.mots_max, self.duree_min, self.marge, self.taille):
+        for champ in (self.caracteres, self.mots_max, self.lignes, self.duree_min, self.marge, self.taille):
             champ.valueChanged.connect(lambda _valeur: self._reglage_change())
-        for liste in (self.lignes, self.format, self.plateforme):
+        for liste in (self.format, self.plateforme):
             liste.currentIndexChanged.connect(lambda _index: self._reglage_change())
         for case in (self.couper_ponctuation, self.majuscules, self.ponctuation):
             case.toggled.connect(lambda _coche: self._reglage_change())
@@ -383,7 +381,7 @@ class AtelierSousTitres(Page):
         self.duree_min.setValue(reglages.duree_min_s)
         self.marge.setValue(reglages.marge_max_pct)
         self.taille.setValue(reglages.taille_pct)
-        choisir(self.lignes, reglages.lignes_max)
+        self.lignes.setValue(reglages.lignes_max)
         choisir(self.format, reglages.format)
         choisir(self.plateforme, reglages.plateforme)
         self.couper_ponctuation.setChecked(reglages.couper_sur_ponctuation)
@@ -399,7 +397,7 @@ class AtelierSousTitres(Page):
         return ReglagesSousTitres(
             caracteres_max=self.caracteres.value(),
             mots_max=self.mots_max.value(),
-            lignes_max=self.lignes.currentData() or 2,
+            lignes_max=self.lignes.value(),
             couper_sur_ponctuation=self.couper_ponctuation.isChecked(),
             duree_min_s=round(self.duree_min.value(), 2),
             majuscules=self.majuscules.isChecked(),
