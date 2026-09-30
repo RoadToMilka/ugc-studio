@@ -18,7 +18,15 @@ from ...services import Services
 from ...variantes import LETTRES, MODELE, STYLE, TEXTE, VOIX, Reglage, champs_differents, valeur_de_prise
 from ..composants.bouton import Bouton
 from ..composants.comparateur import ComparateurAudio
-from ..composants.elements import bouton, conteneur_vertical, glissiere, libelle, minutes_secondes, vider_disposition
+from ..composants.elements import (
+    bouton,
+    conteneur_vertical,
+    glissiere,
+    info,
+    libelle,
+    minutes_secondes,
+    vider_disposition,
+)
 from ..composants.etoiles import boutons_etoiles
 from ..icones import icone
 from ..pages.base import zone_defilante
@@ -101,7 +109,7 @@ class DialogueComparaison(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle(f"Comparer les variantes de la série {serie}", "titre-bloc"))
         disposition.addWidget(
-            libelle(
+            info(
                 "« Lecture enchaînée » joue A, puis B, puis C… Pendant l'écoute, clique sur une lettre "
                 "(ou tape A, B, C…) pour passer à cette variante au même moment du texte. Espace : "
                 "lecture ou pause.",

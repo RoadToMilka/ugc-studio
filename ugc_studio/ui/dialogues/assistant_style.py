@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QVBo
 
 from ...styles import EMOTIONS, INTENSITES, RYTHMES, assembler
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle, liste_deroulante
+from ..composants.elements import bouton, info, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 AUCUN = "Aucun choix"
@@ -36,7 +36,7 @@ class DialogueAssistantStyle(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Assistant de style", "titre-bloc"))
         disposition.addWidget(
-            libelle(
+            info(
                 "Choisis en français : l'app écrit une consigne courte en anglais, comme Google le conseille "
                 "(émotion ou attitude, puis rythme).",
                 "secondaire",

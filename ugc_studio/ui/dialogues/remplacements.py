@@ -7,12 +7,13 @@ celui de tous les projets (le projet l'emporte pour une même entrée).
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLineEdit, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
 
 from ...services import Services
 from ...transcription import Remplacement, nettoyer_remplacements
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle
+from ..composants.elements import bouton, info, libelle
+from ..composants.onglets import Onglets
 from ..pages.base import zone_defilante
 from ..theme import Dimensions, Espacements
 
@@ -35,7 +36,7 @@ class TableauRemplacements(QWidget):
         self._grille.setColumnStretch(1, 1)
         disposition.addLayout(self._grille)
         ajouter = QHBoxLayout()
-        ajouter.addWidget(bouton("Ajouter un remplacement", variante="discret", nom_icone="plus", action=self.ajouter))
+        ajouter.addWidget(bouton("Ajouter un remplacement", variante="contour", nom_icone="plus", action=self.ajouter))
         ajouter.addStretch(1)
         disposition.addLayout(ajouter)
         disposition.addStretch(1)
@@ -82,7 +83,7 @@ class DialogueRemplacements(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Dictionnaire de remplacements", "titre-bloc"))
         disposition.addWidget(
-            libelle(
+            info(
                 "Pour les mots que la transcription écrit mal (noms de marque, produits…) : écris-les tels "
                 "que transcrits, puis comment ils doivent apparaître. Ils sont remplacés après chaque "
                 "transcription, en gardant le moment de chaque mot (gratuit : c'est l'app qui remplace). "
@@ -90,8 +91,7 @@ class DialogueRemplacements(QDialog):
                 "secondaire",
             )
         )
-        self.onglets = QTabWidget()
-        self.onglets.setDocumentMode(True)
+        self.onglets = Onglets()
         projet = services.projets.projet
         self.projet = TableauRemplacements(list(projet.remplacements) if projet else [])
         self.global_ = TableauRemplacements(list(services.remplacements.entrees))

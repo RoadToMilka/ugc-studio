@@ -24,7 +24,7 @@ from ....fournisseurs.capacites import (
 from ....prix import lire_decimal, recuperer_taux_bce
 from ....services import Services
 from ... import taches
-from ...composants.elements import bloc, bouton, libelle, separateur, vider_disposition
+from ...composants.elements import bloc, bouton, info, libelle, separateur, vider_disposition
 from ...composants.montant_label import MontantLabel
 from ...ouvrir import ouvrir_page_web
 from ...theme import Dimensions, Espacements, Typo
@@ -83,7 +83,7 @@ class OngletModeles(QWidget):
 
         # --- Taux de change ---
         cadre, d = bloc("Taux de change")
-        d.addWidget(libelle("Les prix des fournisseurs sont en dollars ; l'app affiche les coûts en euros.", "secondaire"))
+        d.addWidget(info("Les prix des fournisseurs sont en dollars ; l'app affiche les coûts en euros.", "secondaire"))
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         ligne.addWidget(libelle("1 $ =", retour_a_la_ligne=False))
@@ -93,19 +93,19 @@ class OngletModeles(QWidget):
         ligne.addWidget(libelle("€", retour_a_la_ligne=False))
         ligne.addSpacing(Espacements.M)
         self.bouton_bce = bouton(
-            "Récupérer le taux du jour (BCE)", variante="discret", nom_icone="refresh-cw", action=self.taux_du_jour
+            "Récupérer le taux du jour (BCE)", variante="contour", nom_icone="refresh-cw", action=self.taux_du_jour
         )
         ligne.addWidget(self.bouton_bce)
         ligne.addStretch(1)
         d.addLayout(ligne)
-        self.info_taux = libelle("", "legende")
+        self.info_taux = info()
         d.addWidget(self.info_taux)
         contenu.addWidget(cadre)
 
         # --- Modèles ---
         cadre, d = bloc("Modèles et prix")
         d.addWidget(
-            libelle(
+            info(
                 "Tarifs officiels de Google (tarif « Standard », paiement à l'usage), vérifiés le "
                 f"{PRIX_VERIFIES_LE:%d/%m/%Y}, en dollars par million de tokens. Coût d'un appel = tokens × prix "
                 "÷ 1 000 000 × taux de change ; les nombres de tokens sont ceux renvoyés par l'API. Quand Google "
@@ -119,7 +119,7 @@ class OngletModeles(QWidget):
         self._grille.setColumnStretch(0, 1)
         d.addLayout(self._grille)
         d.addWidget(
-            libelle(
+            info(
                 "Niveau gratuit de Google (clé sans moyen de paiement) : ces modèles n'y sont pas facturés, avec des "
                 "limites d'utilisation plus basses. L'app affiche quand même le coût au tarif payant.",
                 "legende",
@@ -127,11 +127,11 @@ class OngletModeles(QWidget):
         )
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
-        actions.addWidget(bouton("Rétablir les prix par défaut", variante="discret", nom_icone="rotate-ccw", action=self._retablir))
+        actions.addWidget(bouton("Rétablir les prix par défaut", variante="contour", nom_icone="rotate-ccw", action=self._retablir))
         actions.addWidget(
             bouton(
                 "Page des tarifs Google",
-                variante="discret",
+                variante="contour",
                 nom_icone="external-link",
                 action=lambda: ouvrir_page_web(ADRESSE_TARIFS_GOOGLE),
             )
@@ -189,7 +189,7 @@ class OngletModeles(QWidget):
 
     def taux_du_jour(self) -> None:
         self.bouton_bce.setEnabled(False)
-        self.info_taux.setText("Récupération du taux auprès de la BCE…")
+        self.info_taux.afficher_etat("Récupération du taux auprès de la BCE…")
 
         def fin(resultat) -> None:
             taux, jour = resultat
@@ -198,7 +198,7 @@ class OngletModeles(QWidget):
 
         def echec(erreur: Exception) -> None:
             self.bouton_bce.setEnabled(True)
-            self.info_taux.setText(f"Taux non récupéré : {getattr(erreur, 'message', erreur)}")
+            self.info_taux.afficher_etat(f"Taux non récupéré : {getattr(erreur, 'message', erreur)}", erreur=True)
 
         taches.lancer(recuperer_taux_bce, fin, echec)
 

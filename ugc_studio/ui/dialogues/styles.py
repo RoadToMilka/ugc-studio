@@ -32,7 +32,15 @@ from ...styles import Style
 from ..composants.bouton import activer_avec_entree
 from ..composants.champ_style import ChampStyle
 from ..composants.conseils import ListeConseils
-from ..composants.elements import bouton, conteneur_vertical, libelle, liste_deroulante, separateur, vider_disposition
+from ..composants.elements import (
+    bouton,
+    conteneur_vertical,
+    info,
+    libelle,
+    liste_deroulante,
+    separateur,
+    vider_disposition,
+)
 from ..icones import icone_menu
 from ..pages.base import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs
@@ -269,14 +277,14 @@ class DialogueBibliothequeStyles(QDialog):
         entete.addStretch(1)
         if style_actuel[0]:
             entete.addWidget(
-                bouton("Enregistrer le style actuel", variante="discret", nom_icone="plus", action=self.enregistrer_actuel)
+                bouton("Enregistrer le style actuel", variante="contour", nom_icone="plus", action=self.enregistrer_actuel)
             )
         entete.addWidget(bouton("Nouveau style", nom_icone="plus", action=self.nouveau))
         disposition.addLayout(entete)
         explication = "Tes styles enregistrés, rangés par catégorie."
         if cible:
             explication += f" « Appliquer » met le style sur la {cible} et choisit sa voix et son modèle."
-        disposition.addWidget(libelle(explication, "secondaire"))
+        disposition.addWidget(info(explication, "secondaire"))
 
         zone, contenu = zone_defilante(largeur_max=None)
         self._liste_widget, self._liste = conteneur_vertical(Espacements.XS)
@@ -308,7 +316,7 @@ class DialogueBibliothequeStyles(QDialog):
         self._lignes = []
         par_categorie = self._services.styles.par_categorie()
         if not par_categorie:
-            self._liste.addWidget(libelle("Aucun style pour l'instant : crée le premier avec « Nouveau style ».", "secondaire"))
+            self._liste.addWidget(libelle("Aucun style pour l'instant : crée le premier avec « Nouveau style ».", "discret"))
             return
         for rang, (categorie, styles) in enumerate(par_categorie):
             if rang:

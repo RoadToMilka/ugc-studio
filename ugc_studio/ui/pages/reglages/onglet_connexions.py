@@ -12,7 +12,7 @@ from ....fournisseurs import creer_adaptateur, nom_fournisseur
 from ....fournisseurs.base import ResultatTest
 from ....services import Services
 from ... import taches
-from ...composants.elements import bloc, bouton, libelle, pastille, vider_disposition
+from ...composants.elements import bloc, bouton, info, libelle, pastille, vider_disposition
 from ...dialogues.cle_api import DialogueCle
 from ...icones import icone, icone_menu
 from ...theme import Couleurs, Dimensions, Espacements
@@ -105,7 +105,7 @@ class OngletConnexions(QWidget):
 
         cadre, self._liste = bloc("Clés API")
         self._liste.addWidget(
-            libelle(
+            info(
                 "Tes clés sont rangées dans le coffre-fort de Windows (Gestionnaire d'identification). "
                 "L'app ne les réaffiche jamais en entier.",
                 "secondaire",

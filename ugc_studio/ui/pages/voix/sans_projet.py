@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QHBoxLayout
 
 from ....services import Services
 from ...actions_projet import nouveau_projet, ouvrir_projet
-from ...composants.elements import bloc, bouton, libelle, vider_disposition
+from ...composants.elements import bloc, bouton, info, libelle, vider_disposition
 from ...theme import Espacements
 from ..base import Page
 
@@ -20,7 +20,7 @@ class SansProjet(Page):
 
         cadre, d = bloc("Commence par un projet")
         d.addWidget(
-            libelle(
+            info(
                 "Un projet regroupe le script, les prises audio, la transcription et les réglages d'une pub. "
                 "Tout est enregistré automatiquement dans son dossier.",
                 "secondaire",
@@ -48,7 +48,7 @@ class SansProjet(Page):
         for nom, dossier in recents:
             ligne = QHBoxLayout()
             ligne.addWidget(
-                bouton(nom, variante="discret", nom_icone="folder-open", action=lambda _coche=False, d=dossier: ouvrir_projet(self, self._services, d))
+                bouton(nom, variante="contour", nom_icone="folder-open", action=lambda _coche=False, d=dossier: ouvrir_projet(self, self._services, d))
             )
             ligne.addWidget(libelle(str(dossier), "legende"), 1)
             self._recents.addLayout(ligne)

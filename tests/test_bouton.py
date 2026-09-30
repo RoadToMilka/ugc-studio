@@ -16,7 +16,7 @@ from ugc_studio.ui.composants.bouton import (
 )
 from ugc_studio.ui.composants.elements import bouton
 from ugc_studio.ui.polices import police
-from ugc_studio.ui.theme import Dimensions, Espacements, Hauteurs, Typo
+from ugc_studio.ui.theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 
 ROUGE, VERT = QColor(255, 0, 0), QColor(0, 255, 0)
 
@@ -143,6 +143,37 @@ def test_chaque_variante_se_dessine(app_configuree, qtbot, variante):
 def test_variante_inconnue_refusee(app_configuree):
     with pytest.raises(ValueError):
         Bouton("x", "clignotant")
+    with pytest.raises(ValueError):
+        Bouton("x", "discret")  # ancien style, remplacé par « contour » (v1.0.2)
+
+
+def test_quatre_styles_et_l_etat_selectionne(app_configuree, qtbot):
+    """Principal : mauve. Normal : fond gris clair. Contour : pas de fond, contour gris.
+    Icône : ni fond ni contour. Sélectionné (onglet actif, bouton coché) : contour mauve et fond
+    mauve léger, comme le module actif de la barre latérale."""
+    principal, normal, contour, icone_seule = (
+        Bouton("Générer l'audio", "principal"),
+        Bouton("Tester la clé"),
+        Bouton("Accentuer", "contour"),
+        Bouton("", "icone", "ellipsis"),
+    )
+    for element in (principal, normal, contour, icone_seule):
+        qtbot.addWidget(element)
+    assert principal._apparence().contour == qcolor(Couleurs.ACCENT)
+    assert normal._apparence().fond == qcolor(Couleurs.SURFACE_ELEVEE)
+    assert contour._apparence().fond is None and contour._apparence().contour is not None
+    assert icone_seule._apparence().fond is None and icone_seule._apparence().contour is None
+
+    for bouton_cochable in (normal, contour):
+        bouton_cochable.setCheckable(True)
+        bouton_cochable.setChecked(True)
+        apparence = bouton_cochable._apparence()
+        assert apparence.fond == qcolor(Couleurs.ACCENT, Opacites.TEINTE_SELECTION)
+        assert apparence.contour == qcolor(Couleurs.ACCENT) and apparence.texte == Couleurs.TEXTE
+
+    contour.setChecked(False)
+    contour.setEnabled(False)
+    assert contour._apparence().fond is None and contour._apparence().texte == Couleurs.TEXTE_DESACTIVE
 
 
 def test_le_menu_s_ouvre_et_le_bouton_se_releve(app_configuree, qtbot):

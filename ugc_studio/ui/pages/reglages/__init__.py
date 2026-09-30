@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ....services import Services
+from ...composants.onglets import Onglets
 from ...theme import Espacements
 from ..base import entete_de_page
 from .onglet_connexions import OngletConnexions
@@ -23,8 +24,7 @@ class PageReglages(QWidget):
             entete_de_page("Réglages", "Connexions API, modèles et prix, suivi des coûts, journal et données.")
         )
 
-        self.onglets = QTabWidget()
-        self.onglets.setDocumentMode(True)
+        self.onglets = Onglets()
         self.connexions = OngletConnexions(services)
         self.modeles = OngletModeles(services)
         self.couts = OngletCouts(services)

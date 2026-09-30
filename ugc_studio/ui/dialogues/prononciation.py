@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLineEdit, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
 
 from ...prononciation import Prononciation, nettoyer
 from ...services import Services
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, libelle
+from ..composants.elements import bouton, info, libelle
+from ..composants.onglets import Onglets
 from ..pages.base import zone_defilante
 from ..theme import Dimensions, Espacements
 
@@ -39,7 +40,7 @@ class TableauPrononciations(QWidget):
         self._grille.setColumnStretch(1, 1)
         disposition.addLayout(self._grille)
         ajouter = QHBoxLayout()
-        ajouter.addWidget(bouton("Ajouter un mot", variante="discret", nom_icone="plus", action=self.ajouter))
+        ajouter.addWidget(bouton("Ajouter un mot", variante="contour", nom_icone="plus", action=self.ajouter))
         ajouter.addStretch(1)
         disposition.addLayout(ajouter)
         disposition.addStretch(1)
@@ -93,7 +94,7 @@ class DialoguePrononciation(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Dictionnaire de prononciation", "titre-bloc"))
         disposition.addWidget(
-            libelle(
+            info(
                 "Pour les mots que la voix prononce mal (noms de marque…) : écris le mot comme dans le script, "
                 "puis comment le dire. Seul le texte envoyé à la voix change : le script et les sous-titres "
                 "gardent la bonne orthographe. Pour un même mot, le dictionnaire du projet l'emporte.",
@@ -101,8 +102,7 @@ class DialoguePrononciation(QDialog):
             )
         )
 
-        self.onglets = QTabWidget()
-        self.onglets.setDocumentMode(True)
+        self.onglets = Onglets()
         projet = services.projets.projet
         self.projet = TableauPrononciations(list(projet.prononciations) if projet else [], tester)
         self.global_ = TableauPrononciations(list(services.prononciations.entrees), tester)

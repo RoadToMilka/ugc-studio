@@ -6,9 +6,17 @@ Pourquoi ne pas utiliser le bouton standard de Qt (QPushButton) ? Il colle l'ic�
 - l'espace entre l'icône et le texte est le même partout dans l'app :
   `Dimensions.ECART_ICONE_TEXTE` (theme.py), comme dans la barre latérale.
 
-Variantes : « normal », « principal » (contour mauve), « discret » (sans cadre),
-« icone » (petit bouton carré avec une icône seule) et « projet » (nom du projet dans le bandeau,
-avec sa flèche à droite).
+Quatre styles, un rôle chacun (§9.4 bis), pour qu'un bouton ressemble toujours à un bouton et
+que son importance se lise d'un coup d'œil :
+- « principal » : contour mauve, fond mauve léger ; l'action principale d'une zone (une seule) ;
+- « normal » (secondaire) : fond gris et bordure fine ; les actions importantes à côté du
+  principal, les boutons du bas des fenêtres ;
+- « contour » : contour gris bien visible, sans fond (le fond du bloc reste visible) ; les outils
+  à l'intérieur d'un bloc (Ajouter une réplique, Accentuer, Actualiser…) ;
+- « icone » : petit bouton carré avec une icône seule (⋯, ▶…), fond au survol.
+Un bouton « normal » ou « contour » qui peut rester enfoncé (onglet actif, variante écoutée)
+prend l'état « sélectionné » : contour mauve et fond mauve très léger, comme le module actif de la
+barre latérale. Variante à part : « projet » (nom du projet dans le bandeau, flèche à droite).
 """
 
 from __future__ import annotations
@@ -25,7 +33,7 @@ from ..icones import icone
 from ..polices import police
 from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 
-VARIANTES = ("normal", "principal", "discret", "icone", "projet")
+VARIANTES = ("normal", "principal", "contour", "icone", "projet")
 _TOUCHES_ENTREE = (Qt.Key.Key_Return, Qt.Key.Key_Enter)
 
 
@@ -261,8 +269,8 @@ class Bouton(QAbstractButton):
         enfonce = actif and self.isDown()
         focus = actif and self.hasFocus() and self._focus_clavier
         variante = self._variante
-        if variante == "normal" and self.isCheckable() and self.isChecked():
-            variante = "principal"  # bouton « enfoncé » (ex. variante écoutée) : allure du bouton principal
+        if variante in ("normal", "contour") and self.isCheckable() and self.isChecked():
+            variante = "selectionne"  # onglet actif, variante écoutée : comme le module actif de la barre latérale
 
         if variante == "projet":
             if not actif:
@@ -273,10 +281,12 @@ class Bouton(QAbstractButton):
                 texte = Couleurs.TEXTE_SECONDAIRE if self._attenue else Couleurs.TEXTE
             return _Apparence(None, None, texte)
 
-        sans_cadre = variante in ("discret", "icone")
+        sans_cadre = variante == "icone"
         if not actif:
             if sans_cadre:
                 return _Apparence(None, None, Couleurs.TEXTE_DESACTIVE)
+            if variante == "contour":
+                return _Apparence(None, qcolor(Couleurs.BORDURE), Couleurs.TEXTE_DESACTIVE)
             return _Apparence(qcolor(Couleurs.SURFACE), qcolor(Couleurs.BORDURE), Couleurs.TEXTE_DESACTIVE)
 
         if variante == "principal":
@@ -287,6 +297,15 @@ class Bouton(QAbstractButton):
             else:
                 fond, contour = qcolor(Couleurs.ACCENT, Opacites.TEINTE), qcolor(Couleurs.ACCENT)
             texte = Couleurs.TEXTE
+        elif variante == "selectionne":
+            fond = qcolor(Couleurs.ACCENT, Opacites.TEINTE_SELECTION)
+            contour = qcolor(Couleurs.ACCENT_SURVOL if (survol or enfonce) else Couleurs.ACCENT)
+            texte = Couleurs.TEXTE
+        elif variante == "contour":
+            fond = qcolor(Couleurs.FOND) if enfonce else (qcolor(Couleurs.SURFACE_ELEVEE) if survol else None)
+            opacite = Opacites.CONTOUR_BOUTON_SURVOL if (survol or enfonce) else Opacites.CONTOUR_BOUTON
+            contour = qcolor(Couleurs.TEXTE_SECONDAIRE, opacite)
+            texte = Couleurs.TEXTE if (survol or enfonce) else Couleurs.TEXTE_SECONDAIRE
         elif sans_cadre:
             fond = qcolor(Couleurs.FOND) if enfonce else (qcolor(Couleurs.SURFACE_ELEVEE) if survol else None)
             contour = None

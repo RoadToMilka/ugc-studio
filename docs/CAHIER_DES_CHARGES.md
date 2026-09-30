@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 3.1, 30/09/2026 (V1.1 en cours, lot 1 : textes et titres, balises en français, pastilles centrées, pleine largeur ; voir §12.2)
+> Version du document : 3.2, 30/09/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; voir §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -606,7 +606,21 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - L'icône et le texte sont toujours **centrés en hauteur** (le texte est centré sur la hauteur de ses majuscules).
 - **Écart icône → texte identique partout** : 12 px (`Dimensions.ECART_ICONE_TEXTE`), dans la barre latérale, les boutons, le bandeau (flèche après le nom du projet) et les menus.
 - Icônes : 16 px dans les boutons avec texte et les menus, 20 px dans la barre latérale et les petits boutons-icônes (⋯, lecture).
-- Variantes : normal, principal (contour mauve), discret (sans cadre), icône (carré de 28 px), projet (nom du projet dans le bandeau). Contour de focus seulement en navigation au clavier (touche Tab).
+- **Quatre styles** (depuis la 1.0.2), les mêmes dans toute l'app :
+  - **Principal** : fond mauve léger et contour mauve. L'action principale d'une zone (« Générer l'audio », « Transcrire », « Enregistrer »…).
+  - **Normal** (dit secondaire) : fond gris clair et contour fin. Les autres actions (« Tester la clé », « Annuler »…).
+  - **Contour** : pas de fond, contour gris bien visible. Les outils d'un bloc (« Accentuer », « Prononciation », « Remplacements »…) et les onglets non choisis. Il remplace l'ancien style « discret », sans cadre, qu'on ne reconnaissait pas comme un bouton.
+  - **Icône** : carré de 28 px, icône seule, sans fond ni contour (⋯, lecture, favori).
+  - Plus le nom du projet dans le bandeau (style « projet »).
+- **Sélectionné** (un état, pas un style) : contour mauve et fond mauve très léger, comme le module actif de la barre latérale. Pour l'onglet actif et la lettre de la variante en écoute (fenêtre de comparaison).
+- Contour de focus seulement en navigation au clavier (touche Tab).
+
+### 9.4 ter Onglets et infos
+
+- **Onglets en boutons** (`ui/composants/onglets.py`), partout où il y a des onglets (Réglages, Bibliothèque de voix, Prononciation, Remplacements, Variantes) : une ligne de séparation, 16 px d'espace, puis une rangée de boutons ; l'onglet actif a l'allure « sélectionné », les autres le style « contour ». Les onglets standard de Qt, qui soulignaient l'onglet actif d'un trait mauve par-dessus la ligne, ne se créent plus (vérifié par un test).
+- **Infos avec une ampoule** : chaque phrase d'aide (sous un bloc, un champ ou une case à cocher, en haut d'une fenêtre) commence par l'icône Lucide « lightbulb », à la taille des icônes des boutons (16 px, donc le même trait), dans la couleur du texte secondaire, à 8 px du texte et centrée sur sa première ligne. Sous une case à cocher, l'ampoule tombe sous la case et le texte s'aligne sur celui de la case.
+- Pas d'ampoule pour un nom de champ, une donnée (durée, coût, détails d'une voix, « Mot 3 sur 120 »), une traduction, un message d'état (en cours, succès, erreur en rouge), un avertissement orange ni une liste vide (texte « discret »).
+- Un seul composant, `info()` de `elements.py` : un test signale toute phrase d'aide grise écrite autrement.
 
 ### 9.5 Typographie
 
@@ -622,7 +636,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 - **Pas de tiret long** (« — ») comme séparateur dans l'interface : « / » entre un module et un projet, ailleurs la ponctuation qui convient (parenthèses, point médian « · », deux-points, virgule). Ex. « Prise 5 (variante C) », « Kore · Ferme · féminine ». Les noms donnés automatiquement par la v1.0.0 (« Prise 5 — variante C ») et le message de test de clé enregistré sont corrigés à la lecture ; un nom choisi à la main ne change jamais. Vérifié par un test.
 - **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test).
 - **Molette de la souris** : faire défiler une page ne change jamais une valeur au passage. Listes déroulantes, champs de nombre et barres de lecture ne réagissent à la molette qu'après un clic dedans ; sinon la page défile. Ils se créent toujours avec `liste_deroulante()`, `champ_entier()`, `champ_decimal()` et `glissiere()` (vérifié par un test).
-- Le texte d'une case à cocher ne passe jamais à la ligne : il reste court (48 caractères au plus, vérifié par un test) et l'explication va dans une légende dessous, qui passe à la ligne (`case_a_cocher()`). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent (ou, si rien n'est encore coupé, les plus larges). Toute erreur inattendue pendant l'autotest le fait échouer.
+- Le texte d'une case à cocher ne passe jamais à la ligne : il reste court (48 caractères au plus, vérifié par un test) et l'explication va dessous, en info avec une ampoule, qui passe à la ligne (`case_a_cocher()`). L'autotest vérifie chaque page à cette largeur, et chaque fenêtre de dialogue, puis signale les éléments qui dépassent (ou, si rien n'est encore coupé, les plus larges). Toute erreur inattendue pendant l'autotest le fait échouer.
 
 ### 9.7 Valeurs complémentaires
 
