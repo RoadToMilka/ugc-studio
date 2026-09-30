@@ -19,6 +19,7 @@ from ...fournisseurs import ADAPTATEURS, FOURNISSEURS_PREVUS, creer_adaptateur
 from ...fournisseurs.base import Adaptateur, ResultatTest
 from .. import taches
 from ..composants.bouton import activer_avec_entree
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, libelle, liste_deroulante
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
@@ -51,7 +52,7 @@ class DialogueCle(QDialog):
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         titre = f"Remplacer la clé « {a_remplacer.nom} »" if remplacement else "Ajouter une clé API"
-        disposition.addWidget(libelle(titre, "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre(titre, "cle-api"))
 
         # Fournisseur (les fournisseurs prévus plus tard sont visibles mais grisés)
         self.fournisseur = liste_deroulante()

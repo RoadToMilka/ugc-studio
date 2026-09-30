@@ -187,7 +187,8 @@ TEXTES_QUI_NE_SONT_PAS_DES_INFOS = {
     "Icônes Lucide (licence ISC) · Police Inter (licence SIL OFL 1.1).",
 }
 MOTS_D_UNE_PHRASE = 5  # à partir de 5 mots, avec un point final, un texte gris est une phrase d'aide
-FICHIERS_AVEC_AMPOULE = {Path("ui") / "composants" / "elements.py"}
+# L'ampoule : devant les infos (elements.py) et sur le bouton « Conseils » (conseils.py).
+FICHIERS_AVEC_AMPOULE = {Path("ui") / "composants" / "elements.py", Path("ui") / "composants" / "conseils.py"}
 
 
 def _texte_ecrit(noeud: ast.AST) -> str | None:
@@ -212,8 +213,9 @@ def test_les_phrases_d_aide_sont_des_infos():
     """Chaque phrase d'aide grise (sous un bloc, un champ, en haut d'une fenêtre) commence par la
     même ampoule (§9.4 bis). Elle s'écrit donc avec info() de elements.py, jamais avec un simple
     libelle() gris : ce test signale les libelle() « legende » ou « secondaire » dont le texte est
-    une phrase. Et l'ampoule n'est dessinée que par elements.py : pas d'autre façon d'écrire une
-    info. (Les listes vides ont leur propre style, « discret » : ce ne sont pas des infos.)"""
+    une phrase. Et l'ampoule n'est dessinée que par elements.py (et par le bouton « Conseils ») :
+    pas d'autre façon d'écrire une info. (Les listes vides ont leur propre style, « discret » : ce ne
+    sont pas des infos.)"""
     ecarts = []
     for fichier in _fichiers():
         source = fichier.read_text(encoding="utf-8")

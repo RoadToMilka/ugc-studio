@@ -1,7 +1,7 @@
 """Voice Design (§5.4 bis) : créer une voix à partir d'une description, sans passer par Google AI Studio.
 
 1. On décrit la voix (nom, langue, genre, modèle, description en anglais de 1 à 2 phrases ; assistant
-   et traduction disponibles). Le panneau « Conseils Google » reste visible à côté.
+   et traduction disponibles). Les conseils de Google sont derrière le bouton « Conseils ».
 2. « Créer la voix » : Google crée la voix, la garde 1 an (200 voix au maximum par projet) et renvoie
    un extrait, joué aussitôt.
 3. Chaque création donne une version un peu différente : on peut en créer d'autres avec la même
@@ -13,7 +13,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout
 
-from ...conseils import CONSEILS_VOIX
 from ...fournisseurs.capacites import MODELES_CONNUS, Capacite
 from ...fournisseurs.voix import RequeteVoiceDesign, VoixBibliotheque
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES
@@ -21,11 +20,10 @@ from ...services import Services
 from ...voix_locales import GENRES, MAX_VOIX_CREEES, date_lisible
 from .. import taches
 from ..composants.champ_style import ChampDescription
-from ..composants.conseils import ListeConseils
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, conteneur_vertical, info, libelle, liste_deroulante
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
-from ..pages.base import zone_defilante
 from ..theme import Dimensions, Espacements, Hauteurs
 
 
@@ -74,12 +72,12 @@ class DialogueVoiceDesign(QDialog):
         self.voix_creee: VoixBibliotheque | None = None
         self._versions: list[LigneVersion] = []
         self.setWindowTitle("Créer une voix")
-        self.setMinimumSize(Dimensions.DIALOGUE_STYLE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
+        self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Créer une voix (Voice Design)", "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre("Créer une voix (Voice Design)", "creer-une-voix"))
         disposition.addWidget(
             info(
                 "Décris la voix : Google en crée une nouvelle et te fait écouter un extrait. Chaque création donne "
@@ -88,8 +86,6 @@ class DialogueVoiceDesign(QDialog):
             )
         )
 
-        colonnes = QHBoxLayout()
-        colonnes.setSpacing(Espacements.XL)
         gauche = QVBoxLayout()
         gauche.setSpacing(Espacements.M)
         formulaire = QGridLayout()
@@ -133,15 +129,7 @@ class DialogueVoiceDesign(QDialog):
         self._versions_widget, self._liste_versions = conteneur_vertical(0)
         gauche.addWidget(self._versions_widget)
         gauche.addStretch(1)
-        colonnes.addLayout(gauche, 1)
-
-        zone, conseils = zone_defilante(largeur_max=None)
-        zone.setFixedWidth(Dimensions.PANNEAU_CONSEILS_LARGEUR)
-        conseils.setSpacing(Espacements.S)
-        conseils.addWidget(libelle("Conseils Google", "intitule"))
-        conseils.addWidget(ListeConseils(CONSEILS_VOIX))
-        colonnes.addWidget(zone)
-        disposition.addLayout(colonnes, 1)
+        disposition.addLayout(gauche, 1)
 
         bas = QHBoxLayout()
         bas.setSpacing(Espacements.S)

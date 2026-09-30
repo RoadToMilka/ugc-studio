@@ -16,7 +16,7 @@ SOUS_TITRE = "Le texte d'une vidéo ou d'un audio, mot par mot, pour créer les 
 class PageTranscription(QStackedWidget):
     def __init__(self, services: Services):
         super().__init__()
-        self.sans_projet = SansProjet(services, TITRE, SOUS_TITRE)
+        self.sans_projet = SansProjet(services, TITRE, SOUS_TITRE, "transcription")
         self.atelier = AtelierTranscription(services)
         self.addWidget(self.sans_projet)
         self.addWidget(self.atelier)

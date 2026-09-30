@@ -18,6 +18,7 @@ from ...services import Services
 from ...variantes import LETTRES, MODELE, STYLE, TEXTE, VOIX, Reglage, champs_differents, valeur_de_prise
 from ..composants.bouton import Bouton
 from ..composants.comparateur import ComparateurAudio
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
     bouton,
     conteneur_vertical,
@@ -29,7 +30,7 @@ from ..composants.elements import (
 )
 from ..composants.etoiles import boutons_etoiles
 from ..icones import icone
-from ..pages.base import zone_defilante
+from ..composants.defilement import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements
 
 EXTRAIT_TEXTE = 40  # caractères montrés d'un texte de réplique modifié
@@ -107,7 +108,7 @@ class DialogueComparaison(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle(f"Comparer les variantes de la série {serie}", "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre(f"Comparer les variantes de la série {serie}", "comparaison"))
         disposition.addWidget(
             info(
                 "« Lecture enchaînée » joue A, puis B, puis C… Pendant l'écoute, clique sur une lettre "

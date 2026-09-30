@@ -13,7 +13,7 @@ from .atelier import SOUS_TITRE, TITRE, AtelierSousTitres
 class PageSousTitres(QStackedWidget):
     def __init__(self, services: Services):
         super().__init__()
-        self.sans_projet = SansProjet(services, TITRE, SOUS_TITRE)
+        self.sans_projet = SansProjet(services, TITRE, SOUS_TITRE, "sous-titres")
         self.atelier = AtelierSousTitres(services)
         self.addWidget(self.sans_projet)
         self.addWidget(self.atelier)

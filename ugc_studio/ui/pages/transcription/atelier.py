@@ -145,7 +145,11 @@ class ZoneDepot(QFrame):
 
 class AtelierTranscription(Page):
     def __init__(self, services: Services):
-        super().__init__("Transcription", "Le texte d'une vidéo ou d'un audio, mot par mot, pour créer les sous-titres.")
+        super().__init__(
+            "Transcription",
+            "Le texte d'une vidéo ou d'un audio, mot par mot, pour créer les sous-titres.",
+            conseils="transcription",
+        )
         self._services = services
         self._projet: Projet | None = None
         self._source_en_cours: Path | None = None

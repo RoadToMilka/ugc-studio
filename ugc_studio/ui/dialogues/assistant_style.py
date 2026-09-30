@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QVBo
 
 from ...styles import EMOTIONS, INTENSITES, RYTHMES, assembler
 from ..composants.bouton import activer_avec_entree
+from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
@@ -34,7 +35,7 @@ class DialogueAssistantStyle(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Assistant de style", "titre-bloc"))
+        disposition.addLayout(entete_de_fenetre("Assistant de style", "assistant-style"))
         disposition.addWidget(
             info(
                 "Choisis en français : l'app écrit une consigne courte en anglais, comme Google le conseille "

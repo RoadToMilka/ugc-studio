@@ -1,27 +1,103 @@
-"""Panneau « Conseils Google » (§5.4 bis, §5.5) : chaque conseil en anglais d'origine, avec sa traduction."""
+"""Bouton « Conseils » et fenêtre de conseils (V1.1, §9.4 quater).
+
+Le bouton (ampoule, style contour) se place en haut à droite de chaque module, sur la ligne du
+titre, et en haut à droite de chaque fenêtre qui a quelque chose à expliquer. Il ouvre les
+conseils de la page, en français ; les textes sont dans conseils_des_pages.py.
+
+Pourquoi une fenêtre ? Jusqu'à la 1.0.2, les conseils de Google restaient affichés sous le script
+(module Voix) et à côté des formulaires (styles, Voice Design), en anglais avec leur traduction :
+beaucoup de place pour une lecture qu'on ne fait qu'une fois. Ils sont maintenant réunis derrière
+un bouton, avec ceux de chaque module et de chaque fenêtre.
+"""
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QWidget
 
-from ...conseils import Conseil
-from ..theme import Espacements
-from .elements import libelle
+from ...conseils_des_pages import PAGES, PageDeConseils
+from ..theme import Dimensions, Espacements
+from .bouton import Bouton
+from .defilement import zone_defilante
+from .elements import bouton, libelle
+
+TEXTE_BOUTON = "Conseils"
 
 
-class ListeConseils(QWidget):
-    """Liste de conseils : l'original anglais (texte courant), puis la traduction (légende)."""
+def titre_des_conseils(page: PageDeConseils) -> str:
+    """« Voix / Conseils » : la page, puis « Conseils » (comme « Voix / Sérum Glowzy »)."""
+    return f"{page.titre} / Conseils"
 
-    def __init__(self, conseils: tuple[Conseil, ...], parent=None):
-        super().__init__(parent)
-        disposition = QVBoxLayout(self)
+
+class _Conseil(QWidget):
+    """Un conseil : une puce, puis le texte, qui passe à la ligne sous lui-même (pas sous la puce)."""
+
+    def __init__(self, texte: str):
+        super().__init__()
+        disposition = QHBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(Espacements.S)
-        for conseil in conseils:
-            bloc_conseil = QVBoxLayout()
-            bloc_conseil.setSpacing(0)
-            bloc_conseil.addWidget(libelle(f"• {conseil.anglais}", "secondaire"))
-            francais = libelle(conseil.francais, "legende")
-            francais.setContentsMargins(Espacements.M, 0, 0, 0)
-            bloc_conseil.addWidget(francais)
-            disposition.addLayout(bloc_conseil)
+        # Même police pour la puce et le texte, calés en haut : la puce tombe sur la première ligne.
+        disposition.addWidget(libelle("•", "secondaire", retour_a_la_ligne=False), 0, Qt.AlignmentFlag.AlignTop)
+        self.texte = libelle(texte)
+        disposition.addWidget(self.texte, 1)
+
+
+class DialogueConseils(QDialog):
+    """Fenêtre des conseils d'un module ou d'une fenêtre : des rubriques, chacune avec ses conseils."""
+
+    def __init__(self, page: PageDeConseils, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.page = page
+        titre = titre_des_conseils(page)
+        self.setWindowTitle(titre)
+        self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
+        self.resize(Dimensions.DIALOGUE_CONSEILS_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
+
+        disposition = QVBoxLayout(self)
+        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        disposition.setSpacing(Espacements.M)
+        disposition.addWidget(libelle(titre, "titre-bloc"))
+
+        zone, contenu = zone_defilante()
+        contenu.setSpacing(Espacements.XL)
+        for rubrique in page.rubriques:
+            partie = QVBoxLayout()
+            partie.setSpacing(Espacements.S)
+            partie.addWidget(libelle(rubrique.titre, "intitule"))
+            for conseil in rubrique.conseils:
+                partie.addWidget(_Conseil(conseil))
+            contenu.addLayout(partie)
+        disposition.addWidget(zone, 1)
+
+        bas = QHBoxLayout()
+        bas.addStretch(1)
+        bas.addWidget(bouton("Fermer", action=self.accept))
+        disposition.addLayout(bas)
+
+    def conseils(self) -> list[str]:
+        """Les textes affichés, dans l'ordre (pour les tests)."""
+        return [element.texte.text() for element in self.findChildren(_Conseil)]
+
+
+def bouton_conseils(cle: str) -> Bouton:
+    """Bouton « Conseils » (ampoule, style contour) qui ouvre les conseils de la page `cle`
+    (voir conseils_des_pages.PAGES)."""
+    page = PAGES[cle]
+    resultat = bouton(TEXTE_BOUTON, variante="contour", nom_icone="lightbulb")
+    resultat.clicked.connect(lambda: DialogueConseils(page, resultat.window()).exec())
+    resultat.setProperty("conseils", cle)  # pour les tests et l'autotest
+    return resultat
+
+
+def entete_de_fenetre(titre: str, conseils: str) -> QHBoxLayout:
+    """Titre d'une fenêtre, avec le bouton « Conseils » en haut à droite.
+    Le titre reste accessible (`entete.titre`), comme le bouton (`entete.conseils`)."""
+    entete = QHBoxLayout()
+    entete.setContentsMargins(0, 0, 0, 0)
+    entete.setSpacing(Espacements.S)
+    entete.titre = libelle(titre, "titre-bloc")
+    entete.addWidget(entete.titre, 1)
+    entete.conseils = bouton_conseils(conseils)
+    entete.addWidget(entete.conseils)
+    return entete

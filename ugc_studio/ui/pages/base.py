@@ -2,76 +2,31 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
+from ..composants.conseils import bouton_conseils
+from ..composants.defilement import zone_defilante
 from ..composants.elements import libelle
-from ..theme import Dimensions, Espacements
+from ..theme import Espacements
 
 
-class ZoneDefilante(QScrollArea):
-    """Zone qui défile, dont la hauteur « souhaitée » reste modeste.
-
-    Sans cela, Qt prend la hauteur du contenu (jusqu'à 24 lignes de texte) comme hauteur
-    souhaitée. Dans une fenêtre à onglets contenant des textes sur plusieurs lignes, Qt en déduit
-    même une hauteur *minimale* de fenêtre, qui peut dépasser l'écran d'un ordinateur portable
-    (les boutons du bas deviennent inaccessibles). Le contenu, lui, défile comme avant."""
-
-    def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
-        taille = super().sizeHint()
-        return QSize(taille.width(), min(taille.height(), Dimensions.ZONE_DEFILANTE_HAUTEUR_SOUHAITEE))
-
-
-def zone_defilante(
-    largeur_max: int | None = None,
-    marges: tuple[int, int, int, int] = (0, 0, 0, 0),
-) -> tuple[QScrollArea, QVBoxLayout]:
-    """Zone qui défile verticalement quand son contenu est trop haut.
-
-    Renvoie la zone et la disposition verticale où ajouter le contenu. La colonne de contenu
-    occupe toute la largeur disponible (en plein écran, les blocs s'étirent jusqu'au bord droit),
-    sauf si `largeur_max` la limite ; elle reste alors calée à gauche.
-    """
-    zone = ZoneDefilante()
-    zone.setWidgetResizable(True)
-    zone.setFrameShape(QFrame.Shape.NoFrame)
-    zone.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-    interieur = QWidget()
-    interieur.setObjectName("contenuDefilant")
-    zone.setWidget(interieur)
-    # setWidget() rend le fond du contenu opaque (couleur « fenêtre » de la palette) :
-    # on le remet transparent pour voir le fond de l'app, comme dans le reste de l'interface.
-    interieur.setAutoFillBackground(False)
-    zone.viewport().setAutoFillBackground(False)
-
-    disposition = QVBoxLayout(interieur)
-    disposition.setContentsMargins(*marges)
-    disposition.setSpacing(0)
-
-    colonne = QWidget()
-    if largeur_max is not None:
-        colonne.setMaximumWidth(largeur_max)
-    contenu = QVBoxLayout(colonne)
-    contenu.setContentsMargins(0, 0, 0, 0)
-    contenu.setSpacing(Espacements.L)
-    ligne = QHBoxLayout()
-    ligne.setContentsMargins(0, 0, 0, 0)
-    ligne.addWidget(colonne, 1)
-    ligne.addStretch(0)
-    disposition.addLayout(ligne)
-    disposition.addStretch(1)
-    return zone, contenu
-
-
-def entete_de_page(titre: str, sous_titre: str) -> QVBoxLayout:
-    """Titre + sous-titre d'une page. Les deux textes restent accessibles : `entete.titre`, `entete.sous_titre`."""
+def entete_de_page(titre: str, sous_titre: str, conseils: str | None = None) -> QVBoxLayout:
+    """Titre + sous-titre d'une page, et le bouton « Conseils » en haut à droite, sur la ligne du
+    titre (`conseils` : la page de conseils_des_pages.PAGES à ouvrir). Les éléments restent
+    accessibles : `entete.titre`, `entete.sous_titre`, `entete.conseils` (ou None)."""
     entete = QVBoxLayout()
     entete.setContentsMargins(0, 0, 0, 0)
     entete.setSpacing(Espacements.XS)
+    ligne = QHBoxLayout()
+    ligne.setContentsMargins(0, 0, 0, 0)
+    ligne.setSpacing(Espacements.S)
     entete.titre = libelle(titre, "titre-page")
+    ligne.addWidget(entete.titre, 1)
+    entete.conseils = bouton_conseils(conseils) if conseils else None
+    if entete.conseils is not None:
+        ligne.addWidget(entete.conseils)
+    entete.addLayout(ligne)
     entete.sous_titre = libelle(sous_titre, "secondaire")
-    entete.addWidget(entete.titre)
     entete.addWidget(entete.sous_titre)
     return entete
 
@@ -82,7 +37,7 @@ class Page(QWidget):
     Les pages ajoutent leurs éléments dans `self.contenu` (une disposition verticale).
     """
 
-    def __init__(self, titre: str, sous_titre: str, largeur_max: int | None = None):
+    def __init__(self, titre: str, sous_titre: str, largeur_max: int | None = None, conseils: str | None = None):
         super().__init__()
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
@@ -91,7 +46,7 @@ class Page(QWidget):
             largeur_max, (Espacements.XXL, Espacements.XL, Espacements.XXL, Espacements.XXL)
         )
         disposition.addWidget(zone)
-        entete = entete_de_page(titre, sous_titre)
-        self.titre, self.sous_titre = entete.titre, entete.sous_titre
+        entete = entete_de_page(titre, sous_titre, conseils)
+        self.titre, self.sous_titre, self.bouton_conseils = entete.titre, entete.sous_titre, entete.conseils
         self.contenu.addLayout(entete)
         self.contenu.addSpacing(Espacements.S)
