@@ -199,6 +199,13 @@ class DispositionStudio(QWidget):
         besoin = self._apercu.sizeHint().width() + self._disposition.spacing() + self._reglages.minimumSizeHint().width()
         return max(Dimensions.STUDIO_DEUX_COLONNES_MIN, besoin)
 
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        """Largeur minimale : celle d'une seule colonne. Sans cela, sur deux colonnes, le studio ne
+        pourrait pas devenir plus étroit que ses deux colonnes : il n'y aurait jamais assez peu de place
+        pour passer sur une colonne, et le bord droit de la page serait coupé."""
+        largeur = max(self._apercu.minimumSizeHint().width(), self._reglages.minimumSizeHint().width())
+        return QSize(largeur, super().minimumSizeHint().height())
+
     def resizeEvent(self, evenement) -> None:  # noqa: N802
         self._adapter(evenement.size().width())
         super().resizeEvent(evenement)
