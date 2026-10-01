@@ -19,7 +19,7 @@ from ..composants.choix_voix import choisir
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import ZoneDefilante
 from ..composants.editeur_script import EditeurScript
-from ..composants.elements import bouton, info, libelle, liste_deroulante, pastille, vider_disposition
+from ..composants.elements import bouton, info, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
 from ..theme import Dimensions, Espacements
 
@@ -101,17 +101,14 @@ class ColonneComparee(QWidget):
             RESEAUX.get(script.reseau, script.reseau),
         ]
         self._contenu.addWidget(libelle("  ·  ".join(d for d in details if d), "legende"))
+        # Note et marques en texte (qui passe à la ligne) : des pastilles ne tiendraient pas dans la colonne.
         marques = QHBoxLayout()
         marques.setSpacing(Espacements.S)
-        if script.note:
-            marques.addWidget(libelle(f"{'★' * script.note}{'☆' * (5 - script.note)}", "legende", retour_a_la_ligne=False))
-        if script.retenu:
-            marques.addWidget(pastille("Retenu"))
-        if script.envoye_le:
-            marques.addWidget(pastille("Envoyé dans Voix"))
-        marques.addStretch(1)
+        textes = [f"{'★' * script.note}{'☆' * (5 - script.note)}" if script.note else ""]
+        textes += ["Retenu" if script.retenu else "", "Envoyé dans Voix" if script.envoye_le else ""]
+        marques.addWidget(libelle("  ·  ".join(t for t in textes if t), "legende"), 1)
         if script.cout_eur is not None:
-            marques.addWidget(MontantLabel(script.cout_eur))
+            marques.addWidget(MontantLabel(script.cout_eur), 0, Qt.AlignmentFlag.AlignTop)
         self._contenu.addLayout(marques)
         for rang, replique in enumerate(script.repliques, start=1):
             roles = " · ".join(ROLES.get(r, r) for r in replique.roles)
@@ -146,7 +143,7 @@ class DialogueComparerScripts(QDialog):
         self.script_a_envoyer: ScriptEcrit | None = None
         choisis = list(choisis if choisis is not None else choix_par_defaut(scripts))[:COLONNES]
         self.setWindowTitle("Comparer les scripts")
-        self.resize(Dimensions.DIALOGUE_COMPARER_SCRIPTS_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
+        self.resize(Dimensions.DIALOGUE_COMPARER_SCRIPTS_LARGEUR, Dimensions.DIALOGUE_SCRIPTS_HAUTEUR)
 
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)

@@ -40,7 +40,7 @@ from ..composants.defilement import ZoneDefilante
 from ..composants.elements import bouton, champ_entier, info, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
-from ..theme import Dimensions, Espacements
+from ..theme import Dimensions, Espacements, Hauteurs
 from .variantes import marquer_modifie
 
 ONGLETS = (MEMES, PAR_VARIANTE, ACCROCHES)
@@ -104,7 +104,7 @@ class DialogueVariantesScript(QDialog):
         self._variantes: list[ReglagesScript] = [self._base.copie() for _ in range(VARIANTES_MIN)]
         self._colonnes: list[ColonneScript] = []
         self.setWindowTitle("Variantes de script")
-        self.resize(Dimensions.DIALOGUE_VARIANTES_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
+        self.resize(Dimensions.DIALOGUE_VARIANTES_LARGEUR, Dimensions.DIALOGUE_SCRIPTS_HAUTEUR)
 
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
@@ -233,9 +233,14 @@ class DialogueVariantesScript(QDialog):
         for variante in self._variantes:
             self._colonnes.append(ColonneScript({nom: self._champ(nom, variante) for nom in REGLAGES}))
         for rang, (nom, titre) in enumerate(REGLAGES.items(), start=1):
-            self._grille.addWidget(libelle(titre, "legende", retour_a_la_ligne=False), rang, 0, Qt.AlignmentFlag.AlignTop)
+            # Titre et valeur du brief centrés sur la hauteur d'un champ (sur la ligne du texte des champs).
+            etiquette = libelle(titre, "legende", retour_a_la_ligne=False)
+            etiquette.setFixedHeight(Hauteurs.CONTROLE)
+            self._grille.addWidget(etiquette, rang, 0, Qt.AlignmentFlag.AlignTop)
             base = libelle(texte_d_un_reglage(nom, self._base, self._brief), "secondaire")
             base.setMaximumWidth(Dimensions.COLONNE_VARIANTE_LARGEUR)
+            base.setMinimumHeight(Hauteurs.CONTROLE)
+            base.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             self._grille.addWidget(base, rang, 1, Qt.AlignmentFlag.AlignTop)
             for index, colonne in enumerate(self._colonnes):
                 champ = colonne.champs[nom]
@@ -271,6 +276,7 @@ class DialogueVariantesScript(QDialog):
             duree.valueChanged.connect(lambda _valeur: self._actualiser())
             return duree
         texte = QLineEdit(getattr(variante, nom))
+        texte.setCursorPosition(0)  # un texte long se lit depuis son début
         texte.setPlaceholderText(
             {"accroche": "le modèle l'écrit", "profil": "ex. sportive", "consigne": "ex. ton léger"}.get(nom, "")
         )

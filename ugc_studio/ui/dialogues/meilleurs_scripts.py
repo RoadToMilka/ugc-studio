@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
 from ...ecriture.affichage import nom_angle
 from ...ecriture.brief import ANGLES, DUREE_MAX, LANGUES_ECRITURE, RESEAUX, Brief
 from ...ecriture.exemples import ExempleScript, exemple_colle
+from ...ecriture.scripts import segments_depuis_modele
+from ...script import texte_pour_affichage
 from ...services import Services
 from ..composants.choix_voix import choisir
 from ..composants.conseils import entete_de_fenetre
@@ -40,9 +42,19 @@ from ..composants.elements import (
     vider_disposition,
 )
 from ..icones import icone_menu
-from ..theme import Couleurs, Dimensions, Espacements, Hauteurs
+from ..theme import Couleurs, Dimensions, Espacements
 
 TUTOIEMENTS_EXEMPLE = {"tu": "Tutoiement", "vous": "Vouvoiement"}
+
+
+def texte_de_l_exemple(exemple: ExempleScript) -> str:
+    """Les répliques, une par ligne, comme dans le reste de l'app : balises en français (« <petit
+    rire> »), mot accentué en MAJUSCULES."""
+    lignes = []
+    for replique in exemple.repliques:
+        segments, _retraits = segments_depuis_modele(str(replique.get("texte") or ""), True, True)
+        lignes.append(texte_pour_affichage(segments))
+    return "\n".join(lignes)
 
 
 def details_de_l_exemple(exemple: ExempleScript) -> str:
@@ -55,6 +67,15 @@ def details_de_l_exemple(exemple: ExempleScript) -> str:
         "vouvoiement" if exemple.tutoiement == "vous" else "tutoiement",
     ]
     return "  ·  ".join(m for m in morceaux if m)
+
+
+def _avec_titre(titre: str, element) -> QVBoxLayout:
+    """Un champ sous son nom (comme dans le brief du module Script)."""
+    colonne = QVBoxLayout()
+    colonne.setSpacing(Espacements.XS)
+    colonne.addWidget(libelle(titre, "legende", retour_a_la_ligne=False))
+    colonne.addWidget(element)
+    return colonne
 
 
 class LigneExemple(QFrame):
@@ -77,16 +98,20 @@ class LigneExemple(QFrame):
         titre.addStretch(1)
         textes.addLayout(titre)
         textes.addWidget(libelle(details_de_l_exemple(exemple), "legende"))
-        repliques = "\n".join(str(r.get("texte") or "") for r in exemple.repliques)
-        textes.addWidget(libelle(repliques, "secondaire", selectionnable=True))
+        textes.addWidget(libelle(texte_de_l_exemple(exemple), "secondaire", selectionnable=True))
         if exemple.pourquoi:
             textes.addWidget(libelle(f"Pourquoi il marche : {exemple.pourquoi}", "legende"))
         self.note: QLineEdit | None = None
         if not exemple.fourni:
+            ligne_note = QHBoxLayout()
+            ligne_note.setSpacing(Espacements.M)
+            ligne_note.addWidget(libelle("Ta note", "legende", retour_a_la_ligne=False))
             self.note = QLineEdit(exemple.note)
-            self.note.setPlaceholderText("Ta note, lue par le modèle (ex. CPA 9 €, meilleur ROAS)")
+            self.note.setPlaceholderText("lue par le modèle (ex. CPA 9 €, meilleur ROAS)")
+            self.note.setToolTip("Le modèle lit cette note avec l'exemple : dis-lui pourquoi ce script a marché")
             self.note.editingFinished.connect(lambda: dialogue.noter(exemple, self.note.text()))
-            textes.addWidget(self.note)
+            ligne_note.addWidget(self.note, 1)
+            textes.addLayout(ligne_note)
         disposition.addLayout(textes, 1)
         plus = bouton("", variante="icone", nom_icone="ellipsis")
         plus.setToolTip("Plus d'actions")
@@ -217,7 +242,7 @@ class DialogueAjoutExemple(QDialog):
         self.titre = QLineEdit(brief.produit.strip())
         self.titre.setPlaceholderText("ex. Gourde isotherme")
         self.texte = QPlainTextEdit()
-        self.texte.setFixedHeight(Dimensions.CHAMP_TEXTE_COLLE_HAUTEUR)
+        self.texte.setFixedHeight(Dimensions.CHAMP_SCRIPT_COLLE_HAUTEUR)
         self.texte.setTabChangesFocus(True)
         self.texte.setPlaceholderText("Colle ici le texte du script")
         self.texte.textChanged.connect(self._actualiser)
@@ -243,27 +268,24 @@ class DialogueAjoutExemple(QDialog):
         self.note = QLineEdit()
         self.note.setPlaceholderText("ex. CPA 9 €, meilleur ROAS du mois")
 
+        # Deux colonnes, chaque champ sous son nom : la fenêtre tient sur l'écran d'un portable.
         formulaire = QGridLayout()
-        formulaire.setHorizontalSpacing(Espacements.M)
-        formulaire.setVerticalSpacing(Espacements.S)
-        for rang, (titre, element) in enumerate(
-            (
-                ("Produit", self.titre),
-                ("Script", self.texte),
-                ("Langue", self.langue),
-                ("Réseau", self.reseau),
-                ("Angle", self.angle),
-                ("Tutoiement", self.tutoiement),
-                ("Durée", self.duree),
-                ("Ta note", self.note),
-            )
+        formulaire.setHorizontalSpacing(Espacements.L)
+        formulaire.setVerticalSpacing(Espacements.M)
+        formulaire.addLayout(_avec_titre("Produit", self.titre), 0, 0, 1, 2)
+        formulaire.addLayout(_avec_titre("Script", self.texte), 1, 0, 1, 2)
+        for rang, paire in enumerate(
+            ((("Langue", self.langue), ("Réseau", self.reseau)),
+             (("Angle", self.angle), ("Tutoiement", self.tutoiement)),
+             (("Durée", self.duree), ("Ta note", self.note))),
+            start=2,
         ):
-            etiquette = libelle(titre, "legende", retour_a_la_ligne=False)
-            etiquette.setFixedHeight(Hauteurs.CONTROLE)
-            formulaire.addWidget(etiquette, rang, 0, Qt.AlignmentFlag.AlignTop)
-            formulaire.addWidget(element, rang, 1, Qt.AlignmentFlag.AlignTop if element is self.texte else Qt.AlignmentFlag.AlignVCenter)
+            for colonne, (titre, element) in enumerate(paire):
+                formulaire.addLayout(_avec_titre(titre, element), rang, colonne)
+        formulaire.setColumnStretch(0, 1)
         formulaire.setColumnStretch(1, 1)
-        disposition.addLayout(formulaire, 1)
+        disposition.addLayout(formulaire)
+        disposition.addStretch(1)
 
         boutons = QHBoxLayout()
         boutons.setSpacing(Espacements.S)
