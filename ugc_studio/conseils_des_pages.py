@@ -319,6 +319,20 @@ SOUS_TITRES = PageDeConseils(
             ),
         ),
         Rubrique(
+            "Animations",
+            (
+                "Onglet Animations : le mot qui devient actif peut faire un pop, un rebond, un zoom, un fondu "
+                "ou glisser vers le haut, avec sa durée et son intensité ; ses réglages avancés (tailles, "
+                "opacité et décalage de départ, courbe) partent de ceux de l'animation choisie.",
+                "Quand le mot suivant s'allume, le précédent redevient « déjà dit » d'un coup, ou en fondu.",
+                "Le sous-titre entier peut apparaître et disparaître (fondu, pop, zoom, glissement) : "
+                "l'apparition commence à son début, la disparition finit à sa fin ; les temps ne changent pas.",
+                "Le sommet d'un pop compte dans la place : un mot animé ne sort jamais de la marge maximum.",
+                "Pour revoir une animation : choisis le sous-titre dans la liste et active la boucle de "
+                "l'aperçu.",
+            ),
+        ),
+        Rubrique(
             "Polices et licences",
             (
                 "Polices fournies avec l'app (Montserrat, Poppins, Anton, Bebas Neue, Inter) : licence SIL "

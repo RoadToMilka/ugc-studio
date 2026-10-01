@@ -6,4 +6,4 @@ il est inscrit dans le .exe, et la fabrication automatique publie une Release Gi
 """
 
 NOM_APP = "UGC Studio"
-__version__ = "1.6.0"
+__version__ = "1.7.0"

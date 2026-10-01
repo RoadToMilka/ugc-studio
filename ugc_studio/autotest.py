@@ -77,6 +77,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "studio",
     "style_texte",
     "mots_du_studio",
+    "animations",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -631,14 +632,53 @@ def _mots_du_studio(atelier, capturer, capturer_image, rapport: dict) -> bool:
     glowzy = serum + 1 if serum is not None and serum + 1 < len(atelier.mots) else None
     lecteur.aller_a(atelier.mots[glowzy].debut + 0.1 if glowzy is not None else 0.0)
     atelier._actualiser_toile()
-    instant = toile._moteur.instant(toile.sous_titre, toile._mots, toile._temps) if toile.sous_titre else None
-    etat["fond_qui_glisse"] = bool(instant and toile._moteur.en_mouvement(toile.sous_titre, toile._mots, instant))
+    etat["fond_qui_glisse"] = bool(toile.sous_titre and toile._moteur.en_mouvement(toile.sous_titre, toile._mots, toile._temps))
     capturer_image(_image_du_sous_titre(toile), "mots-fond-qui-glisse")
     rapport["mots_actifs"] = actifs
     appliquer(depart)
     panneau.onglets.setCurrentIndex(0)
     etat["retour_au_depart"] = atelier.reglages_du_projet().mots == depart and onglet._nom == ACTIF
     rapport["mots_du_studio"] = etat
+    return all(etat.values())
+
+
+def _animations(atelier, capturer, capturer_image, rapport: dict) -> bool:
+    """V2, lot 6 : l'onglet Animations. Un pop sur le mot qui devient actif et un fondu à
+    l'apparition du sous-titre, appliqués depuis l'onglet : captures au milieu de chaque animation
+    (images à la taille de la vidéo, recadrées sur le sous-titre) ; puis plus d'animation."""
+    from .style_sous_titres import AnimationMot, Animations
+    from .ui.pages.sous_titres.reglages import ONGLET_ANIMATIONS
+
+    panneau, onglet, toile, lecteur = atelier.panneau, atelier.panneau.animations, atelier.toile, atelier.lecteur
+    etat: dict = {}
+    panneau.onglets.setCurrentIndex(ONGLET_ANIMATIONS)
+    depart = atelier.reglages_du_projet().animations
+    voulues = Animations(AnimationMot("pop", 400), apparition="fondu", apparition_duree_ms=400)
+    onglet.charger(voulues, toile.taille_video()[1])
+    onglet.change.emit()
+    _laisser_afficher()
+    capturer(atelier.window(), "studio-animations")
+    etat["enregistrees"] = atelier.reglages_du_projet().animations == voulues
+    serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), None)
+    moments = {}
+    if serum is not None:
+        moments["animation-pop"] = atelier.mots[serum].debut + 0.2  # au sommet du pop (400 ms)
+        sous_titre = next((s for s in atelier.sous_titres if s.premier_mot <= serum < s.dernier_mot), None)
+        if sous_titre is not None:
+            moments["animation-apparition"] = sous_titre.debut + 0.1
+    bouge = []
+    for nom, moment in moments.items():
+        lecteur.aller_a(moment)
+        atelier._actualiser_toile()
+        bouge.append(bool(toile.sous_titre and toile._moteur.en_mouvement(toile.sous_titre, toile._mots, toile._temps)))
+        capturer_image(_image_du_sous_titre(toile), nom)
+    etat["en_mouvement"] = len(bouge) == 2 and all(bouge)
+    onglet.charger(depart, toile.taille_video()[1])
+    onglet.change.emit()
+    _laisser_afficher()
+    panneau.onglets.setCurrentIndex(0)
+    etat["retour_au_depart"] = atelier.reglages_du_projet().animations == depart
+    rapport["animations"] = etat
     return all(etat.values())
 
 
@@ -821,6 +861,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["studio"] = _studio(sous_titres, capturer, rapport)
             verifs["style_texte"] = _style_texte(sous_titres, capturer, capturer_image, rapport)
             verifs["mots_du_studio"] = _mots_du_studio(sous_titres, capturer, capturer_image, rapport)
+            verifs["animations"] = _animations(sous_titres, capturer, capturer_image, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()

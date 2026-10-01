@@ -31,6 +31,13 @@ déjà commencé (avance de l'allumage comprise) ; ceux d'avant sont « déjà d
 venir » ; un mot accentué du script prend l'état « Accentués » (sauf quand il est actif). Chaque
 état a son apparence (comme le texte, sauf ce qui est réglé). Les mots d'un même état sont dessinés
 ensemble, puis posés avec l'opacité de cet état ; le mot actif en dernier (il peut être agrandi).
+
+Animations (lot 6, §7.12) : pendant l'animation du mot qui devient actif, ce mot est dessiné à part
+(une fois, gardé en mémoire), puis posé à chaque image avec sa taille, son opacité et son décalage
+du moment ; le reste du sous-titre ne change pas. Le retour en fondu du mot précédent pose son
+apparence de mot actif par-dessus, de moins en moins visible. L'apparition et la disparition du
+sous-titre entier agissent sur l'image entière de l'instant (opacité, taille autour du centre du
+bloc, glissement). Comme toujours, tout cela est assemblé en une seule image avant d'être posé.
 """
 
 from __future__ import annotations
@@ -59,10 +66,18 @@ from ..sous_titres import MotAffiche, ReglagesSousTitres, SousTitre, cadre
 from ..style_sous_titres import (
     ACCENTUES,
     ACTIF,
+    ANIM_AUCUNE,
+    ANIM_FONDU,
+    ANIM_POP,
+    ANIM_ZOOM,
     A_VENIR,
     DITS,
     FOND_LIGNE,
     FOND_MOT,
+    GLISSEMENT_PCT,
+    RETOUR_FONDU,
+    SOUS_TITRE_BAS,
+    SOUS_TITRE_HAUT,
     Contour,
     Couleur,
     Degrade,
@@ -71,6 +86,7 @@ from ..style_sous_titres import (
     Lueur,
     Soulignement,
     StyleTexte,
+    courbe,
 )
 from ..ui.polices import poids_qt, police
 from ..ui.theme import Typo
@@ -134,6 +150,37 @@ def _douce(avancee: float) -> float:
     """Courbe douce (ralentit à l'arrivée) pour le fond qui glisse."""
     avancee = min(max(avancee, 0.0), 1.0)
     return 1 - (1 - avancee) ** 3
+
+
+def _autour(centre_x: float, centre_y: float, taille: float, decalage: float) -> QTransform:
+    """Agrandissement `taille` autour du point (centre_x, centre_y), puis décalage vertical."""
+    transformation = QTransform()
+    transformation.translate(centre_x, centre_y + decalage)
+    transformation.scale(taille, taille)
+    transformation.translate(-centre_x, -centre_y)
+    return transformation
+
+
+def _assembler(couches: list[tuple[QImage, int, int, float, QTransform]]) -> tuple[QImage, int, int]:
+    """Des images posées l'une sur l'autre (chacune à sa place x, y, avec son opacité et sa
+    transformation, en pixels réels par rapport au coin de la vidéo) → une seule image transparente,
+    juste assez grande, et la place de son coin."""
+    boite = QRectF()
+    for image, x, y, _opacite, transformation in couches:
+        boite = boite.united(transformation.mapRect(QRectF(x, y, image.width(), image.height())))
+    gauche, haut = math.floor(boite.left()) - 1, math.floor(boite.top()) - 1
+    resultat = _image_vide(math.ceil(boite.right()) + 1 - gauche, math.ceil(boite.bottom()) + 1 - haut)
+    peintre = QPainter(resultat)
+    peintre.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    for image, x, y, opacite, transformation in couches:
+        peintre.resetTransform()
+        peintre.translate(-gauche, -haut)
+        peintre.setTransform(transformation, True)
+        peintre.setOpacity(opacite)
+        # Pixel pour pixel (la finesse d'écran que l'image porte ne la réduit pas).
+        peintre.drawImage(QRectF(x, y, image.width(), image.height()), image, QRectF(image.rect()))
+    peintre.end()
+    return resultat, gauche, haut
 
 
 @dataclass(frozen=True)
@@ -261,7 +308,12 @@ class Moteur:
         utilisees = [
             a for nom, a in self.apparences.items() if a.visible and (nom != ACCENTUES or reglages.mots.accentues_actifs)
         ] or [self.apparences[A_VENIR]]
-        croissance = max(0.0, max(a.echelle for a in utilisees) - 1)
+        animation = reglages.animations.mot
+        profil = animation.profil() if animation.active else None
+        echelles = [a.echelle for a in utilisees]
+        if profil is not None and self.apparences[ACTIF].visible:
+            echelles.append(self.apparences[ACTIF].echelle * profil.taille_max / 100)
+        croissance = max(0.0, max(echelles) - 1)
         contour = max((self.px(a.contour.epaisseur_pct) if a.contour.actif else 0.0) * a.echelle for a in utilisees)
         fond = style.fond
         bordure = self.px(fond.bordure_epaisseur_pct) if fond.visible and fond.bordure else 0.0
@@ -276,7 +328,7 @@ class Moteur:
         debord_y = max([contour, self.px(fond.marge_y_pct) + bordure if fond.visible else 0.0, *fonds_y, *soulignes])
         # Un mot agrandi dépasse en haut et en bas ; un décalage vertical aussi.
         debord_y += croissance * (metriques.ascent() + metriques.descent()) / 2
-        debord_y += max(abs(self.px(a.decalage_pct)) for a in utilisees)
+        debord_y += max([abs(self.px(a.decalage_pct)) for a in utilisees] + [abs(self.px(profil.decalage_depart)) if profil else 0.0])
         self.metriques = Metriques(
             metriques.ascent(),
             metriques.descent(),
@@ -303,8 +355,11 @@ class Moteur:
     def instant(self, sous_titre: SousTitre, mots: list[MotAffiche], temps: float | None) -> Instant:
         """Le mot actif à ce moment de la vidéo : le dernier mot du sous-titre déjà commencé (avance
         de l'allumage comprise). Petit silence entre deux mots : le dernier dit reste allumé ; avant
-        le premier mot, aucun. Sans changement d'état des mots, ou sans temps : aucun."""
-        if temps is None or self.reglages.mots.fixe:
+        le premier mot, aucun. Sans changement d'état des mots ni animation du mot actif, ou sans
+        temps : aucun."""
+        animations = self.reglages.animations
+        besoin = not self.reglages.mots.fixe or animations.mot.active or animations.retour == RETOUR_FONDU
+        if temps is None or not besoin:
             return Instant()
         moment = temps + self.reglages.mots.avance_ms / 1000
         actif = None
@@ -467,17 +522,21 @@ class Moteur:
         echelle: float,
         ratio_ecran: float = 1.0,
         actif: int | None = None,
+        sans: int | None = None,
+        seulement: int | None = None,
     ) -> Rendu:
         """Le sous-titre dessiné à `echelle` points par pixel de vidéo, sur un écran qui a
-        `ratio_ecran` pixels réels par point, avec ce mot actif (gardé en mémoire)."""
+        `ratio_ecran` pixels réels par point, avec ce mot actif (gardé en mémoire). `sans` : sans ce
+        mot (posé à part pendant son animation) ; `seulement` : ce mot seul, avec l'apparence du mot
+        actif (pour son animation, ou son retour en fondu)."""
         cle = (
             sous_titre.premier_mot, sous_titre.dernier_mot, tuple(sous_titre.lignes), sous_titre.echelle,
-            round(echelle, 6), round(ratio_ecran, 4), actif,
+            round(echelle, 6), round(ratio_ecran, 4), actif, sans, seulement,
         )
         if cle in self._rendus:
             self._rendus.move_to_end(cle)
             return self._rendus[cle]
-        rendu = self._dessiner_rendu(self.bloc(sous_titre, mots), mots, echelle * ratio_ecran, actif)
+        rendu = self._dessiner_rendu(self.bloc(sous_titre, mots), mots, echelle * ratio_ecran, actif, sans, seulement)
         # Seule l'image finale connaît l'écran ; `dessous` et `dessus` restent en pixels réels, pour
         # refaire l'image d'un instant (_composer).
         rendu.image.setDevicePixelRatio(ratio_ecran)
@@ -486,17 +545,30 @@ class Moteur:
             self._rendus.popitem(last=False)
         return rendu
 
-    def _dessiner_rendu(self, bloc: Bloc, mots: list[MotAffiche], echelle: float, actif: int | None) -> Rendu:
+    def _dessiner_rendu(
+        self,
+        bloc: Bloc,
+        mots: list[MotAffiche],
+        echelle: float,
+        actif: int | None,
+        sans: int | None = None,
+        seulement: int | None = None,
+    ) -> Rendu:
         style = self.reglages.texte
         ombre, fond = style.ombre, style.fond
-        dessines = self._mots_dessines(bloc, mots, actif)
+        dessines = [
+            mot
+            for mot in self._mots_dessines(bloc, mots, seulement if seulement is not None else actif)
+            if mot.place.index != sans and (seulement is None or mot.place.index == seulement)
+        ]
         visibles = [mot for mot in dessines if mot.apparence.visible]
         groupes = {nom: [mot for mot in visibles if mot.etat == nom] for nom in ORDRE_DES_ETATS}
-        forme_fond = self.forme_du_fond(bloc)
+        forme_fond = self.forme_du_fond(bloc) if seulement is None else None  # fond des lignes : pas sur un mot seul
         bordure = self.px(fond.bordure_epaisseur_pct) if fond.visible and fond.bordure else 0.0
         # Fond surligné du mot actif : posé entre ce qui passe dessous et les lettres (_composer) ; il
-        # compte dans la boîte de l'image, depuis le mot précédent s'il peut en glisser.
-        fond_actif = self._fond_actif(bloc, actif) if actif is not None else None
+        # compte dans la boîte de l'image, depuis le mot précédent s'il peut en glisser. Il reste avec
+        # le sous-titre quand le mot est posé à part (`sans`) : il ne s'anime pas avec lui.
+        fond_actif = self._fond_actif(bloc, actif) if actif is not None and seulement is None else None
         glisse_possible = fond_actif is not None and self._depart_du_glissement(bloc, actif) is not None
 
         def reunies(formes) -> QPainterPath:
@@ -682,6 +754,78 @@ class Moteur:
             pinceau.setTransform(transformation)
         return pinceau
 
+    # --- Animations (lot 6) ----------------------------------------------------------------------
+
+    def _avancee_du_mot(self, instant: Instant) -> float | None:
+        """Avancée (0 à 1) de l'animation du mot actif, ou None (pas d'animation en cours)."""
+        animation = self.reglages.animations.mot
+        if instant.actif is None or not animation.active or not self.apparences[ACTIF].visible:
+            return None
+        duree = animation.duree_ms / 1000
+        return instant.depuis_s / duree if instant.depuis_s < duree else None
+
+    def _retour(self, sous_titre: SousTitre, instant: Instant) -> tuple[int, float] | None:
+        """Retour en fondu du mot précédent à « déjà dit » : (son index, ce qu'il garde de son
+        apparence de mot actif, de 1 à 0), ou None."""
+        animations = self.reglages.animations
+        if animations.retour != RETOUR_FONDU or animations.retour_duree_ms <= 0 or instant.actif is None:
+            return None
+        precedent = instant.actif - 1
+        duree = animations.retour_duree_ms / 1000
+        if precedent < sous_titre.premier_mot or instant.depuis_s >= duree:
+            return None
+        return precedent, 1 - instant.depuis_s / duree
+
+    def valeurs_du_mot(self, avancee: float) -> tuple[float, float, float]:
+        """Taille (facteur), opacité (0 à 1) et décalage (en pixels de la vidéo, vers le bas) du mot
+        actif à cette avancée de son animation."""
+        profil = self.reglages.animations.mot.profil()
+        t = courbe(profil.courbe, avancee)
+        if profil.sommet not in (profil.depart, profil.arrivee) or profil.sommet > max(profil.depart, profil.arrivee):
+            # Deux temps : jusqu'au sommet, puis jusqu'à l'arrivée.
+            if avancee < 0.5:
+                taille = profil.depart + (profil.sommet - profil.depart) * courbe(profil.courbe, avancee * 2)
+            else:
+                taille = profil.sommet + (profil.arrivee - profil.sommet) * courbe(profil.courbe, (avancee - 0.5) * 2)
+        else:
+            taille = profil.depart + (profil.arrivee - profil.depart) * t
+        opacite = (profil.opacite_depart + (100 - profil.opacite_depart) * min(max(t, 0.0), 1.0)) / 100
+        decalage = self.px(profil.decalage_depart) * (1 - t)
+        return max(taille, 0.0) / 100, opacite, decalage
+
+    def _sous_titre_anime(self, sous_titre: SousTitre, temps: float | None) -> tuple[float, float, float] | None:
+        """Apparition ou disparition du sous-titre entier à ce moment : (taille, opacité, décalage en
+        pixels de la vidéo), ou None. Elles restent dans les temps du sous-titre."""
+        animations = self.reglages.animations
+        if temps is None:
+            return None
+        duree_totale = max(sous_titre.fin - sous_titre.debut, 1e-3)
+        depuis, reste = temps - sous_titre.debut, sous_titre.fin - temps
+        app = min(animations.apparition_duree_ms / 1000, duree_totale / 2)
+        dis = min(animations.disparition_duree_ms / 1000, duree_totale / 2)
+        if animations.apparition != ANIM_AUCUNE and app > 0 and 0 <= depuis < app:
+            return self._effet_du_sous_titre(animations.apparition, depuis / app, entree=True)
+        if animations.disparition != ANIM_AUCUNE and dis > 0 and 0 <= reste < dis:
+            return self._effet_du_sous_titre(animations.disparition, reste / dis, entree=False)
+        return None
+
+    def _effet_du_sous_titre(self, nom: str, avancee: float, entree: bool) -> tuple[float, float, float]:
+        """`avancee` va de 0 (invisible) à 1 (sous-titre normal) : à l'envers pour une disparition."""
+        t = courbe("douce", avancee)
+        glissement = self.px(GLISSEMENT_PCT) * (1 - t)
+        if nom == ANIM_FONDU:
+            return 1.0, t, 0.0
+        if nom == ANIM_POP:
+            taille = 0.9 + 0.16 * t if avancee < 0.6 else 1.06 - 0.06 * courbe("douce", (avancee - 0.6) / 0.4)
+            return taille, min(1.0, avancee * 2), 0.0
+        if nom == ANIM_ZOOM:
+            return 0.85 + 0.15 * t, t, 0.0
+        if nom == SOUS_TITRE_HAUT:  # entre par le bas en montant ; sort par le haut
+            return 1.0, t, glissement if entree else -glissement
+        if nom == SOUS_TITRE_BAS:  # entre par le haut en descendant ; sort par le bas
+            return 1.0, t, -glissement if entree else glissement
+        return 1.0, 1.0, 0.0
+
     # --- Fond du mot actif (lot 5) ----------------------------------------------------------------
 
     def _depart_du_glissement(self, bloc: Bloc, actif: int) -> MotPlace | None:
@@ -707,10 +851,18 @@ class Moteur:
             return None
         return _douce(instant.depuis_s / (fond.duree_glisse_ms / 1000))
 
-    def en_mouvement(self, sous_titre: SousTitre, mots: list[MotAffiche], instant: Instant) -> bool:
-        """Quelque chose bouge-t-il à cet instant (le fond du mot actif qui glisse) ? L'aperçu se
-        redessine alors à chaque image."""
-        return self._avancee_du_glissement(sous_titre, mots, instant) is not None
+    def en_mouvement(self, sous_titre: SousTitre, mots: list[MotAffiche], temps: float | None) -> bool:
+        """Quelque chose bouge-t-il à ce moment (fond qui glisse, mot animé, retour en fondu,
+        apparition ou disparition du sous-titre) ? L'aperçu se redessine alors à chaque image."""
+        if temps is None:
+            return False
+        instant = self.instant(sous_titre, mots, temps)
+        return (
+            self._avancee_du_glissement(sous_titre, mots, instant) is not None
+            or self._avancee_du_mot(instant) is not None
+            or self._retour(sous_titre, instant) is not None
+            or self._sous_titre_anime(sous_titre, temps) is not None
+        )
 
     def _fond_actif(self, bloc: Bloc, actif: int, avancee: float = 1.0) -> QPainterPath | None:
         """Fond surligné du mot actif, en pixels de la vidéo (agrandissement et décalage du mot
@@ -767,6 +919,66 @@ class Moteur:
         peintre.end()
         return image
 
+    # --- L'image d'un instant ---------------------------------------------------------------------
+
+    def image_de_l_instant(
+        self,
+        sous_titre: SousTitre,
+        mots: list[MotAffiche],
+        echelle: float,
+        ratio_ecran: float = 1.0,
+        temps: float | None = None,
+    ) -> tuple[QImage, int, int]:
+        """Le sous-titre à ce moment : une seule image transparente, en pixels réels de l'écran, et
+        la place de son coin (x, y), en pixels réels par rapport au coin haut gauche de la vidéo.
+
+        Tout y est assemblé (fond qui glisse, mot animé, retour en fondu, apparition ou disparition
+        du sous-titre) : l'aperçu et l'export posent ensuite cette même image, d'un seul coup. Ils
+        restent ainsi identiques au pixel près, même pendant une animation."""
+        reelle = echelle * ratio_ecran
+        instant = self.instant(sous_titre, mots, temps)
+        avancee = self._avancee_du_mot(instant)
+        retour = self._retour(sous_titre, instant)
+        effet = self._sous_titre_anime(sous_titre, temps)
+
+        # Le sous-titre, sans le mot actif pendant son animation (posé à part, plus bas).
+        base = self.rendu(sous_titre, mots, echelle, ratio_ecran, instant.actif, sans=instant.actif if avancee is not None else None)
+        image, x, y = base.image, base.x, base.y
+        if base.dessous is not None:
+            glissement = self._avancee_du_glissement(sous_titre, mots, instant)
+            if glissement is not None:  # le fond glisse : refait pour cet instant
+                fond = self._fond_actif(self.bloc(sous_titre, mots), instant.actif, glissement)
+                image = self._composer(base.dessous, base.dessus, fond, x, y, reelle)
+
+        # Par-dessus : le mot précédent qui garde un peu de son apparence de mot actif, puis le mot
+        # actif animé (taille, opacité et décalage du moment, autour du centre du mot).
+        couches = [(image, x, y, 1.0, QTransform())]
+        if retour is not None:
+            precedent, part = retour
+            mot = self.rendu(sous_titre, mots, echelle, ratio_ecran, precedent, seulement=precedent)
+            couches.append((mot.image, mot.x, mot.y, part, QTransform()))
+        if avancee is not None:
+            bloc = self.bloc(sous_titre, mots)
+            place = next((p for p in bloc.mots if p.index == instant.actif), None)
+            if place is not None:
+                taille, opacite, decalage = self.valeurs_du_mot(avancee)
+                centre = self._boite_du_mot(place, bloc).center()
+                mot = self.rendu(sous_titre, mots, echelle, ratio_ecran, instant.actif, seulement=instant.actif)
+                transformation = _autour(centre.x() * reelle, centre.y() * reelle, taille, decalage * reelle)
+                couches.append((mot.image, mot.x, mot.y, opacite, transformation))
+        if len(couches) > 1:
+            image, x, y = _assembler(couches)
+
+        # Apparition ou disparition du sous-titre entier : l'image entière, autour du centre du bloc.
+        if effet is not None:
+            taille, opacite, decalage = effet
+            bloc = self.bloc(sous_titre, mots)
+            centre_x, centre_y = (bloc.x + bloc.largeur / 2) * reelle, (bloc.y + bloc.hauteur / 2) * reelle
+            image, x, y = _assembler([(image, x, y, opacite, _autour(centre_x, centre_y, taille, decalage * reelle))])
+        if image.devicePixelRatio() != ratio_ecran:
+            image.setDevicePixelRatio(ratio_ecran)
+        return image, x, y
+
     def dessiner(
         self,
         peintre: QPainter,
@@ -780,19 +992,11 @@ class Moteur:
         """Dessine le sous-titre avec le coin haut gauche de la vidéo en `origine` (coordonnées du
         peintre) et `echelle` points du peintre par pixel de vidéo. `ratio_ecran` : pixels réels de
         l'écran par point (écran à 150 % : 1,5), pour un texte net sur tous les écrans. `temps` : le
-        moment de la vidéo (mot actif ; sans temps, aucun mot n'est actif).
+        moment de la vidéo (mot actif et animations ; sans temps, aucun mot n'est actif).
 
-        Toujours une seule image posée, celle que l'export assemblera (image())."""
-        instant = self.instant(sous_titre, mots, temps)
-        rendu = self.rendu(sous_titre, mots, echelle, ratio_ecran, instant.actif)
-        image = rendu.image
-        if rendu.dessous is not None:
-            avancee = self._avancee_du_glissement(sous_titre, mots, instant)
-            if avancee is not None:  # le fond glisse : l'image de cet instant
-                fond = self._fond_actif(self.bloc(sous_titre, mots), instant.actif, avancee)
-                image = self._composer(rendu.dessous, rendu.dessus, fond, rendu.x, rendu.y, echelle * ratio_ecran)
-                image.setDevicePixelRatio(ratio_ecran)
-        peintre.drawImage(QPointF(origine.x() + rendu.x / ratio_ecran, origine.y() + rendu.y / ratio_ecran), image)
+        Toujours une seule image posée : celle que l'export assemblera (image())."""
+        image, x, y = self.image_de_l_instant(sous_titre, mots, echelle, ratio_ecran, temps)
+        peintre.drawImage(QPointF(origine.x() + x / ratio_ecran, origine.y() + y / ratio_ecran), image)
 
     def image(self, sous_titre: SousTitre | None, mots: list[MotAffiche], temps: float | None = None) -> QImage:
         """Image transparente à la taille de la vidéo, avec ce sous-titre à ce moment (aucun : image

@@ -19,6 +19,8 @@ exactement son apparence et son découpage. Un nouveau projet prend le style de 
 Lot 5 (version 1.6.0) : les mots (onglet « Mots ») : trois états (à venir, actif, déjà dits), plus
 les mots accentués du script, chacun avec ses propres réglages ; un réglage d'un état laissé vide
 (None) vaut « comme le texte ».
+Lot 6 (version 1.7.0) : les animations (onglet « Animations ») : le mot qui devient actif, son
+retour à « déjà dit », l'apparition et la disparition du sous-titre entier.
 """
 
 from __future__ import annotations
@@ -424,6 +426,152 @@ def raccourci_de(mots: Mots) -> str | None:
         if {A_VENIR: mots.a_venir, ACTIF: mots.actif, DITS: mots.dits} == etats_du_raccourci(nom):
             return nom
     return None
+
+
+# --- Animations (lot 6, §7.5) ------------------------------------------------------------------
+
+ANIM_AUCUNE, ANIM_POP, ANIM_REBOND, ANIM_ZOOM, ANIM_FONDU, ANIM_GLISSEMENT = "aucune", "pop", "rebond", "zoom", "fondu", "glissement"
+ANIMATIONS_DU_MOT = {
+    ANIM_AUCUNE: "Aucune",
+    ANIM_POP: "Pop",
+    ANIM_REBOND: "Rebond",
+    ANIM_ZOOM: "Zoom",
+    ANIM_FONDU: "Fondu",
+    ANIM_GLISSEMENT: "Glissement vers le haut",
+}
+COURBE_DOUCE, COURBE_REBOND, COURBE_REGULIERE = "douce", "rebond", "reguliere"
+COURBES = {COURBE_DOUCE: "Douce", COURBE_REBOND: "Rebond", COURBE_REGULIERE: "Régulière"}
+RETOUR_INSTANTANE, RETOUR_FONDU = "instantane", "fondu"
+RETOURS = {RETOUR_INSTANTANE: "Instantané", RETOUR_FONDU: "Fondu"}
+SOUS_TITRE_HAUT, SOUS_TITRE_BAS = "haut", "bas"
+ANIMATIONS_DU_SOUS_TITRE = {
+    ANIM_AUCUNE: "Aucune",
+    ANIM_FONDU: "Fondu",
+    ANIM_POP: "Pop",
+    ANIM_ZOOM: "Zoom",
+    SOUS_TITRE_HAUT: "Glissement vers le haut",
+    SOUS_TITRE_BAS: "Glissement vers le bas",
+}
+GLISSEMENT_PCT = 1.5  # distance d'un glissement (mot ou sous-titre), en % de la hauteur de la vidéo
+
+# Ce que fait chaque animation du mot, à 100 % d'intensité : taille de départ, au sommet, d'arrivée
+# (en %), opacité de départ (en %), décalage de départ (en % de la hauteur, vers le bas), courbe.
+PROFILS_DU_MOT = {
+    ANIM_AUCUNE: (100.0, 100.0, 100.0, 100.0, 0.0, COURBE_REGULIERE),
+    ANIM_POP: (100.0, 116.0, 100.0, 100.0, 0.0, COURBE_DOUCE),
+    ANIM_REBOND: (100.0, 120.0, 100.0, 100.0, 0.0, COURBE_REBOND),
+    ANIM_ZOOM: (92.0, 100.0, 100.0, 100.0, 0.0, COURBE_DOUCE),
+    ANIM_FONDU: (100.0, 100.0, 100.0, 0.0, 0.0, COURBE_DOUCE),
+    ANIM_GLISSEMENT: (100.0, 100.0, 100.0, 0.0, GLISSEMENT_PCT, COURBE_DOUCE),
+}
+
+
+@dataclass(frozen=True)
+class Profil:
+    """Une animation du mot, valeurs réelles (type, intensité et réglages avancés compris)."""
+
+    depart: float  # tailles en % (100 : la taille de l'état)
+    sommet: float
+    arrivee: float
+    opacite_depart: float  # en %
+    decalage_depart: float  # en % de la hauteur, vers le bas
+    courbe: str
+    duree_s: float
+
+    @property
+    def taille_max(self) -> float:
+        return max(self.depart, self.sommet, self.arrivee)
+
+
+@dataclass(frozen=True)
+class AnimationMot:
+    """Quand un mot devient actif : l'animation, sa durée et son intensité. Réglages avancés (None :
+    ceux de l'animation choisie) : taille de départ, au sommet et d'arrivée, opacité et décalage de
+    départ, courbe."""
+
+    type: str = ANIM_AUCUNE
+    duree_ms: int = 180
+    intensite_pct: float = 100.0
+    taille_depart_pct: float | None = None
+    taille_sommet_pct: float | None = None
+    taille_arrivee_pct: float | None = None
+    opacite_depart_pct: float | None = None
+    decalage_depart_pct: float | None = None
+    courbe: str | None = None
+
+    TYPES: ClassVar[dict] = {
+        "taille_depart_pct": float, "taille_sommet_pct": float, "taille_arrivee_pct": float,
+        "opacite_depart_pct": float, "decalage_depart_pct": float, "courbe": str,
+    }
+    LIMITES: ClassVar[dict] = {
+        "duree_ms": (0, 2000), "intensite_pct": (0.0, 200.0), "taille_depart_pct": (0.0, 300.0),
+        "taille_sommet_pct": (0.0, 300.0), "taille_arrivee_pct": (50.0, 200.0), "opacite_depart_pct": (0.0, 100.0),
+        "decalage_depart_pct": (-10.0, 10.0),
+    }
+    CHOIX: ClassVar[dict] = {"type": tuple(ANIMATIONS_DU_MOT), "courbe": tuple(COURBES)}
+
+    def profil(self) -> Profil:
+        depart, sommet, arrivee, opacite, decalage, courbe = PROFILS_DU_MOT.get(self.type, PROFILS_DU_MOT[ANIM_AUCUNE])
+        force = self.intensite_pct / 100  # l'intensité agrandit (ou réduit) l'écart à « rien ne change »
+
+        def ecart(valeur: float, neutre: float) -> float:
+            return neutre + (valeur - neutre) * force
+
+        return Profil(
+            self.taille_depart_pct if self.taille_depart_pct is not None else ecart(depart, 100.0),
+            self.taille_sommet_pct if self.taille_sommet_pct is not None else ecart(sommet, 100.0),
+            self.taille_arrivee_pct if self.taille_arrivee_pct is not None else arrivee,
+            self.opacite_depart_pct if self.opacite_depart_pct is not None else max(0.0, ecart(opacite, 100.0)),
+            self.decalage_depart_pct if self.decalage_depart_pct is not None else ecart(decalage, 0.0),
+            self.courbe or courbe,
+            self.duree_ms / 1000,
+        )
+
+    @property
+    def active(self) -> bool:
+        return self.type != ANIM_AUCUNE and self.duree_ms > 0
+
+
+@dataclass(frozen=True)
+class Animations:
+    """Onglet « Animations » : le mot qui devient actif, son retour à « déjà dit » (instantané ou en
+    fondu), l'apparition et la disparition du sous-titre entier. Les animations ne changent jamais
+    les temps : l'apparition commence au début du sous-titre, la disparition finit à sa fin."""
+
+    mot: AnimationMot = AnimationMot()
+    retour: str = RETOUR_INSTANTANE
+    retour_duree_ms: int = 150
+    apparition: str = ANIM_AUCUNE
+    apparition_duree_ms: int = 200
+    disparition: str = ANIM_AUCUNE
+    disparition_duree_ms: int = 200
+
+    LIMITES: ClassVar[dict] = {"retour_duree_ms": (0, 2000), "apparition_duree_ms": (0, 2000), "disparition_duree_ms": (0, 2000)}
+    CHOIX: ClassVar[dict] = {
+        "retour": tuple(RETOURS), "apparition": tuple(ANIMATIONS_DU_SOUS_TITRE), "disparition": tuple(ANIMATIONS_DU_SOUS_TITRE),
+    }
+
+    @property
+    def aucune(self) -> bool:
+        return (
+            not self.mot.active
+            and (self.retour == RETOUR_INSTANTANE or self.retour_duree_ms <= 0)
+            and (self.apparition == ANIM_AUCUNE or self.apparition_duree_ms <= 0)
+            and (self.disparition == ANIM_AUCUNE or self.disparition_duree_ms <= 0)
+        )
+
+
+def courbe(nom: str, avancee: float) -> float:
+    """Avancée d'une animation (0 à 1) selon sa courbe : douce (ralentit à l'arrivée), régulière, ou
+    rebond (dépasse un peu, puis revient)."""
+    t = min(max(avancee, 0.0), 1.0)
+    if nom == COURBE_REGULIERE:
+        return t
+    if nom == COURBE_REBOND:
+        depassement = 1.70158
+        t -= 1
+        return 1 + (depassement + 1) * t**3 + depassement * t**2
+    return 1 - (1 - t) ** 3
 
 
 @dataclass(frozen=True)
