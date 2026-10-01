@@ -59,7 +59,8 @@ class GrilleEtat:
     """Grille de réglages d'un état : libellé, champ, et bouton ↺ « comme le texte » pour les
     réglages changés (leur libellé passe en mauve)."""
 
-    def __init__(self, contenu: QVBoxLayout):
+    def __init__(self, contenu: QVBoxLayout, infobulle_remise: str = "Comme le texte"):
+        self.infobulle_remise = infobulle_remise
         self.disposition = QGridLayout()
         self.disposition.setHorizontalSpacing(Espacements.M)
         self.disposition.setVerticalSpacing(Espacements.S)
@@ -77,7 +78,7 @@ class GrilleEtat:
             self.disposition.addLayout(element, rang, 1, Qt.AlignmentFlag.AlignLeft)
         if attribut is not None:
             remise = bouton("", variante="icone", nom_icone="rotate-ccw", action=retablir)
-            remise.setToolTip("Comme le texte")
+            remise.setToolTip(self.infobulle_remise)
             self.disposition.addWidget(remise, rang, 2)
             self.marques[attribut] = (etiquette, remise)
         return etiquette

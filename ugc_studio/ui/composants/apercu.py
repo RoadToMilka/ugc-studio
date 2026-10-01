@@ -82,12 +82,12 @@ class ToileApercu(QWidget):
 
     def definir_temps(self, temps: float | None) -> None:
         """Moment de la vidéo affiché : le mot actif en dépend (lot 5). L'aperçu n'est redessiné que
-        si le mot actif change, ou pendant qu'un fond glisse d'un mot à l'autre."""
+        si le mot actif change, ou pendant qu'une chose bouge (fond qui glisse, animation : lot 6)."""
         self._temps = temps
         if self._moteur is None or self._sous_titre is None:
             return
         instant = self._moteur.instant(self._sous_titre, self._mots, temps)
-        etat = (instant.actif, self._moteur.en_mouvement(self._sous_titre, self._mots, instant))
+        etat = (instant.actif, self._moteur.en_mouvement(self._sous_titre, self._mots, temps))
         if etat != self._dessine or etat[1]:
             self._dessine = etat
             self.update()

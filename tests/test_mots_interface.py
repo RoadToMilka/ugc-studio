@@ -130,8 +130,8 @@ def test_fond_du_mot_actif_qui_glisse(app_configuree):
     precedent = moteur.fond_du_mot_actif(SOUS_TITRE, mots, moteur.instant(SOUS_TITRE, mots, 1.2))[0].boundingRect()
     assert depart.left() == pytest.approx(precedent.left())  # « ce » commence : le fond part de « Mais »
     assert precedent.left() < pendant.left() < arrivee.left()
-    assert moteur.en_mouvement(SOUS_TITRE, mots, moteur.instant(SOUS_TITRE, mots, 1.6))
-    assert not moteur.en_mouvement(SOUS_TITRE, mots, moteur.instant(SOUS_TITRE, mots, 1.9))
+    assert moteur.en_mouvement(SOUS_TITRE, mots, 1.6)
+    assert not moteur.en_mouvement(SOUS_TITRE, mots, 1.9)
     # Sur une autre ligne, le fond ne glisse pas (« sérum » commence la seconde ligne).
     saut = moteur.fond_du_mot_actif(SOUS_TITRE, mots, moteur.instant(SOUS_TITRE, mots, 2.05))[0].boundingRect()
     fixe = moteur.fond_du_mot_actif(SOUS_TITRE, mots, moteur.instant(SOUS_TITRE, mots, 2.4))[0].boundingRect()
@@ -252,7 +252,7 @@ def atelier(app_configuree, qtbot, services, tmp_path):
 
 def test_studio_avec_l_onglet_mots(atelier, services):
     onglets = atelier.panneau.onglets
-    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Position", "Découpage", "Écran"]
+    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Découpage", "Écran"]
     mots = atelier.panneau.mots
     mots.raccourci.setCurrentIndex(mots.raccourci.findData("surlignage"))
     mots.raccourci.activated.emit(mots.raccourci.currentIndex())

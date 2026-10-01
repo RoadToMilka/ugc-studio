@@ -44,6 +44,7 @@ from .style_sous_titres import (
     CENTRE,
     DROITE,
     GAUCHE,
+    Animations,
     Mots,
     Position,
     StyleTexte,
@@ -149,13 +150,13 @@ class ReglagesSousTitres:
     """Réglages des sous-titres du projet (§7), enregistrés dans projet.json.
 
     - Découpage (§7.3) : caractères, mots et lignes au plus, coupure sur la ponctuation, durée minimale.
-    - Style : texte (§7.4, style_sous_titres.StyleTexte), mots (§7.5, onglet « Mots ») et position
-      (onglet « Position »).
+    - Style : texte (§7.4, style_sous_titres.StyleTexte), mots et animations (§7.5, onglets « Mots » et
+      « Animations ») et position (onglet « Position »).
     - Écran (§7.1, §7.3) : format, zone de sécurité de la plateforme, marge maximum.
     - Vidéo choisie seulement pour l'aperçu (projet sans vidéo).
 
-    Dans projet.json (format 7), ils sont rangés en trois parties : « style » (texte, mots, position,
-    découpage : le contenu d'un préréglage, lot 7), « ecran » et « apercu » (voir en_dict)."""
+    Dans projet.json (format 7), ils sont rangés en trois parties : « style » (texte, mots, animations,
+    position, découpage : le contenu d'un préréglage, lot 7), « ecran » et « apercu » (voir en_dict)."""
 
     caracteres_max: int = 24  # par sous-titre, espaces comprises
     mots_max: int = 5
@@ -164,6 +165,7 @@ class ReglagesSousTitres:
     duree_min_s: float = 0.6
     texte: StyleTexte = StyleTexte()
     mots: Mots = Mots()
+    animations: Animations = Animations()
     position: Position = Position()
     format: str = FORMAT_AUTO
     largeur_perso: int = 1080  # format personnalisé
@@ -178,6 +180,7 @@ class ReglagesSousTitres:
             "style": {
                 "texte": en_dict(self.texte),
                 "mots": en_dict(self.mots),
+                "animations": en_dict(self.animations),
                 "position": en_dict(self.position),
                 "decoupage": {nom: getattr(self, nom) for nom in _DECOUPAGE},
             },
@@ -214,6 +217,7 @@ class ReglagesSousTitres:
             reglages = _lire_plats(reglages, {cle: valeur for cle, valeur in plats.items() if valeur is not None})
             reglages.texte = lire(StyleTexte, style.get("texte"))
             reglages.mots = lire(Mots, style.get("mots"))
+            reglages.animations = lire(Animations, style.get("animations"))
             reglages.position = lire(Position, style.get("position"))
             reglages.apercu = lire(VideoApercu, brut.get("apercu"))
         else:
@@ -234,7 +238,7 @@ class ReglagesSousTitres:
 def _lire_plats(reglages: ReglagesSousTitres, brut: dict) -> ReglagesSousTitres:
     """Réglages simples (nombres, cases, textes) : valeur convertie, ramenée dans les limites."""
     for champ in fields(ReglagesSousTitres):
-        if champ.name not in brut or champ.name in ("texte", "mots", "position", "apercu"):
+        if champ.name not in brut or champ.name in ("texte", "mots", "animations", "position", "apercu"):
             continue
         defaut = getattr(reglages, champ.name)
         try:

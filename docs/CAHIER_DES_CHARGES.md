@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.11, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; lot 4, style du texte, version 1.5.0, §7.10 ; lot 5, mots, version 1.6.0, §7.11 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.12, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; lot 4, style du texte, version 1.5.0, §7.10 ; lot 5, mots, version 1.6.0, §7.11 ; lot 6, animations, version 1.7.0, §7.12 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -560,7 +560,7 @@ Fait au lot 4 de la V2 (détails au §7.10) ; position et alignement : lot 3 (§
 
 ### 7.5 Mot actif (mot en cours de prononciation)
 
-États des mots (à venir, actif, déjà dits, accentués) faits au lot 5 de la V2 (§7.11) ; animations (« pop », apparition…) : lot 6.
+États des mots (à venir, actif, déjà dits, accentués) faits au lot 5 de la V2 (§7.11) ; animations (« pop », apparition…) au lot 6 (§7.12).
 
 Options **combinables** :
 - couleur du texte du mot actif ;
@@ -776,6 +776,34 @@ Onglet **Mots** du studio, entre Texte et Position (`ui/pages/sous_titres/onglet
 
 **Autotest** : sur la vidéo de démonstration, l'aperçu placé pendant « Sérum » : Surlignage, Karaoké et Apparition appliqués depuis l'onglet (le mot actif est bien « Sérum » ; une image à la taille de la vidéo, recadrée sur le sous-titre, pour chacun), puis un fond qui glisse de « Sérum » à « Glowzy » (capture au milieu du glissement) ; le sous-titre fixe revient ensuite.
 
+### 7.12 Animations (V2, lot 6, version 1.7.0)
+
+Onglet **Animations** du studio, entre Mots et Position (`ui/pages/sous_titres/onglet_animations.py`). Choix détaillés : document « UGC Studio - V2 Studio de style et Script », §8.
+
+- **Mot qui devient actif** : aucune, pop, rebond, zoom, fondu ou glissement vers le haut ; durée (180 ms au départ) et intensité (100 % : l'animation telle quelle ; 50 % : deux fois moins marquée). Réglages avancés : taille de départ, au sommet et d'arrivée, opacité de départ, décalage de départ, courbe (douce, rebond ou régulière) ; tant qu'on ne les change pas, ce sont ceux de l'animation choisie (le champ les montre ; un réglage changé a son libellé en mauve et ↺ « Comme l'animation choisie »).
+
+| Animation | Départ | Sommet | Arrivée | Opacité de départ | Décalage de départ | Courbe |
+|---|---|---|---|---|---|---|
+| Pop | 100 % | 116 % | 100 % | 100 % | 0 | douce |
+| Rebond | 100 % | 120 % | 100 % | 100 % | 0 | rebond |
+| Zoom | 92 % | (aucun) | 100 % | 100 % | 0 | douce |
+| Fondu | 100 % | (aucun) | 100 % | 0 % | 0 | douce |
+| Glissement vers le haut | 100 % | (aucun) | 100 % | 0 % | 1,5 % plus bas | douce |
+
+- **Retour à « déjà dit »** : instantané ou fondu (150 ms au départ) : le mot précédent garde de moins en moins son apparence de mot actif.
+- **Sous-titre entier** : apparition et disparition (aucune, fondu, pop, zoom, glissement vers le haut ou vers le bas), chacune avec sa durée (200 ms au départ). Une animation ne dure jamais plus de la moitié du sous-titre.
+
+**Règles** (`rendu/moteur.py`) :
+- Les animations ne changent jamais les temps : l'animation du mot commence quand il devient actif (avance de l'allumage comprise), l'apparition au début du sous-titre, la disparition finit à sa fin.
+- Taille autour du centre du mot (ou du bloc, pour le sous-titre entier), sans pousser les voisins. Avec un sommet, la taille va du départ au sommet pendant la première moitié de l'animation, puis du sommet à l'arrivée ; sinon du départ à l'arrivée. L'opacité et le décalage vont de leur valeur de départ à la normale, selon la courbe. Le sommet (multiplié par la taille du mot actif, ex. 108 % × 116 %) et le décalage de départ comptent dans la place (§7.11) : un mot animé ne sort jamais de la marge maximum.
+- Pendant son animation, le mot actif (avec son ombre) est dessiné à part une fois (gardé en mémoire), puis posé à chaque image avec sa taille, son opacité et son décalage du moment ; le reste du sous-titre ne change pas, fond surligné du mot actif compris (il ne s'anime pas avec le mot). L'aperçu se redessine à chaque image tant qu'une animation est en cours. Comme toujours, l'image de l'instant est assemblée en une seule image avant d'être posée (`image_de_l_instant`) : aperçu à 100 % et export identiques au pixel près, même au milieu d'une animation (§7.9).
+- Une animation du mot, ou un retour en fondu, suffit à suivre le mot actif, même en « Sous-titre fixe » (onglet Mots).
+- Forme écrite (projet au format 7, numéro inchangé ; un projet de la 1.6.0, sans « animations », n'en a aucune) : `sous_titres.style.animations`, avec `mot` (`type`, `duree_ms`, `intensite_pct`, puis `taille_depart_pct`, `taille_sommet_pct`, `taille_arrivee_pct`, `opacite_depart_pct`, `decalage_depart_pct`, `courbe`, à `null` : ceux de l'animation), `retour` (`instantane` ou `fondu`), `retour_duree_ms`, `apparition`, `apparition_duree_ms`, `disparition`, `disparition_duree_ms` (`aucune`, `fondu`, `pop`, `zoom`, `haut`, `bas`).
+
+**Conseils** de la page : rubrique « Animations ».
+
+**Autotest** : un pop de 400 ms sur le mot qui devient actif et un fondu de 400 ms à l'apparition du sous-titre, appliqués depuis l'onglet ; captures au sommet du pop de « Sérum » et au milieu de l'apparition (images à la taille de la vidéo, recadrées sur le sous-titre) ; l'aperçu doit se savoir en mouvement à ces moments ; puis plus d'animation.
+
 ---
 
 ## 8. Exports
@@ -885,7 +913,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 
 ### 9.4 ter Onglets et infos
 
-- **Onglets en boutons** (`ui/composants/onglets.py`), partout où il y a des onglets (Réglages, Bibliothèque de voix, Prononciation, Remplacements, Variantes) : une ligne de séparation, 16 px d'espace, puis une rangée de boutons ; l'onglet actif a l'allure « sélectionné », les autres le style « contour ». Les onglets standard de Qt, qui soulignaient l'onglet actif d'un trait mauve par-dessus la ligne, ne se créent plus (vérifié par un test).
+- **Onglets en boutons** (`ui/composants/onglets.py`), partout où il y a des onglets (Réglages, Bibliothèque de voix, Prononciation, Remplacements, Variantes) : une ligne de séparation, 16 px d'espace, puis une rangée de boutons ; l'onglet actif a l'allure « sélectionné », les autres le style « contour ». Les onglets standard de Qt, qui soulignaient l'onglet actif d'un trait mauve par-dessus la ligne, ne se créent plus (vérifié par un test). Studio des sous-titres (six onglets, lot 6) : les boutons passent à la ligne quand la colonne des réglages est étroite ; sur une seule rangée, ils imposaient leur largeur à la colonne, et le studio passait sur une colonne dès 1 020 px.
 - **Infos avec une ampoule** : chaque phrase d'aide (sous un bloc, un champ ou une case à cocher, en haut d'une fenêtre) commence par l'icône Lucide « lightbulb », à la taille des icônes des boutons (16 px, donc le même trait), dans la couleur du texte secondaire, à 8 px du texte et centrée sur sa première ligne. Sous une case à cocher, l'ampoule tombe sous la case et le texte s'aligne sur celui de la case.
 - Pas d'ampoule pour un nom de champ, une donnée (durée, coût, détails d'une voix, « Mot 3 sur 120 »), une traduction, un message d'état (en cours, succès, erreur en rouge), un avertissement orange ni une liste vide (texte « discret »).
 - Un seul composant, `info()` de `elements.py` : un test signale toute phrase d'aide grise écrite autrement.
@@ -936,6 +964,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - **Onglet Texte** (lot 4) : groupes en sections repliables (Police, Taille et casse, Remplissage ouverts au départ) ; un groupe replié montre un résumé (ex. le code de la couleur du contour et son épaisseur) ; « Réglages avancés » replié dans le groupe ; « Rétablir » en bouton contour (icône « rotate-ccw ») ; « Importer une police… » en bouton contour (icône « type ») ; réglages d'un effet décoché grisés, libellés compris.
 - Pendant la pipette : curseur en croix sur l'aperçu, et une info sous l'aperçu.
 - **Onglet Mots** (lot 5) : « Raccourci » en liste déroulante (« Personnalisé » en tête quand les états ne sont plus ceux d'un raccourci), « État » en choix en boutons, puis les réglages de l'état en grille à trois colonnes : libellé, champ, bouton icône ↺ (« rotate-ccw », infobulle « Comme le texte »), visible seulement pour un réglage changé, dont le libellé passe en mauve (rôle `legende-modifiee`, couleur `ACCENT_SURVOL`). Groupes repliables comme l'onglet Texte (Remplissage et Taille et place ouverts au départ), réglages d'un effet décoché grisés.
+- **Onglet Animations** (lot 6) : trois groupes (Mot qui devient actif, Retour à « déjà dit », Sous-titre entier) ; animation, courbe, apparition et disparition en listes déroulantes, durées en millisecondes (± 10 ms aux flèches), retour en choix en boutons (Instantané, Fondu) ; réglages avancés du mot repliés, avec ↺ « Comme l'animation choisie » ; durée et intensité grisées sans animation. Six onglets de réglages : Texte, Mots, Animations, Position, Découpage, Écran.
 - Les onglets des réglages prennent la hauteur de l'onglet affiché (option `hauteur_selon_l_onglet` des onglets en boutons ; ailleurs, la hauteur reste celle du plus haut) : pas de grand vide sous un onglet court. Une ligne qui ne sert pas disparaît avec son libellé (« Taille » hors format personnalisé), et un message d'état vide ne laisse pas de ligne vide en bas d'un bloc.
 
 ### 9.5 Typographie
@@ -1011,7 +1040,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0 ; lot 5 (mots), version 1.6.0.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0 ; lot 5 (mots), version 1.6.0 ; lot 6 (animations), version 1.7.0.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -1045,7 +1074,7 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 | 3 | 1.4.0 | **Studio (1)** : moteur de dessin commun, aperçu fidèle (vidéo, fond neutre, damier, zoom, boucle), repères, formats dont personnalisé, position verticale et alignement, sous-titre glissé dans l'aperçu, vidéo d'aperçu pour un projet sans vidéo, « Retrouver la vidéo… » ; projet au format 7 (§7.9) | Fait |
 | 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style, style de départ des nouveaux projets (§7.10) | Fait |
 | 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage ; agrandissement compté dans la place (§7.11) | Fait |
-| 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre | |
+| 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre ; sommet compté dans la place (§7.12) | Fait |
 | 7 | 2.0.0 | **Studio (5)** : timeline (bords de mot en mot, double-clic), préréglages (fenêtre, vignettes animées, les 6 styles fournis, nouveau, export et import), finitions | |
 
 Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient une prise (caler les mots transcrits sur le script) : V3.

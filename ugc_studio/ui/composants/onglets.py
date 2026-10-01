@@ -12,6 +12,9 @@ setCurrentIndex, currentIndex, currentChanged, count, widget, tabText, setTabEna
 Hauteur : comme chez Qt, le contenu prend la hauteur de l'onglet le plus haut (les boutons ne
 bougent pas d'un onglet à l'autre). Avec hauteur_selon_l_onglet, il prend celle de l'onglet affiché :
 pas de grand vide sous un onglet court quand un autre est très long (studio des sous-titres).
+
+Largeur : avec en_flux, les boutons passent à la ligne quand la place manque (studio des
+sous-titres, six onglets) ; la rangée ne force donc pas une largeur minimale à toute la colonne.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QStackedWidget, QVBoxLa
 from ..theme import Espacements
 from .bouton import Bouton
 from .elements import separateur
+from .flux import DispositionFlux
 
 
 class PileAjustee(QWidget):
@@ -77,17 +81,20 @@ class PileAjustee(QWidget):
 class Onglets(QWidget):
     currentChanged = Signal(int)  # même nom que chez QTabWidget
 
-    def __init__(self, parent: QWidget | None = None, hauteur_selon_l_onglet: bool = False):
+    def __init__(self, parent: QWidget | None = None, hauteur_selon_l_onglet: bool = False, en_flux: bool = False):
         super().__init__(parent)
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
         disposition.addWidget(separateur())
         disposition.addSpacing(Espacements.L)  # de l'air entre la ligne et les boutons
-        self._rangee = QHBoxLayout()
-        self._rangee.setContentsMargins(0, 0, 0, 0)
-        self._rangee.setSpacing(Espacements.S)
-        self._rangee.addStretch(1)
+        if en_flux:
+            self._rangee = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la place manque
+        else:
+            self._rangee = QHBoxLayout()
+            self._rangee.setContentsMargins(0, 0, 0, 0)
+            self._rangee.setSpacing(Espacements.S)
+            self._rangee.addStretch(1)
         disposition.addLayout(self._rangee)
         self._pile = PileAjustee() if hauteur_selon_l_onglet else QStackedWidget()
         disposition.addWidget(self._pile, 1)
@@ -104,7 +111,10 @@ class Onglets(QWidget):
         bouton = Bouton(titre, "contour")
         bouton.setCheckable(True)
         self._groupe.addButton(bouton, index)
-        self._rangee.insertWidget(index, bouton)
+        if isinstance(self._rangee, DispositionFlux):
+            self._rangee.addWidget(bouton)
+        else:
+            self._rangee.insertWidget(index, bouton)
         self._boutons.append(bouton)
         self._pile.addWidget(page)
         if index == 0:
