@@ -30,6 +30,7 @@ from ...services import Services
 from ...styles import Style
 from ..composants.bouton import activer_avec_entree
 from ..composants.champ_style import ChampStyle
+from ..composants.choix_voix import propose
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
     bouton,
@@ -105,8 +106,8 @@ class DialogueStyle(QDialog):
         self.categorie.addItems(services.styles.categories())
         self.categorie.setCurrentText(style.categorie or services.styles.categories()[0])
         self.modele = liste_deroulante()
-        for modele in MODELES_CONNUS:
-            if Capacite.TTS in modele.capacites:
+        for modele in MODELES_CONNUS:  # modèles de voix chargés (et celui du style)
+            if Capacite.TTS in modele.capacites and propose(services, modele.identifiant, style.modele):
                 self.modele.addItem(modele.nom, modele.identifiant)
         self._choisir(self.modele, style.modele)
         self.voix = liste_deroulante()

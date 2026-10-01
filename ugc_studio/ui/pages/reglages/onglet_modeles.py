@@ -1,9 +1,10 @@
-"""Onglet « Modèles et prix » (§4.2) : capacités des modèles, prix modifiables, taux de change.
+"""Onglet « Modèles et prix » (§4.2) : modèles chargés, où ils servent, prix modifiables, taux de change.
 
-Les prix par défaut sont les tarifs officiels de Google (page des tarifs, tarif « Standard »),
-avec les changements de prix déjà annoncés (ex. hausse du 01/01/2027). Pour chaque modèle,
-l'onglet donne aussi un ordre de grandeur parlant : le coût d'une minute de voix ou d'une minute
-transcrite, en euros.
+Seuls les modèles chargés sont listés (§4.2 bis) : « Choisir les modèles… » en ajoute ou en retire.
+La colonne « Utilisé dans » dit où chacun sert en ce moment. Les prix par défaut sont les tarifs
+officiels de Google (page des tarifs, tarif « Standard »), avec les changements de prix déjà
+annoncés (ex. hausse du 01/01/2027). Pour chaque modèle, l'onglet donne aussi un ordre de grandeur
+parlant : le coût d'une minute de voix ou d'une minute transcrite, en euros.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
 
 from ....fournisseurs.capacites import (
@@ -21,17 +22,20 @@ from ....fournisseurs.capacites import (
     deviner_capacites,
     modele_connu,
 )
+from ....modeles_charges import CHARGES, USAGES
 from ....prix import lire_decimal, recuperer_taux_bce
 from ....services import Services
 from ... import taches
-from ...composants.elements import bloc, bouton, info, libelle, separateur, vider_disposition
+from ...composants.elements import bloc, bouton, info, libelle, libelle_abrege, separateur, vider_disposition
+from ...dialogues.choix_modeles import DialogueChoixModeles
 from ...composants.montant_label import MontantLabel
 from ...ouvrir import ouvrir_page_web
 from ...theme import Dimensions, Espacements, Typo
 from ...composants.defilement import zone_defilante
 
 NATURES = {"texte": "texte envoyé", "audio": "audio"}
-COLONNES = ("Modèle", "Capacités", "Accès", "Entrée $/M", "Sortie $/M")
+# Les capacités passent sous le nom du modèle, pour laisser la place à « Utilisé dans ».
+COLONNES = ("Modèle", "Utilisé dans", "Accès", "Entrée $/M", "Sortie $/M")
 NB_COLONNES = len(COLONNES)
 
 
@@ -62,6 +66,7 @@ class LigneModele:
     """Les éléments d'une ligne du tableau qui changent quand un prix ou le taux change."""
 
     identifiant: str
+    utilise_dans: QLabel  # « Voix, Traductions » ou « Aucun »
     entree: QLineEdit
     sortie: QLineEdit
     zone_minute: QWidget  # « ≈ 0.0117 € par minute de voix »
@@ -72,6 +77,8 @@ class LigneModele:
 
 
 class OngletModeles(QWidget):
+    connexions_demandees = Signal()  # « Connexions API » (pour tester une clé) : voir PageReglages
+
     def __init__(self, services: Services):
         super().__init__()
         self._services = services
@@ -113,6 +120,20 @@ class OngletModeles(QWidget):
                 "secondaire",
             )
         )
+        d.addWidget(
+            info(
+                "Seuls les modèles chargés sont listés ici et proposés dans les modules : « Choisir les "
+                "modèles… » en ajoute ou en retire. Un modèle utilisé (colonne « Utilisé dans ») ne peut "
+                "pas être retiré.",
+                "secondaire",
+            )
+        )
+        # Le bouton suit l'explication qui le cite. En bas, avec les deux autres, la rangée dépassait
+        # de la partie visible à la largeur minimale de la fenêtre (960 px).
+        choisir = QHBoxLayout()
+        choisir.addWidget(bouton("Choisir les modèles…", nom_icone="list-plus", action=self.choisir_les_modeles))
+        choisir.addStretch(1)
+        d.addLayout(choisir)
         self._grille = QGridLayout()
         self._grille.setHorizontalSpacing(Espacements.L)
         self._grille.setVerticalSpacing(0)
@@ -143,6 +164,8 @@ class OngletModeles(QWidget):
         self._lignes: dict[str, LigneModele] = {}
         services.connexions.abonner(self.rafraichir)
         services.prix.abonner(self._prix_changes)
+        services.modeles.abonner(self.rafraichir, {CHARGES})  # modèles chargés ou retirés
+        services.modeles.abonner(self._usages_changes, {USAGES})  # « Utilisé dans », en direct
         self.rafraichir()
         self._rafraichir_taux()
 
@@ -217,9 +240,8 @@ class OngletModeles(QWidget):
         une_cle_testee = any(
             c.dernier_test and c.dernier_test.ok for c in self._services.connexions.lister()
         )
-        detectes = {m for m in disponibles if deviner_capacites(m)}
         rang = 1
-        for identifiant in self._services.prix.identifiants(detectes):
+        for identifiant in self._services.modeles.charges():
             # Avant chaque modèle : un fin trait horizontal, avec de l'espace au-dessus et en dessous.
             self._grille.setRowMinimumHeight(rang, Espacements.XL)
             self._grille.addWidget(separateur(), rang, 0, 1, NB_COLONNES, Qt.AlignmentFlag.AlignVCenter)
@@ -232,21 +254,21 @@ class OngletModeles(QWidget):
         connu = modele_connu(identifiant)
         capacites = connu.capacites if connu else deviner_capacites(identifiant)
 
-        # Ligne 1
+        # Ligne 1 : nom, sa description et ses capacités, chacun sur une seule ligne (abrégée par
+        # « … » quand la fenêtre est étroite, texte complet au survol). L'identifiant technique
+        # (« gemini-3.8-flash-tts ») ferait doublon avec le nom : il reste lisible au survol du nom.
         nom = QVBoxLayout()
         nom.setSpacing(0)
-        # Le nom peut passer à la ligne : sur une fenêtre étroite, un long nom (« Gemini 2.5 Flash
-        # Preview TTS ») élargirait sinon tout l'onglet au-delà de la partie visible.
-        # L'identifiant technique (« gemini-3.8-flash-tts ») ferait doublon avec le nom : il reste
-        # lisible au survol du nom, utile en cas de souci.
-        titre = libelle(connu.nom if connu else identifiant)
-        titre.setToolTip(f"Identifiant du modèle chez Google : {identifiant}")
+        titre = libelle_abrege(connu.nom if connu else identifiant)
+        titre.definir_aide(f"Identifiant du modèle chez Google : {identifiant}")
         nom.addWidget(titre)
         note = connu.note if connu else "Détecté avec ta clé : renseigne ses prix."
         if note:
-            nom.addWidget(libelle(note, "legende"))
+            nom.addWidget(libelle_abrege(note, "legende"))
+        nom.addWidget(libelle_abrege(" · ".join(LIBELLES[c] for c in sorted(capacites)), "legende"))
         self._grille.addLayout(nom, rang, 0)
-        self._grille.addWidget(libelle(" · ".join(LIBELLES[c] for c in sorted(capacites)), "legende"), rang, 1)
+        utilise_dans = libelle("", "secondaire", retour_a_la_ligne=False)
+        self._grille.addWidget(utilise_dans, rang, 1)
         if accessible:
             acces = libelle("✓ Accessible", "succes", retour_a_la_ligne=False)
         elif une_cle_testee:
@@ -287,9 +309,30 @@ class OngletModeles(QWidget):
         minute.addStretch(1)
         self._grille.addWidget(zone_minute, rang + 1, 3, 1, 2, Qt.AlignmentFlag.AlignTop)
 
-        ligne = LigneModele(identifiant, entree, sortie, zone_minute, cout_minute, zone_remarques, personnalise, hausse)
+        ligne = LigneModele(
+            identifiant, utilise_dans, entree, sortie, zone_minute, cout_minute, zone_remarques, personnalise, hausse
+        )
         self._lignes[identifiant] = ligne
         self._actualiser(ligne)
+        self._afficher_usage(ligne)
+
+    # --- Modèles chargés et « Utilisé dans » -------------------------------------------------
+
+    def choisir_les_modeles(self) -> None:
+        dialogue = DialogueChoixModeles(self._services, self.window(), self.connexions_demandees.emit)
+        if dialogue.exec():
+            self._services.modeles.definir(dialogue.modeles_coches())  # met la liste à jour (rafraichir)
+
+    def _usages_changes(self) -> None:
+        for ligne in self._lignes.values():
+            self._afficher_usage(ligne)
+
+    def _afficher_usage(self, ligne: LigneModele) -> None:
+        modules = self._services.modeles.utilise_dans(ligne.identifiant)
+        ligne.utilise_dans.setText(", ".join(modules) if modules else "Aucun")
+        ligne.utilise_dans.setProperty("role", "secondaire" if modules else "discret")
+        ligne.utilise_dans.style().unpolish(ligne.utilise_dans)
+        ligne.utilise_dans.style().polish(ligne.utilise_dans)
 
     def _actualiser(self, ligne: LigneModele) -> None:
         prix = self._services.prix

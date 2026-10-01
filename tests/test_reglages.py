@@ -131,16 +131,95 @@ def test_prix_personnalise_signale_puis_retabli(app_configuree, qtbot, services)
     assert voix.cout_minute.montant == avant
 
 
-def test_anciens_modeles_listes_seulement_s_ils_sont_accessibles(app_configuree, qtbot, services):
+def test_seuls_les_modeles_charges_sont_listes(app_configuree, qtbot, services):
+    """Au départ : les modèles dont l'app se sert, plus Flash-Lite TTS. Un ancien modèle accessible
+    avec la clé n'est listé qu'une fois chargé (« Choisir les modèles… »)."""
     page = PageReglages(services)
     qtbot.addWidget(page)
-    assert page.modeles.ligne("gemini-2.5-pro-preview-tts") is None
+    assert list(page.modeles._lignes) == [
+        "gemini-3.8-flash-tts",
+        "gemini-3.8-flash-lite-tts",
+        "gemini-3.5-transcribe",
+        "gemini-3.8-flash",
+    ]
     connexion = services.connexions.ajouter("google", "Perso", CLE)
     services.connexions.enregistrer_test(
         connexion.identifiant, True, "Clé valide", ["gemini-3.8-flash-tts", "gemini-2.5-pro-preview-tts", "gemini-3.5-transcribe-live"]
     )
+    assert page.modeles.ligne("gemini-2.5-pro-preview-tts") is None
+    services.modeles.definir([*services.modeles.charges(), "gemini-2.5-pro-preview-tts"])
     assert page.modeles.ligne("gemini-2.5-pro-preview-tts") is not None
-    assert page.modeles.ligne("gemini-3.5-transcribe-live") is None  # modèle « Live » : jamais utilisé par l'app
+
+
+def test_colonne_utilise_dans(app_configuree, qtbot, services):
+    from ugc_studio.modeles_charges import TRANSCRIPTION
+
+    page = PageReglages(services)
+    qtbot.addWidget(page)
+    assert page.modeles.ligne("gemini-3.8-flash").utilise_dans.text() == "Traductions"
+    assert page.modeles.ligne("gemini-3.8-flash-tts").utilise_dans.text() == "Voix"  # styles d'exemple
+    assert page.modeles.ligne("gemini-3.8-flash-lite-tts").utilise_dans.text() == "Aucun"
+    services.modeles.choisir(TRANSCRIPTION, "gemini-3.5-transcribe")  # mise à jour en direct
+    assert page.modeles.ligne("gemini-3.5-transcribe").utilise_dans.text() == "Transcription"
+
+
+def test_nom_du_modele_sur_une_seule_ligne(app_configuree, qtbot, services):
+    from ugc_studio.ui.composants.elements import EtiquetteAbregee
+
+    page = PageReglages(services)
+    qtbot.addWidget(page)
+    page.resize(960, 600)
+    page.show()
+    # Onglet « Modèles et prix » affiché : un onglet caché n'est jamais mis en page (ses textes
+    # gardent la taille par défaut d'un élément de Qt, 640 × 480 px).
+    page.onglets.setCurrentIndex(1)
+    qtbot.waitUntil(page.modeles.isVisible, timeout=2000)
+    (nom,) = [e for e in page.modeles.findChildren(EtiquetteAbregee) if e.text() == "Gemini 3.8 Flash TTS"]
+    assert not nom.wordWrap() and nom.height() < 2 * nom.fontMetrics().lineSpacing()  # une seule ligne
+    assert "gemini-3.8-flash-tts" in nom.toolTip()  # identifiant technique au survol
+
+
+def test_fenetre_choisir_les_modeles(app_configuree, qtbot, services):
+    from ugc_studio.modeles_charges import TRANSCRIPTION
+    from ugc_studio.ui.dialogues.choix_modeles import DialogueChoixModeles
+
+    connexion = services.connexions.ajouter("google", "Perso", CLE)
+    services.connexions.enregistrer_test(
+        connexion.identifiant,
+        True,
+        "Clé valide",
+        ["gemini-3.8-flash-tts", "gemini-2.5-pro-preview-tts", "gemini-3.5-transcribe-live", "imagen-5", "gemini-3.5-transcribe"],
+    )
+    services.modeles.choisir(TRANSCRIPTION, "gemini-3.5-transcribe")
+    dialogue = DialogueChoixModeles(services)
+    qtbot.addWidget(dialogue)
+    lignes = {ligne.identifiant: ligne for ligne in dialogue.lignes()}
+    # Seulement ce que l'app sait utiliser : ni modèle « Live », ni modèle d'images.
+    assert "gemini-3.5-transcribe-live" not in lignes and "imagen-5" not in lignes
+    assert "gemini-2.5-pro-preview-tts" in lignes and not lignes["gemini-2.5-pro-preview-tts"].case.isChecked()
+    # Un modèle utilisé reste coché, et ne peut pas être décoché.
+    transcription = lignes["gemini-3.5-transcribe"].case
+    assert transcription.isChecked() and not transcription.isEnabled()
+    assert "Transcription" in transcription.toolTip()
+    lignes["gemini-2.5-pro-preview-tts"].case.setChecked(True)
+    lignes["gemini-3.8-flash-lite-tts"].case.setChecked(False)  # pas utilisé : on peut le retirer
+    services.modeles.definir(dialogue.modeles_coches())
+    assert services.modeles.est_charge("gemini-2.5-pro-preview-tts")
+    assert not services.modeles.est_charge("gemini-3.8-flash-lite-tts")
+
+
+def test_sans_cle_la_fenetre_renvoie_vers_connexions(app_configuree, qtbot, services):
+    page = PageReglages(services)
+    qtbot.addWidget(page)
+    page.onglets.setCurrentIndex(1)
+    from ugc_studio.ui.composants.bouton import Bouton
+    from ugc_studio.ui.dialogues.choix_modeles import DialogueChoixModeles
+
+    dialogue = DialogueChoixModeles(services, None, page.modeles.connexions_demandees.emit)
+    qtbot.addWidget(dialogue)
+    (aller,) = [b for b in dialogue.findChildren(Bouton) if b.text() == "Connexions API"]
+    aller.click()
+    assert page.onglets.currentIndex() == 0
 
 
 def test_le_cout_d_une_minute_suit_le_taux(app_configuree, qtbot, services):

@@ -24,6 +24,7 @@ from ....generation import (
     repliques_api,
     tokens_par_seconde,
 )
+from ....modeles_charges import CHARGES, VOIX
 from ....projets import LANGUES, Projet
 from ....prononciation import fusionner
 from ....script import est_vide
@@ -100,6 +101,7 @@ class AtelierVoix(Page):
         ligne.setSpacing(Espacements.S)
         self.modele = liste_deroulante()
         self.modele.currentIndexChanged.connect(self._reglage_change)
+        self.modele.currentIndexChanged.connect(lambda _index: self._declarer_modele())
         ligne.addWidget(self.modele, 1)
         self.voix = liste_deroulante()
         self.voix.setToolTip("Tes favoris ★ et tes voix créées d'abord, puis les 30 voix de base")
@@ -205,6 +207,7 @@ class AtelierVoix(Page):
 
         services.projets.abonner(self._projet_change)
         services.connexions.abonner(self._remplir_modeles)
+        services.modeles.abonner(self._remplir_modeles, {CHARGES})  # modèles chargés ou retirés
         services.prix.abonner(self._mettre_a_jour_estimation)
         services.voix.abonner(self._remplir_voix)
         self._remplir_modeles()
@@ -226,10 +229,15 @@ class AtelierVoix(Page):
         self.flux.arreter()
         self._projet = projet
         if projet is None:
+            self._declarer_modele()
             return
         self._chargement = True
         self.titre.setText(f"Voix / {projet.nom}")
+        # Le modèle du projet est toujours proposé, même s'il n'est plus chargé : il est alors
+        # rechargé (voir modeles_charges.py), sans rien changer dans le projet.
+        remplir_modeles_voix(self.modele, self._services, projet.voix.modele)
         choisir(self.modele, projet.voix.modele)
+        self._declarer_modele()
         self._selectionner_voix(projet.voix.voix or VOIX_PAR_DEFAUT)
         self.repliques.definir(projet.repliques)
         self._chargement = False
@@ -238,11 +246,16 @@ class AtelierVoix(Page):
         self._mettre_a_jour_estimation()
 
     def _remplir_modeles(self) -> None:
-        """Modèles de voix accessibles avec les clés (croisement avec les capacités, §3.4)."""
+        """Modèles de voix chargés et accessibles avec les clés (croisement avec les capacités, §3.4)."""
         choix = self.modele.currentData() or (self._projet.voix.modele if self._projet else None)
         avec_cle = remplir_modeles_voix(self.modele, self._services, choix)
         self.info_modeles.setText("Aucune clé testée : ajoute et teste ta clé Google dans Réglages → Connexions API.")
         self.info_modeles.setVisible(not avec_cle)
+        self._declarer_modele()
+
+    def _declarer_modele(self) -> None:
+        """Réglages → Modèles et prix, « Utilisé dans » : le modèle choisi ici (projet ouvert)."""
+        self._services.modeles.choisir(VOIX, self.modele.currentData() if self._projet else None)
 
     # --- Voix : favoris, voix créées, 30 voix de base ----------------------------------------
 

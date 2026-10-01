@@ -221,6 +221,10 @@ REGLAGES = PageDeConseils(
         Rubrique(
             "Modèles et prix",
             (
+                "Seuls les modèles chargés sont proposés dans l'app : « Choisir les modèles… » en ajoute "
+                "ou en retire, parmi ceux que ta clé permet d'utiliser.",
+                "La colonne « Utilisé dans » dit où chaque modèle sert en ce moment ; un modèle utilisé ne "
+                "peut pas être retiré, pour qu'aucun module ne se retrouve sans modèle.",
                 "Les prix sont les tarifs officiels de Google, en dollars par million de tokens. Quand "
                 "Google annonce un nouveau tarif, l'app applique le bon à la date de chaque appel.",
                 "Tu peux modifier un prix ; « Rétablir les prix par défaut » revient aux tarifs de Google.",

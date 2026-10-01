@@ -1,6 +1,6 @@
 # UGC Studio — Cahier des charges
 
-> Version du document : 3.4, 01/10/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; lot 4, fondu, listes déroulantes intégrées, bibliothèque de voix plus rapide, tableaux ; voir §12.2)
+> Version du document : 3.5, 01/10/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; lot 4, fondu, listes déroulantes intégrées, bibliothèque de voix plus rapide, tableaux ; lot 5, modèles chargés et colonne « Utilisé dans » ; voir §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -120,7 +120,7 @@ Un modèle absent du tableau mais accessible avec une clé est reconnu d'après 
 
 ### 4.2 Catalogue des modèles et prix
 
-- Liste des modèles connus avec leurs capacités. Sous le nom de chaque modèle, une courte description ; l'identifiant technique (`gemini-3.8-flash-tts`) ne s'affiche qu'au survol du nom (il faisait doublon).
+- Liste des **modèles chargés** (§4.2 bis). Pour chacun : son nom, une courte description et ses capacités, chacun sur une seule ligne (abrégé par « … » quand la fenêtre est étroite, texte complet au survol) ; l'identifiant technique (`gemini-3.8-flash-tts`) ne s'affiche qu'au survol du nom (il faisait doublon). Colonnes : Modèle, **Utilisé dans** (§4.2 ter), Accès, prix d'entrée et de sortie.
 - **Prix par défaut = tarifs officiels de Google** ([page des tarifs](https://ai.google.dev/gemini-api/docs/pricing?hl=fr), tarif « Standard » du niveau payant), vérifiés le 30/09/2026, en $ par million de tokens :
 
 | Modèle | Entrée | Sortie | Ordre de grandeur (Google) |
@@ -136,9 +136,21 @@ Un modèle absent du tableau mais accessible avec une clé est reconnu d'après 
 - **Changements de prix annoncés** : Google double les prix des modèles 3.8 **à partir du 01/01/2027** (Flash TTS : 1,00 $ / 18,00 $ ; Flash-Lite TTS : 1,00 $ / 12,00 $ ; Flash : 1,50 $ / 7,50 $). Chaque modèle a donc une liste de tarifs datés ; l'app applique **automatiquement** le tarif en vigueur le jour de l'appel et affiche le prochain changement sous le modèle.
 - **Prix modifiables** par modèle (entrée et sortie). Un prix saisi à la main est signalé (« Prix modifié à la main », avec le tarif Google) et s'applique jusqu'au prochain changement de tarif annoncé par Google : l'information la plus récente l'emporte.
 - **Ordre de grandeur en euros** sous chaque prix : coût d'une minute de voix (≈ 250 tokens de texte + 60 s × 25 tokens audio) ou d'une minute transcrite (60 s × 25 tokens audio + ≈ 175 tokens de texte), d'après les chiffres de la page des tarifs.
-- Modèles listés : les modèles principaux (3.8 Flash TTS, 3.8 Flash-Lite TTS, 3.5 Transcribe, 3.8 Flash pour les traductions) toujours ; les anciennes générations et les modèles inconnus seulement s'ils sont accessibles avec une clé. Les anciennes générations de voix n'ont ni balises ni Voice Design (doc officielle). Les modèles « Live » (temps réel, ex. `gemini-3.5-transcribe-live`) utilisent une autre API et ne sont jamais proposés.
+- Les anciennes générations de voix n'ont ni balises ni Voice Design (doc officielle). Les modèles « Live » (temps réel, ex. `gemini-3.5-transcribe-live`) utilisent une autre API et ne sont jamais proposés.
 - **Niveau gratuit** de Google (clé sans moyen de paiement) : ces modèles n'y sont pas facturés (limites d'usage plus basses). L'app affiche quand même le coût au tarif payant ; une note le rappelle.
 - Bouton « Page des tarifs Google » pour vérifier les prix.
+
+### 4.2 bis Modèles chargés (depuis la 1.0.5)
+
+- L'app garde la liste des **modèles chargés**, c'est-à-dire mis à disposition dans l'app (`modeles.json`). Au départ : les modèles utilisés (Gemini 3.8 Flash TTS, 3.5 Transcribe, 3.8 Flash pour les traductions), plus **3.8 Flash-Lite TTS**, pratique et lié à Flash TTS. Les anciennes générations et les modèles inconnus n'y sont plus d'office.
+- L'onglet « Modèles et prix » et les listes « Modèle » des modules (Voix, Variantes, Créer une voix, Style, Transcription) ne proposent que les modèles chargés (et, comme avant, accessibles avec la clé et capables de la tâche). Le modèle déjà choisi reste toujours dans sa liste.
+- Bouton **« Choisir les modèles… »** : une fenêtre liste les modèles accessibles avec la clé (dernier test réussi) que l'app sait utiliser (voix, transcription, texte des traductions ; ni images, ni vidéo, ni « Live »), avec une case à cocher, les capacités et le prix s'il est connu. Sans clé testée, elle l'explique et renvoie vers « Connexions API ».
+- Un modèle **utilisé** (§4.2 ter) reste coché et ne peut pas être décoché (l'infobulle dit où il sert) : aucun module ne peut se retrouver sans modèle.
+- Sécurités : un projet (ou une voix créée, un style) qui se sert d'un modèle non chargé le recharge automatiquement, sans rien changer dans le projet. Les prix saisis à la main sont gardés, même si le modèle est retiré puis rechargé.
+
+### 4.2 ter Colonne « Utilisé dans »
+
+Où le modèle sert **en ce moment**, mis à jour en direct : **Voix** (modèle choisi dans le module Voix, projet ouvert ; ou modèle d'une voix créée ou d'un style enregistré), **Transcription** (modèle choisi dans ses options), **Sous-titres** (modèle qui transcrit une prise pour créer ses sous-titres), **Traductions** (Gemini 3.8 Flash : traduction des styles et des descriptions de voix). Modèle chargé mais pas utilisé : « Aucun ». Chaque module déclare lui-même le modèle qu'il utilise (`modeles_charges.py`).
 - **Taux de change USD → EUR** modifiable (champ manuel), ou récupéré en un clic auprès de la Banque centrale européenne (taux de référence du jour). Valeur de départ : 0,86, signalée « à vérifier ».
 - Prix et taux rangés dans `prix.json` (seuls les prix modifiés y sont écrits ; bouton « Rétablir les prix par défaut »).
 
@@ -650,7 +662,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 2. Quand la place manque, les **colonnes de texte** (projet, modèle, opération, texte, remarque) se resserrent d'abord, jusqu'à 88 px. Les dates, nombres et montants gardent **toujours** leur largeur complète.
 3. En dernier recours, une **barre de défilement horizontale** fine apparaît en bas du tableau : aucune colonne n'est jamais cachée sans moyen d'aller la voir. L'autotest vérifie chaque tableau à la plus petite largeur de la fenêtre.
 - Suivi des coûts : colonnes « Entrée » et « Sortie » (tokens, détail au survol du titre) au lieu de « Tokens entrée » et « Tokens sortie », pour que le tableau tienne en entier à 960 px, coût compris.
-- Modèles et prix (nom du modèle sur une seule ligne) : avec le lot 5, qui refait ce tableau.
+- Modèles et prix (lot 5) : nom, description et capacités du modèle, chacun sur une seule ligne (abrégés par « … », texte complet au survol).
 
 ### 9.5 Typographie
 
