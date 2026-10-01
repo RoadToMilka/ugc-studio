@@ -402,7 +402,8 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
 
     bloc, panneau, toile = atelier.bloc_apercu, atelier.panneau, atelier.toile
     rapport["studio_deux_colonnes"] = atelier.studio.deux_colonnes
-    largeur, limite = atelier.studio.width(), Dimensions.STUDIO_DEUX_COLONNES_MIN
+    largeur, limite = atelier.studio.width(), atelier.studio.largeur_deux_colonnes()
+    rapport["studio_largeur_deux_colonnes"] = limite
     if largeur < limite:
         colonnes_ok = not atelier.studio.deux_colonnes
     elif largeur >= limite + Dimensions.BARRE_DEFILEMENT + Espacements.S:

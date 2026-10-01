@@ -11,7 +11,7 @@ Le studio : l'aperçu à gauche et les réglages à droite ; l'un sous l'autre q
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QEvent, QSize
 from PySide6.QtWidgets import QBoxLayout, QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from ....preferences import Preferences
@@ -173,7 +173,8 @@ class BlocApercu(QFrame):
 
 class DispositionStudio(QWidget):
     """L'aperçu à gauche (largeur fixe) et les réglages à droite ; l'un sous l'autre quand la page a
-    moins de STUDIO_DEUX_COLONNES_MIN pixels de large."""
+    moins de STUDIO_DEUX_COLONNES_MIN pixels de large, ou moins que ce que demandent les deux colonnes
+    (un onglet des réglages peut demander plus de place : voir largeur_deux_colonnes)."""
 
     def __init__(self, apercu: QWidget, reglages: QWidget, parent: QWidget | None = None):
         super().__init__(parent)
@@ -190,19 +191,33 @@ class DispositionStudio(QWidget):
     def deux_colonnes(self) -> bool:
         return bool(self._deux_colonnes)
 
+    def largeur_deux_colonnes(self) -> int:
+        """Largeur qu'il faut pour deux colonnes : la colonne de l'aperçu, l'espace entre les deux, et
+        le minimum des réglages (il dépend de l'onglet affiché et des groupes ouverts). Sans cette
+        vérification, des réglages plus larges que leur colonne garderaient le studio sur deux colonnes
+        trop larges pour la page : son bord droit serait coupé."""
+        besoin = self._apercu.sizeHint().width() + self._disposition.spacing() + self._reglages.minimumSizeHint().width()
+        return max(Dimensions.STUDIO_DEUX_COLONNES_MIN, besoin)
+
     def resizeEvent(self, evenement) -> None:  # noqa: N802
         self._adapter(evenement.size().width())
         super().resizeEvent(evenement)
 
+    def event(self, evenement) -> bool:
+        if evenement.type() == QEvent.Type.LayoutRequest:
+            self._adapter(self.width())  # les réglages demandent une autre place (onglet, groupe ouvert)
+        return super().event(evenement)
+
     def _adapter(self, largeur: int) -> None:
+        limite = self.largeur_deux_colonnes()
         if self._deux_colonnes:
-            deux = largeur >= Dimensions.STUDIO_DEUX_COLONNES_MIN
+            deux = largeur >= limite
         else:
             # Pour repasser sur deux colonnes, il faut un peu plus de place : sans cette marge, la barre de
             # défilement de la page (qui apparaît ou disparaît selon la disposition) ferait changer la
             # disposition en boucle autour de la limite.
             marge = 0 if self._deux_colonnes is None else Dimensions.BARRE_DEFILEMENT + Espacements.S
-            deux = largeur >= Dimensions.STUDIO_DEUX_COLONNES_MIN + marge
+            deux = largeur >= limite + marge
         if deux == self._deux_colonnes:
             return
         self._deux_colonnes = deux

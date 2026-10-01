@@ -97,10 +97,13 @@ def test_contour_autour_des_lettres(app_configuree):
 def test_fond_par_mot_par_ligne_ou_en_bloc(app_configuree, mode, nombre):
     from PySide6.QtCore import QRectF
 
+    from ugc_studio.sous_titres import MotAffiche, SousTitre
+
     fond = Fond(mode, Couleur(124, 58, 237), 1.0, 0.5, 0.6)
     moteur = _moteur(replace(SANS_OMBRE, fond=fond))
-    mots, sous_titres = _sous_titres(moteur)
-    sous_titre = next(s for s in sous_titres if len(s.lignes) == 2)
+    textes = ["Mais", "ce", "sérum", "Glowzy"]
+    mots = [MotAffiche(texte, texte, i * 0.3, i * 0.3 + 0.25) for i, texte in enumerate(textes)]
+    sous_titre = SousTitre(0.0, 1.2, ["Mais ce", "sérum Glowzy"], 0, len(mots))  # deux lignes
     bloc = moteur.bloc(sous_titre, mots)
     rectangles = moteur._rectangles_du_fond(bloc)
     attendu = {FOND_MOT: len(bloc.mots), FOND_LIGNE: len(bloc.lignes), FOND_BLOC: nombre}[mode]
@@ -390,3 +393,19 @@ def test_pipette_prend_une_couleur_dans_l_apercu(atelier, services, qtbot):
     qtbot.keyClick(texte.contour_couleur.code, Qt.Key.Key_Escape)
     assert not toile.pipette_active
     assert services.projets.projet.sous_titres.texte.contour.couleur == Couleur(0, 0, 0)
+
+
+def test_studio_sur_une_colonne_quand_les_reglages_ne_tiennent_pas(atelier, qtbot):
+    """Les réglages de l'onglet Texte demandent plus de place : le studio passe sur une colonne dès que
+    les deux colonnes ne tiennent plus (pas seulement sous 880 px), et rien n'est coupé à droite."""
+    from ugc_studio.ui.theme import Dimensions
+
+    studio = atelier.studio
+    limite = studio.largeur_deux_colonnes()
+    assert limite >= Dimensions.STUDIO_DEUX_COLONNES_MIN and studio.deux_colonnes
+    page = atelier.parentWidget()
+    ecart = page.width() - studio.width()
+    page.resize(limite + ecart - 30, 900)
+    qtbot.waitUntil(lambda: not studio.deux_colonnes, timeout=2000)
+    zone = atelier.defilement
+    qtbot.waitUntil(lambda: zone.widget().width() <= zone.viewport().width(), timeout=2000)
