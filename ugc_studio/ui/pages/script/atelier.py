@@ -124,7 +124,10 @@ class AtelierScript(Page):
         self.cout_accroches = MontantLabel(0, Typo.LEGENDE)
         self.cout_accroches.setProperty("role", "legende")
         estimations.addWidget(self.cout_accroches)
-        self.libelle_cout_script = libelle("  ·  Script ≈", "legende", retour_a_la_ligne=False)
+        estimations.addSpacing(Espacements.S)
+        estimations.addWidget(libelle("·", "legende", retour_a_la_ligne=False))
+        estimations.addSpacing(Espacements.S)
+        self.libelle_cout_script = libelle("Script ≈", "legende", retour_a_la_ligne=False)
         estimations.addWidget(self.libelle_cout_script)
         self.cout_script = MontantLabel(0, Typo.LEGENDE)
         self.cout_script.setProperty("role", "legende")
@@ -132,6 +135,7 @@ class AtelierScript(Page):
         estimations.addStretch(1)
         d.addLayout(estimations)
         self.statut = libelle("", "secondaire")
+        self.statut.hide()  # visible seulement quand il y a quelque chose à dire
         d.addWidget(self.statut)
         self.contenu.addWidget(cadre)
 
@@ -250,7 +254,7 @@ class AtelierScript(Page):
         nombre = max(1, len(etat.accroches_cochees()))
         cout = prix.cout_eur(brief.modele, script.tokens_entree, script.tokens_sortie)
         self._montant(self.cout_script, None if cout is None else cout * nombre)
-        self.libelle_cout_script.setText(f"  ·  {nombre} scripts ≈" if nombre > 1 else "  ·  Script ≈")
+        self.libelle_cout_script.setText(f"{nombre} scripts ≈" if nombre > 1 else "Script ≈")
         lecture = estimer_lecture(page or "x" * TEXTE_PAGE_TYPIQUE, brief.modele, brief.langue)
         self.produit.definir_estimation(prix.cout_eur(brief.modele, lecture.tokens_entree, lecture.tokens_sortie))
 
@@ -273,6 +277,7 @@ class AtelierScript(Page):
 
     def _afficher(self, message: str, role: str) -> None:
         self.statut.setText(message)
+        self.statut.setVisible(bool(message))
         self.statut.setProperty("role", role)
         self.statut.style().unpolish(self.statut)
         self.statut.style().polish(self.statut)

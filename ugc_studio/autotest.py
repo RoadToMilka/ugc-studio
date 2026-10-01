@@ -377,6 +377,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             for section in ecriture.formulaire.sections:
                 section.ouvrir()
             ecriture.produit.section_fiche.ouvrir()
+            _laisser_afficher()  # la page s'allonge : la barre de défilement doit le savoir avant les captures
             champ_produit = ecriture.formulaire.champs["produit"]
             rapport["script_demo"] = {
                 "produit": champ_produit.valeur(),

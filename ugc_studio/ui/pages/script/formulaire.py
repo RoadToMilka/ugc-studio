@@ -207,6 +207,7 @@ class FormulaireBrief(QWidget):
         for colonne, (titre, element) in enumerate((("Pays", self.pays), ("Langue", self.langue), ("Réseau", self.reseau))):
             essentiel.addLayout(_avec_titre(titre, element), 0, colonne)
         duree = QHBoxLayout()
+        duree.setContentsMargins(0, 0, 0, 0)
         duree.setSpacing(Espacements.S)
         duree.addWidget(self.duree)
         duree.addStretch(1)
