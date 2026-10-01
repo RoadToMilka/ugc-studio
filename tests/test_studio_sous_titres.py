@@ -399,3 +399,25 @@ def test_lecteur_sans_son_place_le_temps(app_configuree):
     assert lecteur.temps == 2.5 and temps == [2.5] and not lecteur.en_lecture()
     lecteur.basculer()  # sans lecteur réel : rien ne se passe
     assert not lecteur.en_lecture()
+
+
+def test_video_de_test_ecrite(app_configuree, tmp_path):
+    """La vidéo de test de l'autotest : un AVI dont chaque image est un JPEG de la bonne taille."""
+    from PySide6.QtGui import QImage
+
+    from ugc_studio.rendu.video_test import COULEUR_HAUT, ecrire_video_de_test
+
+    chemin = ecrire_video_de_test(tmp_path / "videos" / "test.avi", 270, 480, 0.5, 10)
+    donnees = chemin.read_bytes()
+    assert donnees[:4] == b"RIFF" and donnees[8:12] == b"AVI "
+    debut = donnees.index(b"00dc") + 8  # première image
+    taille = int.from_bytes(donnees[debut - 4 : debut], "little")
+    image = QImage.fromData(donnees[debut : debut + taille], "JPG")
+    entete = donnees.index(b"avih") + 8
+    assert (image.width(), image.height()) == (270, 480)
+    assert int.from_bytes(donnees[entete + 16 : entete + 20], "little") == 5  # 0,5 s à 10 images par seconde
+    haut = image.pixelColor(135, 2)
+    from PySide6.QtGui import QColor
+
+    attendue = QColor(COULEUR_HAUT)
+    assert abs(haut.green() - attendue.green()) < 30 and abs(haut.blue() - attendue.blue()) < 30

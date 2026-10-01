@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QPointF, QRectF, Qt
+from PySide6.QtCore import QBuffer, QIODevice, QPointF, QRectF, Qt
 from PySide6.QtGui import QImage, QLinearGradient, QPainter
 
 from ..avi import avi_mjpeg
@@ -43,7 +43,9 @@ def _image(largeur: int, hauteur: int, numero: int, images_par_seconde: int) -> 
 
 
 def _jpeg(image: QImage) -> bytes:
-    tampon = QBuffer(QByteArray())
+    # Le tampon garde ses propres données : un QByteArray passé à QBuffer() serait effacé par
+    # Python aussitôt (QBuffer ne garde qu'un pointeur dessus), et l'écriture ferait planter l'app.
+    tampon = QBuffer()
     tampon.open(QIODevice.OpenModeFlag.WriteOnly)
     image.save(tampon, "JPG", QUALITE_JPEG)
     return bytes(tampon.data())
