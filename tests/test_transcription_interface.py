@@ -245,3 +245,23 @@ def test_description_de_la_source():
         infos={"resolution": [1080, 1920], "images_par_seconde": 29.97, "codec_video": "H264", "hdr": True},
     )
     assert description_source(transcription) == "pub.mp4  ·  0:42  ·  1080 × 1920  ·  29.97 images/s  ·  H264  ·  HDR"
+
+
+def test_masquer_les_hesitations_demande_avant_de_defaire_un_ajustement(atelier, services, monkeypatch):
+    """Même réglage que dans la page Sous-titres (V1.1) : la même question est posée."""
+    from ugc_studio.ui import sous_titres_du_projet
+
+    transcription = _transcription(services)
+    transcription.masquer_hesitations = False
+    transcription.ajustements_sous_titres = [[0.8, 1.0]]  # « euh », seul dans un sous-titre ajusté à la main
+    atelier.rafraichir()
+    questions = []
+    monkeypatch.setattr(sous_titres_du_projet, "demander", lambda _parent, texte, _plusieurs: questions.append(texte) or False)
+    atelier.masquer.setChecked(True)
+    (question,) = questions
+    assert question.startswith("Ce réglage défait ton ajustement du sous-titre 2 (« euh »)")
+    assert question.endswith(" : plus aucun de ses mots n'est affiché.")
+    assert not atelier.masquer.isChecked() and not transcription.masquer_hesitations  # réglage gardé
+    monkeypatch.setattr(sous_titres_du_projet, "demander", lambda *_arguments: True)
+    atelier.masquer.setChecked(True)
+    assert transcription.masquer_hesitations and transcription.ajustements_sous_titres == []

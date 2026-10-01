@@ -220,3 +220,147 @@ def test_clic_sur_un_sous_titre(atelier, services):
     atelier.choisir_sous_titre(dernier)
     assert atelier.tableau.currentRow() == dernier
     assert atelier.apercu.text() == atelier.sous_titres[dernier].texte
+
+
+# --- V1.1 : réorganiser les sous-titres à la main ---------------------------------------------
+
+MOTS_PUB = [
+    ("Mais", 0.0, 0.3),
+    ("ce", 0.35, 0.5),
+    ("sérum", 0.55, 0.9),
+    ("Glowzy", 0.95, 1.4),
+    ("a", 1.45, 1.5),
+    ("vraiment", 1.55, 2.0),
+    ("changé", 2.05, 2.4),
+    ("ma", 2.45, 2.6),
+    ("peau", 2.65, 3.0),
+    ("en", 3.05, 3.15),
+    ("deux", 3.2, 3.5),
+    ("semaines", 3.55, 4.0),
+    ("!", 4.0, 4.05),
+]
+
+
+def _textes(atelier) -> list[str]:
+    return [s.texte.replace("\n", " ").replace(" ", " ") for s in atelier.sous_titres]
+
+
+def _pub_en_sous_titres(atelier, services) -> None:
+    """4 sous-titres de 3 mots : « Mots au plus » réglé sur 3, « Caractères au plus » sur 40."""
+    from ugc_studio.sous_titres import ReglagesSousTitres
+
+    _transcription_video(services, [Mot(texte, debut, fin) for texte, debut, fin in MOTS_PUB])
+    services.projets.projet.sous_titres = ReglagesSousTitres(caracteres_max=40, mots_max=3)
+    atelier.rafraichir()
+    assert _textes(atelier) == ["Mais ce sérum", "Glowzy a vraiment", "changé ma peau", "en deux semaines !"]
+
+
+def test_actions_selon_le_sous_titre_choisi(atelier, services):
+    _pub_en_sous_titres(atelier, services)
+    boutons = (atelier.bouton_monter, atelier.bouton_descendre, atelier.bouton_couper, atelier.bouton_fusionner)
+    assert not any(b.isEnabled() for b in boutons) and not atelier.bouton_retablir.isEnabled()
+    atelier.choisir_sous_titre(0)
+    assert not atelier.bouton_monter.isEnabled() and atelier.bouton_descendre.isEnabled() and atelier.bouton_couper.isEnabled()
+    assert atelier.bouton_descendre.toolTip() == "« sérum » passe au début du sous-titre 2"
+    atelier.choisir_sous_titre(3)
+    assert atelier.bouton_monter.isEnabled() and not atelier.bouton_descendre.isEnabled()
+    assert not atelier.bouton_fusionner.isEnabled()
+    assert atelier.bouton_monter.toolTip() == "« en » passe à la fin du sous-titre 3"
+
+
+def test_action_refusee_avec_la_raison(atelier, services):
+    _pub_en_sous_titres(atelier, services)
+    atelier.choisir_sous_titre(1)
+    atelier.monter_premier_mot()
+    assert atelier.statut_ajustements.isVisible() and atelier.statut_ajustements.property("role") == "erreur"
+    assert atelier.statut_ajustements.text() == (
+        "Impossible : le sous-titre 1 aurait 4 mots, et « Mots au plus » est réglé sur 3."
+    )
+    assert services.projets.projet.transcription.ajustements_sous_titres == []
+    assert _textes(atelier)[:2] == ["Mais ce sérum", "Glowzy a vraiment"]  # rien n'a changé
+
+
+def test_couper_monter_retablir(atelier, services, tmp_path, monkeypatch):
+    _pub_en_sous_titres(atelier, services)
+    atelier.choisir_sous_titre(0)
+    atelier._remplir_menu_couper()  # ce que fait le menu « Couper » en s'ouvrant
+    actions = atelier.menu_couper.actions()
+    assert [a.text() for a in actions] == ["Couper avant « ce »", "Couper avant « sérum »"]
+    actions[0].trigger()
+    assert _textes(atelier)[:3] == ["Mais", "ce sérum", "Glowzy a vraiment"]
+    assert atelier.statut_ajustements.property("role") == "succes"
+    assert atelier.statut_ajustements.text() == "Sous-titre 1 coupé avant « ce »."
+    assert atelier.tableau.item(0, 3).text() == "Ajusté à la main" == atelier.tableau.item(1, 3).text()
+    assert atelier.tableau.item(2, 3).text() == ""
+    assert "2 ajustés à la main" in atelier.resume.text() and atelier.tableau.currentRow() == 0
+    # Le temps des mots ne change pas : chaque sous-titre commence avec son premier mot.
+    assert [s.debut for s in atelier.sous_titres[:2]] == [0.0, 0.35]
+
+    atelier.choisir_sous_titre(1)
+    atelier.monter_premier_mot()
+    assert _textes(atelier)[:2] == ["Mais ce", "sérum"]
+    assert atelier.statut_ajustements.text() == "« ce » passe à la fin du sous-titre 1."
+
+    # Enregistré dans le projet, retrouvé à la réouverture, et repris tel quel dans le SRT.
+    services.projets.ouvrir(services.projets.projet.dossier)
+    assert len(services.projets.projet.transcription.ajustements_sous_titres) == 2
+    assert _textes(atelier)[:2] == ["Mais ce", "sérum"]
+    monkeypatch.setattr(atelier, "_demander_fichier", lambda _proposition: tmp_path / "pub.srt")
+    atelier.exporter_srt()
+    texte = (tmp_path / "pub.srt").read_bytes().decode("utf-8-sig")
+    assert "\r\nMais ce\r\n\r\n2\r\n" in texte and texte.count(" --> ") == len(atelier.sous_titres)
+
+    atelier.choisir_sous_titre(1)
+    atelier.retablir(tous=False)
+    assert atelier.statut_ajustements.text() == "Sous-titre 2 : découpage automatique rétabli."
+    assert len(services.projets.projet.transcription.ajustements_sous_titres) == 1
+    atelier.retablir(tous=True)
+    assert services.projets.projet.transcription.ajustements_sous_titres == []
+    assert _textes(atelier) == ["Mais ce sérum", "Glowzy a vraiment", "changé ma peau", "en deux semaines !"]
+    assert not atelier.bouton_retablir.isEnabled()
+
+
+def test_reglage_qui_defait_un_ajustement_demande_d_abord(atelier, services, monkeypatch):
+    from ugc_studio.ui import sous_titres_du_projet
+
+    _pub_en_sous_titres(atelier, services)
+    atelier.choisir_sous_titre(0)
+    atelier.couper_avant(2)  # « Mais ce » | « sérum »
+    assert _textes(atelier)[:2] == ["Mais ce", "sérum"]
+    questions, reponse = [], {"appliquer": False}
+
+    def demander(_parent, texte, plusieurs):
+        questions.append((texte, plusieurs))
+        return reponse["appliquer"]
+
+    monkeypatch.setattr(sous_titres_du_projet, "demander", demander)
+    atelier.mots_max.setValue(1)  # « Mais ce » (2 mots) ne tiendrait plus
+    assert questions == [("Ce réglage défait ton ajustement du sous-titre 1 (« Mais ce ») : 2 mots, pour 1 au plus.", False)]
+    # « Garder le réglage actuel » : rien ne change.
+    assert atelier.mots_max.value() == 3 and services.projets.projet.sous_titres.mots_max == 3
+    assert len(services.projets.projet.transcription.ajustements_sous_titres) == 2
+    # « Appliquer et défaire cet ajustement ».
+    reponse["appliquer"] = True
+    atelier.mots_max.setValue(1)
+    assert services.projets.projet.sous_titres.mots_max == 1
+    assert len(services.projets.projet.transcription.ajustements_sous_titres) == 1  # « sérum » (1 mot) tient
+    assert [s.texte for s in atelier.sous_titres if s.ajuste] == ["sérum"]
+    # Un réglage sans conflit ne demande rien.
+    questions.clear()
+    atelier.duree_min.setValue(1.0)
+    assert questions == []
+
+
+def test_mots_corriges_dans_transcription_defont_un_ajustement(atelier, services):
+    from ugc_studio.transcription import corriger
+
+    _pub_en_sous_titres(atelier, services)
+    atelier.choisir_sous_titre(0)
+    atelier.couper_avant(2)  # « Mais ce » | « sérum »
+    corriger(services.projets.projet.transcription.mots, 1, "c" * 40)  # corrigé dans le module Transcription
+    atelier.rafraichir()  # retour sur la page Sous-titres
+    assert atelier.statut_ajustements.property("role") == "avertissement"
+    texte = atelier.statut_ajustements.text()
+    assert texte.startswith("Des mots ont changé dans le module Transcription : ton ajustement du sous-titre 1 (« Mais ccc")
+    assert texte.endswith("ne tient plus (45 caractères, pour 40 au plus). Il revient au découpage automatique.")
+    assert len(services.projets.projet.transcription.ajustements_sous_titres) == 1  # « sérum » tient toujours

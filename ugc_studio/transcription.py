@@ -9,6 +9,8 @@ mot est prononcé.
   appliqué après chaque transcription (les mots remplacés gardent leurs temps).
 - Hésitations (« euh », « hum »…) : repérées pour être masquées dans les sous-titres ; l'audio
   et les temps des autres mots ne changent pas.
+- Sous-titres réorganisés à la main (V1.1) : rangés avec les mots qu'ils regroupent, repérés par
+  le temps (voir sous_titres.Ajustement).
 
 Ce module ne dépend pas de l'interface : il est testé seul.
 """
@@ -16,6 +18,7 @@ Ce module ne dépend pas de l'interface : il est testé seul.
 from __future__ import annotations
 
 import bisect
+import math
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -69,6 +72,10 @@ class Transcription:
     # sur le script de la prise (son orthographe exacte), à chaque transcription.
     prise: str = ""  # identifiant de la prise
     script: str = ""  # texte du script (sans balises)
+    # Sous-titres réorganisés à la main (V1.1, §7.8) : pour chacun, [début, fin] en secondes (début
+    # de son premier mot, fin de son dernier mot). Repérés par le temps, ils suivent les mots
+    # corrigés ; une nouvelle transcription les efface.
+    ajustements_sous_titres: list[list[float]] = field(default_factory=list)
 
     @property
     def horodatee(self) -> bool:
@@ -80,7 +87,9 @@ class Transcription:
 
     @classmethod
     def depuis_dict(cls, brut: dict) -> Transcription:
-        champs = {k: v for k, v in brut.items() if k in cls.__dataclass_fields__ and k != "mots"}
+        champs = {
+            k: v for k, v in brut.items() if k in cls.__dataclass_fields__ and k not in ("mots", "ajustements_sous_titres")
+        }
         mots = [
             Mot(str(m.get("texte", "")), float(m.get("debut", 0)), float(m.get("fin", 0)), str(m.get("locuteur", "")))
             for m in brut.get("mots") or []
@@ -88,9 +97,25 @@ class Transcription:
         ]
         transcription = cls(**champs)
         transcription.mots = mots
+        transcription.ajustements_sous_titres = _ajustements_lisibles(brut.get("ajustements_sous_titres"))
         if not isinstance(transcription.infos, dict):
             transcription.infos = {}
         return transcription
+
+
+def _ajustements_lisibles(brut) -> list[list[float]]:
+    """Ajustements relus dans un projet : les paires [début, fin] illisibles sont ignorées (un
+    projet de la v1.0 n'en a aucun)."""
+    ajustements = []
+    for paire in brut if isinstance(brut, list) else []:
+        if not (isinstance(paire, list | tuple) and len(paire) == 2):
+            continue
+        if any(isinstance(v, bool) or not isinstance(v, int | float) for v in paire):
+            continue
+        debut, fin = float(paire[0]), float(paire[1])
+        if math.isfinite(debut) and math.isfinite(fin) and debut <= fin:
+            ajustements.append([debut, fin])
+    return ajustements
 
 
 def resolution_video(infos: dict) -> tuple[int, int] | None:

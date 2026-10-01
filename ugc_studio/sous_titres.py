@@ -1,8 +1,8 @@
 """Studio sous-titres (§7) : des mots horodatés aux sous-titres, puis au fichier SRT (§8.1).
 
 1. Texte affiché (§7.2) : sans les hésitations (si l'option est cochée), ponctuation affichée ou
-   masquée, typographie de la langue (français : espace insécable avant « ! ? : ; »), TOUT EN
-   MAJUSCULES en option. Les temps des mots ne changent pas.
+   masquée, typographie de la langue (français : espace insécable avant « ! ? : ; »), « Tout en
+   majuscules » en option. Les temps des mots ne changent pas.
 2. Découpage (§7.3) : les mots sont regroupés en sous-titres qui respectent les nombres maximum
    de caractères, de mots et de lignes. Parmi tous les découpages possibles, l'app retient celui
    qui donne des sous-titres bien remplis et équilibrés, en coupant de préférence après une
@@ -15,6 +15,11 @@
 4. Temps : un sous-titre va du début de son premier mot à la fin du dernier, dure au moins la
    durée minimale (prolongé sans chevaucher le suivant), et les petits trous entre deux
    sous-titres sont comblés (pas de clignotement).
+5. Réorganisation à la main (V1.1) : monter le premier mot au sous-titre précédent, descendre le
+   dernier au suivant, couper, fusionner. Chaque sous-titre ajusté garde ses mots quand les
+   réglages changent ; le reste est redécoupé autour de lui. Les mêmes règles s'appliquent (une
+   action qui ne les respecte pas est refusée, avec la raison), et le temps des mots ne change
+   jamais.
 
 Ce module ne dépend pas de l'interface : la largeur d'un texte en pixels est mesurée par une
 fonction fournie (Qt dans l'app, une règle simple dans les tests).
@@ -25,7 +30,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from .transcription import PONCTUATION, Mot, mots_affiches
@@ -315,10 +320,16 @@ class SousTitre:
     echelle: float = 1.0  # < 1 : un mot seul trop large, affiché plus petit (signalé en orange)
     dans_la_marge: bool = False  # déborde de la zone de sécurité (jusqu'à la marge maximum)
     trop_large: bool = False  # même à la taille minimum, le mot dépasse la marge maximum
+    ajustement: Ajustement | None = None  # réorganisé à la main (sinon : découpage automatique)
 
     @property
     def texte(self) -> str:
         return "\n".join(self.lignes)
+
+    @property
+    def ajuste(self) -> bool:
+        """« Ajusté à la main » : ses mots ont été choisis à la main (V1.1)."""
+        return self.ajustement is not None
 
     @property
     def signale(self) -> bool:
@@ -448,6 +459,293 @@ def caler_les_temps(sous_titres: list[SousTitre], duree_min: float, duree_totale
         sous_titre.debut, sous_titre.fin = round(sous_titre.debut, 3), round(sous_titre.fin, 3)
 
 
+# --- Réorganisation à la main (V1.1) ----------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Ajustement:
+    """Sous-titre réorganisé à la main. Il est repéré par le temps, pas par la place de ses mots
+    dans la liste : ses mots sont ceux dont le milieu tombe entre `debut` et `fin` (le début de son
+    premier mot et la fin de son dernier, au moment de l'ajustement). Il suit ainsi les mots
+    corrigés dans le module Transcription (fusion, coupe, suppression) et les réglages du texte
+    affiché (hésitations, ponctuation), sans que le temps d'aucun mot ne change."""
+
+    debut: float
+    fin: float
+
+    def contient(self, mot: MotAffiche) -> bool:
+        return self.debut <= _milieu(mot) <= self.fin
+
+
+def _milieu(mot: MotAffiche) -> float:
+    return (mot.debut + mot.fin) / 2
+
+
+# Règles qu'un sous-titre choisi à la main doit respecter (les mêmes que le découpage automatique).
+PERSONNE = "personne"  # changement de personne : coupure toujours faite
+SILENCE = "silence"  # silence de plus de 0,8 s : coupure toujours faite
+PHRASE = "phrase"  # fin de phrase, si « Couper de préférence après la ponctuation » est coché
+MOTS = "mots"  # « Mots au plus »
+CARACTERES = "caracteres"  # « Caractères au plus »
+LIGNES = "lignes"  # tiendrait sur 2 lignes, mais « Lignes au plus » est réglé sur 1
+ECRAN = "ecran"  # trop large pour l'écran, même jusqu'à la marge maximum
+SANS_MOT = "sans-mot"  # plus aucun de ses mots n'est affiché
+CHEVAUCHEMENT = "chevauchement"  # deux mots au même moment : impossible de les séparer
+
+
+def _nombre(valeur: float) -> str:
+    """27 → « 27 » ; 1.25 → « 1,25 »."""
+    if float(valeur).is_integer():
+        return str(int(valeur))
+    return f"{valeur:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+@dataclass(frozen=True)
+class Refus:
+    """Pourquoi des mots ne peuvent pas former un sous-titre (action refusée, ou ajustement défait)."""
+
+    regle: str
+    nombre: float = 0  # ex. 27 caractères, 6 mots, 1,2 s de silence
+    limite: float = 0  # ex. 24 (« Caractères au plus »)
+    mot: str = ""  # ex. « semaines ! » (fin de phrase)
+    suivant: str = ""
+
+    def pour_une_action(self, sujet: str = "ce sous-titre") -> str:
+        """Raison complète, après « Impossible : ». Ex. « le sous-titre 3 ferait 27 caractères, et
+        « Caractères au plus » est réglé sur 24 »."""
+        nombre, limite = _nombre(self.nombre), _nombre(self.limite)
+        textes = {
+            PERSONNE: f"« {self.mot} » et « {self.suivant} » ne sont pas dits par la même personne, et un "
+            "changement de personne termine toujours le sous-titre",
+            SILENCE: f"il y a un silence de {nombre} s entre « {self.mot} » et « {self.suivant} », et un silence "
+            f"de plus de {_nombre(PAUSE_COUPURE_S)} s termine toujours le sous-titre",
+            PHRASE: f"« {self.mot} » termine une phrase, et « Couper de préférence après la ponctuation » est "
+            "coché : une fin de phrase termine alors toujours le sous-titre",
+            MOTS: f"{sujet} aurait {nombre} mots, et « Mots au plus » est réglé sur {limite}",
+            CARACTERES: f"{sujet} ferait {nombre} caractères, et « Caractères au plus » est réglé sur {limite}",
+            LIGNES: f"{sujet} ne tiendrait pas sur une ligne dans l'écran, et « Lignes au plus » est réglé sur 1",
+            ECRAN: f"{sujet} serait trop large pour l'écran, même jusqu'à la marge maximum (réglages « Taille "
+            "du texte » et « Marge maximum »)",
+            SANS_MOT: f"{sujet} n'aurait plus aucun mot",
+            CHEVAUCHEMENT: f"« {self.mot} » et « {self.suivant} » ont le même moment dans la transcription : "
+            "corrige d'abord leur moment (« Corriger les mots »)",
+        }
+        return textes[self.regle]
+
+    def pour_un_reglage(self) -> str:
+        """Raison courte, après le nom du sous-titre. Ex. « 22 caractères, pour 20 au plus »."""
+        nombre, limite = _nombre(self.nombre), _nombre(self.limite)
+        textes = {
+            PERSONNE: f"« {self.mot} » et « {self.suivant} » ne sont pas dits par la même personne",
+            SILENCE: f"silence de {nombre} s entre « {self.mot} » et « {self.suivant} »",
+            PHRASE: f"« {self.mot} » termine une phrase (« Couper de préférence après la ponctuation »)",
+            MOTS: f"{nombre} mots, pour {limite} au plus",
+            CARACTERES: f"{nombre} caractères, pour {limite} au plus",
+            LIGNES: "ne tient plus sur une ligne dans l'écran",
+            ECRAN: "trop large pour l'écran, même jusqu'à la marge maximum",
+            SANS_MOT: "plus aucun de ses mots n'est affiché",
+            CHEVAUCHEMENT: f"« {self.mot} » et « {self.suivant} » ont le même moment",
+        }
+        return textes[self.regle]
+
+
+def message_de_refus(refus: Iterable[Refus], sujet: str = "ce sous-titre") -> str:
+    """« Impossible : ce sous-titre ferait 27 caractères, et « Caractères au plus » est réglé sur 24. »"""
+    return "Impossible : " + " ; ".join(r.pour_une_action(sujet) for r in refus) + "."
+
+
+def _sur_une_ligne(texte: str) -> str:
+    """Texte d'un sous-titre cité dans un message : ses lignes bout à bout."""
+    return " ".join(texte.replace(ESPACE_INSECABLE, " ").split())
+
+
+def _raisons(refus: Iterable[Refus]) -> str:
+    return " ; ".join(r.pour_un_reglage() for r in refus)
+
+
+def texte_reglage_qui_defait(concernes: list[tuple[int, str, tuple[Refus, ...]]]) -> str:
+    """Question posée avant un réglage qui défait des sous-titres réorganisés à la main :
+    (numéro du sous-titre, son texte, raisons). Ex. « Ce réglage défait ton ajustement du
+    sous-titre 4 (« Mais ce Sérum Glowzy a ») : 22 caractères, pour 20 au plus. »"""
+    if len(concernes) == 1:
+        ((numero, texte, refus),) = concernes
+        return f"Ce réglage défait ton ajustement du sous-titre {numero} (« {_sur_une_ligne(texte)} ») : {_raisons(refus)}."
+    lignes = [f"Ce réglage défait tes ajustements de {len(concernes)} sous-titres :"]
+    lignes += [f"• sous-titre {numero} (« {_sur_une_ligne(texte)} ») : {_raisons(refus)}." for numero, texte, refus in concernes]
+    return "\n".join(lignes)
+
+
+def texte_ajustements_defaits(defaits: list[tuple[int, Defait]]) -> str:
+    """Message de la page Sous-titres quand des mots changés dans le module Transcription défont
+    des ajustements : (numéro du sous-titre où se trouvent maintenant ses mots, ajustement défait)."""
+
+    def decrire(numero: int, defait: Defait) -> str:
+        if not defait.texte:
+            return "un sous-titre ajusté n'a plus aucun mot affiché"
+        return f"sous-titre {numero} (« {_sur_une_ligne(defait.texte)} ») : {_raisons(defait.refus)}"
+
+    debut = "Des mots ont changé dans le module Transcription"
+    if len(defaits) == 1:
+        ((numero, defait),) = defaits
+        if not defait.texte:
+            return f"{debut} : un sous-titre ajusté à la main n'a plus aucun mot affiché, son ajustement est retiré."
+        return (
+            f"{debut} : ton ajustement du sous-titre {numero} (« {_sur_une_ligne(defait.texte)} ») ne tient plus "
+            f"({_raisons(defait.refus)}). Il revient au découpage automatique."
+        )
+    lignes = [f"{debut} : ces ajustements ne tiennent plus et reviennent au découpage automatique."]
+    lignes += [f"• {decrire(numero, defait)}." for numero, defait in defaits]
+    return "\n".join(lignes)
+
+
+def verifier_groupe(
+    groupe: list[MotAffiche], reglages: ReglagesSousTitres, ecran: Ecran, mesure: Mesure
+) -> tuple[_Disposition | None, tuple[Refus, ...]]:
+    """Ces mots peuvent-ils former un sous-titre ? Mêmes règles que le découpage automatique : les
+    coupures toujours faites (changement de personne, silence de plus de 0,8 s), la fin de phrase
+    (si « Couper de préférence après la ponctuation » est coché), les maximums de mots et de
+    caractères (un mot seul peut les dépasser), puis la place à l'écran. Renvoie la mise en lignes,
+    ou les raisons du refus."""
+    if not groupe:
+        return None, (Refus(SANS_MOT),)
+    for mot, suivant in zip(groupe, groupe[1:], strict=False):
+        if mot.locuteur and suivant.locuteur and mot.locuteur != suivant.locuteur:
+            return None, (Refus(PERSONNE, mot=mot.texte, suivant=suivant.texte),)
+        silence = suivant.debut - mot.fin
+        if silence > PAUSE_COUPURE_S:
+            # Arrondi au centième, mais toujours affiché « plus de 0,8 s » (jamais « 0,8 s »).
+            duree = max(round(silence, 2), PAUSE_COUPURE_S + 0.01)
+            return None, (Refus(SILENCE, duree, PAUSE_COUPURE_S, mot.texte, suivant.texte),)
+    refus = []
+    if reglages.couper_sur_ponctuation:
+        fin_de_phrase = next((m for m in groupe[:-1] if finit_une_phrase(m.original)), None)
+        if fin_de_phrase is not None:
+            refus.append(Refus(PHRASE, mot=fin_de_phrase.texte))
+    if len(groupe) > 1:
+        if len(groupe) > reglages.mots_max:
+            refus.append(Refus(MOTS, len(groupe), reglages.mots_max))
+        caracteres = len(" ".join(m.texte for m in groupe))
+        if caracteres > reglages.caracteres_max:
+            refus.append(Refus(CARACTERES, caracteres, reglages.caracteres_max))
+    if refus:
+        return None, tuple(refus)
+    disposition = disposer(groupe, reglages.lignes_max, ecran, mesure)
+    if disposition is None:
+        tiendrait_sur_2_lignes = reglages.lignes_max == 1 and disposer(groupe, 2, ecran, mesure) is not None
+        return None, (Refus(LIGNES if tiendrait_sur_2_lignes else ECRAN, limite=reglages.lignes_max),)
+    return disposition, ()
+
+
+@dataclass(frozen=True)
+class Defait:
+    """Ajustement fait à la main qui ne tient plus (réglage changé, mots corrigés) : ses mots
+    reviennent au découpage automatique."""
+
+    ajustement: Ajustement
+    refus: tuple[Refus, ...]
+    texte: str = ""  # ses mots, tels qu'ils s'afficheraient (vide s'il n'en a plus)
+    premier_mot: int = -1  # indice de son premier mot dans les mots affichés (-1 s'il n'en a plus)
+
+
+@dataclass
+class Decoupage:
+    """Résultat du calcul : les mots affichés, les sous-titres, et les ajustements qui ne tiennent plus."""
+
+    mots: list[MotAffiche]
+    sous_titres: list[SousTitre]
+    defaits: list[Defait] = field(default_factory=list)
+
+
+def _groupes_ajustes(
+    mots: list[MotAffiche], ajustements: Iterable[Ajustement]
+) -> tuple[list[tuple[Ajustement, int, int]], list[Ajustement]]:
+    """Mots de chaque ajustement : (ajustement, premier mot, dernier mot exclu), dans l'ordre du
+    temps ; puis les ajustements qui n'ont plus aucun mot. Un mot n'appartient qu'à un ajustement."""
+    groupes, sans_mot = [], []
+    libre = 0
+    for ajustement in sorted(set(ajustements), key=lambda a: (a.debut, a.fin)):
+        dedans = [index for index in range(libre, len(mots)) if ajustement.contient(mots[index])]
+        if not dedans:
+            sans_mot.append(ajustement)
+            continue
+        groupes.append((ajustement, dedans[0], dedans[-1] + 1))
+        libre = dedans[-1] + 1
+    return groupes, sans_mot
+
+
+def decouper_avec_ajustements(
+    mots: list[MotAffiche],
+    ajustements: Iterable[Ajustement],
+    reglages: ReglagesSousTitres,
+    ecran: Ecran,
+    mesure: Mesure,
+) -> tuple[list[SousTitre], list[Defait]]:
+    """Les sous-titres ajustés à la main gardent leurs mots ; les mots entre eux sont découpés
+    automatiquement. Un ajustement qui ne respecte plus les règles est défait (ses mots reviennent
+    au découpage automatique) et renvoyé avec la raison."""
+    groupes, sans_mot = _groupes_ajustes(mots, ajustements)
+    defaits = [Defait(ajustement, (Refus(SANS_MOT),)) for ajustement in sans_mot]
+    gardes: list[tuple[int, int, _Disposition, Ajustement]] = []
+    for ajustement, premier, dernier in groupes:
+        groupe = mots[premier:dernier]
+        disposition, refus = verifier_groupe(groupe, reglages, ecran, mesure)
+        if disposition is None:
+            defaits.append(Defait(ajustement, refus, " ".join(m.texte for m in groupe), premier))
+        else:
+            gardes.append((premier, dernier, disposition, ajustement))
+    sous_titres: list[SousTitre] = []
+    libre = 0  # premier mot pas encore placé
+    for premier, dernier, disposition, ajustement in [*gardes, (len(mots), len(mots), None, None)]:
+        if premier > libre:  # mots libres avant ce sous-titre ajusté : découpage automatique
+            for sous_titre in decouper(mots[libre:premier], reglages, ecran, mesure):
+                sous_titre.premier_mot += libre
+                sous_titre.dernier_mot += libre
+                sous_titres.append(sous_titre)
+        if disposition is not None:
+            sous_titres.append(
+                SousTitre(
+                    mots[premier].debut,
+                    mots[dernier - 1].fin,
+                    list(disposition.lignes),
+                    premier,
+                    dernier,
+                    disposition.echelle,
+                    disposition.dans_la_marge,
+                    disposition.trop_large,
+                    ajustement,
+                )
+            )
+        libre = max(libre, dernier)
+    defaits.sort(key=lambda d: (d.ajustement.debut, d.ajustement.fin))
+    return sous_titres, defaits
+
+
+def calculer_sous_titres(
+    mots: list[Mot],
+    reglages: ReglagesSousTitres,
+    langue: str,
+    ecran_video: Ecran,
+    mesure: Mesure,
+    hesitations: Iterable[str] = (),
+    masquer_hesitations: bool = True,
+    duree_totale: float | None = None,
+    ajustements: Iterable[Ajustement] = (),
+) -> Decoupage:
+    """Des mots de la transcription aux sous-titres : texte affiché, découpage (autour des
+    sous-titres ajustés à la main), temps."""
+    affiches = mots_a_afficher(mots, reglages, langue, hesitations, masquer_hesitations)
+    largeurs: dict[str, float] = {}  # une même ligne est mesurée une seule fois
+
+    def mesure_memorisee(texte: str) -> float:
+        if texte not in largeurs:
+            largeurs[texte] = mesure(texte)
+        return largeurs[texte]
+
+    sous_titres, defaits = decouper_avec_ajustements(affiches, ajustements, reglages, ecran_video, mesure_memorisee)
+    caler_les_temps(sous_titres, reglages.duree_min_s, duree_totale)
+    return Decoupage(affiches, sous_titres, defaits)
+
+
 def creer_sous_titres(
     mots: list[Mot],
     reglages: ReglagesSousTitres,
@@ -458,18 +756,156 @@ def creer_sous_titres(
     masquer_hesitations: bool = True,
     duree_totale: float | None = None,
 ) -> tuple[list[MotAffiche], list[SousTitre]]:
-    """Des mots de la transcription aux sous-titres : texte affiché, découpage, temps."""
-    affiches = mots_a_afficher(mots, reglages, langue, hesitations, masquer_hesitations)
-    largeurs: dict[str, float] = {}  # une même ligne est mesurée une seule fois
+    """Découpage automatique seul (sans ajustement fait à la main) : mots affichés et sous-titres."""
+    decoupage = calculer_sous_titres(
+        mots, reglages, langue, ecran_video, mesure, hesitations, masquer_hesitations, duree_totale
+    )
+    return decoupage.mots, decoupage.sous_titres
 
-    def mesure_memorisee(texte: str) -> float:
-        if texte not in largeurs:
-            largeurs[texte] = mesure(texte)
-        return largeurs[texte]
 
-    sous_titres = decouper(affiches, reglages, ecran_video, mesure_memorisee)
-    caler_les_temps(sous_titres, reglages.duree_min_s, duree_totale)
-    return affiches, sous_titres
+# --- Actions à la main sur les sous-titres (V1.1) -----------------------------------------------
+
+
+@dataclass(frozen=True)
+class Reorganisation:
+    """Résultat d'une action à la main : les ajustements à enregistrer, ou les raisons du refus
+    (rien ne change alors)."""
+
+    ajustements: tuple[Ajustement, ...] = ()
+    refus: tuple[Refus, ...] = ()
+    sujet: str = "ce sous-titre"  # le sous-titre dont parlent les raisons du refus
+    choisi: int = 0  # sous-titre à montrer ensuite
+
+    @property
+    def possible(self) -> bool:
+        return not self.refus
+
+    @property
+    def message(self) -> str:
+        return message_de_refus(self.refus, self.sujet) if self.refus else ""
+
+
+def _bornes(mots: list[MotAffiche], premier: int, dernier: int) -> Ajustement:
+    """Ajustement qui couvre exactement mots[premier] à mots[dernier] (inclus) : du début du premier
+    mot à la fin du dernier. Si un voisin chevauche ce moment (temps de la transcription qui se
+    recouvrent), la borne passe à mi-chemin entre les milieux des deux mots."""
+    debut, fin = mots[premier].debut, mots[dernier].fin
+    if premier > 0 and _milieu(mots[premier - 1]) >= debut:
+        debut = (_milieu(mots[premier - 1]) + _milieu(mots[premier])) / 2
+    if dernier + 1 < len(mots) and _milieu(mots[dernier + 1]) <= fin:
+        fin = (_milieu(mots[dernier]) + _milieu(mots[dernier + 1])) / 2
+    return Ajustement(debut, fin)
+
+
+def _reorganiser(
+    decoupage: Decoupage,
+    remplaces: range,
+    groupes: list[tuple[int, int, str]],
+    reglages: ReglagesSousTitres,
+    ecran: Ecran,
+    mesure: Mesure,
+    choisi: int,
+) -> Reorganisation:
+    """Les sous-titres `remplaces` (indices) deviennent `groupes` : (premier mot, dernier mot
+    exclu, nom du sous-titre pour un éventuel refus). Ces groupes sont ajustés à la main ; les
+    autres ajustements ne changent pas."""
+    mots = decoupage.mots
+    for premier, dernier, sujet in groupes:
+        _disposition, refus = verifier_groupe(mots[premier:dernier], reglages, ecran, mesure)
+        if refus:
+            return Reorganisation(refus=refus, sujet=sujet)
+    gardes = [
+        (s.ajustement, s.premier_mot, s.dernier_mot)
+        for index, s in enumerate(decoupage.sous_titres)
+        if s.ajustement is not None and index not in remplaces
+    ]
+    crees = [(_bornes(mots, premier, dernier - 1), premier, dernier) for premier, dernier, _sujet in groupes]
+    attendus = sorted(gardes + crees, key=lambda groupe: groupe[1])
+    ajustements = tuple(ajustement for ajustement, _premier, _dernier in attendus)
+    obtenus, _sans_mot = _groupes_ajustes(mots, ajustements)
+    if set(obtenus) != set(attendus):
+        # Deux mots au même moment (temps de la transcription) : le temps ne peut pas les séparer.
+        for _ajustement, premier, dernier in crees:
+            for index in (premier, dernier):
+                if 0 < index < len(mots) and _milieu(mots[index - 1]) >= _milieu(mots[index]):
+                    return Reorganisation(refus=(Refus(CHEVAUCHEMENT, mot=mots[index - 1].texte, suivant=mots[index].texte),))
+        premier = crees[0][1]
+        return Reorganisation(refus=(Refus(CHEVAUCHEMENT, mot=mots[max(premier - 1, 0)].texte, suivant=mots[premier].texte),))
+    return Reorganisation(ajustements=ajustements, choisi=choisi)
+
+
+def _sous_titre(decoupage: Decoupage, index: int) -> SousTitre:
+    if not 0 <= index < len(decoupage.sous_titres):
+        raise ValueError(f"Pas de sous-titre n° {index + 1}.")
+    return decoupage.sous_titres[index]
+
+
+def monter_premier_mot(
+    decoupage: Decoupage, index: int, reglages: ReglagesSousTitres, ecran: Ecran, mesure: Mesure
+) -> Reorganisation:
+    """Le premier mot du sous-titre `index` passe à la fin du sous-titre précédent."""
+    actuel = _sous_titre(decoupage, index)
+    if index == 0:
+        raise ValueError("Le premier sous-titre n'a pas de sous-titre avant lui.")
+    precedent = decoupage.sous_titres[index - 1]
+    groupes = [(precedent.premier_mot, actuel.premier_mot + 1, f"le sous-titre {index}")]
+    if actuel.dernier_mot - actuel.premier_mot > 1:
+        groupes.append((actuel.premier_mot + 1, actuel.dernier_mot, f"le sous-titre {index + 1}"))
+    choisi = index if len(groupes) == 2 else index - 1
+    return _reorganiser(decoupage, range(index - 1, index + 1), groupes, reglages, ecran, mesure, choisi)
+
+
+def descendre_dernier_mot(
+    decoupage: Decoupage, index: int, reglages: ReglagesSousTitres, ecran: Ecran, mesure: Mesure
+) -> Reorganisation:
+    """Le dernier mot du sous-titre `index` passe au début du sous-titre suivant."""
+    actuel = _sous_titre(decoupage, index)
+    if index + 1 >= len(decoupage.sous_titres):
+        raise ValueError("Le dernier sous-titre n'a pas de sous-titre après lui.")
+    suivant = decoupage.sous_titres[index + 1]
+    groupes = []
+    if actuel.dernier_mot - actuel.premier_mot > 1:
+        groupes.append((actuel.premier_mot, actuel.dernier_mot - 1, f"le sous-titre {index + 1}"))
+    groupes.append((actuel.dernier_mot - 1, suivant.dernier_mot, f"le sous-titre {index + 2}"))
+    return _reorganiser(decoupage, range(index, index + 2), groupes, reglages, ecran, mesure, index)
+
+
+def couper_avant(
+    decoupage: Decoupage, index: int, mot: int, reglages: ReglagesSousTitres, ecran: Ecran, mesure: Mesure
+) -> Reorganisation:
+    """Le sous-titre `index` est coupé en deux : `mot` (indice dans les mots affichés) commence le
+    nouveau sous-titre."""
+    actuel = _sous_titre(decoupage, index)
+    if not actuel.premier_mot < mot < actuel.dernier_mot:
+        raise ValueError("Ce mot ne peut pas commencer un nouveau sous-titre.")
+    groupes = [
+        (actuel.premier_mot, mot, f"le sous-titre {index + 1}"),
+        (mot, actuel.dernier_mot, f"le sous-titre {index + 2}"),
+    ]
+    return _reorganiser(decoupage, range(index, index + 1), groupes, reglages, ecran, mesure, index)
+
+
+def fusionner_avec_le_suivant(
+    decoupage: Decoupage, index: int, reglages: ReglagesSousTitres, ecran: Ecran, mesure: Mesure
+) -> Reorganisation:
+    """Le sous-titre `index` et le suivant n'en font plus qu'un."""
+    actuel = _sous_titre(decoupage, index)
+    if index + 1 >= len(decoupage.sous_titres):
+        raise ValueError("Le dernier sous-titre n'a pas de sous-titre après lui.")
+    suivant = decoupage.sous_titres[index + 1]
+    groupes = [(actuel.premier_mot, suivant.dernier_mot, "le sous-titre fusionné")]
+    return _reorganiser(decoupage, range(index, index + 2), groupes, reglages, ecran, mesure, index)
+
+
+def retablir_automatique(decoupage: Decoupage, index: int | None = None) -> Reorganisation:
+    """Le sous-titre `index` (ou tous, si None) revient au découpage automatique."""
+    if index is None:
+        return Reorganisation()
+    _sous_titre(decoupage, index)
+    gardes = tuple(
+        s.ajustement for numero, s in enumerate(decoupage.sous_titres) if s.ajustement is not None and numero != index
+    )
+    return Reorganisation(ajustements=gardes, choisi=index)
 
 
 # --- Export SRT (§8.1) --------------------------------------------------------------------------

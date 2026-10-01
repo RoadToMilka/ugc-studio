@@ -8,6 +8,10 @@
    taille du texte) : les sous-titres sont recalculés à chaque changement.
 3. Sous-titres : la liste, écoutable (le sous-titre en cours s'affiche en grand) ; ceux où un mot
    a dû être rapetissé sont signalés en orange. Export SRT pour Premiere Pro.
+4. Réorganiser à la main (V1.1) : sur le sous-titre choisi, monter son premier mot, descendre son
+   dernier mot, le couper, le fusionner avec le suivant, ou revenir au découpage automatique. Les
+   réglages du découpage s'appliquent toujours (une action qui ne les respecte pas est refusée,
+   avec la raison) ; un réglage qui défait un ajustement demande d'abord (sous_titres_du_projet.py).
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
+    QMenu,
     QMessageBox,
     QTableWidgetItem,
     QVBoxLayout,
@@ -40,24 +45,29 @@ from ....sous_titres import (
     PLATEFORMES,
     MotAffiche,
     ReglagesSousTitres,
+    Reorganisation,
     SousTitre,
-    creer_sous_titres,
-    ecran,
     ecrire_srt,
+    retablir_automatique,
+    texte_ajustements_defaits,
 )
+# Les actions à la main, calculées sans interface (même nom que les méthodes de la page qui les appellent).
+from ....sous_titres import couper_avant as calcul_couper
+from ....sous_titres import descendre_dernier_mot as calcul_descendre
+from ....sous_titres import fusionner_avec_le_suivant as calcul_fusionner
+from ....sous_titres import monter_premier_mot as calcul_monter
 from ....stt import (
     MODELE_PAR_DEFAUT,
     Options,
     estimer_cout,
-    hesitations,
-    langue_de,
     terminer_transcription,
     transcription_de_prise,
     transcrire_source,
 )
-from ....transcription import Transcription, resolution_video
+from ....transcription import Transcription
 from ... import taches
 from ...composants.choix_voix import choisir
+from ...composants.flux import DispositionFlux
 from ...composants.elements import (
     bloc,
     bouton,
@@ -75,7 +85,13 @@ from ...composants.montant_label import MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ...icones import icone
-from ...mesure_texte import mesure_sous_titres
+from ...sous_titres_du_projet import (
+    Calcul,
+    ajustements,
+    calculer as calculer_du_projet,
+    confirmer_reglage,
+    ranger_ajustements,
+)
 from ...theme import Couleurs, Dimensions, Espacements, qcolor
 from ..base import Page
 from ..transcription.atelier import description_source
@@ -103,11 +119,14 @@ def temps_lisible(secondes: float) -> str:
 
 
 def remarque(sous_titre: SousTitre) -> str:
+    remarques = []
     if sous_titre.trop_large:
-        return "Trop large, même réduit : raccourcis ce mot"
-    if sous_titre.echelle < 1:
-        return f"Mot rapetissé à {round(sous_titre.echelle * 100)} %"
-    return ""
+        remarques.append("Trop large, même réduit : raccourcis ce mot")
+    elif sous_titre.echelle < 1:
+        remarques.append(f"Mot rapetissé à {round(sous_titre.echelle * 100)} %")
+    if sous_titre.ajuste:
+        remarques.append("Ajusté à la main")
+    return "  ·  ".join(remarques)
 
 
 class AtelierSousTitres(Page):
@@ -120,6 +139,7 @@ class AtelierSousTitres(Page):
         self._occupe = False
         self.mots: list[MotAffiche] = []
         self.sous_titres: list[SousTitre] = []
+        self._calcul: Calcul | None = None
         self._debuts: list[float] = []
         self.lecteur = Lecteur(self)
 
@@ -185,8 +205,10 @@ class AtelierSousTitres(Page):
         self.apercu = libelle("", "apercu-sous-titre")
         self.apercu.setAlignment(Qt.AlignmentFlag.AlignCenter)
         d.addWidget(self.apercu)
+        self._zone_reorganiser(d)
         self.tableau = self._tableau()
         d.addWidget(self.tableau)
+        self._actualiser_reorganisation()  # aucun sous-titre choisi : actions désactivées
         export = QHBoxLayout()
         export.setSpacing(Espacements.M)
         self.bouton_exporter = bouton("Exporter en SRT…", variante="principal", nom_icone="download", action=self.exporter_srt)
@@ -281,6 +303,46 @@ class AtelierSousTitres(Page):
         colonne.addStretch(1)
         return colonne
 
+    def _zone_reorganiser(self, d: QVBoxLayout) -> None:
+        """« Réorganiser à la main » : les actions sur le sous-titre choisi dans la liste."""
+        self.titre_reorganiser = libelle("Réorganiser à la main", "intitule")
+        d.addWidget(self.titre_reorganiser)
+        d.addWidget(
+            info(
+                "Choisis un sous-titre dans la liste. Le moment des mots ne change jamais, et les réglages du "
+                "découpage s'appliquent toujours.",
+                "legende",
+            )
+        )
+        actions = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la fenêtre est étroite
+        self.bouton_monter = bouton(
+            "Monter le premier mot", variante="contour", nom_icone="arrow-up", action=self.monter_premier_mot
+        )
+        self.bouton_descendre = bouton(
+            "Descendre le dernier mot", variante="contour", nom_icone="arrow-down", action=self.descendre_dernier_mot
+        )
+        self.bouton_couper = bouton("Couper", variante="contour", nom_icone="scissors")
+        self.menu_couper = QMenu(self.bouton_couper)
+        self.menu_couper.aboutToShow.connect(self._remplir_menu_couper)  # les mots du sous-titre choisi
+        self.bouton_couper.setMenu(self.menu_couper)
+        self.bouton_fusionner = bouton(
+            "Fusionner avec le suivant", variante="contour", nom_icone="list-plus", action=self.fusionner_avec_le_suivant
+        )
+        self.bouton_retablir = bouton("Rétablir", variante="contour", nom_icone="rotate-ccw")
+        self.bouton_retablir.setToolTip("Revenir au découpage automatique")
+        menu = QMenu(self.bouton_retablir)
+        self.action_retablir = menu.addAction("Rétablir le découpage automatique de ce sous-titre")
+        self.action_retablir.triggered.connect(lambda: self.retablir(tous=False))
+        self.action_retablir_tous = menu.addAction("Rétablir le découpage automatique de tous les sous-titres")
+        self.action_retablir_tous.triggered.connect(lambda: self.retablir(tous=True))
+        self.bouton_retablir.setMenu(menu)
+        for element in (self.bouton_monter, self.bouton_descendre, self.bouton_couper, self.bouton_fusionner, self.bouton_retablir):
+            actions.addWidget(element)
+        d.addLayout(actions)
+        self.statut_ajustements = libelle("", "secondaire")
+        self.statut_ajustements.hide()
+        d.addWidget(self.statut_ajustements)
+
     def _tableau(self) -> Tableau:
         tableau = Tableau(COLONNES)
         tableau.setMinimumHeight(Dimensions.TABLEAU_HAUTEUR_MIN)
@@ -302,6 +364,7 @@ class AtelierSousTitres(Page):
         self.titre.setText(f"{TITRE} / {projet.nom}")
         self._afficher("", "secondaire")
         self.statut_export.clear()
+        self._statut_reorganisation("")
         self.rafraichir()
 
     def showEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
@@ -408,7 +471,12 @@ class AtelierSousTitres(Page):
     def _reglage_change(self) -> None:
         if self._projet is None:
             return
-        self._projet.sous_titres = self.reglages()
+        reglages = self.reglages()
+        # Un réglage qui défait un sous-titre réorganisé à la main demande d'abord (V1.1).
+        if not confirmer_reglage(self.window(), self._services, self._projet, reglages=reglages):
+            self._charger_reglages()  # « Garder le réglage actuel » : les champs reprennent leur valeur
+            return
+        self._projet.sous_titres = reglages
         self._services.projets.enregistrer()
         self.calculer()
 
@@ -416,28 +484,23 @@ class AtelierSousTitres(Page):
         transcription = self.transcription
         if transcription is None:
             return
+        if not confirmer_reglage(self.window(), self._services, self._projet, masquer=masquer):
+            self._charger_reglages()
+            return
         transcription.masquer_hesitations = masquer
         self._services.projets.enregistrer()
         self.calculer()
 
     def calculer(self) -> None:
-        """(Re)calcule les sous-titres d'après les mots et les réglages, puis les affiche."""
-        transcription, reglages = self.transcription, self._projet.sous_titres
-        resolution_source = resolution_video(transcription.infos) if transcription else None
-        ecran_video = ecran(reglages, resolution_source)
-        mots = transcription.mots if transcription is not None and transcription.horodatee else []
-        langue = langue_de(transcription, self._projet)
-        self.mots, self.sous_titres = creer_sous_titres(
-            mots,
-            reglages,
-            langue,
-            ecran_video,
-            mesure_sous_titres(ecran_video),
-            hesitations(self._services, transcription),
-            transcription.masquer_hesitations if transcription else True,
-            transcription.duree_s if transcription and transcription.duree_s else None,
-        )
+        """(Re)calcule les sous-titres d'après les mots, les réglages et les sous-titres réorganisés
+        à la main, puis les affiche."""
+        calcul = calculer_du_projet(self._services, self._projet)
+        self._calcul = calcul
+        self.mots, self.sous_titres = calcul.decoupage.mots, calcul.decoupage.sous_titres
         self._debuts = [s.debut for s in self.sous_titres]
+        if calcul.decoupage.defaits:
+            self._retirer_les_ajustements_defaits(calcul)
+        ecran_video, langue = calcul.ecran, calcul.langue
         typographie = " ; typographie française : espace insécable avant « ! ? : ; »" if langue.startswith("fr") else ""
         self.infos_ecran.setText(
             f"Vidéo {ecran_video.largeur} × {ecran_video.hauteur}, texte de {round(ecran_video.taille_texte)} px (police Inter) : "
@@ -447,15 +510,36 @@ class AtelierSousTitres(Page):
         self._remplir_tableau()
         self.cadre_sous_titres.setVisible(bool(self.sous_titres))
         signales = sum(1 for s in self.sous_titres if s.signale)
+        ajustes = sum(1 for s in self.sous_titres if s.ajuste)
         morceaux = [f"{len(self.sous_titres)} sous-titres", f"{len(self.mots)} mots"]
         if self.sous_titres:
             morceaux.append(minutes_secondes(self.sous_titres[-1].fin))
+        if ajustes:
+            morceaux.append(f"{ajustes} ajusté{'s' if ajustes > 1 else ''} à la main")
         if signales:
             morceaux.append(f"{signales} signalé{'s' if signales > 1 else ''} en orange (mot rapetissé pour tenir dans l'écran)")
         self.resume.setText("  ·  ".join(morceaux))
         self.bouton_exporter.setEnabled(bool(self.sous_titres))
         self._montrer(self.tableau.currentRow() if self.tableau.currentRow() >= 0 else 0)
+        self._actualiser_reorganisation()
         self._etat_lecture()
+
+    def _retirer_les_ajustements_defaits(self, calcul: Calcul) -> None:
+        """Des mots changés dans le module Transcription (texte, temps, fusion, coupe, suppression,
+        hésitations) défont des sous-titres réorganisés à la main : ils sont retirés du projet (leurs
+        mots sont déjà redécoupés automatiquement), et la page dit lesquels."""
+        transcription = self.transcription
+        defaits = calcul.decoupage.defaits
+        retires = {defait.ajustement for defait in defaits}
+        ranger_ajustements(transcription, [a for a in ajustements(transcription) if a not in retires])
+        self._services.projets.enregistrer()
+        numeros = []
+        for defait in defaits:
+            numero = next(
+                (rang for rang, s in enumerate(self.sous_titres, 1) if s.premier_mot <= defait.premier_mot < s.dernier_mot), 0
+            )
+            numeros.append((numero, defait))
+        self._statut_reorganisation(texte_ajustements_defaits(numeros), "avertissement")
 
     def _remplir_tableau(self) -> None:
         self.tableau.setRowCount(len(self.sous_titres))
@@ -502,6 +586,7 @@ class AtelierSousTitres(Page):
             return
         self.tableau.selectRow(index)
         self._montrer(index)
+        self._actualiser_reorganisation()
         chemin = self._chemin_audio()
         if chemin is not None and self.lecteur.chemin == str(chemin):
             self.lecteur.aller_a(round(self.sous_titres[index].debut * 1000))
@@ -545,10 +630,138 @@ class AtelierSousTitres(Page):
         if index >= 0 and index != self.tableau.currentRow():
             self.tableau.selectRow(index)
             self.tableau.scrollToItem(self.tableau.item(index, 0))
+            self._actualiser_reorganisation()
 
     def quitter(self) -> None:
         """La page n'est plus affichée : la lecture s'arrête (et libère le fichier audio)."""
         self.lecteur.arreter()
+
+    # --- Réorganiser à la main (V1.1) ---------------------------------------------------------
+
+    def _statut_reorganisation(self, message: str, role: str = "secondaire") -> None:
+        self._afficher(message, role, self.statut_ajustements)
+        self.statut_ajustements.setVisible(bool(message))
+
+    def _choisi(self) -> int:
+        """Indice du sous-titre choisi dans la liste (-1 : aucun)."""
+        index = self.tableau.currentRow()
+        if 0 <= index < len(self.sous_titres) and self.tableau.selectionModel().isRowSelected(index):
+            return index
+        return -1
+
+    def _actualiser_reorganisation(self) -> None:
+        """Actions possibles sur le sous-titre choisi, avec ses vrais mots dans les infobulles."""
+        index, nombre = self._choisi(), len(self.sous_titres)
+        choisi = self.sous_titres[index] if index >= 0 else None
+        self.bouton_monter.setEnabled(choisi is not None and index > 0)
+        self.bouton_descendre.setEnabled(choisi is not None and index + 1 < nombre)
+        self.bouton_couper.setEnabled(choisi is not None and choisi.dernier_mot - choisi.premier_mot > 1)
+        self.bouton_fusionner.setEnabled(choisi is not None and index + 1 < nombre)
+        ajustes = any(s.ajuste for s in self.sous_titres)
+        self.bouton_retablir.setEnabled(ajustes)
+        self.action_retablir.setEnabled(choisi is not None and choisi.ajuste)
+        self.action_retablir_tous.setEnabled(ajustes)
+        if choisi is None:
+            aide = "Choisis d'abord un sous-titre dans la liste."
+            for element in (self.bouton_monter, self.bouton_descendre, self.bouton_couper, self.bouton_fusionner):
+                element.setToolTip(aide)
+            return
+        premier, dernier = self.mots[choisi.premier_mot].texte, self.mots[choisi.dernier_mot - 1].texte
+        self.bouton_monter.setToolTip(f"« {premier} » passe à la fin du sous-titre {index}" if index > 0 else "")
+        self.bouton_descendre.setToolTip(
+            f"« {dernier} » passe au début du sous-titre {index + 2}" if index + 1 < nombre else ""
+        )
+        self.bouton_couper.setToolTip("Couper ce sous-titre en deux : choisis le mot qui commence le nouveau sous-titre")
+        self.bouton_fusionner.setToolTip(f"Réunir les sous-titres {index + 1} et {index + 2}" if index + 1 < nombre else "")
+
+    def _remplir_menu_couper(self) -> None:
+        """Menu « Couper » : un choix par mot qui peut commencer le nouveau sous-titre."""
+        self.menu_couper.clear()
+        index = self._choisi()
+        if index < 0:
+            return
+        choisi = self.sous_titres[index]
+        for mot in range(choisi.premier_mot + 1, choisi.dernier_mot):
+            texte = self.mots[mot].texte.replace("&", "&&")  # « & » seul soulignerait la lettre suivante
+            action = self.menu_couper.addAction(f"Couper avant « {texte} »")
+            action.triggered.connect(lambda _coche=False, m=mot: self.couper_avant(m))
+
+    def _reorganiser(self, faire, message: str) -> None:
+        """Applique une action à la main au sous-titre choisi ; si elle ne respecte pas les règles,
+        rien ne change et la raison s'affiche."""
+        index, transcription = self._choisi(), self.transcription
+        if index < 0 or transcription is None or self._calcul is None:
+            return
+        resultat: Reorganisation = faire(index, self._calcul)
+        if not resultat.possible:
+            self._statut_reorganisation(resultat.message, "erreur")
+            return
+        ranger_ajustements(transcription, resultat.ajustements)
+        self._services.projets.enregistrer()
+        self.calculer()
+        self.choisir_sous_titre(min(resultat.choisi, len(self.sous_titres) - 1))
+        self._statut_reorganisation(message, "succes")
+
+    def monter_premier_mot(self) -> None:
+        index = self._choisi()
+        if index <= 0:
+            return
+        mot = self.mots[self.sous_titres[index].premier_mot].texte
+        self._reorganiser(
+            lambda i, c: calcul_monter(c.decoupage, i, c.reglages, c.ecran, c.mesure),
+            f"« {mot} » passe à la fin du sous-titre {index}.",
+        )
+
+    def descendre_dernier_mot(self) -> None:
+        index = self._choisi()
+        if index < 0 or index + 1 >= len(self.sous_titres):
+            return
+        choisi = self.sous_titres[index]
+        mot = self.mots[choisi.dernier_mot - 1].texte
+        numero = index + 2 if choisi.dernier_mot - choisi.premier_mot > 1 else index + 1  # numéro après l'action
+        self._reorganiser(
+            lambda i, c: calcul_descendre(c.decoupage, i, c.reglages, c.ecran, c.mesure),
+            f"« {mot} » passe au début du sous-titre {numero}.",
+        )
+
+    def couper_avant(self, mot: int) -> None:
+        """Coupe le sous-titre choisi : `mot` (indice dans les mots affichés) commence le nouveau sous-titre."""
+        index = self._choisi()
+        if index < 0 or not self.sous_titres[index].premier_mot < mot < self.sous_titres[index].dernier_mot:
+            return
+        self._reorganiser(
+            lambda i, c: calcul_couper(c.decoupage, i, mot, c.reglages, c.ecran, c.mesure),
+            f"Sous-titre {index + 1} coupé avant « {self.mots[mot].texte} ».",
+        )
+
+    def fusionner_avec_le_suivant(self) -> None:
+        index = self._choisi()
+        if index < 0 or index + 1 >= len(self.sous_titres):
+            return
+        self._reorganiser(
+            lambda i, c: calcul_fusionner(c.decoupage, i, c.reglages, c.ecran, c.mesure),
+            f"Sous-titres {index + 1} et {index + 2} réunis.",
+        )
+
+    def retablir(self, tous: bool = False) -> None:
+        """« Rétablir » : ce sous-titre (ou tous) revient au découpage automatique."""
+        index, transcription = self._choisi(), self.transcription
+        if transcription is None or self._calcul is None:
+            return
+        if tous:
+            resultat = retablir_automatique(self._calcul.decoupage)
+            message = "Découpage automatique rétabli pour tous les sous-titres."
+        else:
+            if index < 0 or not self.sous_titres[index].ajuste:
+                return
+            resultat = retablir_automatique(self._calcul.decoupage, index)
+            message = f"Sous-titre {index + 1} : découpage automatique rétabli."
+        ranger_ajustements(transcription, resultat.ajustements)
+        self._services.projets.enregistrer()
+        self.calculer()
+        if index >= 0:
+            self.choisir_sous_titre(min(index, len(self.sous_titres) - 1))
+        self._statut_reorganisation(message, "succes")
 
     # --- Créer les sous-titres d'une prise (§3.3) ---------------------------------------------
 
@@ -624,9 +837,14 @@ class AtelierSousTitres(Page):
         boite.setIcon(QMessageBox.Icon.Question)
         boite.setWindowTitle("Créer les sous-titres")
         boite.setText("Remplacer les mots actuels ?")
+        ajustes = (
+            " Les sous-titres réorganisés à la main reviendront au découpage automatique."
+            if actuelle.ajustements_sous_titres
+            else ""
+        )
         boite.setInformativeText(
             f"Les sous-titres viennent aujourd'hui de « {Path(actuelle.source).name or actuelle.source} ». "
-            "Ses mots et ses corrections seront remplacés par ceux de la prise."
+            f"Ses mots et ses corrections seront remplacés par ceux de la prise.{ajustes}"
         )
         remplacer = boite.addButton("Remplacer", QMessageBox.ButtonRole.AcceptRole)
         boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)

@@ -41,7 +41,7 @@ from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
-from .ui.theme import Dimensions, Typo
+from .ui.theme import Dimensions, Espacements, Typo
 
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
 DELAI_MAX_MS = 120_000  # sécurité : l'autotest ne peut pas bloquer la fabrication
@@ -63,6 +63,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "captures",
     "sans_debordement",
     "sous_titres",
+    "reorganisation",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -394,6 +395,34 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 for numero, position in enumerate(range(barre.pageStep(), barre.maximum() + barre.pageStep(), barre.pageStep()), 2):
                     barre.setValue(min(position, barre.maximum()))
                     capturer(fenetre, f"sous-titres-{numero}")
+                barre.setValue(0)
+
+            # V1.1, lot 6 : réorganiser à la main. Le premier mot du 4e sous-titre (« a ») monte au 3e
+            # (« Mais ce Sérum Glowzy a ») ; puis descendre « ma » au 5e est refusé (26 caractères,
+            # pour 24 au plus), avec la raison affichée.
+            sous_titres.choisir_sous_titre(3)
+            sous_titres.monter_premier_mot()
+            ajustes = [s.texte for s in sous_titres.sous_titres if s.ajuste]
+            sous_titres.choisir_sous_titre(3)
+            sous_titres.descendre_dernier_mot()
+            rapport["sous_titres_reorganises"] = {
+                "sous_titres": [s.texte for s in sous_titres.sous_titres],
+                "ajustes": ajustes,
+                "message": sous_titres.statut_ajustements.text(),
+            }
+            verifs["reorganisation"] = len(ajustes) == 2 and sous_titres.statut_ajustements.text().startswith(
+                "Impossible : "
+            )
+            if defilement is not None:
+                barre = defilement.verticalScrollBar()
+                haut = sous_titres.titre_reorganiser.mapTo(defilement.widget(), QPoint(0, 0)).y()
+                barre.setValue(min(max(0, haut - Espacements.L), barre.maximum()))
+                capturer(fenetre, "sous-titres-reorganises")
+                # Menu « Couper » : un choix par mot qui peut commencer le nouveau sous-titre.
+                bouton_couper, menu_couper = sous_titres.bouton_couper, sous_titres.menu_couper
+                menu_couper.popup(bouton_couper.mapToGlobal(QPoint(0, bouton_couper.height())))
+                capturer(menu_couper, "menu-couper")
+                menu_couper.hide()
                 barre.setValue(0)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.

@@ -175,6 +175,7 @@ def terminer_transcription(
     transcription.separation_voix = options.separation_voix
     transcription.texte = resultat.texte
     transcription.mots = resultat.mots
+    transcription.ajustements_sous_titres = []  # nouveaux mots : les sous-titres ajustés à la main repartent de zéro
     transcription.date = datetime.now().astimezone().isoformat(timespec="seconds")
     transcription.cout_eur = None if appel.cout_eur is None else format(appel.cout_eur, "f")
     if projet is not None:

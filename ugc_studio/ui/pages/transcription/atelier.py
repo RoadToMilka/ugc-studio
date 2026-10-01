@@ -79,6 +79,7 @@ from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ...dialogues.remplacements import DialogueRemplacements
 from ...extraction import EXTENSIONS_ACCEPTEES, FILTRE_FICHIERS, ExtracteurAudio, LecteurInfos
 from ...icones import icone
+from ...sous_titres_du_projet import confirmer_reglage
 from ...theme import Couleurs, Dimensions, Espacements
 from ..base import Page
 
@@ -504,7 +505,13 @@ class AtelierTranscription(Page):
         boite.setIcon(QMessageBox.Icon.Question)
         boite.setWindowTitle("Nouvelle source")
         boite.setText("Remplacer la transcription actuelle ?")
-        boite.setInformativeText("La nouvelle source devra être transcrite à son tour.")
+        transcription = self.transcription
+        ajustes = (
+            " Les sous-titres réorganisés à la main reviendront au découpage automatique."
+            if transcription is not None and transcription.ajustements_sous_titres
+            else ""
+        )
+        boite.setInformativeText(f"La nouvelle source devra être transcrite à son tour.{ajustes}")
         remplacer = boite.addButton("Remplacer", QMessageBox.ButtonRole.AcceptRole)
         boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
         boite.exec()
@@ -621,10 +628,18 @@ class AtelierTranscription(Page):
 
     def _masquer_change(self, masquer: bool) -> None:
         transcription = self.transcription
-        if transcription is not None:
-            transcription.masquer_hesitations = masquer
-            self._services.projets.enregistrer()
-            self.rafraichir()
+        if transcription is None:
+            return
+        # Même réglage que dans la page Sous-titres : s'il défait un sous-titre réorganisé à la
+        # main, la même question est posée (V1.1).
+        if not confirmer_reglage(self.window(), self._services, self._projet, masquer=masquer):
+            self.masquer.blockSignals(True)  # « Garder le réglage actuel »
+            self.masquer.setChecked(not masquer)
+            self.masquer.blockSignals(False)
+            return
+        transcription.masquer_hesitations = masquer
+        self._services.projets.enregistrer()
+        self.rafraichir()
 
     def ouvrir_remplacements(self) -> None:
         dialogue = DialogueRemplacements(self._services, self.window())
