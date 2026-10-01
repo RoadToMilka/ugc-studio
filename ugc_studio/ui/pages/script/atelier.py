@@ -106,7 +106,7 @@ class AtelierScript(Page):
         d.addWidget(self.formulaire)
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
-        self.bouton_accroches = bouton("Proposer des accroches", nom_icone="message-square-quote", action=self.proposer_accroches)
+        self.bouton_accroches = bouton("Proposer des accroches", nom_icone="message-square-quote", action=self.demander_accroches)
         self.bouton_accroches.setToolTip("Le modèle propose des accroches : coche ensuite celles à développer")
         actions.addWidget(self.bouton_accroches)
         self.bouton_ecrire = bouton("Écrire le script", variante="principal", nom_icone="pen-line", action=self.ecrire)
@@ -434,7 +434,8 @@ class AtelierScript(Page):
 
     # --- Accroches ------------------------------------------------------------------------------
 
-    def proposer_accroches(self) -> None:
+    def demander_accroches(self) -> None:
+        """« Proposer des accroches » : le modèle en propose, tu coches celles à développer."""
         if self._projet is None or self._occupe:
             return
         adaptateur = self._adaptateur()

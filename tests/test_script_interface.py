@@ -169,6 +169,7 @@ def test_accroches_puis_deux_scripts_puis_envoi_dans_voix(app_configuree, qtbot,
     lignes[0].case.setChecked(True)
     lignes[1].case.setChecked(True)
     assert atelier.bouton_ecrire.text() == "Écrire les 2 scripts"
+    atelier.formulaire.balises.setChecked(True)  # sinon la balise <laugh> du faux Google serait retirée
 
     FauxGoogle.reponses = [_script(ACCROCHES["accroches"][0]["texte"]), RELECTURE, _script(ACCROCHES["accroches"][1]["texte"]), RELECTURE]
     atelier.bouton_ecrire.click()

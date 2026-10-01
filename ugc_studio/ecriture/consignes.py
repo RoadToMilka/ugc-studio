@@ -47,12 +47,11 @@ CONSIGNE_SYSTEME = (
 )
 
 NOTES_RESEAUX = {
-    "tiktok": "TikTok: native and fast-paced, like a creator's own video, homemade rather than polished; hook "
-    "within the first 2 seconds; the product or its benefit within the first 3 seconds.",
-    "snapchat": "Snapchat: very short; the offer within the first 2 seconds.",
-    "meta": "Facebook and Instagram (Reels): the first seconds decide everything; never assume a personal "
-    "attribute of the viewer.",
-    "autre": "Social video ad: hook immediately, product or benefit within the first 3 seconds.",
+    "tiktok": "native and fast-paced, like a creator's own video, homemade rather than polished; hook within the "
+    "first 2 seconds; the product or its benefit within the first 3 seconds",
+    "snapchat": "very short; the offer within the first 2 seconds",
+    "meta": "Reels and feed; the first seconds decide everything; never assume a personal attribute of the viewer",
+    "autre": "social video ad; hook immediately, product or benefit within the first 3 seconds",
 }
 
 # Façon de s'adresser à la personne qui regarde, selon la langue (l'anglais n'a qu'une forme).
@@ -199,7 +198,8 @@ def bloc_brief(brief: Brief, mots_par_seconde: float | None = None) -> str:
     if brief.langue in USAGES_REGIONAUX:
         lignes.append(USAGES_REGIONAUX[brief.langue])
     lignes.append(f"Currency: {devise} ({SYMBOLES_DEVISE.get(devise, devise)}).")
-    lignes.append(f"Network: {RESEAUX.get(brief.reseau, brief.reseau)}. {NOTES_RESEAUX.get(brief.reseau, '')}".strip())
+    note = NOTES_RESEAUX.get(brief.reseau, "")
+    lignes.append(f"Network: {RESEAUX.get(brief.reseau, brief.reseau)}" + (f" ({note})." if note else "."))
     lignes.append(f"Target duration: {duree} seconds, that is about {mots} words (plus or minus 10 %), tags excluded.")
     angle = ANGLES_ANGLAIS.get(brief.angle)
     lignes.append(f"Angle: {angle}." if angle else "Angle: your choice, the best one for this product and network.")
@@ -287,7 +287,8 @@ def _conventions(brief: Brief) -> list[str]:
     else:
         styles = "Delivery styles: none (leave style and style_fr empty)."
     return [
-        "Write numbers and prices with digits, as in the brief (the subtitles keep them).",
+        "Write prices, percentages and figures with digits, as in the brief (the subtitles keep them); small "
+        "everyday counts may be written in words ('trois gouttes').",
         "No emojis, hashtags, stage directions, speaker names, or quotation marks around a whole line.",
         balises,
         accents,
