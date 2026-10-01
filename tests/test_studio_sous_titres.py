@@ -214,7 +214,7 @@ def test_studio_avec_ses_onglets(atelier, services, tmp_path):
     _video(services, tmp_path)
     atelier.rafraichir()
     onglets = atelier.panneau.onglets
-    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Position", "Découpage", "Écran"]
+    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Position", "Découpage", "Écran"]
     assert atelier.toile.sous_titre is atelier.sous_titres[0]  # le premier sous-titre est montré
     assert atelier.studio.deux_colonnes
 

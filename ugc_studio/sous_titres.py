@@ -35,7 +35,7 @@ import bisect
 import math
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 
 from .style_sous_titres import (
@@ -44,6 +44,7 @@ from .style_sous_titres import (
     CENTRE,
     DROITE,
     GAUCHE,
+    Mots,
     Position,
     StyleTexte,
     VideoApercu,
@@ -148,11 +149,12 @@ class ReglagesSousTitres:
     """Réglages des sous-titres du projet (§7), enregistrés dans projet.json.
 
     - Découpage (§7.3) : caractères, mots et lignes au plus, coupure sur la ponctuation, durée minimale.
-    - Style : texte (§7.4, style_sous_titres.StyleTexte) et position (onglet « Position »).
+    - Style : texte (§7.4, style_sous_titres.StyleTexte), mots (§7.5, onglet « Mots ») et position
+      (onglet « Position »).
     - Écran (§7.1, §7.3) : format, zone de sécurité de la plateforme, marge maximum.
     - Vidéo choisie seulement pour l'aperçu (projet sans vidéo).
 
-    Dans projet.json (format 7), ils sont rangés en trois parties : « style » (texte, position,
+    Dans projet.json (format 7), ils sont rangés en trois parties : « style » (texte, mots, position,
     découpage : le contenu d'un préréglage, lot 7), « ecran » et « apercu » (voir en_dict)."""
 
     caracteres_max: int = 24  # par sous-titre, espaces comprises
@@ -161,6 +163,7 @@ class ReglagesSousTitres:
     couper_sur_ponctuation: bool = True
     duree_min_s: float = 0.6
     texte: StyleTexte = StyleTexte()
+    mots: Mots = Mots()
     position: Position = Position()
     format: str = FORMAT_AUTO
     largeur_perso: int = 1080  # format personnalisé
@@ -174,6 +177,7 @@ class ReglagesSousTitres:
         return {
             "style": {
                 "texte": en_dict(self.texte),
+                "mots": en_dict(self.mots),
                 "position": en_dict(self.position),
                 "decoupage": {nom: getattr(self, nom) for nom in _DECOUPAGE},
             },
@@ -209,6 +213,7 @@ class ReglagesSousTitres:
             })
             reglages = _lire_plats(reglages, {cle: valeur for cle, valeur in plats.items() if valeur is not None})
             reglages.texte = lire(StyleTexte, style.get("texte"))
+            reglages.mots = lire(Mots, style.get("mots"))
             reglages.position = lire(Position, style.get("position"))
             reglages.apercu = lire(VideoApercu, brut.get("apercu"))
         else:
@@ -229,7 +234,7 @@ class ReglagesSousTitres:
 def _lire_plats(reglages: ReglagesSousTitres, brut: dict) -> ReglagesSousTitres:
     """Réglages simples (nombres, cases, textes) : valeur convertie, ramenée dans les limites."""
     for champ in fields(ReglagesSousTitres):
-        if champ.name not in brut or champ.name in ("texte", "position", "apercu"):
+        if champ.name not in brut or champ.name in ("texte", "mots", "position", "apercu"):
             continue
         defaut = getattr(reglages, champ.name)
         try:
@@ -394,6 +399,7 @@ class MotAffiche:
     debut: float
     fin: float
     locuteur: str = ""
+    accentue: bool = False  # accentué dans le script d'une prise (état « Accentués », lot 5)
 
 
 def _ponctuation_seule(texte: str) -> bool:
@@ -412,13 +418,13 @@ def accrocher_la_ponctuation(mots: list[Mot]) -> list[Mot]:
             en_attente += texte + " "
         elif _ponctuation_seule(texte) and resultat and not en_attente:
             dernier = resultat[-1]
-            resultat[-1] = Mot(f"{dernier.texte} {texte}", dernier.debut, dernier.fin, dernier.locuteur)
+            resultat[-1] = replace(dernier, texte=f"{dernier.texte} {texte}")
         else:
-            resultat.append(Mot(en_attente + texte, mot.debut, mot.fin, mot.locuteur))
+            resultat.append(replace(mot, texte=en_attente + texte))
             en_attente = ""
     if en_attente and resultat:
         dernier = resultat[-1]
-        resultat[-1] = Mot(f"{dernier.texte} {en_attente.strip()}", dernier.debut, dernier.fin, dernier.locuteur)
+        resultat[-1] = replace(dernier, texte=f"{dernier.texte} {en_attente.strip()}")
     return resultat
 
 
@@ -435,7 +441,7 @@ def mots_a_afficher(
     for mot in accrocher_la_ponctuation(gardes):
         affiche = texte_affiche(mot.texte, reglages, langue)
         if affiche:
-            resultat.append(MotAffiche(affiche, mot.texte, mot.debut, mot.fin, mot.locuteur))
+            resultat.append(MotAffiche(affiche, mot.texte, mot.debut, mot.fin, mot.locuteur, mot.accentue))
     return resultat
 
 

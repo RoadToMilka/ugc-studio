@@ -15,12 +15,17 @@ le fait un outil de comparaison de textes :
   partage le temps d'un voisin) ;
 - mot transcrit absent du script (rire transcrit, hésitation…) → ignoré.
 
+Mots accentués (V2, lot 5) : les mots mis en valeur dans le script d'une prise (bouton
+« Accentuer » du module Voix, dits en MAJUSCULES à la voix) sont retrouvés dans les mots des
+sous-titres, pour l'état « Accentués » de l'onglet Mots (marquer_les_accentues).
+
 Ce module ne dépend pas de l'interface : il est testé seul.
 """
 
 from __future__ import annotations
 
 import unicodedata
+from dataclasses import replace
 from difflib import SequenceMatcher
 
 from .transcription import DUREE_MOT_MIN, PONCTUATION, Mot
@@ -150,3 +155,67 @@ def _sans_chevauchement(mots: list[Mot]) -> list[Mot]:
     for mot in mots:
         mot.debut, mot.fin = round(mot.debut, 3), round(mot.fin, 3)
     return mots
+
+
+# --- Mots accentués du script (V2, lot 5) --------------------------------------------------------
+
+
+def mots_du_script_accentues(segments: list[dict]) -> list[tuple[str, bool]]:
+    """Mots du script (les mêmes que mots_du_script(texte_brut(segments)), dans l'ordre), avec pour
+    chacun s'il est accentué : une de ses lettres vient d'un passage accentué du script."""
+    caracteres = [
+        (caractere, bool(segment.get("accentue")))
+        for segment in segments
+        if "balise" not in segment
+        for caractere in segment.get("texte", "")
+    ]
+    jetons: list[tuple[str, bool]] = []
+    courant, accentue = "", False
+    for caractere, dans_l_accent in [*caracteres, (" ", False)]:
+        if caractere.isspace():
+            if courant:
+                jetons.append((courant, accentue))
+            courant, accentue = "", False
+        else:
+            courant += caractere
+            accentue = accentue or (dans_l_accent and caractere.isalnum())
+    mots: list[tuple[str, bool]] = []
+    en_attente = ""
+    for morceau, accentue in jetons:  # même regroupement de la ponctuation que mots_du_script
+        if _ponctuation_seule(morceau) and all(c in OUVRANTES for c in morceau):
+            en_attente += morceau + " "
+            continue
+        if _ponctuation_seule(morceau) and mots and not en_attente:
+            texte, deja = mots[-1]
+            mots[-1] = (f"{texte} {morceau}", deja or accentue)
+            continue
+        mots.append((en_attente + morceau, accentue))
+        en_attente = ""
+    if en_attente:
+        if mots:
+            texte, deja = mots[-1]
+            mots[-1] = (f"{texte} {en_attente.strip()}", deja)
+        else:
+            mots.append((en_attente.strip(), False))
+    return mots
+
+
+def marquer_les_accentues(mots: list[Mot], segments: list[dict]) -> list[Mot]:
+    """Copie des mots (ceux d'une prise, alignés sur son script), avec `accentue` pour ceux qui
+    sont accentués dans le script. Les mots sont retrouvés par la même comparaison que
+    l'alignement : un mot corrigé depuis dans le module Transcription n'est plus reconnu (il
+    s'affiche comme les autres)."""
+    script = mots_du_script_accentues(segments)
+    resultat = [replace(mot, accentue=False) for mot in mots]
+    if not any(accentue for _texte, accentue in script):
+        return resultat
+    cles_script = [cle_d_alignement(texte) for texte, _accentue in script]
+    cles_mots = [cle_d_alignement(mot.texte) for mot in mots]
+    comparaison = SequenceMatcher(None, cles_script, cles_mots, autojunk=False)
+    for operation, i1, i2, j1, _j2 in comparaison.get_opcodes():
+        if operation != "equal":
+            continue
+        for decalage in range(i2 - i1):
+            if script[i1 + decalage][1]:
+                resultat[j1 + decalage] = replace(resultat[j1 + decalage], accentue=True)
+    return resultat

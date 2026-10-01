@@ -18,6 +18,10 @@ Règles (§7.3, §7.4) :
 - Débord (lot 4) : le contour et le fond (marge intérieure, bordure) dépassent du texte. Le bloc
   placé à l'écran est la boîte visible, débord compris : c'est elle qui reste dans les marges et
   part du bord de la zone de sécurité. L'ombre et la lueur, floues et légères, n'en font pas partie.
+- Agrandissement (lot 5) : un mot agrandi par son état (mot actif à 108 %, par exemple) grandit
+  autour de son centre, sans pousser ses voisins. La boîte du sous-titre compte, de chaque côté
+  d'une ligne, la moitié de ce que gagne son plus large mot (et, en haut et en bas, ce que gagne la
+  hauteur des lettres : dans debord_y).
 """
 
 from __future__ import annotations
@@ -36,7 +40,8 @@ class Metriques:
     descendante: float  # de la ligne de base au bas des jambages (p, g, j…)
     interligne: float  # d'une ligne de base à la suivante
     debord_x: float = 0.0  # contour ou fond qui dépasse du texte, à gauche et à droite
-    debord_y: float = 0.0  # en haut et en bas
+    debord_y: float = 0.0  # en haut et en bas (agrandissement des mots compris)
+    croissance: float = 0.0  # un mot peut grandir de cette part de sa taille (0,08 : jusqu'à 108 %)
 
 
 @dataclass(frozen=True)
@@ -160,9 +165,11 @@ def placer(
     largeurs = [mesure(ligne) * echelle for ligne in lignes]
     hauteur = hauteur_du_bloc(len(lignes), metriques, echelle)
     haut = haut_du_bloc(reglages, zone, hauteur)
-    lignes_placees, mots_places = [], []
+    lignes_placees, mots_places, exces = [], [], []
     for numero, (texte, groupe, largeur) in enumerate(zip(lignes, groupes, largeurs, strict=True)):
-        x = x_de_la_ligne(zone, largeur, metriques.debord_x)
+        # Le plus large mot de la ligne, agrandi, dépasse de chaque côté de la moitié de ce qu'il gagne.
+        exces.append(metriques.croissance * max((mesure(textes[i]) for i in groupe), default=0.0) * echelle / 2)
+        x = x_de_la_ligne(zone, largeur, metriques.debord_x + exces[-1])
         base = haut + metriques.debord_y + (metriques.ascendante + numero * metriques.interligne) * echelle
         lignes_placees.append(LignePlacee(texte, x, base, largeur))
         for rang, index in enumerate(groupe):
@@ -176,6 +183,6 @@ def placer(
                     numero,
                 )
             )
-    gauche = min((ligne.x for ligne in lignes_placees), default=0.0) - metriques.debord_x
-    droite = max((ligne.x + ligne.largeur for ligne in lignes_placees), default=0.0) + metriques.debord_x
+    gauche = min((ligne.x - e for ligne, e in zip(lignes_placees, exces, strict=True)), default=0.0) - metriques.debord_x
+    droite = max((ligne.x + ligne.largeur + e for ligne, e in zip(lignes_placees, exces, strict=True)), default=0.0) + metriques.debord_x
     return Bloc(tuple(lignes_placees), tuple(mots_places), gauche, haut, droite - gauche, hauteur, echelle)

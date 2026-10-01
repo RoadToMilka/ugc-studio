@@ -10,6 +10,8 @@ découpage avec le nouveau réglage (une fraction de seconde pour une pub), et a
 V2, lot 3 : la largeur des lignes est mesurée par le moteur de dessin (rendu/moteur.py), le même
 qui dessine l'aperçu ; le format est celui de la vidéo du projet, ou de la vidéo choisie seulement
 pour l'aperçu, sinon celui choisi.
+V2, lot 5 : sous-titres d'une prise, avec l'état « Accentués » : les mots accentués de son script
+sont repérés (alignement.marquer_les_accentues).
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from dataclasses import dataclass
 
 from PySide6.QtWidgets import QMessageBox, QWidget
 
+from ..alignement import marquer_les_accentues
 from ..projets import Projet
 from ..rendu.moteur import Moteur
 from ..services import Services
@@ -72,6 +75,15 @@ def resolution_imposee(projet: Projet, reglages: ReglagesSousTitres | None = Non
     return video_du_projet(projet) or reglages.apercu.resolution
 
 
+def script_de_la_prise(projet: Projet, transcription: Transcription | None) -> list[dict] | None:
+    """Script (segments) de la prise dont viennent les mots des sous-titres (None : pas une prise,
+    ou prise supprimée depuis)."""
+    if transcription is None or not transcription.prise:
+        return None
+    prise = next((p for p in projet.prises if p.identifiant == transcription.prise), None)
+    return prise.script if prise is not None else None
+
+
 def ajustements(transcription: Transcription | None) -> list[Ajustement]:
     """Sous-titres réorganisés à la main, tels qu'enregistrés dans le projet."""
     if transcription is None:
@@ -102,6 +114,9 @@ def calculer(
     mesure = moteur.mesure
     langue = langue_de(transcription, projet)
     mots = transcription.mots if transcription is not None and transcription.horodatee else []
+    script = script_de_la_prise(projet, transcription) if reglages.mots.accentues_actifs else None
+    if script:
+        mots = marquer_les_accentues(mots, script)  # état « Accentués » (lot 5)
     decoupage = calculer_sous_titres(
         mots,
         reglages,

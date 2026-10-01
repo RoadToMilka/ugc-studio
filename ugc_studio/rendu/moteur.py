@@ -1,5 +1,5 @@
-"""Moteur de dessin des sous-titres (V2 ; cahier des charges §7.7 et §7.9) : un seul morceau de code
-pour l'aperçu et, en V3, pour les exports.
+"""Moteur de dessin des sous-titres (V2 ; cahier des charges §7.7, §7.9, §7.10 et §7.11) : un seul
+morceau de code pour l'aperçu et, en V3, pour les exports.
 
 Le principe :
 - Le texte devient des **formes** (le contour exact de chaque lettre, QPainterPath) à la taille
@@ -7,18 +7,30 @@ Le principe :
   V3 les dessinera à 100 %, sur un fond transparent (image()). Une forme réduite garde exactement
   ses proportions : ce que montre l'aperçu est ce qui sera exporté, à la finesse de l'écran près.
 - Le **découpage** mesure la largeur des lignes avec ce même moteur (mesure) : « ça tient » veut
-  dire « ça tient une fois dessiné », contour et fond compris (lot 4).
-- La place de chaque ligne et de chaque mot vient de mise_en_page.py (testé sans interface).
-- Ce qui ne bouge pas (un sous-titre entier, avec ses effets) est dessiné une fois par taille
-  d'affichage, puis gardé en mémoire : pendant la lecture, l'aperçu ne fait que le recopier.
+  dire « ça tient une fois dessiné », contour, fond et agrandissement des mots compris.
+- La place de chaque ligne et de chaque mot vient de mise_en_page.py (testé sans interface) ; elle
+  est calculée une fois pour le sous-titre entier : rien ne bouge pendant la lecture.
+- Ce qui ne bouge pas (un sous-titre, avec un mot actif donné et ses effets) est dessiné une fois
+  par taille d'affichage, puis gardé en mémoire : pendant la lecture, l'aperçu ne fait que le
+  recopier. Seul le fond qui glisse d'un mot à l'autre (mot actif) est redessiné à chaque image.
+- À chaque instant, le sous-titre est **une seule image transparente**, posée d'un coup sur la
+  vidéo (aperçu) ou sur le fond transparent (export) : aperçu à 100 % et export restent identiques
+  au pixel près, même quand quelque chose bouge (poser plusieurs couches l'une après l'autre sur la
+  vidéo arrondirait autrement les bords et les transparences d'un ou deux niveaux sur 255).
 
 Police : celle du style, à la taille du texte arrondie au pixel de la vidéo. Inter SemiBold sans
 espacement est exactement la mesure de la V1 : un ancien projet garde son découpage. Une police
 introuvable (autre ordinateur, police désinstallée) est remplacée par Inter (police_remplacee).
 
-Ordre de dessin (lot 4, §7.4) : ombre, fond, lueur, contour, remplissage. Le contour est dessiné
-autour des lettres (un trait deux fois plus épais, sous le remplissage) : elles gardent leur
-épaisseur.
+Ordre de dessin (§7.4) : ombre, fond, lueur, contour, remplissage (puis soulignement). Le contour est
+dessiné autour des lettres (un trait deux fois plus épais, sous le remplissage) : elles gardent
+leur épaisseur.
+
+États des mots (lot 5, §7.11) : à un instant donné, le mot actif est le dernier mot du sous-titre
+déjà commencé (avance de l'allumage comprise) ; ceux d'avant sont « déjà dits », ceux d'après « à
+venir » ; un mot accentué du script prend l'état « Accentués » (sauf quand il est actif). Chaque
+état a son apparence (comme le texte, sauf ce qui est réglé). Les mots d'un même état sont dessinés
+ensemble, puis posés avec l'opacité de cet état ; le mot actif en dernier (il peut être agrandi).
 """
 
 from __future__ import annotations
@@ -29,6 +41,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
+    QBrush,
     QColor,
     QFont,
     QFontMetricsF,
@@ -41,15 +54,31 @@ from PySide6.QtGui import (
     QTransform,
 )
 
-from ..mise_en_page import Bloc, Metriques, placer
+from ..mise_en_page import Bloc, Metriques, MotPlace, placer
 from ..sous_titres import MotAffiche, ReglagesSousTitres, SousTitre, cadre
-from ..style_sous_titres import FOND_BLOC, FOND_LIGNE, FOND_MOT, Couleur, StyleTexte
+from ..style_sous_titres import (
+    ACCENTUES,
+    ACTIF,
+    A_VENIR,
+    DITS,
+    FOND_LIGNE,
+    FOND_MOT,
+    Contour,
+    Couleur,
+    Degrade,
+    EtatMot,
+    FondMot,
+    Lueur,
+    Soulignement,
+    StyleTexte,
+)
 from ..ui.polices import poids_qt, police
 from ..ui.theme import Typo
 from .polices import POLICE_DE_SECOURS, famille_pour, graisse_proche
 
-RENDUS_GARDES = 96  # sous-titres déjà dessinés gardés en mémoire (toutes tailles d'affichage confondues)
+RENDUS_GARDES = 48  # sous-titres déjà dessinés gardés en mémoire (tailles d'affichage et mots actifs confondus)
 FLOU_MINIMUM = 0.75  # en dessous (en pixels de l'image), le flou ne se verrait pas : il n'est pas calculé
+ORDRE_DES_ETATS = (A_VENIR, DITS, ACCENTUES, ACTIF)  # le mot actif est dessiné en dernier, par-dessus
 
 
 def police_du_texte(style: StyleTexte, taille_px: int) -> tuple[QFont, bool]:
@@ -101,28 +130,86 @@ def flouter(image: QImage, rayon: float) -> QImage:
     return petite.scaled(largeur, hauteur, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
 
+def _douce(avancee: float) -> float:
+    """Courbe douce (ralentit à l'arrivée) pour le fond qui glisse."""
+    avancee = min(max(avancee, 0.0), 1.0)
+    return 1 - (1 - avancee) ** 3
+
+
 @dataclass(frozen=True)
 class Rendu:
     """Un sous-titre dessiné à une taille d'affichage : son image et sa place, en pixels de
     l'image par rapport au coin haut gauche de la vidéo (nombres entiers : l'image tombe pile sur
-    les pixels, l'aperçu à 100 % et l'export sont donc identiques)."""
+    les pixels, l'aperçu à 100 % et l'export sont donc identiques).
+
+    `image` : le sous-titre complet, fond du mot actif compris (à sa place d'arrivée).
+    `dessous` et `dessus` : quand le fond du mot actif peut glisser, ce qui passe sous ce fond
+    (ombre, fonds) et ce qui passe dessus (les lettres) ; pendant le glissement, l'image de chaque
+    instant est refaite avec eux (_composer). Sinon None."""
 
     image: QImage
     x: int
     y: int
+    dessous: QImage | None = None
+    dessus: QImage | None = None
+
+
+@dataclass(frozen=True)
+class Instant:
+    """Ce que montre un sous-titre à un instant : le mot actif (sa place dans les mots affichés ;
+    None : aucun) et depuis combien de temps il l'est (pour le fond qui glisse)."""
+
+    actif: int | None = None
+    depuis_s: float = 0.0
+
+
+@dataclass(frozen=True)
+class Apparence:
+    """Apparence d'un état des mots : celle du texte, sauf ce que l'état règle (onglet Mots)."""
+
+    visible: bool
+    opacite: float  # 0 à 1
+    couleur: Couleur
+    degrade: Degrade
+    contour: Contour
+    lueur: Lueur
+    fond: FondMot | None
+    soulignement: Soulignement | None
+    echelle: float  # agrandissement autour du centre du mot
+    decalage_pct: float  # vers le bas, en % de la hauteur de la vidéo
+
+
+def apparence(texte: StyleTexte, etat: EtatMot) -> Apparence:
+    def ou(valeur, defaut):
+        return defaut if valeur is None else valeur
+
+    return Apparence(
+        etat.visible,
+        etat.opacite,
+        ou(etat.couleur, texte.couleur),
+        ou(etat.degrade, texte.degrade),
+        ou(etat.contour, texte.contour),
+        ou(etat.lueur, texte.lueur),
+        etat.fond,
+        etat.soulignement,
+        etat.echelle,
+        etat.decalage_pct,
+    )
 
 
 class MesureDuMoteur:
-    """Largeur d'une ligne pour le découpage (texte, plus le débord du contour et du fond de chaque
-    côté) ; texte() : la largeur du texte seul, pour placer les mots.
+    """Largeur d'une ligne pour le découpage (texte, plus le débord du contour et des fonds de chaque
+    côté, plus l'agrandissement du plus large mot) ; texte() : la largeur du texte seul, pour
+    placer les mots.
 
     Espace entre les lettres : Qt l'ajoute aussi après la dernière lettre ; il est retiré ici, pour
     qu'une ligne (ou le fond d'un mot) reste centrée sur ses lettres."""
 
-    def __init__(self, metriques: QFontMetricsF, debord: float, espace_lettres: float = 0.0):
+    def __init__(self, metriques: QFontMetricsF, debord: float, espace_lettres: float = 0.0, croissance: float = 0.0):
         self._metriques = metriques
         self.debord = debord
         self._espace_lettres = espace_lettres
+        self._croissance = croissance  # agrandissement d'un mot (états des mots), en plus de sa taille
         self._largeurs: dict[str, float] = {}
 
     def texte(self, texte: str) -> float:
@@ -132,7 +219,25 @@ class MesureDuMoteur:
         return self._largeurs[texte]
 
     def __call__(self, texte: str) -> float:
-        return self.texte(texte) + 2 * self.debord
+        largeur = self.texte(texte) + 2 * self.debord
+        if self._croissance > 0 and texte.split():
+            # Un mot agrandi (autour de son centre) dépasse de chaque côté : au plus le plus large.
+            largeur += self._croissance * max(self.texte(mot) for mot in texte.split())
+        return largeur
+
+
+@dataclass
+class _MotDessine:
+    """Un mot prêt à dessiner : son état, ses formes (déjà à leur place, agrandissement compris) et
+    sa boîte (avant agrandissement)."""
+
+    place: MotPlace
+    etat: str
+    apparence: Apparence
+    transformation: QTransform  # agrandissement et décalage de l'état
+    lettres: QPainterPath
+    trait: QPainterPath | None
+    boite: QRectF
 
 
 class Moteur:
@@ -152,19 +257,35 @@ class Moteur:
         if style.espaces.mots_pct:
             self.police.setWordSpacing(self.px(style.espaces.mots_pct))
         metriques = QFontMetricsF(self.police)
-        contour = self.px(style.contour.epaisseur_pct) if style.contour.actif else 0.0
+        self.apparences = {nom: apparence(style, reglages.mots.etat(nom)) for nom in ORDRE_DES_ETATS}
+        utilisees = [
+            a for nom, a in self.apparences.items() if a.visible and (nom != ACCENTUES or reglages.mots.accentues_actifs)
+        ] or [self.apparences[A_VENIR]]
+        croissance = max(0.0, max(a.echelle for a in utilisees) - 1)
+        contour = max((self.px(a.contour.epaisseur_pct) if a.contour.actif else 0.0) * a.echelle for a in utilisees)
         fond = style.fond
         bordure = self.px(fond.bordure_epaisseur_pct) if fond.visible and fond.bordure else 0.0
-        debord_x = max(contour, self.px(fond.marge_x_pct) + bordure if fond.visible else 0.0)
-        debord_y = max(contour, self.px(fond.marge_y_pct) + bordure if fond.visible else 0.0)
+        fonds_x = [self.px(a.fond.marge_x_pct) * a.echelle for a in utilisees if a.fond is not None]
+        fonds_y = [self.px(a.fond.marge_y_pct) * a.echelle for a in utilisees if a.fond is not None]
+        soulignes = [
+            self.px(a.soulignement.distance_pct + a.soulignement.epaisseur_pct) - metriques.descent()
+            for a in utilisees
+            if a.soulignement is not None
+        ]
+        debord_x = max([contour, self.px(fond.marge_x_pct) + bordure if fond.visible else 0.0, *fonds_x])
+        debord_y = max([contour, self.px(fond.marge_y_pct) + bordure if fond.visible else 0.0, *fonds_y, *soulignes])
+        # Un mot agrandi dépasse en haut et en bas ; un décalage vertical aussi.
+        debord_y += croissance * (metriques.ascent() + metriques.descent()) / 2
+        debord_y += max(abs(self.px(a.decalage_pct)) for a in utilisees)
         self.metriques = Metriques(
             metriques.ascent(),
             metriques.descent(),
             metriques.lineSpacing() * style.espaces.interligne_pct / 100,
             debord_x,
             debord_y,
+            croissance,
         )
-        self.mesure = MesureDuMoteur(metriques, debord_x, espace_lettres)
+        self.mesure = MesureDuMoteur(metriques, debord_x, espace_lettres, croissance)
         self._formes_des_mots: dict[str, QPainterPath] = {}
         self._rendus: OrderedDict[tuple, Rendu] = OrderedDict()
 
@@ -177,6 +298,32 @@ class Moteur:
     def bloc(self, sous_titre: SousTitre, mots: list[MotAffiche]) -> Bloc:
         return placer(sous_titre, mots, self.reglages, self.zone, self.metriques, self.mesure.texte)
 
+    # --- Mot actif et états des mots (lot 5) -----------------------------------------------------
+
+    def instant(self, sous_titre: SousTitre, mots: list[MotAffiche], temps: float | None) -> Instant:
+        """Le mot actif à ce moment de la vidéo : le dernier mot du sous-titre déjà commencé (avance
+        de l'allumage comprise). Petit silence entre deux mots : le dernier dit reste allumé ; avant
+        le premier mot, aucun. Sans changement d'état des mots, ou sans temps : aucun."""
+        if temps is None or self.reglages.mots.fixe:
+            return Instant()
+        moment = temps + self.reglages.mots.avance_ms / 1000
+        actif = None
+        for index in range(sous_titre.premier_mot, min(sous_titre.dernier_mot, len(mots))):
+            if mots[index].debut <= moment + 1e-6:
+                actif = index
+            else:
+                break
+        return Instant(actif, moment - mots[actif].debut if actif is not None else 0.0)
+
+    def etat_du_mot(self, index: int, mots: list[MotAffiche], actif: int | None) -> str:
+        if actif is not None and index == actif:
+            return ACTIF
+        if self.reglages.mots.accentues_actifs and mots[index].accentue:
+            return ACCENTUES
+        if actif is not None and index < actif:
+            return DITS
+        return A_VENIR
+
     # --- Formes --------------------------------------------------------------------------------
 
     def _forme_du_mot(self, texte: str) -> QPainterPath:
@@ -187,18 +334,69 @@ class Moteur:
             self._formes_des_mots[texte] = forme
         return self._formes_des_mots[texte]
 
+    def _boite_du_mot(self, place: MotPlace, bloc: Bloc) -> QRectF:
+        """Boîte d'un mot : sa largeur, du haut des lettres (accents compris) au bas des jambages."""
+        base = bloc.lignes[place.ligne].base
+        haut = base - self.metriques.ascendante * bloc.echelle
+        return QRectF(place.x, haut, place.largeur, (self.metriques.ascendante + self.metriques.descendante) * bloc.echelle)
+
+    def _transformation(self, boite: QRectF, aspect: Apparence) -> QTransform:
+        """Agrandissement autour du centre du mot, puis décalage vertical."""
+        transformation = QTransform()
+        decalage = self.px(aspect.decalage_pct)
+        if aspect.echelle == 1 and not decalage:
+            return transformation
+        centre = boite.center()
+        transformation.translate(centre.x(), centre.y() + decalage)
+        transformation.scale(aspect.echelle, aspect.echelle)
+        transformation.translate(-centre.x(), -centre.y())
+        return transformation
+
+    def _trait(self, forme: QPainterPath, contour: Contour) -> QPainterPath | None:
+        if not contour.actif or contour.epaisseur_pct <= 0:
+            return None
+        traceur = QPainterPathStroker()
+        traceur.setWidth(2 * self.px(contour.epaisseur_pct))  # la moitié dépasse : autour des lettres
+        nets = contour.angles == "nets"
+        traceur.setJoinStyle(Qt.PenJoinStyle.MiterJoin if nets else Qt.PenJoinStyle.RoundJoin)
+        traceur.setCapStyle(Qt.PenCapStyle.SquareCap if nets else Qt.PenCapStyle.RoundCap)
+        trait = traceur.createStroke(forme)
+        trait.setFillRule(Qt.FillRule.WindingFill)
+        return trait
+
+    def _mots_dessines(self, bloc: Bloc, mots: list[MotAffiche], actif: int | None) -> list[_MotDessine]:
+        resultat = []
+        for place in bloc.mots:
+            etat = self.etat_du_mot(place.index, mots, actif)
+            aspect = self.apparences[etat]
+            boite = self._boite_du_mot(place, bloc)
+            transformation = self._transformation(boite, aspect)
+            position = QTransform()
+            position.translate(place.x, bloc.lignes[place.ligne].base)
+            position.scale(bloc.echelle, bloc.echelle)  # mot seul rapetissé (§7.3)
+            lettres = position.map(self._forme_du_mot(place.texte))
+            lettres.setFillRule(Qt.FillRule.WindingFill)  # lettres qui se touchent : jamais de trou
+            trait = self._trait(lettres, aspect.contour)
+            resultat.append(
+                _MotDessine(
+                    place, etat, aspect, transformation, transformation.map(lettres),
+                    transformation.map(trait) if trait is not None else None, boite,
+                )
+            )
+        return resultat
+
     def formes_des_lignes(self, bloc: Bloc) -> list[QPainterPath]:
-        """Contour des lettres de chaque ligne, à leur place dans la vidéo."""
+        """Contour des lettres de chaque ligne, à leur place dans la vidéo (sans état des mots)."""
         formes = []
         for numero, ligne in enumerate(bloc.lignes):
             forme = QPainterPath()
-            forme.setFillRule(Qt.FillRule.WindingFill)  # lettres qui se touchent : jamais de trou
+            forme.setFillRule(Qt.FillRule.WindingFill)
             for mot in bloc.mots:
                 if mot.ligne != numero:
                     continue
                 transformation = QTransform()
                 transformation.translate(mot.x, ligne.base)
-                transformation.scale(bloc.echelle, bloc.echelle)  # mot seul rapetissé (§7.3)
+                transformation.scale(bloc.echelle, bloc.echelle)
                 forme.addPath(transformation.map(self._forme_du_mot(mot.texte)))
             formes.append(forme)
         return formes
@@ -211,20 +409,9 @@ class Moteur:
             forme.addPath(ligne)
         return forme
 
-    def _trait_du_contour(self, forme: QPainterPath) -> QPainterPath | None:
-        contour = self.reglages.texte.contour
-        if not contour.actif or contour.epaisseur_pct <= 0:
-            return None
-        traceur = QPainterPathStroker()
-        traceur.setWidth(2 * self.px(contour.epaisseur_pct))  # la moitié dépasse : autour des lettres
-        nets = contour.angles == "nets"
-        traceur.setJoinStyle(Qt.PenJoinStyle.MiterJoin if nets else Qt.PenJoinStyle.RoundJoin)
-        traceur.setCapStyle(Qt.PenCapStyle.SquareCap if nets else Qt.PenCapStyle.RoundCap)
-        trait = traceur.createStroke(forme)
-        trait.setFillRule(Qt.FillRule.WindingFill)
-        return trait
-
     def _rectangles_du_fond(self, bloc: Bloc) -> list[QRectF]:
+        """Fond de l'onglet Texte derrière chaque mot, chaque ligne ou tout le bloc (avant
+        l'agrandissement d'un mot par son état)."""
         fond = self.reglages.texte.fond
         if not fond.visible or not bloc.lignes:
             return []
@@ -240,71 +427,136 @@ class Moteur:
             return [boite(m.x, m.x + m.largeur, bloc.lignes[m.ligne], bloc.lignes[m.ligne]) for m in bloc.mots]
         if fond.mode == FOND_LIGNE:
             return [boite(ligne.x, ligne.x + ligne.largeur, ligne, ligne) for ligne in bloc.lignes]
-        if fond.mode == FOND_BLOC:
-            gauche = min(ligne.x for ligne in bloc.lignes)
-            droite = max(ligne.x + ligne.largeur for ligne in bloc.lignes)
-            return [boite(gauche, droite, bloc.lignes[0], bloc.lignes[-1])]
-        return []
+        gauche = min(ligne.x for ligne in bloc.lignes)
+        droite = max(ligne.x + ligne.largeur for ligne in bloc.lignes)
+        return [boite(gauche, droite, bloc.lignes[0], bloc.lignes[-1])]
 
-    def forme_du_fond(self, bloc: Bloc) -> QPainterPath | None:
-        """Fond derrière chaque mot, chaque ligne, ou un seul bloc (rectangles arrondis)."""
-        rectangles = self._rectangles_du_fond(bloc)
-        if not rectangles:
-            return None
-        arrondi = self.px(self.reglages.texte.fond.arrondi_pct)
+    def _arrondis(self, rectangles: list[QRectF], arrondi_pct: float, transformation: QTransform | None = None) -> QPainterPath:
+        arrondi = self.px(arrondi_pct)
         forme = QPainterPath()
         forme.setFillRule(Qt.FillRule.WindingFill)
         for rectangle in rectangles:
             rayon = min(arrondi, rectangle.height() / 2, rectangle.width() / 2)
             forme.addRoundedRect(rectangle, rayon, rayon)
-        return forme
+        return transformation.map(forme) if transformation is not None else forme
+
+    def forme_du_fond(self, bloc: Bloc) -> QPainterPath | None:
+        """Fond de l'onglet Texte derrière chaque ligne ou tout le bloc (rectangles arrondis). Celui
+        « derrière chaque mot » est dessiné mot par mot (_fond_texte_du_mot) : il suit l'état du mot."""
+        if self.reglages.texte.fond.mode == FOND_MOT:
+            return None
+        rectangles = self._rectangles_du_fond(bloc)
+        return self._arrondis(rectangles, self.reglages.texte.fond.arrondi_pct) if rectangles else None
+
+    def _fond_texte_du_mot(self, mot: _MotDessine) -> QPainterPath:
+        """Fond de l'onglet Texte « derrière chaque mot », pour ce mot (il suit son agrandissement)."""
+        fond = self.reglages.texte.fond
+        marge_x, marge_y = self.px(fond.marge_x_pct), self.px(fond.marge_y_pct)
+        return self._arrondis([mot.boite.adjusted(-marge_x, -marge_y, marge_x, marge_y)], fond.arrondi_pct, mot.transformation)
+
+    def _fond_d_etat(self, boite: QRectF, fond: FondMot) -> QRectF:
+        marge_x, marge_y = self.px(fond.marge_x_pct), self.px(fond.marge_y_pct)
+        return boite.adjusted(-marge_x, -marge_y, marge_x, marge_y)
 
     # --- Dessin ---------------------------------------------------------------------------------
 
-    def rendu(self, sous_titre: SousTitre, mots: list[MotAffiche], echelle: float, ratio_ecran: float = 1.0) -> Rendu:
+    def rendu(
+        self,
+        sous_titre: SousTitre,
+        mots: list[MotAffiche],
+        echelle: float,
+        ratio_ecran: float = 1.0,
+        actif: int | None = None,
+    ) -> Rendu:
         """Le sous-titre dessiné à `echelle` points par pixel de vidéo, sur un écran qui a
-        `ratio_ecran` pixels réels par point (gardé en mémoire)."""
+        `ratio_ecran` pixels réels par point, avec ce mot actif (gardé en mémoire)."""
         cle = (
             sous_titre.premier_mot, sous_titre.dernier_mot, tuple(sous_titre.lignes), sous_titre.echelle,
-            round(echelle, 6), round(ratio_ecran, 4),
+            round(echelle, 6), round(ratio_ecran, 4), actif,
         )
         if cle in self._rendus:
             self._rendus.move_to_end(cle)
             return self._rendus[cle]
-        rendu = self._dessiner_rendu(self.bloc(sous_titre, mots), echelle * ratio_ecran)
+        rendu = self._dessiner_rendu(self.bloc(sous_titre, mots), mots, echelle * ratio_ecran, actif)
+        # Seule l'image finale connaît l'écran ; `dessous` et `dessus` restent en pixels réels, pour
+        # refaire l'image d'un instant (_composer).
         rendu.image.setDevicePixelRatio(ratio_ecran)
         self._rendus[cle] = rendu
         while len(self._rendus) > RENDUS_GARDES:
             self._rendus.popitem(last=False)
         return rendu
 
-    def _dessiner_rendu(self, bloc: Bloc, echelle: float) -> Rendu:
+    def _dessiner_rendu(self, bloc: Bloc, mots: list[MotAffiche], echelle: float, actif: int | None) -> Rendu:
         style = self.reglages.texte
-        ombre, lueur, fond = style.ombre, style.lueur, style.fond
-        lignes = self.formes_des_lignes(bloc)
-        texte = QPainterPath()
-        texte.setFillRule(Qt.FillRule.WindingFill)
-        for ligne in lignes:
-            texte.addPath(ligne)
-        trait = self._trait_du_contour(texte)
-        silhouette = QPainterPath(texte)  # le texte et son contour (ombre portée par le texte, lueur)
-        if trait is not None:
-            silhouette.addPath(trait)
+        ombre, fond = style.ombre, style.fond
+        dessines = self._mots_dessines(bloc, mots, actif)
+        visibles = [mot for mot in dessines if mot.apparence.visible]
+        groupes = {nom: [mot for mot in visibles if mot.etat == nom] for nom in ORDRE_DES_ETATS}
         forme_fond = self.forme_du_fond(bloc)
-        bordure = self.px(fond.bordure_epaisseur_pct) if forme_fond is not None and fond.bordure else 0.0
+        bordure = self.px(fond.bordure_epaisseur_pct) if fond.visible and fond.bordure else 0.0
+        # Fond surligné du mot actif : posé entre ce qui passe dessous et les lettres (_composer) ; il
+        # compte dans la boîte de l'image, depuis le mot précédent s'il peut en glisser.
+        fond_actif = self._fond_actif(bloc, actif) if actif is not None else None
+        glisse_possible = fond_actif is not None and self._depart_du_glissement(bloc, actif) is not None
+
+        def reunies(formes) -> QPainterPath:
+            """Formes réunies : là où elles se touchent, pas de double opacité."""
+            forme = QPainterPath()
+            forme.setFillRule(Qt.FillRule.WindingFill)
+            for une in formes:
+                if une is not None:
+                    forme.addPath(une)
+            return forme
+
+        silhouettes = {
+            nom: reunies([forme for mot in liste for forme in (mot.lettres, mot.trait)]) for nom, liste in groupes.items() if liste
+        }
+        # Fond « derrière chaque mot » de l'onglet Texte, et fonds surlignés des états (sauf celui du
+        # mot actif, dessiné à part : il peut glisser), réunis par état.
+        fonds_texte = {
+            nom: reunies(self._fond_texte_du_mot(mot) for mot in liste)
+            for nom, liste in groupes.items()
+            if liste and fond.mode == FOND_MOT
+        }
+        fonds_etats = {
+            nom: reunies(
+                self._arrondis([self._fond_d_etat(mot.boite, mot.apparence.fond)], mot.apparence.fond.arrondi_pct, mot.transformation)
+                for mot in liste
+            )
+            for nom, liste in groupes.items()
+            if liste and nom != ACTIF and self.apparences[nom].fond is not None
+        }
 
         ombre_visible = ombre.active and ombre.couleur.opacite > 0
-        porteuse = forme_fond if ombre_visible and ombre.portee == "fond" and forme_fond is not None else silhouette
+        par_le_fond = ombre.portee == "fond" and (forme_fond is not None or bool(fonds_texte))
         dx, dy, flou = self.px(ombre.decalage_x_pct), self.px(ombre.decalage_y_pct), self.px(ombre.flou_pct)
-        halo = self.px(lueur.taille_pct) if lueur.active and lueur.intensite_pct > 0 else 0.0
+        halos = {
+            nom: self.px(self.apparences[nom].lueur.taille_pct)
+            for nom in silhouettes
+            if self.apparences[nom].lueur.active and self.apparences[nom].lueur.intensite_pct > 0
+        }
 
-        boite = silhouette.boundingRect()
+        # Boîte de l'image : tout ce qui sera dessiné, flous compris.
+        boite = QRectF()
+        for forme in silhouettes.values():
+            boite = boite.united(forme.boundingRect())
         if forme_fond is not None:
             boite = boite.united(forme_fond.boundingRect().adjusted(-bordure, -bordure, bordure, bordure))
-        if ombre_visible:
-            boite = boite.united(porteuse.boundingRect().translated(dx, dy).adjusted(-2 * flou, -2 * flou, 2 * flou, 2 * flou))
-        if halo:
-            boite = boite.united(silhouette.boundingRect().adjusted(-2 * halo, -2 * halo, 2 * halo, 2 * halo))
+        for forme in [*fonds_texte.values(), *fonds_etats.values()]:
+            boite = boite.united(forme.boundingRect().adjusted(-bordure, -bordure, bordure, bordure))
+        for mot in visibles:
+            if mot.apparence.soulignement is not None:
+                boite = boite.united(mot.transformation.mapRect(self._rect_du_soulignement(mot)))
+        if fond_actif is not None:
+            boite = boite.united(fond_actif.boundingRect())
+            if glisse_possible:  # pendant le glissement, le fond reste entre ses places de départ et d'arrivée
+                boite = boite.united(self._fond_actif(bloc, actif, 0.0).boundingRect())
+        if ombre_visible and not boite.isEmpty():
+            boite = boite.united(boite.translated(dx, dy).adjusted(-2 * flou, -2 * flou, 2 * flou, 2 * flou))
+        for nom, halo in halos.items():
+            boite = boite.united(silhouettes[nom].boundingRect().adjusted(-2 * halo, -2 * halo, 2 * halo, 2 * halo))
+        if boite.isEmpty():  # aucun mot visible (ex. tous « à venir », invisibles) ni fond
+            boite = QRectF(bloc.x, bloc.y, max(1.0, bloc.largeur), max(1.0, bloc.hauteur))
         gauche, haut = math.floor(boite.left() * echelle) - 1, math.floor(boite.top() * echelle) - 1
         droite, bas = math.ceil(boite.right() * echelle) + 1, math.ceil(boite.bottom() * echelle) + 1
         largeur, hauteur = droite - gauche, bas - haut
@@ -317,64 +569,203 @@ class Moteur:
             peintre.translate(*decalage)
             return peintre
 
-        def calque_flou(forme: QPainterPath, couleur: Couleur, rayon: float, decalage=(0.0, 0.0)) -> QImage:
-            calque = _image_vide(largeur, hauteur)
-            peintre = peintre_sur(calque, decalage)
-            peintre.fillPath(forme, qcouleur(couleur, opaque=True))
-            peintre.end()
-            return flouter(calque, rayon * echelle)
-
-        image = _image_vide(largeur, hauteur)
-        if ombre_visible:  # 1. ombre
-            calque = calque_flou(porteuse, ombre.couleur, flou, (dx, dy))
-            peintre = QPainter(image)
-            peintre.setOpacity(ombre.couleur.opacite / 100)
+        def poser(cible: QImage, calque: QImage, opacite: float) -> None:
+            peintre = QPainter(cible)
+            peintre.setOpacity(opacite)
             peintre.drawImage(QPointF(0, 0), calque)
             peintre.end()
-        peintre = peintre_sur(image)
-        if forme_fond is not None:  # 2. fond (et sa bordure)
+
+        dessous = _image_vide(largeur, hauteur)
+        image = _image_vide(largeur, hauteur) if fond_actif is not None else dessous
+
+        # 1. Ombre : celle des lettres (et de leur contour) des mots visibles, ou celle des fonds ;
+        #    un état à moitié transparent a une ombre à moitié transparente.
+        if ombre_visible:
+            calque = _image_vide(largeur, hauteur)
+            peintre = peintre_sur(calque, (dx, dy))
+            couleur = qcouleur(ombre.couleur, opaque=True)
+            if par_le_fond and forme_fond is not None:
+                peintre.fillPath(forme_fond, couleur)
+            for nom in silhouettes:
+                teinte = QColor(couleur)
+                teinte.setAlphaF(self.apparences[nom].opacite)
+                forme = fonds_texte.get(nom) if par_le_fond else silhouettes[nom]
+                if forme is not None:
+                    peintre.fillPath(forme, teinte)
+            peintre.end()
+            poser(dessous, flouter(calque, flou * echelle), ombre.couleur.opacite / 100)
+
+        # 2. Fonds : celui de l'onglet Texte (lignes, bloc ou mots), puis ceux des états (sauf le mot
+        #    actif, dont le fond est posé à part, au-dessus : il peut glisser).
+        peintre = peintre_sur(dessous)
+        if forme_fond is not None:
             peintre.fillPath(forme_fond, qcouleur(fond.couleur))
             if bordure > 0:
                 # Le tour des fonds réunis : deux fonds de ligne qui se touchent n'ont pas de trait entre eux.
                 peintre.strokePath(forme_fond.simplified(), QPen(qcouleur(fond.bordure_couleur), bordure))
+        for nom in ORDRE_DES_ETATS:
+            peintre.setOpacity(self.apparences[nom].opacite)
+            if nom in fonds_texte:
+                peintre.fillPath(fonds_texte[nom], qcouleur(fond.couleur))
+                if bordure > 0:
+                    peintre.strokePath(fonds_texte[nom].simplified(), QPen(qcouleur(fond.bordure_couleur), bordure))
+            if nom in fonds_etats:
+                peintre.fillPath(fonds_etats[nom], qcouleur(self.apparences[nom].fond.couleur))
         peintre.end()
-        if halo:  # 3. lueur : la silhouette élargie de la moitié du halo, puis floutée
-            traceur = QPainterPathStroker()
-            traceur.setWidth(halo)
-            traceur.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            traceur.setCapStyle(Qt.PenCapStyle.RoundCap)
-            elargie = QPainterPath(silhouette)
-            elargie.addPath(traceur.createStroke(silhouette))
-            calque = calque_flou(elargie, lueur.couleur, halo)
-            peintre = QPainter(image)
-            peintre.setOpacity(lueur.couleur.opacite / 100 * lueur.intensite_pct / 100)
-            peintre.drawImage(QPointF(0, 0), calque)
-            peintre.end()
-        peintre = peintre_sur(image)
-        if trait is not None:  # 4. contour
-            peintre.fillPath(trait, qcouleur(style.contour.couleur))
-        for ligne, forme in zip(bloc.lignes, lignes, strict=True):  # 5. remplissage
-            peintre.fillPath(forme, self._pinceau(ligne, bloc))
-        peintre.end()
-        return Rendu(image, gauche, haut)
 
-    def _pinceau(self, ligne, bloc: Bloc):
-        """Couleur du texte, ou dégradé de deux couleurs sur la ligne (vertical, horizontal, en biais)."""
-        style = self.reglages.texte
-        if not style.degrade.actif:
-            return qcouleur(style.couleur)
+        # 3 à 5. Chaque état : lueur, contour, remplissage, soulignement ; posé avec son opacité.
+        for nom in ORDRE_DES_ETATS:
+            liste = groupes.get(nom) or []
+            if not liste:
+                continue
+            aspect = self.apparences[nom]
+            direct = aspect.opacite >= 1  # opaque : dessiné directement, sans calque intermédiaire
+            calque = image if direct else _image_vide(largeur, hauteur)
+            if nom in halos:
+                traceur = QPainterPathStroker()
+                traceur.setWidth(halos[nom])
+                traceur.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+                traceur.setCapStyle(Qt.PenCapStyle.RoundCap)
+                elargie = QPainterPath(silhouettes[nom])
+                elargie.addPath(traceur.createStroke(silhouettes[nom]))
+                lumiere = _image_vide(largeur, hauteur)
+                peintre = peintre_sur(lumiere)
+                peintre.fillPath(elargie, qcouleur(aspect.lueur.couleur, opaque=True))
+                peintre.end()
+                poser(calque, flouter(lumiere, halos[nom] * echelle), aspect.lueur.couleur.opacite / 100 * aspect.lueur.intensite_pct / 100)
+            peintre = peintre_sur(calque)
+            for mot in liste:
+                if mot.trait is not None:
+                    peintre.fillPath(mot.trait, qcouleur(aspect.contour.couleur))
+            for mot in liste:
+                peintre.fillPath(mot.lettres, self._pinceau(bloc.lignes[mot.place.ligne], bloc, aspect, mot.transformation))
+            for mot in liste:
+                if aspect.soulignement is not None:
+                    trait = QPainterPath()
+                    trait.addRect(self._rect_du_soulignement(mot))
+                    peintre.fillPath(mot.transformation.map(trait), qcouleur(aspect.soulignement.couleur))
+            peintre.end()
+            if not direct:
+                poser(image, calque, aspect.opacite)
+        if fond_actif is None:
+            return Rendu(image, gauche, haut)
+        # Le sous-titre complet, fond du mot actif à sa place d'arrivée ; les deux couches restent
+        # en mémoire seulement si ce fond peut glisser (images refaites pendant le glissement).
+        complet = self._composer(dessous, image, fond_actif, gauche, haut, echelle)
+        if glisse_possible:
+            return Rendu(complet, gauche, haut, dessous, image)
+        return Rendu(complet, gauche, haut)
+
+    def _rect_du_soulignement(self, mot: _MotDessine) -> QRectF:
+        souligne = mot.apparence.soulignement
+        base = mot.boite.top() + self.metriques.ascendante * (mot.boite.height() / (self.metriques.ascendante + self.metriques.descendante))
+        return QRectF(mot.boite.left(), base + self.px(souligne.distance_pct), mot.boite.width(), self.px(souligne.epaisseur_pct))
+
+    def _pinceau(self, ligne, bloc: Bloc, aspect: Apparence, transformation: QTransform):
+        """Couleur du texte, ou dégradé de deux couleurs sur la ligne (vertical, horizontal, en biais).
+        Un mot agrandi garde le dégradé de sa ligne, agrandi avec lui."""
+        if not aspect.degrade.actif:
+            return qcouleur(aspect.couleur)
         haut = ligne.base - self.metriques.ascendante * bloc.echelle
         bas = ligne.base + self.metriques.descendante * bloc.echelle
         gauche, droite = ligne.x, ligne.x + ligne.largeur
-        if style.degrade.direction == "horizontal":
+        if aspect.degrade.direction == "horizontal":
             degrade = QLinearGradient(QPointF(gauche, haut), QPointF(droite, haut))
-        elif style.degrade.direction == "biais":
+        elif aspect.degrade.direction == "biais":
             degrade = QLinearGradient(QPointF(gauche, haut), QPointF(droite, bas))
         else:
             degrade = QLinearGradient(QPointF(gauche, haut), QPointF(gauche, bas))
-        degrade.setColorAt(0, qcouleur(style.couleur))
-        degrade.setColorAt(1, qcouleur(style.degrade.couleur))
-        return degrade
+        degrade.setColorAt(0, qcouleur(aspect.couleur))
+        degrade.setColorAt(1, qcouleur(aspect.degrade.couleur))
+        pinceau = QBrush(degrade)
+        if not transformation.isIdentity():
+            pinceau.setTransform(transformation)
+        return pinceau
+
+    # --- Fond du mot actif (lot 5) ----------------------------------------------------------------
+
+    def _depart_du_glissement(self, bloc: Bloc, actif: int) -> MotPlace | None:
+        """Le mot d'où glisse le fond du mot actif : le mot précédent, sur la même ligne (sur une
+        autre ligne, le fond ne glisse pas : il apparaît sous le mot). None si ce fond ne glisse pas."""
+        aspect = self.apparences[ACTIF]
+        fond = aspect.fond
+        if fond is None or not aspect.visible or not fond.glisse or fond.duree_glisse_ms <= 0:
+            return None
+        places = {place.index: place for place in bloc.mots}
+        place, precedente = places.get(actif), places.get(actif - 1)
+        if place is None or precedente is None or precedente.ligne != place.ligne:
+            return None
+        return precedente
+
+    def _avancee_du_glissement(self, sous_titre: SousTitre, mots: list[MotAffiche], instant: Instant) -> float | None:
+        """Où en est le fond du mot actif qui glisse depuis le mot précédent (0 : sous ce mot ; vers
+        1 : arrivé), courbe douce comprise ; None s'il ne glisse pas, ou plus."""
+        fond = self.apparences[ACTIF].fond
+        if instant.actif is None or fond is None or instant.depuis_s >= fond.duree_glisse_ms / 1000:
+            return None
+        if self._depart_du_glissement(self.bloc(sous_titre, mots), instant.actif) is None:
+            return None
+        return _douce(instant.depuis_s / (fond.duree_glisse_ms / 1000))
+
+    def en_mouvement(self, sous_titre: SousTitre, mots: list[MotAffiche], instant: Instant) -> bool:
+        """Quelque chose bouge-t-il à cet instant (le fond du mot actif qui glisse) ? L'aperçu se
+        redessine alors à chaque image."""
+        return self._avancee_du_glissement(sous_titre, mots, instant) is not None
+
+    def _fond_actif(self, bloc: Bloc, actif: int, avancee: float = 1.0) -> QPainterPath | None:
+        """Fond surligné du mot actif, en pixels de la vidéo (agrandissement et décalage du mot
+        compris) ; None s'il n'en a pas. `avancee` inférieure à 1 : en train de glisser depuis le mot
+        précédent (même ligne)."""
+        aspect = self.apparences[ACTIF]
+        if aspect.fond is None or not aspect.visible:
+            return None
+        place = next((p for p in bloc.mots if p.index == actif), None)
+        if place is None:
+            return None
+        boite = self._boite_du_mot(place, bloc)
+        rectangle = self._fond_d_etat(boite, aspect.fond)
+        precedente = self._depart_du_glissement(bloc, actif) if avancee < 1 else None
+        if precedente is not None:
+            depart = self._fond_d_etat(self._boite_du_mot(precedente, bloc), aspect.fond)
+            rectangle = QRectF(
+                depart.left() + (rectangle.left() - depart.left()) * avancee,
+                depart.top() + (rectangle.top() - depart.top()) * avancee,
+                depart.width() + (rectangle.width() - depart.width()) * avancee,
+                depart.height() + (rectangle.height() - depart.height()) * avancee,
+            )
+        return self._arrondis([rectangle], aspect.fond.arrondi_pct, self._transformation(boite, aspect))
+
+    def _couleur_du_fond_actif(self) -> QColor:
+        aspect = self.apparences[ACTIF]
+        couleur = qcouleur(aspect.fond.couleur)
+        couleur.setAlphaF(couleur.alphaF() * aspect.opacite)
+        return couleur
+
+    def fond_du_mot_actif(self, sous_titre: SousTitre, mots: list[MotAffiche], instant: Instant) -> tuple[QPainterPath, QColor] | None:
+        """Fond surligné du mot actif à cet instant (en pixels de la vidéo) et sa couleur : s'il
+        glisse, il part du mot précédent (même ligne) et arrive sur le mot actif en `duree_glisse_ms`."""
+        if instant.actif is None:
+            return None
+        avancee = self._avancee_du_glissement(sous_titre, mots, instant)
+        forme = self._fond_actif(self.bloc(sous_titre, mots), instant.actif, 1.0 if avancee is None else avancee)
+        return None if forme is None else (forme, self._couleur_du_fond_actif())
+
+    def _composer(self, dessous: QImage, dessus: QImage, fond: QPainterPath | None, gauche: int, haut: int, echelle: float) -> QImage:
+        """Une seule image : ce qui passe sous le fond du mot actif, ce fond (en pixels de la vidéo),
+        puis les lettres. L'aperçu et l'export posent ensuite cette même image, d'un seul coup : ils
+        restent identiques au pixel près (poser les couches une à une sur la vidéo arrondirait
+        autrement les bords et les transparences)."""
+        image = dessous.copy()
+        peintre = QPainter(image)
+        if fond is not None:
+            peintre.setRenderHint(QPainter.RenderHint.Antialiasing)
+            peintre.translate(-gauche, -haut)
+            peintre.scale(echelle, echelle)
+            peintre.fillPath(fond, self._couleur_du_fond_actif())
+            peintre.resetTransform()
+        peintre.drawImage(QPointF(0, 0), dessus)
+        peintre.end()
+        return image
 
     def dessiner(
         self,
@@ -384,19 +775,31 @@ class Moteur:
         sous_titre: SousTitre,
         mots: list[MotAffiche],
         ratio_ecran: float = 1.0,
+        temps: float | None = None,
     ) -> None:
         """Dessine le sous-titre avec le coin haut gauche de la vidéo en `origine` (coordonnées du
         peintre) et `echelle` points du peintre par pixel de vidéo. `ratio_ecran` : pixels réels de
-        l'écran par point (écran à 150 % : 1,5), pour un texte net sur tous les écrans."""
-        rendu = self.rendu(sous_titre, mots, echelle, ratio_ecran)
-        peintre.drawImage(QPointF(origine.x() + rendu.x / ratio_ecran, origine.y() + rendu.y / ratio_ecran), rendu.image)
+        l'écran par point (écran à 150 % : 1,5), pour un texte net sur tous les écrans. `temps` : le
+        moment de la vidéo (mot actif ; sans temps, aucun mot n'est actif).
 
-    def image(self, sous_titre: SousTitre | None, mots: list[MotAffiche]) -> QImage:
-        """Image transparente à la taille de la vidéo, avec ce sous-titre (aucun : image vide). C'est
-        l'image que l'export de la V3 assemblera, une par image du film."""
+        Toujours une seule image posée, celle que l'export assemblera (image())."""
+        instant = self.instant(sous_titre, mots, temps)
+        rendu = self.rendu(sous_titre, mots, echelle, ratio_ecran, instant.actif)
+        image = rendu.image
+        if rendu.dessous is not None:
+            avancee = self._avancee_du_glissement(sous_titre, mots, instant)
+            if avancee is not None:  # le fond glisse : l'image de cet instant
+                fond = self._fond_actif(self.bloc(sous_titre, mots), instant.actif, avancee)
+                image = self._composer(rendu.dessous, rendu.dessus, fond, rendu.x, rendu.y, echelle * ratio_ecran)
+                image.setDevicePixelRatio(ratio_ecran)
+        peintre.drawImage(QPointF(origine.x() + rendu.x / ratio_ecran, origine.y() + rendu.y / ratio_ecran), image)
+
+    def image(self, sous_titre: SousTitre | None, mots: list[MotAffiche], temps: float | None = None) -> QImage:
+        """Image transparente à la taille de la vidéo, avec ce sous-titre à ce moment (aucun : image
+        vide). C'est l'image que l'export de la V3 assemblera, une par image du film."""
         image = _image_vide(self.largeur, self.hauteur)
         if sous_titre is not None:
             peintre = QPainter(image)
-            self.dessiner(peintre, QPointF(0, 0), 1.0, sous_titre, mots)
+            self.dessiner(peintre, QPointF(0, 0), 1.0, sous_titre, mots, temps=temps)
             peintre.end()
         return image

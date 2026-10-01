@@ -383,6 +383,13 @@ QLabel[role="legende-erreur"] {
     color: $erreur;
     font-size: ${legende}px;
 }
+QLabel[role="legende-modifiee"] {
+    color: $accent_survol;
+    font-size: ${legende}px;
+}
+QLabel[role="legende-modifiee"]:disabled {
+    color: $texte_desactive;
+}
 QLabel[vide="true"] {
     color: $texte_secondaire;
 }

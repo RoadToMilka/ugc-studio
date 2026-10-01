@@ -299,6 +299,26 @@ SOUS_TITRES = PageDeConseils(
             ),
         ),
         Rubrique(
+            "Mots : le mot en train d'être dit",
+            (
+                "Onglet Mots : trois états, chacun avec son apparence : les mots à venir, le mot actif (en "
+                "train d'être dit) et les mots déjà dits. Tout ce qui n'est pas réglé reste « comme le texte ».",
+                "Les raccourcis remplissent les états : Surlignage (le mot actif en jaune, un peu plus grand), "
+                "Karaoké (les mots dits restent jaunes), Apparition (les mots apparaissent quand ils sont "
+                "dits), Mot par mot (un seul mot à la fois). Tout reste modifiable ensuite.",
+                "Un réglage changé a son nom en mauve ; ↺ le remet comme le texte.",
+                "Un mot invisible garde sa place : rien ne bouge pendant la lecture. Un mot agrandi grandit "
+                "autour de son centre, sans pousser ses voisins ; la place qu'il prend compte dans le "
+                "découpage, il ne sort jamais de la marge maximum.",
+                "Pour le mot actif, le fond surligné peut glisser d'un mot à l'autre (réglages avancés du "
+                "fond) ; sur une autre ligne, il apparaît directement sous le mot.",
+                "Mots accentués : pour les sous-titres d'une prise, les mots mis en valeur dans son script "
+                "(bouton « Accentuer » du module Voix) peuvent avoir leur propre apparence.",
+                "Si les mots s'allument un peu tard ou un peu tôt, « Avance de l'allumage » (réglages "
+                "avancés) les décale à l'écran, de 200 ms au plus ; le moment des mots ne change pas.",
+            ),
+        ),
+        Rubrique(
             "Polices et licences",
             (
                 "Polices fournies avec l'app (Montserrat, Poppins, Anton, Bebas Neue, Inter) : licence SIL "

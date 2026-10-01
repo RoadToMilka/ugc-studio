@@ -162,7 +162,7 @@ class OngletTexte(QWidget):
 
     def _groupe_police(self, contenu: QVBoxLayout) -> None:
         self.recherche_police = QLineEdit()
-        self.recherche_police.setPlaceholderText("Rechercher une police")
+        self.recherche_police.setPlaceholderText("Nom de police")  # court : tient dans le champ, sans « … »
         self.recherche_police.setClearButtonEnabled(True)
         self.recherche_police.textChanged.connect(lambda _texte: self._remplir_polices())
         self.police = liste_deroulante("Polices fournies, puis importées et de Windows (tape une lettre pour y sauter)")
