@@ -223,22 +223,23 @@ def test_format_suivi_de_la_video(atelier, services, tmp_path):
     _video(services, tmp_path)
     atelier.rafraichir()
     assert not atelier.format.isEnabled() and atelier.format.currentText() == "Celui de la vidéo (1080 × 1350)"
-    assert atelier.panneau.info_format.isVisibleTo(atelier.panneau)
+    # (Onglet Écran pas affiché : on vérifie ce qui est montré ou caché dedans.)
+    assert not atelier.panneau.info_format.isHidden()
     assert atelier.toile.taille_video() == (1080, 1350)
-    assert not atelier.panneau.zone_video.isVisibleTo(atelier.panneau)  # le projet a sa vidéo
+    assert atelier.panneau.zone_video.isHidden()  # le projet a sa vidéo
 
 
 def test_format_personnalise_sans_video(atelier, services):
     _prise_sans_video(services)
     atelier.rafraichir()
     assert atelier.format.isEnabled() and atelier.format.currentData() == "9:16"
-    assert not atelier.panneau.zone_perso.isVisibleTo(atelier.panneau)
+    assert atelier.panneau.zone_perso.isHidden()
     atelier.panneau.largeur_perso.setValue(1201)
     atelier.panneau.hauteur_perso.setValue(1500)
     atelier.format.setCurrentIndex(atelier.format.findData("personnalise"))
     reglages = services.projets.projet.sous_titres
     assert (reglages.format, reglages.largeur_perso, reglages.hauteur_perso) == ("personnalise", 1202, 1500)
-    assert atelier.panneau.zone_perso.isVisibleTo(atelier.panneau)
+    assert not atelier.panneau.zone_perso.isHidden()
     assert atelier.toile.taille_video() == (1202, 1500)
     assert "Vidéo 1202 × 1500" in atelier.infos_ecran.text()
 
@@ -310,13 +311,13 @@ def test_video_choisie_seulement_pour_l_apercu(atelier, services, tmp_path, monk
     _prise_sans_video(services)
     atelier.rafraichir()
     panneau = atelier.panneau
-    assert panneau.zone_video.isVisibleTo(panneau) and not panneau.bouton_retirer_video.isVisibleTo(panneau)
+    assert not panneau.zone_video.isHidden() and panneau.bouton_retirer_video.isHidden()
     montage = tmp_path / "montage.mp4"
     montage.write_bytes(b"video")
     monkeypatch.setattr(atelier, "_demander_video", lambda _titre, _proposition: montage)
     atelier.choisir_video_apercu()
     assert services.projets.projet.sous_titres.apercu.chemin == str(montage)
-    assert panneau.nom_video.text().startswith("montage.mp4") and panneau.bouton_retirer_video.isVisibleTo(panneau)
+    assert panneau.nom_video.text().startswith("montage.mp4") and not panneau.bouton_retirer_video.isHidden()
     # Sa résolution (lue par Qt Multimedia dans l'app) impose son format.
     atelier._infos_video_lues({"resolution": [1080, 1350]})
     assert services.projets.projet.sous_titres.apercu.resolution == (1080, 1350)

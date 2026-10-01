@@ -191,7 +191,14 @@ class DispositionStudio(QWidget):
         super().resizeEvent(evenement)
 
     def _adapter(self, largeur: int) -> None:
-        deux = largeur >= Dimensions.STUDIO_DEUX_COLONNES_MIN
+        if self._deux_colonnes:
+            deux = largeur >= Dimensions.STUDIO_DEUX_COLONNES_MIN
+        else:
+            # Pour repasser sur deux colonnes, il faut un peu plus de place : sans cette marge, la barre de
+            # défilement de la page (qui apparaît ou disparaît selon la disposition) ferait changer la
+            # disposition en boucle autour de la limite.
+            marge = 0 if self._deux_colonnes is None else Dimensions.BARRE_DEFILEMENT + Espacements.S
+            deux = largeur >= Dimensions.STUDIO_DEUX_COLONNES_MIN + marge
         if deux == self._deux_colonnes:
             return
         self._deux_colonnes = deux

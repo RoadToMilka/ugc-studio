@@ -401,10 +401,16 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
 
     bloc, panneau, toile = atelier.bloc_apercu, atelier.panneau, atelier.toile
     rapport["studio_deux_colonnes"] = atelier.studio.deux_colonnes
+    largeur, limite = atelier.studio.width(), Dimensions.STUDIO_DEUX_COLONNES_MIN
+    if largeur < limite:
+        colonnes_ok = not atelier.studio.deux_colonnes
+    elif largeur >= limite + Dimensions.BARRE_DEFILEMENT + Espacements.S:
+        colonnes_ok = atelier.studio.deux_colonnes
+    else:
+        colonnes_ok = True  # entre les deux : la disposition d'avant est gardée (voir DispositionStudio)
     etat = {
         # Deux colonnes dans une fenêtre large, l'une sous l'autre dans une fenêtre étroite (écran de la fabrication).
-        "colonnes_selon_la_largeur": atelier.studio.deux_colonnes
-        == (atelier.studio.width() >= Dimensions.STUDIO_DEUX_COLONNES_MIN),
+        "colonnes_selon_la_largeur": colonnes_ok,
         "sous_titre_affiche": toile.sous_titre is not None,
         "taille_video": list(toile.taille_video()),
         "video_en_fond": toile.montre_la_video(),

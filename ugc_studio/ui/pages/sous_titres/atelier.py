@@ -70,6 +70,7 @@ from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ...extraction import FILTRE_FICHIERS, LecteurInfos
 from ...sous_titres_du_projet import (
     Calcul,
+    a_sa_video,
     ajustements,
     calculer as calculer_du_projet,
     confirmer_reglage,
@@ -115,12 +116,6 @@ def remarque(sous_titre: SousTitre) -> str:
     if sous_titre.ajuste:
         remarques.append("Ajusté à la main")
     return "  ·  ".join(remarques)
-
-
-def a_sa_video(transcription: Transcription | None) -> bool:
-    """Le projet a-t-il sa propre vidéo (transcrite dans le module Transcription) ? Sinon (prise de
-    voix, audio importé), une vidéo peut être choisie seulement pour l'aperçu."""
-    return bool(transcription and not transcription.prise and (transcription.infos or {}).get("video"))
 
 
 class AtelierSousTitres(Page):

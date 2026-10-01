@@ -50,12 +50,19 @@ class Calcul:
     moteur: Moteur | None = None
 
 
+def a_sa_video(transcription: Transcription | None) -> bool:
+    """Le projet a-t-il sa propre vidéo (transcrite dans le module Transcription) ? Sinon (prise de
+    voix, audio importé), une vidéo peut être choisie seulement pour l'aperçu."""
+    if transcription is None or transcription.prise:
+        return False
+    infos = transcription.infos or {}
+    return bool(infos.get("video")) or resolution_video(infos) is not None
+
+
 def video_du_projet(projet: Projet) -> tuple[int, int] | None:
     """Résolution de la vidéo transcrite dans le projet (None : pas de vidéo, ex. une prise de voix)."""
     transcription = projet.transcription
-    if transcription is None or transcription.prise:
-        return None
-    return resolution_video(transcription.infos)
+    return resolution_video(transcription.infos) if a_sa_video(transcription) else None
 
 
 def resolution_imposee(projet: Projet, reglages: ReglagesSousTitres | None = None) -> tuple[int, int] | None:
