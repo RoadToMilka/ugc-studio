@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.14, 01/10/2026 (V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.15, 02/10/2026 (V3 en préparation, §12 ; V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -27,7 +27,7 @@ Application Windows de bureau pour produire des **publicités e-commerce UGC / i
 |---|---|---|
 | Langage | Python 3.12 | Lisible, grand écosystème audio/vidéo |
 | Interface | PySide6 (Qt) | Interface de bureau moderne, thème sombre personnalisable |
-| Audio / vidéo | FFmpeg : pour la V1, celui de Qt Multimedia (déjà inclus avec Qt) ; FFmpeg en ligne de commande ajouté pour les exports vidéo (V3) | Extraction audio et lecture des infos source (V1), encodage (V3). Passer par Qt évite d'alourdir le `.exe` d'environ 80 Mo tant qu'on n'encode pas de vidéo |
+| Audio / vidéo | FFmpeg : pour la V1, celui de Qt Multimedia (déjà inclus avec Qt) ; FFmpeg en ligne de commande ajouté pour les exports vidéo (V3), en **version GPL** (décision du 02/10/2026) : elle seule contient les encodeurs x264 et x265 | Extraction audio et lecture des infos source (V1), encodage (V3) : x264 et x265 donnent la meilleure qualité pour un poids de fichier donné, et x265 garde le HDR des vidéos d'iPhone. Passer par Qt évite d'alourdir l'app tant qu'on n'encode pas de vidéo (le `ffmpeg.exe` de la version GPL « essentials » 9.0.2 pèse environ 100 Mo) |
 | Rendu des sous-titres | Dessin image par image en Python (Qt QPainter), puis assemblage par FFmpeg | Contrôle total du design ; aperçu identique à l'export |
 | Stockage des clés API | Coffre-fort Windows via la bibliothèque `keyring` | Clés chiffrées, jamais dans un fichier ni sur GitHub |
 | Données locales | Fichiers JSON dans `%APPDATA%\UGC Studio\` | Styles, préréglages, projets, historique des coûts |
@@ -1051,7 +1051,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Chaque version publiée = une **Release GitHub** avec le `.exe` construit automatiquement (GitHub Actions, machine Windows, PyInstaller).
 - Fabrication automatique à chaque envoi de code : tests, fabrication de `UGC-Studio.exe`, démarrage du `.exe` en mode autotest (vérifications, dont la lecture d'une vidéo de test depuis la 1.4.0, + captures d'écran de chaque module), rapport joint au run.
 - Le numéro de version est dans `ugc_studio/__init__.py`. Quand il change sur la branche `main`, une Release `v<version>` est publiée automatiquement. Les versions `0.x` (étapes de la V1) sont marquées « pré-version ».
-- Les polices (Inter pour l'interface ; Montserrat, Poppins, Anton et Bebas Neue pour les sous-titres, avec leurs licences) et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer. FFmpeg en ligne de commande sera ajouté avec les exports vidéo (V3).
+- Les polices (Inter pour l'interface ; Montserrat, Poppins, Anton et Bebas Neue pour les sous-titres, avec leurs licences) et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer. FFmpeg en ligne de commande, en version GPL, sera ajouté avec les exports vidéo (V3 ; façon de l'inclure : §13).
 - *(plus tard)* Installateur qui crée l'icône sur le bureau et dans le menu Démarrer.
 
 ---
@@ -1122,12 +1122,16 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 | 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre ; sommet compté dans la place (§7.12) | Fait |
 | 7 | 2.0.0 | **Studio (5)** : frise (bords de mot en mot, double-clic, zoom), préréglages (liste du studio et « (modifié) », fenêtre, vignettes animées, les 6 styles fournis, ★ des nouveaux projets, nouveau, export et import), finitions (§7.13) | Fait |
 
-Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient une prise (caler les mots transcrits sur le script) : V3.
+Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient une prise (caler les mots transcrits sur le script) : à décider plus tard (02/10/2026).
 
 ### V3 : exports vidéo
+Priorité de l'utilisateur (02/10/2026) : exporter la vidéo et les sous-titres d'une vidéo ou d'un audio **terminés**, importés dans l'app. L'assemblage de la voix et de la vidéo reste dans Premiere Pro pour le moment : une vidéo sans son y est montée avec la voix, puis réimportée dans l'app, qui refait ses sous-titres à partir d'elle.
+- FFmpeg en ligne de commande, version GPL (x264, x265) (§2).
 - Overlay transparent MOV ProRes 4444 (§8.2).
 - Vidéo finale incrustée, choix débit / conteneur / codec, HDR (§8.3, §8.4).
 - Résumé avant export (§8.5).
+- Style par personne (pubs à deux voix), reporté de la V2 (§12.3).
+- Pas prévus pour le moment : assemblage de la voix et d'une vidéo dans l'app (Premiere Pro s'en charge) ; export ASS (§8.1). À décider plus tard : vidéo qui contient une prise (§12.3).
 
 ### V4 : voix avancées et fournisseurs
 - Voice Replication (avec consentement), multi-voix.
@@ -1144,6 +1148,7 @@ Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient 
 - **Zones de sécurité** par plateforme : documentées au §7.8 (TikTok, Meta et YouTube d'après leurs guides ; Snapchat à confirmer). TikTok : la réserve à droite sous le milieu de l'écran (300 px d'après une ancienne note, 140 px sur toute la hauteur d'après des sources de 2026) n'est pas appliquée tant que le modèle officiel n'a pas été relu (lot 3, §7.8).
 - **Lecture de pages par Google avec Gemini 3.8 Flash** (module Script) : les deux pages de Google sur l'outil « URL context » ne listaient pas les mêmes modèles (01/10/2026). Si Google refuse l'outil pour un modèle, l'app essaie un autre modèle chargé qui sait lire les pages, sinon propose de coller le texte. À confirmer au premier vrai essai.
 - **Qualité des scripts** : consignes et exemples s'affineront avec les retours de l'utilisateur sur de vrais produits (lot 2).
+- **FFmpeg (V3)** : version GPL précise (proposée : 9.0.2 « essentials » de gyan.dev, l'une des deux sources Windows indiquées par ffmpeg.org) et façon de l'inclure : dans le `.exe` (environ 100 Mo de plus, à décompresser à chaque lancement) ou téléchargé une seule fois au premier export (vérifié par son empreinte SHA-256). À trancher dans le document V3.
 - **Durée de conservation des voix créées** (Voice Design) : la documentation officielle « Voice Design » indique 1 an et 200 voix par projet ; le guide « Get_Started_Voices » indique 7 jours. L'app affiche la date renvoyée par Google (`expire_time`).
 
 ---
