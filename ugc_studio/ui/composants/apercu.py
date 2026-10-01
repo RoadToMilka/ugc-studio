@@ -411,6 +411,9 @@ class LecteurApercu(QObject):
                 lecteur.blockSignals(True)
                 lecteur.stop()
                 lecteur.setSource(QUrl())
+                # Le lecteur oublie son puits vidéo et sa sortie son avant d'être détruit avec eux.
+                lecteur.setVideoSink(None)
+                lecteur.setAudioOutput(None)
                 lecteur.deleteLater()
         for objet in (self._puits, *self._sorties):
             if objet is not None:
