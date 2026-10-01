@@ -1,4 +1,9 @@
-"""Réglages du studio des sous-titres (V2, lot 3 ; cahier des charges §7.9) : six onglets.
+"""Réglages du studio des sous-titres (V2, lot 3 ; cahier des charges §7.9) : un préréglage, puis
+six onglets.
+
+- Préréglage (lot 7) : la liste des préréglages (choisir l'un l'applique), « (modifié) » quand le style
+  du projet s'en écarte, « Enregistrer… » (nouveau préréglage) et le menu ⋯ (mettre à jour, revenir,
+  gérer les préréglages).
 
 - Texte (onglet_texte.py) : police, graisse, taille, casse, ponctuation, remplissage, contour,
   ombre, lueur, fond, espaces (lot 4).
@@ -20,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QMenu, QVBoxLayout, QWidget
 
 from ....sous_titres import (
     COTE_MAX,
@@ -34,6 +39,7 @@ from ....sous_titres import (
     ReglagesSousTitres,
     cote_pair,
 )
+from ....prereglages import Prereglage
 from ....style_sous_titres import ALIGNEMENTS, POSITIONS, Position, VideoApercu
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
@@ -50,6 +56,7 @@ from ...composants.elements import (
 )
 from ...composants.onglets import Onglets
 from ...composants.section_repliable import SectionRepliable
+from ...icones import icone_menu
 from ...theme import Espacements
 from .onglet_animations import OngletAnimations
 from .onglet_mots import OngletMots
@@ -58,6 +65,8 @@ from .reglages_communs import grille, nombre_lisible
 
 ONGLET_TEXTE, ONGLET_MOTS, ONGLET_ANIMATIONS, ONGLET_POSITION, ONGLET_DECOUPAGE, ONGLET_ECRAN = range(6)
 PAS_REGLAGE_FIN = 10  # la glissière du réglage fin compte en dixièmes de % de la hauteur
+SANS_PREREGLAGE = ""  # choix « Aucun préréglage » de la liste
+MODIFIE = " (modifié)"
 
 
 class PanneauReglages(QWidget):
@@ -67,12 +76,24 @@ class PanneauReglages(QWidget):
     choisir_video_demande = Signal()  # « Choisir une vidéo… » (vidéo d'aperçu)
     retirer_video_demande = Signal()
     video_apercu_change = Signal()  # décalage ou son de la vidéo d'aperçu
+    # Préréglages (lot 7) : la page s'en charge (bibliothèque, question avant de défaire un ajustement).
+    prereglage_choisi = Signal(str)  # identifiant du préréglage choisi dans la liste
+    enregistrer_prereglage_demande = Signal()  # « Enregistrer… » : nouveau préréglage avec ce style
+    mettre_a_jour_prereglage_demande = Signal()
+    revenir_au_prereglage_demande = Signal()
+    gerer_prereglages_demande = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
+        disposition.addLayout(self._ligne_prereglage())
+        self.statut_prereglage = libelle("", "secondaire")  # « Préréglage appliqué »… (vide : caché)
+        self.statut_prereglage.hide()
+        disposition.addSpacing(Espacements.S)
+        disposition.addWidget(self.statut_prereglage)
+        disposition.addSpacing(Espacements.S)
         self.onglets = Onglets(hauteur_selon_l_onglet=True, en_flux=True)  # six onglets : sur deux lignes si besoin
         self.texte = OngletTexte()
         self.texte.change.connect(self.change.emit)
@@ -89,6 +110,62 @@ class PanneauReglages(QWidget):
         disposition.addWidget(self.onglets)
         self._apercu = VideoApercu()
         self._resolution_imposee: tuple[int, int] | None | bool = False  # False : liste des formats pas encore remplie
+
+    # --- Préréglage (lot 7) ----------------------------------------------------------------------
+
+    def _ligne_prereglage(self) -> QHBoxLayout:
+        ligne = QHBoxLayout()
+        ligne.setSpacing(Espacements.S)
+        ligne.addWidget(libelle("Préréglage", "legende", retour_a_la_ligne=False))
+        self.prereglage = liste_deroulante(
+            "Un style complet (onglets Texte, Mots, Animations, Position et Découpage) : en choisir un l'applique"
+        )
+        self.prereglage.activated.connect(lambda _index: self._prereglage_active())
+        ligne.addWidget(self.prereglage, 1)
+        self.bouton_enregistrer_prereglage = bouton(
+            "Enregistrer…", variante="contour", nom_icone="save", action=lambda: self.enregistrer_prereglage_demande.emit()
+        )
+        self.bouton_enregistrer_prereglage.setToolTip("Enregistrer ce style comme nouveau préréglage")
+        ligne.addWidget(self.bouton_enregistrer_prereglage)
+        self.bouton_plus_prereglage = bouton("", variante="icone", nom_icone="ellipsis")
+        self.bouton_plus_prereglage.setToolTip("Plus d'actions sur les préréglages")
+        menu = QMenu(self.bouton_plus_prereglage)
+        self.action_mettre_a_jour = menu.addAction(icone_menu("save"), "Mettre à jour ce préréglage")
+        self.action_mettre_a_jour.triggered.connect(lambda: self.mettre_a_jour_prereglage_demande.emit())
+        self.action_revenir = menu.addAction(icone_menu("rotate-ccw"), "Revenir au préréglage")
+        self.action_revenir.triggered.connect(lambda: self.revenir_au_prereglage_demande.emit())
+        menu.addSeparator()
+        self.action_gerer = menu.addAction(icone_menu("library"), "Gérer les préréglages…")
+        self.action_gerer.triggered.connect(lambda: self.gerer_prereglages_demande.emit())
+        self.bouton_plus_prereglage.setMenu(menu)
+        ligne.addWidget(self.bouton_plus_prereglage)
+        return ligne
+
+    def definir_prereglages(self, prereglages: list[Prereglage], origine: str, nom_origine: str, modifie: bool) -> None:
+        """La liste des préréglages ; celui du projet (`origine`) est choisi, suivi de « (modifié) »
+        quand le style du projet s'en écarte. Sans préréglage (ou s'il a été supprimé depuis) : « Aucun
+        préréglage » (ou son ancien nom)."""
+        self.prereglage.blockSignals(True)
+        self.prereglage.clear()
+        existe = any(p.identifiant == origine for p in prereglages)
+        if not existe:
+            texte = f"{nom_origine} (supprimé)" if origine and nom_origine else "Aucun préréglage"
+            self.prereglage.addItem(texte, SANS_PREREGLAGE)
+        for prereglage in prereglages:
+            texte = prereglage.nom + (MODIFIE if prereglage.identifiant == origine and modifie else "")
+            self.prereglage.addItem(texte, prereglage.identifiant)
+        choisir(self.prereglage, origine if existe else SANS_PREREGLAGE)
+        self.prereglage.blockSignals(False)
+        self.action_mettre_a_jour.setEnabled(existe and modifie)
+        self.action_revenir.setEnabled(existe and modifie)
+        nom = next((p.nom for p in prereglages if p.identifiant == origine), "")
+        self.action_mettre_a_jour.setText(f"Mettre à jour « {nom} » avec ce style" if existe else "Mettre à jour ce préréglage")
+        self.action_revenir.setText(f"Revenir à « {nom} »" if existe else "Revenir au préréglage")
+
+    def _prereglage_active(self) -> None:
+        identifiant = self.prereglage.currentData()
+        if identifiant:
+            self.prereglage_choisi.emit(identifiant)
 
     # --- Onglets -------------------------------------------------------------------------------
 
@@ -399,6 +476,8 @@ class PanneauReglages(QWidget):
             plateforme=self.plateforme.currentData(),
             marge_max_pct=round(self.marge.value(), 2),
             apercu=base.apercu,
+            prereglage=base.prereglage,
+            prereglage_nom=base.prereglage_nom,
         )
 
     def decalage_et_son(self) -> tuple[float, bool]:

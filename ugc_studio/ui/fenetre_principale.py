@@ -91,8 +91,9 @@ class FenetrePrincipale(QMainWindow):
 
         # « Créer les sous-titres » d'une prise (§3.3) : depuis la liste des prises du module Voix.
         self.page("voix").atelier.prises.sous_titres_demandes.connect(self.creer_sous_titres)
-        # « Corriger les mots » des sous-titres : dans le module Transcription.
-        self.page("sous-titres").atelier.corriger_demande.connect(lambda: self.afficher_module("transcription"))
+        # « Corriger les mots » des sous-titres : dans le module Transcription (sur le premier mot d'un
+        # sous-titre, depuis la frise du studio).
+        self.page("sous-titres").atelier.corriger_demande.connect(self.corriger_les_mots)
         # « Envoyer dans Voix » d'un script (V2) : ses répliques remplacent celles du module Voix.
         self.page("script").atelier.envoi_demande.connect(self.envoyer_dans_voix)
         # Accroches d'une série « Accroches seulement » (V2, lot 2) : en variantes A/B de voix.
@@ -141,6 +142,13 @@ class FenetrePrincipale(QMainWindow):
             precedente.quitter()  # ex. la lecture de la page quittée s'arrête
         self.pages.setCurrentIndex(self._index_pages[identifiant])
         self.barre_laterale.selectionner(identifiant)
+
+    def corriger_les_mots(self, temps: float = -1.0) -> None:
+        """« Corriger les mots » : le module Transcription s'ouvre ; depuis la frise des sous-titres,
+        le mot qui commence à `temps` y est choisi (-1 : aucun)."""
+        self.afficher_module("transcription")
+        if temps >= 0:
+            self.page("transcription").atelier.choisir_mot_au_temps(temps)
 
     def creer_sous_titres(self, identifiant_prise: str) -> None:
         """« Créer les sous-titres de cette prise » : ouvre le module Sous-titres et s'en charge."""

@@ -76,8 +76,14 @@ def app_configuree(qapp):
 
 @pytest.fixture
 def services(dossier_donnees_temporaire):
-    """Services de l'app (clés, prix, coûts) dans le dossier temporaire, avec un coffre-fort en mémoire."""
+    """Services de l'app (clés, prix, coûts) dans le dossier temporaire, avec un coffre-fort en mémoire.
+
+    Sans préréglage ★ : un nouveau projet y garde le style de départ du lot 4, sur lequel sont écrits
+    les tests des réglages des sous-titres. Le ★ (style des nouveaux projets, lot 7) a ses propres
+    tests (test_prereglages.py, test_frise_prereglages_interface.py)."""
     from ugc_studio.connexions import CoffreMemoire
     from ugc_studio.services import creer_services
 
-    return creer_services(CoffreMemoire())
+    resultat = creer_services(CoffreMemoire())
+    resultat.prereglages.definir_par_defaut("")
+    return resultat

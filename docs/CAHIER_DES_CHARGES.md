@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.12, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; lot 4, style du texte, version 1.5.0, §7.10 ; lot 5, mots, version 1.6.0, §7.11 ; lot 6, animations, version 1.7.0, §7.12 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.13, 01/10/2026 (V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -578,13 +578,14 @@ Options **combinables** :
 
 - Enregistrer la combinaison complète (texte + mot actif + découpage + position) sous un nom.
 - Appliquer, dupliquer, modifier, supprimer.
+- Fait au lot 7 de la V2 (§7.13), avec les 6 styles fournis, le préréglage des nouveaux projets (★), l'export et l'import.
 
 ### 7.7 Aperçu
 
 - Lecteur vidéo (ou fond neutre si audio seul) avec les sous-titres rendus **exactement comme à l'export** (même moteur de dessin). Fait au lot 3 de la V2 (§7.9).
 - Repères activables : zone de sécurité (pointillés mauves), marge maximum (rouge), grille. Fait (§7.9).
 - Choix de la plateforme pour la zone de sécurité.
-- Timeline des sous-titres (lot 7 de la V2) : les bords se déplacent **de mot en mot** entre deux sous-titres voisins (le moment des mots ne change jamais), sous-titres signalés en orange (cf. §7.3), double-clic : « Corriger les mots » (module Transcription).
+- Timeline des sous-titres (lot 7 de la V2) : les bords se déplacent **de mot en mot** entre deux sous-titres voisins (le moment des mots ne change jamais), sous-titres signalés en orange (cf. §7.3), double-clic : « Corriger les mots » (module Transcription). Fait : la « Frise » (§7.13).
 
 ### 7.8 Mise en œuvre (étape 8)
 
@@ -717,7 +718,7 @@ Onglet **Texte** du studio (`ui/pages/sous_titres/onglet_texte.py`) : tout ce qu
 - **Débord** : le contour et le fond (marge intérieure et bordure) dépassent du texte. Ils comptent dans la largeur mesurée par le découpage (« ça tient une fois dessiné ») et dans la boîte du sous-titre : c'est la boîte visible qui reste entre les marges maximum, part du bord de la zone de sécurité (alignement à gauche ou à droite) et règle la course du réglage fin. Un mot seul trop large est rapetissé, pas son débord. L'ombre et la lueur, floues et légères, n'en font pas partie.
 - **Espaces** : l'espace entre les lettres s'ajoute après chaque lettre sauf la dernière (une ligne reste centrée sur ses lettres) ; l'espace entre les mots s'ajoute à chaque espace.
 - Un réglage qui change la largeur du texte (police, graisse, taille, espaces, contour, marges du fond) refait le découpage, avec la question de la 1.1.0 s'il défait un ajustement fait à la main (§7.8) ; les autres ne changent que le dessin.
-- **Style de départ** des nouveaux projets : `ressources/style_de_depart.json` (Montserrat Extra-grasse, blanc, contour noir de 0,3 %, sans ombre). Un projet plus ancien (1.1.0 à 1.4.0) garde son apparence et son découpage : Inter SemiBold, blanc, ombre légère, sans contour ni fond (les valeurs par défaut du style).
+- **Style de départ** des nouveaux projets : `ressources/style_de_depart.json` (Montserrat Extra-grasse, blanc, contour noir de 0,3 %, sans ombre). Depuis le lot 7, un nouveau projet prend le préréglage marqué ★ (§7.13) ; ce style de départ sert quand aucun ne l'est. Un projet plus ancien (1.1.0 à 1.4.0) garde son apparence et son découpage : Inter SemiBold, blanc, ombre légère, sans contour ni fond (les valeurs par défaut du style).
 - **Forme écrite** du style du texte (projet au format 7, numéro inchangé : un projet de la 1.4.0, à qui manquent les nouveaux groupes, les reçoit avec leurs valeurs par défaut). Choix possibles : `direction` vertical, horizontal ou biais ; `angles` arrondis ou nets ; `portee` texte ou fond ; `mode` du fond aucun, mot, ligne ou bloc.
 
 ```json
@@ -803,6 +804,49 @@ Onglet **Animations** du studio, entre Mots et Position (`ui/pages/sous_titres/o
 **Conseils** de la page : rubrique « Animations ».
 
 **Autotest** : un pop de 400 ms sur le mot qui devient actif et un fondu de 400 ms à l'apparition du sous-titre, appliqués depuis l'onglet ; captures au sommet du pop de « Sérum » et au milieu de l'apparition (images à la taille de la vidéo, recadrées sur le sous-titre) ; l'aperçu doit se savoir en mouvement à ces moments ; puis plus d'animation.
+
+### 7.13 Frise et préréglages (V2, lot 7, version 2.0.0)
+
+**Frise** (`ui/composants/frise.py`) : bloc « Frise » sous l'aperçu et les réglages, sur toute la largeur. Choix détaillés : document « UGC Studio - V2 Studio de style et Script », §5.3.
+
+- En haut, les graduations du temps (une toutes les 1, 2, 5, 10… secondes, au moins 64 px d'écart) ; puis un bloc par sous-titre, de son début à sa fin, numéroté ; en dessous, un trait par mot (son texte au survol) ; le trait mauve du moment lu.
+- Clic : la lecture va à ce moment. Clic sur un bloc : il est choisi (contour mauve), dans la frise comme dans la liste des sous-titres (les deux restent synchronisées), et la lecture va au moment cliqué. Double-clic sur un bloc : « Corriger les mots » ouvre le module Transcription sur son premier mot.
+- Bloc signalé (un mot rapetissé, §7.3) : contour et numéro orange. Ajusté à la main : un point mauve. Les mots du sous-titre choisi sont mauves.
+- **Bord commun** de deux sous-titres qui se touchent (la fin de l'un est le début de l'autre) : un trait fin le signale, le pointeur devient une double flèche. Glissé, il saute de mot en mot (au milieu du silence entre deux mots) ; chaque sous-titre garde au moins un mot. Les mots qui vont changer de sous-titre se colorent : en mauve, ou en rouge si une règle du découpage serait enfreinte, avec la raison au survol. Au relâchement, ils passent d'un sous-titre à l'autre (`sous_titres.deplacer_la_limite` : mêmes règles et mêmes messages que « Monter le premier mot » et « Descendre le dernier mot ») ; le résultat, ou la raison du refus, s'affiche sous la frise. Échap annule. Un bord séparé de son voisin par un silence ne se glisse pas : il suit le moment des mots, qui ne change jamais.
+- Molette : défilement de la frise agrandie (sinon, la page défile) ; Ctrl + molette : zoom autour du pointeur, de toute la pub jusqu'à 24 fois plus large ; une barre de défilement apparaît alors, et la frise suit la lecture.
+
+**Préréglages** (`prereglages.py`, testé sans interface ; fenêtre `ui/dialogues/prereglages.py`) :
+
+- Un préréglage = un nom et la partie « style » d'un projet (onglets Texte, Mots, Animations, Position et Découpage), sous la même forme écrite. Ni le format, ni la plateforme, ni la vidéo d'aperçu.
+- Rangement : `%APPDATA%\UGC Studio\prereglages_sous_titres.json` (`version_format`, `par_defaut` : l'identifiant du ★, `prereglages` : identifiant, nom, fourni, style). Noms uniques (« Nom (2) »), 60 caractères au plus.
+- **Fournis** (`ressources/prereglages_sous_titres.json`) : les 6 styles de l'annexe B du document V2, faits avec les seuls réglages de l'app ; modifiables, supprimables ; « Rétablir les préréglages fournis » les remet comme à l'origine (sans toucher aux autres, ni au choix du ★). Au premier lancement, ★ sur « Blanc contour noir ».
+
+| Préréglage | Texte | Mots | Animations | Position, découpage |
+|---|---|---|---|---|
+| Blanc contour noir | Montserrat Extra-grasse, 4,2 %, blanc, contour noir 0,313 % | actif : jaune #FFD43B, 108 % | pop, 180 ms | Centre + 11 % (61 % de la hauteur) |
+| Surligneur | Poppins Grasse, 4,1 %, ombre noire à 55 % (flou 0,938 %, 0,313 % vers le bas), 1,875 % entre les mots | actif : fond #7C3AED, marges 0,938 % et 0,156 %, arrondi 1,25 % | zoom, 140 ms | Centre + 11 % |
+| Karaoké | Poppins Extra-grasse, 4,1 %, contour noir 0,313 % | actif : #FACC15, 106 % ; déjà dits : #FACC15 | pop, 180 ms, sommet 114 % | Centre + 11 % |
+| Mot par mot | Anton, MAJUSCULES, 7,8 %, contour noir 0,469 %, ombre noire à 45 % (flou 1,563 %, 0,938 % vers le bas) | à venir : invisibles | pop, 200 ms : départ 60 % et opacité 0, sommet 112 % | Centre ; 2 mots, 1 ligne |
+| Bandeau | Montserrat Grasse, 3,4 %, #111827, fond par ligne blanc (marges 1,875 % et 0,625 %, arrondi 1,563 %), interlignage 152 % | sous-titre fixe | aucune | Centre + 12 % |
+| Atténué | Bebas Neue, MAJUSCULES, 6,3 %, 0,078 % entre les lettres, ombre noire à 60 % (flou 0,625 %, 0,313 % vers le bas) | à venir et déjà dits : 45 % ; actif : lueur #F59E0B, 2,188 % | aucune | Centre + 11 % |
+
+- En haut des réglages du studio : « Préréglage » et la liste ; celui du projet est choisi, suivi de « (modifié) » dès que le style du projet s'en écarte (position comprise). Un projet plus ancien affiche « Aucun préréglage » ; un préréglage supprimé depuis, « Nom (supprimé) ». Choisir un préréglage l'applique (la question de la 1.1.0 vient d'abord s'il défait un ajustement fait à la main). « Enregistrer… » : un nouveau préréglage avec le style du projet, qui devient le sien. Menu ⋯ : « Mettre à jour « Nom » avec ce style » (après confirmation : les autres projets gardent leur copie), « Revenir à « Nom » », « Gérer les préréglages… ». Un message sous la liste dit ce qui a été fait. « Rétablir » (onglet Texte) remet les valeurs du préréglage du projet.
+- Fenêtre **« Préréglages de sous-titres »** (bouton « Conseils » en haut à droite) : une carte par préréglage, avec sa **vignette animée** (« Mais ce sérum Glowzy a tout changé ! » rejoué en boucle, 20 images par seconde, découpé et dessiné par le moteur de l'aperçu avec les réglages du préréglage, chaque sous-titre centré), son nom (suivi d'une pastille ★ pour celui des nouveaux projets, le sens au survol), sa police (« absente : Inter la remplace » si elle manque), « style du projet », « fourni » ; « Appliquer » (grisé sans projet ouvert) ; menu ⋯ : Dupliquer, Renommer…, Exporter…, « Utiliser pour les nouveaux projets (★) » (ou « Ne plus l'utiliser… »), Supprimer…. En bas : Nouveau (à partir du style de départ), Importer…, Rétablir les préréglages fournis, Fermer.
+- **Export** : un fichier `.json` lisible (`type` : `prereglages_sous_titres`, puis le nom et le style de chaque préréglage). **Import** : ajoutés à la liste, avec de nouveaux identifiants et un nom unique ; un fichier illisible est refusé avec un message, sans jamais être modifié ; une police absente de l'ordinateur est signalée (Inter la remplace, le préréglage garde son nom).
+- Le projet garde sa **propre copie** du style et retient son préréglage d'origine ; modifier ou supprimer un préréglage ne change pas un projet déjà fait. **Nouveaux projets** : le style du préréglage ★ ; sans ★, le style de départ (§7.10).
+- Forme écrite (projet au format 7, numéro inchangé ; un projet de la 1.7.0 n'a pas de préréglage d'origine) : `sous_titres.prereglage`, à côté de `style`, `ecran` et `apercu`.
+
+```json
+"prereglage": {"identifiant": "fourni-blanc-contour-noir", "nom": "Blanc contour noir"}
+```
+
+**Écarts choisis** (par rapport au document V2) : « Enregistrer… » enregistre directement un nouveau préréglage, et le menu ⋯ n'a donc pas de doublon « Enregistrer comme nouveau » ; l'interface dit « Frise » (le document disait « timeline », mot anglais) ; le ★ du premier lancement est sur « Blanc contour noir » (le document ne le fixait pas).
+
+**Tests** : le service des tests n'a pas de ★ (un nouveau projet y garde le style de départ, sur lequel sont écrits les tests des autres réglages) ; le ★ a ses propres tests.
+
+**Conseils** de la page : rubriques « Préréglages » et « Frise » ; fenêtre « Préréglages de sous-titres » : vignettes, créer et modifier, partager.
+
+**Autotest** : sur le projet de démonstration, qui part du préréglage ★ sans « (modifié) » : la frise (un bloc par sous-titre, un clic sur un bloc le choisit dans la liste, un bord commun glissé d'un mot, capture pendant le glissement, puis le découpage automatique rétabli) ; les 6 préréglages fournis appliqués depuis la liste (une image à la taille de la vidéo, recadrée sur le sous-titre, pendant « Sérum ») ; « (modifié) » après un réglage changé (capture avec la ligne « Préréglage » à l'écran) ; la fenêtre des préréglages et ses vignettes (au milieu de « sérum ») : les 6 cartes visibles sans faire défiler, chaque nom écrit en entier, ★ compris ; puis tout revient comme au début.
 
 ---
 
@@ -965,6 +1009,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Pendant la pipette : curseur en croix sur l'aperçu, et une info sous l'aperçu.
 - **Onglet Mots** (lot 5) : « Raccourci » en liste déroulante (« Personnalisé » en tête quand les états ne sont plus ceux d'un raccourci), « État » en choix en boutons, puis les réglages de l'état en grille à trois colonnes : libellé, champ, bouton icône ↺ (« rotate-ccw », infobulle « Comme le texte »), visible seulement pour un réglage changé, dont le libellé passe en mauve (rôle `legende-modifiee`, couleur `ACCENT_SURVOL`). Groupes repliables comme l'onglet Texte (Remplissage et Taille et place ouverts au départ), réglages d'un effet décoché grisés.
 - **Onglet Animations** (lot 6) : trois groupes (Mot qui devient actif, Retour à « déjà dit », Sous-titre entier) ; animation, courbe, apparition et disparition en listes déroulantes, durées en millisecondes (± 10 ms aux flèches), retour en choix en boutons (Instantané, Fondu) ; réglages avancés du mot repliés, avec ↺ « Comme l'animation choisie » ; durée et intensité grisées sans animation. Six onglets de réglages : Texte, Mots, Animations, Position, Découpage, Écran.
+- **Préréglage** (lot 7) : en haut des réglages, une ligne « Préréglage », la liste (qui s'étire), « Enregistrer… » en bouton contour (icône « save ») et le bouton icône ⋯ (menu : « save », « rotate-ccw », « library »). **Frise** (lot 7) : fond de l'app, blocs arrondis (4 px) en surface surélevée avec contour neutre, choisi : contour mauve de 2 px et fond mauve léger, signalé : orange ; graduations et textes en légende (12 px) ; hauteurs dans `theme.Dimensions` (graduations 18 px, blocs 36 px, mots 12 px), bord saisissable à 6 px près. **Vignettes** (lot 7) : 240 × 108 px, fond neutre gris, coins de 8 px ; cartes de la fenêtre des préréglages en blocs, côte à côte, passant à la ligne, la ligne du nom à la hauteur d'une pastille (cartes alignées avec ou sans ★) ; fenêtre de 880 × 680 px (la hauteur maximale d'une fenêtre de dialogue) : les 6 préréglages fournis s'y voient sans faire défiler, en 2 rangées de 3.
 - Les onglets des réglages prennent la hauteur de l'onglet affiché (option `hauteur_selon_l_onglet` des onglets en boutons ; ailleurs, la hauteur reste celle du plus haut) : pas de grand vide sous un onglet court. Une ligne qui ne sert pas disparaît avec son libellé (« Taille » hors format personnalisé), et un message d'état vide ne laisse pas de ligne vide en bas d'un bloc.
 
 ### 9.5 Typographie
@@ -994,7 +1039,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 ## 10. Données et sécurité
 
 - Clés API : coffre-fort Windows uniquement (`keyring`). Jamais dans le code, les projets, les logs ni GitHub.
-- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json`, bibliothèque de briefs `briefs.json`, vitesses de parole mesurées `vitesses.json`, polices importées pour les sous-titres `polices\` ; options d'écriture du module Script retenues dans les préférences).
+- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json`, bibliothèque de briefs `briefs.json`, vitesses de parole mesurées `vitesses.json`, polices importées pour les sous-titres `polices\`, préréglages de sous-titres `prereglages_sous_titres.json` ; options d'écriture du module Script retenues dans les préférences).
 - Lecture d'une page produit (module Script) : une seule demande, celle de l'utilisateur, avec les en-têtes d'un navigateur ordinaire ; 5 Mo lus au plus ; aucune clé envoyée au site.
 - Projets : dossier choisi par l'utilisateur (par défaut `Documents\UGC Studio\Projets\`).
 - Journal d'erreurs lisible, accessible depuis Réglages, sans aucune clé API.
@@ -1040,7 +1085,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0 ; lot 5 (mots), version 1.6.0 ; lot 6 (animations), version 1.7.0.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 (§12.3) terminée le 01/10/2026 (Release v2.0.0) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0 ; lot 5 (mots), version 1.6.0 ; lot 6 (animations), version 1.7.0 ; lot 7 (frise et préréglages), version 2.0.0.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -1075,7 +1120,7 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 | 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style, style de départ des nouveaux projets (§7.10) | Fait |
 | 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage ; agrandissement compté dans la place (§7.11) | Fait |
 | 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre ; sommet compté dans la place (§7.12) | Fait |
-| 7 | 2.0.0 | **Studio (5)** : timeline (bords de mot en mot, double-clic), préréglages (fenêtre, vignettes animées, les 6 styles fournis, nouveau, export et import), finitions | |
+| 7 | 2.0.0 | **Studio (5)** : frise (bords de mot en mot, double-clic, zoom), préréglages (liste du studio et « (modifié) », fenêtre, vignettes animées, les 6 styles fournis, ★ des nouveaux projets, nouveau, export et import), finitions (§7.13) | Fait |
 
 Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient une prise (caler les mots transcrits sur le script) : V3.
 

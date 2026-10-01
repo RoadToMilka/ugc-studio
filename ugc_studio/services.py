@@ -14,6 +14,7 @@ from .ecriture.briefs import BibliothequeBriefs
 from .ecriture.exemples import BibliothequeExemples
 from .modeles_charges import ModelesCharges
 from .preferences import Preferences
+from .prereglages import FICHIER_PREREGLAGES, BibliothequePrereglages
 from .prix import CataloguePrix
 from .projets import GestionnaireProjets
 from .prononciation import DictionnaireGlobal
@@ -38,6 +39,7 @@ class Services:
     exemples: BibliothequeExemples  # « Mes meilleurs scripts » : exemples donnés au modèle (V2, §10.9)
     briefs: BibliothequeBriefs  # briefs réutilisables d'un projet à l'autre (V2, §10.5)
     vitesses: VitessesDeParole  # vitesse de parole de chaque voix, mesurée sur les prises (V2, §10.7)
+    prereglages: BibliothequePrereglages  # préréglages de style des sous-titres (V2, lot 7, §7.13)
 
 
 def creer_services(coffre: Coffre | None = None) -> Services:
@@ -48,6 +50,8 @@ def creer_services(coffre: Coffre | None = None) -> Services:
     voix = GestionnaireVoix(dossier / "voix.json")
     projets = GestionnaireProjets(dossier / "projets_recents.json")
     vitesses = VitessesDeParole(dossier / "vitesses.json")
+    prereglages = BibliothequePrereglages(dossier / FICHIER_PREREGLAGES)
+    projets.style_des_nouveaux = prereglages.reglages_des_nouveaux  # ★ : style des nouveaux projets
     # Un projet qui s'ouvre : ses prises pas encore mesurées (ex. créées avec la 1.2.0) affinent la
     # vitesse de leur voix. Abonné en premier : les modules affichent ensuite la vitesse à jour.
     projets.abonner(lambda projet: vitesses.noter_prises(projet.prises) if projet is not None else None)
@@ -65,4 +69,5 @@ def creer_services(coffre: Coffre | None = None) -> Services:
         exemples=BibliothequeExemples(dossier / "scripts_exemples.json"),
         briefs=BibliothequeBriefs(dossier / "briefs.json"),
         vitesses=vitesses,
+        prereglages=prereglages,
     )

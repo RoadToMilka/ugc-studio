@@ -83,6 +83,10 @@ class EtiquetteAbregee(QLabel):
     def text(self) -> str:
         return self._complet
 
+    def est_abrege(self) -> bool:
+        """Vrai si le texte affiché est raccourci par « … » (la place manque pour l'écrire en entier)."""
+        return QLabel.text(self) != self._complet
+
     def setText(self, texte: str) -> None:  # noqa: N802 — même nom que chez QLabel
         self._complet = texte
         self._mettre_a_jour()

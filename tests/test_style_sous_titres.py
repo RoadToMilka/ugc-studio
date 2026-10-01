@@ -92,12 +92,14 @@ def _reglages_complets() -> ReglagesSousTitres:
         plateforme="meta",
         marge_max_pct=6.0,
         apercu=VideoApercu("C:/Montages/pub.mp4", 2.0, 1080, 1920, False),
+        prereglage="fourni-surligneur",
+        prereglage_nom="Surligneur",
     )
 
 
-def test_format_7_ecrit_en_trois_parties():
+def test_format_7_ecrit_en_quatre_parties():
     ecrit = _reglages_complets().en_dict()
-    assert set(ecrit) == {"style", "ecran", "apercu"}
+    assert set(ecrit) == {"style", "ecran", "apercu", "prereglage"}  # préréglage d'origine : lot 7
     assert set(ecrit["style"]) == {"texte", "mots", "animations", "position", "decoupage"}  # lots 5 et 6
     assert ecrit["style"]["decoupage"] == {
         "caracteres_max": 30, "mots_max": 4, "lignes_max": 1, "couper_sur_ponctuation": False, "duree_min_s": 0.8,
@@ -105,6 +107,7 @@ def test_format_7_ecrit_en_trois_parties():
     assert ecrit["style"]["position"] == {"verticale": "haut", "decalage_pct": 2.5, "alignement": "gauche", "largeur_lignes_pct": 80.0}
     assert ecrit["ecran"] == {"format": "personnalise", "largeur": 1200, "hauteur": 1500, "plateforme": "meta", "marge_max_pct": 6.0}
     assert ecrit["apercu"]["chemin"] == "C:/Montages/pub.mp4" and not ecrit["apercu"]["son_de_la_video"]
+    assert ecrit["prereglage"] == {"identifiant": "fourni-surligneur", "nom": "Surligneur"}
     assert ReglagesSousTitres.depuis_dict(json.loads(json.dumps(ecrit))) == _reglages_complets()
 
 

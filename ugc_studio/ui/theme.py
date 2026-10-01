@@ -207,6 +207,25 @@ class Dimensions:
     REPERE_EPAISSEUR = 1  # traits des repères (toujours 1 px à l'écran, quel que soit le zoom)
     REPERE_POINTILLES = (4, 4)  # zone de sécurité : 4 px de trait, 4 px d'espace
     CHAMP_COTE_LARGEUR = 112  # largeur ou hauteur d'un format personnalisé (« 1080 px »)
+    # Frise des sous-titres (V2, lot 7) : graduations du temps, blocs des sous-titres, traits des mots.
+    FRISE_REGLE_HAUTEUR = 18
+    FRISE_BLOC_HAUTEUR = 36
+    FRISE_MOTS_HAUTEUR = 12
+    FRISE_MARGE = 8  # à gauche et à droite : le premier et le dernier bloc restent saisissables
+    FRISE_POIGNEE = 6  # un bord commun se saisit à 6 px près
+    FRISE_CURSEUR = 2  # trait du moment lu
+    FRISE_MARQUE_AJUSTE = 3  # rayon du point d'un sous-titre ajusté à la main
+    FRISE_GRADUATION_MIN = 64  # écart minimum entre deux temps écrits sur la règle
+    FRISE_ZOOM_MAX = 24  # Ctrl + molette : jusqu'à 24 fois plus large que « toute la pub »
+    FRISE_PAS_DE_ZOOM = 1.25  # un cran de molette
+    # Préréglages de sous-titres (V2, lot 7) : vignettes animées, 3 cartes par rangée et les 2
+    # rangées des 6 préréglages fournis visibles sans faire défiler, dans une fenêtre qui tient sur
+    # l'écran d'un portable (DIALOGUE_HAUTEUR_MAX).
+    VIGNETTE_LARGEUR = 240
+    VIGNETTE_HAUTEUR = 108
+    VIGNETTE_IMAGES_PAR_SECONDE = 20
+    DIALOGUE_PREREGLAGES_LARGEUR = 880
+    DIALOGUE_PREREGLAGES_HAUTEUR = DIALOGUE_HAUTEUR_MAX
     EDITEUR_REPLIQUE_HAUTEUR_MIN = 88  # éditeur d'une réplique (grandit ensuite avec son texte)
     # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
     BADGE_MARGE_HORIZONTALE = 8  # espace intérieur, à gauche et à droite du nom de la balise

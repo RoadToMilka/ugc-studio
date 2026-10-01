@@ -14,6 +14,14 @@
    dernier mot, le couper, le fusionner avec le suivant, ou revenir au découpage automatique. Les
    réglages du découpage s'appliquent toujours (une action qui ne les respecte pas est refusée,
    avec la raison) ; un réglage qui défait un ajustement demande d'abord (sous_titres_du_projet.py).
+5. Frise (V2, lot 7, composants/frise.py) : sous le studio, un bloc par sous-titre et un trait par
+   mot ; un clic place la lecture ou choisit un sous-titre (synchronisé avec la liste), le bord
+   commun de deux sous-titres se glisse de mot en mot (mêmes règles qu'au point 4), un double-clic
+   corrige les mots du sous-titre dans le module Transcription.
+6. Préréglages (V2, lot 7, prereglages.py) : en haut des réglages, le préréglage d'origine du projet
+   (« (modifié) » quand son style s'en écarte) ; en choisir un l'applique (avec la question de la
+   1.1.0 s'il défait un ajustement), « Enregistrer… » en crée un, le menu ⋯ met à jour, revient au
+   préréglage ou ouvre la fenêtre « Préréglages de sous-titres ».
 """
 
 from __future__ import annotations
@@ -24,13 +32,15 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QInputDialog, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
 
 from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
 from ....fournisseurs.stt import MODE_VERBATIM
 from ....mise_en_page import limites_du_reglage_fin
 from ....modeles_charges import SOUS_TITRES
+from ....prereglages import appliquer as appliquer_le_prereglage
+from ....prereglages import modifie, style_du_projet
 from ....projets import FICHIER_AUDIO, ErreurProjet, Projet, nom_de_dossier
 from ....rendu.moteur import Moteur
 from ....rendu.polices import NOMS_GRAISSES, police_remplacee
@@ -49,6 +59,7 @@ from ....sous_titres import (
 )
 # Les actions à la main, calculées sans interface (même nom que les méthodes de la page qui les appellent).
 from ....sous_titres import couper_avant as calcul_couper
+from ....sous_titres import deplacer_la_limite as calcul_limite
 from ....sous_titres import descendre_dernier_mot as calcul_descendre
 from ....sous_titres import fusionner_avec_le_suivant as calcul_fusionner
 from ....sous_titres import monter_premier_mot as calcul_monter
@@ -67,9 +78,11 @@ from ...composants.apercu import LecteurApercu
 from ...composants.choix_voix import choisir
 from ...composants.elements import bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
 from ...composants.flux import DispositionFlux
+from ...composants.frise import FriseSousTitres
 from ...composants.montant_label import MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues.prereglages import DialoguePrereglages
 from ...extraction import FILTRE_FICHIERS, LecteurInfos
 from ...sous_titres_du_projet import (
     Calcul,
@@ -123,7 +136,9 @@ def remarque(sous_titre: SousTitre) -> str:
 
 
 class AtelierSousTitres(Page):
-    corriger_demande = Signal()  # « Corriger les mots » : ouvrir le module Transcription
+    # « Corriger les mots » : ouvrir le module Transcription, sur le mot qui commence à ce moment
+    # (double-clic sur un bloc de la frise) ; -1 : sans choisir de mot.
+    corriger_demande = Signal(float)
 
     def __init__(self, services: Services):
         super().__init__(TITRE, SOUS_TITRE, conseils="sous-titres")
@@ -153,6 +168,7 @@ class AtelierSousTitres(Page):
         d.addWidget(self.panneau)
         self.studio = DispositionStudio(self.bloc_apercu, cadre_reglages)
         self.contenu.addWidget(self.studio)
+        self.contenu.addWidget(self._bloc_frise())
         # Raccourcis vers les réglages (tests, autotest).
         panneau = self.panneau
         self.caracteres, self.mots_max, self.lignes, self.duree_min = panneau.caracteres, panneau.mots_max, panneau.lignes, panneau.duree_min
@@ -183,6 +199,7 @@ class AtelierSousTitres(Page):
         self.contenu.addWidget(self.cadre_sous_titres)
 
         self._brancher()
+        services.prereglages.abonner(self._actualiser_prereglage)  # renommé, supprimé, mis à jour…
         services.projets.abonner(self._projet_change)
         services.prix.abonner(self._mettre_a_jour_estimation)
         self._projet_change(services.projets.projet)
@@ -195,7 +212,7 @@ class AtelierSousTitres(Page):
         d.addWidget(self.texte_source)
         ligne = QHBoxLayout()
         self.bouton_corriger = bouton(
-            "Corriger les mots", variante="contour", nom_icone="pencil", action=lambda: self.corriger_demande.emit()
+            "Corriger les mots", variante="contour", nom_icone="pencil", action=lambda: self.corriger_demande.emit(-1.0)
         )
         self.bouton_corriger.setToolTip("Corriger un mot ou son moment dans le module Transcription")
         ligne.addWidget(self.bouton_corriger)
@@ -232,6 +249,23 @@ class AtelierSousTitres(Page):
         d.addWidget(self.statut)
         return cadre
 
+    def _bloc_frise(self):
+        """Frise des sous-titres (V2, lot 7), sur toute la largeur, sous l'aperçu et les réglages."""
+        self.cadre_frise, d = bloc("Frise")
+        d.addWidget(
+            info(
+                "Clic : aller à ce moment, ou choisir un sous-titre. Glisse le bord commun de deux sous-titres : "
+                "des mots passent de l'un à l'autre. Double-clic : corriger ses mots. Ctrl + molette : zoom.",
+                "legende",
+            )
+        )
+        self.frise = FriseSousTitres()
+        d.addWidget(self.frise)
+        self.statut_frise = libelle("", "secondaire")
+        self.statut_frise.hide()
+        d.addWidget(self.statut_frise)
+        return self.cadre_frise
+
     def _brancher(self) -> None:
         panneau, apercu, lecteur = self.panneau, self.bloc_apercu, self.lecteur
         panneau.change.connect(self._reglage_change)
@@ -242,6 +276,11 @@ class AtelierSousTitres(Page):
         panneau.video_apercu_change.connect(self._video_apercu_change)
         panneau.texte.pipette_demandee.connect(self.prendre_une_couleur)
         panneau.mots.pipette_demandee.connect(self.prendre_une_couleur)
+        panneau.prereglage_choisi.connect(self.appliquer_prereglage)
+        panneau.enregistrer_prereglage_demande.connect(self.enregistrer_prereglage)
+        panneau.mettre_a_jour_prereglage_demande.connect(self.mettre_a_jour_prereglage)
+        panneau.revenir_au_prereglage_demande.connect(self.revenir_au_prereglage)
+        panneau.gerer_prereglages_demande.connect(self.gerer_prereglages)
         apercu.bouton_lecture.clicked.connect(self.basculer_lecture)
         apercu.position.sliderMoved.connect(lecteur.aller_a_position)
         apercu.bouton_boucle.toggled.connect(lambda _coche: self._actualiser_boucle())
@@ -253,6 +292,12 @@ class AtelierSousTitres(Page):
         lecteur.position_change.connect(self._position_lue)
         lecteur.etat_change.connect(apercu.definir_lecture)
         lecteur.erreur.connect(self._erreur_de_lecture)
+        frise = self.frise.toile
+        frise.temps_demande.connect(self._aller_a)
+        frise.sous_titre_clique.connect(self.choisir_sous_titre)
+        frise.correction_demandee.connect(self._corriger_le_sous_titre)
+        frise.limite_deplacee.connect(self.deplacer_la_limite)
+        frise.definir_verification(self._verifier_la_limite)
 
     def _zone_reorganiser(self, d: QVBoxLayout) -> None:
         """« Réorganiser à la main » : les actions sur le sous-titre choisi dans la liste."""
@@ -411,6 +456,7 @@ class AtelierSousTitres(Page):
             police_remplacee(reglages.texte),
             self._accentues_du_script(),
         )
+        self._actualiser_prereglage()
 
     def _accentues_du_script(self) -> int | None:
         """Mots accentués dans le script de la prise des sous-titres (None : pas une prise)."""
@@ -448,6 +494,7 @@ class AtelierSousTitres(Page):
         self._actualiser_limites()
         self.toile.definir(self._calcul.moteur, self.mots)
         self._actualiser_toile()
+        self._actualiser_prereglage()  # la position fait partie du style : « (modifié) »
         self._enregistrement_position.start()
 
     def _position_glissee(self, decalage: float) -> None:
@@ -490,6 +537,10 @@ class AtelierSousTitres(Page):
         self.toile.definir(moteur, self.mots)
         self.bloc_apercu.zone.actualiser_taille()
         self._remplir_tableau()
+        transcription = self.transcription
+        self.frise.toile.definir(self.sous_titres, self.mots, (transcription.duree_s or 0.0) if transcription else 0.0)
+        self.frise.toile.definir_choisi(self._choisi())
+        self.cadre_frise.setVisible(bool(self.sous_titres))
         self.cadre_sous_titres.setVisible(bool(self.sous_titres))
         signales = sum(1 for s in self.sous_titres if s.signale)
         ajustes = sum(1 for s in self.sous_titres if s.ajuste)
@@ -559,6 +610,7 @@ class AtelierSousTitres(Page):
         index = sous_titre_au_temps(self.sous_titres, self.lecteur.temps, self._debuts)
         self.toile.montrer(self.sous_titres[index] if index >= 0 else None)
         self.toile.definir_temps(self.lecteur.temps)
+        self.frise.toile.definir_temps(self.lecteur.temps)
 
     def _au_debut(self) -> None:
         """Projet ouvert : l'aperçu montre le premier sous-titre (sans le choisir dans la liste)."""
@@ -573,6 +625,7 @@ class AtelierSousTitres(Page):
         if index >= 0 and index != self.tableau.currentRow() and not self.bloc_apercu.bouton_boucle.isChecked():
             self.tableau.selectRow(index)
             self.tableau.scrollToItem(self.tableau.item(index, 0))
+            self.frise.toile.definir_choisi(index)
             self._actualiser_reorganisation()
 
     def _position_lue(self, position_ms: int, duree_ms: int) -> None:
@@ -582,14 +635,22 @@ class AtelierSousTitres(Page):
             apercu.position.setValue(position_ms)
         apercu.temps.setText(f"{minutes_secondes(position_ms / 1000)} / {minutes_secondes(duree_ms / 1000)}")
 
-    def choisir_sous_titre(self, index: int) -> None:
-        """Clic sur un sous-titre : il est choisi, et l'aperçu (la lecture) se place sur lui."""
+    def choisir_sous_titre(self, index: int, temps: float | None = None) -> None:
+        """Clic sur un sous-titre (liste ou frise) : il est choisi dans les deux, et l'aperçu (la
+        lecture) se place sur lui : à son début, ou au moment cliqué dans la frise."""
         if not 0 <= index < len(self.sous_titres):
             return
         self.tableau.selectRow(index)
+        self.frise.toile.definir_choisi(index)
         self._actualiser_reorganisation()
         self._actualiser_boucle()
-        self.lecteur.aller_a(self.sous_titres[index].debut)
+        sous_titre = self.sous_titres[index]
+        self.lecteur.aller_a(sous_titre.debut if temps is None else min(max(temps, sous_titre.debut), sous_titre.fin))
+        self._actualiser_toile()
+
+    def _aller_a(self, temps: float) -> None:
+        """Clic dans la frise, hors d'un bloc : la lecture va à ce moment."""
+        self.lecteur.aller_a(temps)
         self._actualiser_toile()
 
     def _actualiser_boucle(self) -> None:
@@ -650,6 +711,108 @@ class AtelierSousTitres(Page):
     def quitter(self) -> None:
         """La page n'est plus affichée : la lecture s'arrête (et libère les fichiers)."""
         self.lecteur.arreter()
+
+    # --- Préréglages (V2, lot 7) ----------------------------------------------------------------
+
+    def _actualiser_prereglage(self) -> None:
+        """Liste des préréglages, avec celui du projet (« (modifié) » s'il s'en écarte) ; « Rétablir »
+        de l'onglet Texte remet les valeurs de ce préréglage."""
+        if self._projet is None:
+            return
+        bibliotheque, reglages = self._services.prereglages, self._projet.sous_titres
+        origine = bibliotheque.prereglage(reglages.prereglage)
+        self.panneau.definir_prereglages(
+            bibliotheque.prereglages,
+            reglages.prereglage,
+            reglages.prereglage_nom,
+            origine is not None and modifie(reglages, origine),
+        )
+        texte = appliquer_le_prereglage(reglages, origine).texte if origine is not None else None
+        self.panneau.texte.definir_reference(texte)
+
+    def _statut_prereglage(self, message: str, role: str = "succes") -> None:
+        self._afficher(message, role, self.panneau.statut_prereglage)
+
+    def _demander_nom(self, titre: str, nom: str) -> str | None:
+        """Nom d'un nouveau préréglage (remplacé dans les tests)."""
+        texte, ok = QInputDialog.getText(self.window(), titre, "Nom du préréglage :", text=nom)
+        return texte if ok and texte.strip() else None
+
+    def appliquer_prereglage(self, identifiant: str) -> None:
+        """Le style du préréglage remplace celui du projet (format, plateforme et vidéo d'aperçu ne
+        changent pas). S'il défait un ajustement fait à la main, la question de la 1.1.0 vient d'abord."""
+        prereglage = self._services.prereglages.prereglage(identifiant)
+        if self._projet is None or prereglage is None:
+            return
+        reglages = appliquer_le_prereglage(self._projet.sous_titres, prereglage)
+        if not confirmer_reglage(self.window(), self._services, self._projet, reglages=reglages):
+            self._charger_reglages()  # « Garder le réglage actuel » : la liste revient au préréglage du projet
+            return
+        self._projet.sous_titres = reglages
+        self._services.projets.enregistrer()
+        self._charger_reglages()
+        self.calculer()
+        self._statut_prereglage(f"Préréglage « {prereglage.nom} » appliqué.")
+
+    def revenir_au_prereglage(self) -> None:
+        """Menu ⋯ : le style du projet redevient celui de son préréglage d'origine."""
+        if self._projet is not None:
+            self.appliquer_prereglage(self._projet.sous_titres.prereglage)
+
+    def enregistrer_prereglage(self) -> None:
+        """« Enregistrer… » : le style du projet devient un nouveau préréglage (et celui du projet)."""
+        if self._projet is None:
+            return
+        bibliotheque = self._services.prereglages
+        reglages = self._projet.sous_titres
+        proposition = bibliotheque.nom_libre(f"{reglages.prereglage_nom} (perso)" if reglages.prereglage_nom else "Mon style")
+        nom = self._demander_nom("Enregistrer comme nouveau préréglage", proposition)
+        if nom is None:
+            return
+        cree = bibliotheque.ajouter(nom, style_du_projet(reglages))
+        self._projet.sous_titres = replace(reglages, prereglage=cree.identifiant, prereglage_nom=cree.nom)
+        self._services.projets.enregistrer()
+        self._actualiser_prereglage()
+        self._statut_prereglage(f"Préréglage « {cree.nom} » enregistré : tu le retrouves pour tes autres projets.")
+
+    def mettre_a_jour_prereglage(self) -> None:
+        """Menu ⋯ : le préréglage d'origine prend le style du projet (les autres projets gardent le leur)."""
+        if self._projet is None:
+            return
+        bibliotheque, reglages = self._services.prereglages, self._projet.sous_titres
+        origine = bibliotheque.prereglage(reglages.prereglage)
+        if origine is None:
+            return
+        boite = QMessageBox(self.window())
+        boite.setIcon(QMessageBox.Icon.Question)
+        boite.setWindowTitle("Mettre à jour le préréglage")
+        boite.setText(f"Mettre à jour « {origine.nom} » avec le style de ce projet ?")
+        boite.setInformativeText("Les projets déjà faits gardent leur propre copie du style : ils ne changent pas.")
+        oui = boite.addButton("Mettre à jour", QMessageBox.ButtonRole.AcceptRole)
+        boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
+        if not self._confirmer(boite, oui):
+            return
+        bibliotheque.mettre_a_jour(origine.identifiant, style_du_projet(reglages))
+        self._projet.sous_titres = replace(reglages, prereglage_nom=origine.nom)
+        self._services.projets.enregistrer()
+        self._actualiser_prereglage()
+        self._statut_prereglage(f"« {origine.nom} » mis à jour.")
+
+    @staticmethod
+    def _confirmer(boite: QMessageBox, oui) -> bool:
+        """Pose la question (remplacé dans les tests)."""
+        boite.exec()
+        return boite.clickedButton() is oui
+
+    def gerer_prereglages(self) -> None:
+        """Menu ⋯ : la fenêtre « Préréglages de sous-titres » ; « Appliquer » y met un préréglage sur le projet."""
+        actuel = self._projet.sous_titres.prereglage if self._projet is not None else ""
+        fenetre = DialoguePrereglages(self._services, self.window(), actuel, projet_ouvert=self._projet is not None)
+        fenetre.exec()
+        if fenetre.prereglage_choisi:
+            self.appliquer_prereglage(fenetre.prereglage_choisi)
+        else:
+            self._actualiser_prereglage()
 
     # --- Vidéo : retrouvée, ou choisie seulement pour l'aperçu ----------------------------------
 
@@ -770,21 +933,57 @@ class AtelierSousTitres(Page):
             action = self.menu_couper.addAction(f"Couper avant « {texte} »")
             action.triggered.connect(lambda _coche=False, m=mot: self.couper_avant(m))
 
-    def _reorganiser(self, faire, message: str) -> None:
-        """Applique une action à la main au sous-titre choisi ; si elle ne respecte pas les règles,
-        rien ne change et la raison s'affiche."""
-        index, transcription = self._choisi(), self.transcription
+    def _reorganiser(self, faire, message: str, index: int | None = None, statut=None) -> None:
+        """Applique une action à la main au sous-titre choisi (ou `index`) ; si elle ne respecte pas
+        les règles, rien ne change et la raison s'affiche (sous la liste, ou `statut`)."""
+        index = self._choisi() if index is None else index
+        transcription = self.transcription
+        afficher = self._statut_reorganisation if statut is None else (lambda texte, role: self._afficher(texte, role, statut))
         if index < 0 or transcription is None or self._calcul is None:
             return
         resultat: Reorganisation = faire(index, self._calcul)
         if not resultat.possible:
-            self._statut_reorganisation(resultat.message, "erreur")
+            afficher(resultat.message, "erreur")
             return
         ranger_ajustements(transcription, resultat.ajustements)
         self._services.projets.enregistrer()
         self.calculer()
         self.choisir_sous_titre(min(resultat.choisi, len(self.sous_titres) - 1))
-        self._statut_reorganisation(message, "succes")
+        afficher(message, "succes")
+
+    def _verifier_la_limite(self, index: int, mot: int) -> str:
+        """Pendant le glissement d'un bord de la frise : la raison d'un refus (vide : possible)."""
+        calcul = self._calcul
+        if calcul is None:
+            return ""
+        try:
+            resultat = calcul_limite(calcul.decoupage, index, mot, calcul.reglages, calcul.ecran, calcul.mesure)
+        except ValueError as erreur:
+            return str(erreur)
+        return resultat.message
+
+    def deplacer_la_limite(self, index: int, mot: int) -> None:
+        """Bord commun glissé dans la frise : `mot` commence désormais le sous-titre `index + 1`."""
+        if not 0 <= index < len(self.sous_titres) - 1:
+            return
+        depart = self.sous_titres[index + 1].premier_mot
+        if mot == depart or not self.sous_titres[index].premier_mot < mot < self.sous_titres[index + 1].dernier_mot:
+            return
+        deplaces = self.mots[mot:depart] if mot < depart else self.mots[depart:mot]
+        texte = " ".join(m.texte for m in deplaces).replace(ESPACE_INSECABLE, " ")
+        numero = index + 2 if mot < depart else index + 1
+        verbe = "passe" if len(deplaces) == 1 else "passent"
+        self._reorganiser(
+            lambda i, c: calcul_limite(c.decoupage, i, mot, c.reglages, c.ecran, c.mesure),
+            f"« {texte} » {verbe} au sous-titre {numero}.",
+            index=index,
+            statut=self.statut_frise,
+        )
+
+    def _corriger_le_sous_titre(self, index: int) -> None:
+        """Double-clic sur un bloc de la frise : « Corriger les mots », sur son premier mot."""
+        if 0 <= index < len(self.sous_titres):
+            self.corriger_demande.emit(self.mots[self.sous_titres[index].premier_mot].debut)
 
     def monter_premier_mot(self) -> None:
         index = self._choisi()

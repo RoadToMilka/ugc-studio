@@ -86,6 +86,7 @@ from ..base import Page
 journal = logging.getLogger(__name__)
 
 AUTO = ""  # langue : détection automatique
+MEME_MOMENT_S = 1e-3  # deux temps à moins d'une milliseconde : le même moment
 
 
 def fichiers_acceptes(urls) -> list[Path]:
@@ -728,6 +729,17 @@ class AtelierTranscription(Page):
         chemin = self._chemin_audio()
         if chemin is not None and self.lecteur.chemin == str(chemin):
             self.lecteur.aller_a(round(transcription.mots[index].debut * 1000))
+
+    def choisir_mot_au_temps(self, temps: float) -> None:
+        """Depuis la frise des sous-titres (double-clic sur un bloc) : le premier mot qui commence à ce
+        moment (ou après) est choisi, prêt à être corrigé."""
+        transcription = self.transcription
+        if transcription is None or not transcription.mots:
+            return
+        self.rafraichir()  # les mots affichés sont ceux du projet, même si la page n'a pas encore été montrée
+        mots = transcription.mots
+        index = next((i for i, mot in enumerate(mots) if mot.debut >= temps - MEME_MOMENT_S), len(mots) - 1)
+        self.choisir_mot(index)
 
     def _mot_choisi_change(self) -> None:
         transcription = self.transcription

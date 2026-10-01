@@ -109,5 +109,5 @@ def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path,
     ligne.findChild(QMenu).actions()[0].trigger()
     assert fenetre.module_actuel() == "sous-titres" and demandes == [prise.identifiant]
     # « Corriger les mots » : dans le module Transcription.
-    fenetre.page("sous-titres").atelier.corriger_demande.emit()
+    fenetre.page("sous-titres").atelier.corriger_demande.emit(-1.0)
     assert fenetre.module_actuel() == "transcription"

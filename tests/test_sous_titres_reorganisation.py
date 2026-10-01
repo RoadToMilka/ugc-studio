@@ -396,3 +396,37 @@ def test_ajustements_enregistres_avec_la_transcription():
     brut = {"ajustements_sous_titres": [[1, 2], ["a", 2], [3, 1], [True, 2], [1, 2, 3], "x", [0.5, float("inf")]]}
     assert Transcription.depuis_dict(brut).ajustements_sous_titres == [[1.0, 2.0]]
     assert Transcription.depuis_dict({"ajustements_sous_titres": "rien"}).ajustements_sous_titres == []
+
+
+# --- Frise (V2, lot 7) : le bord commun de deux sous-titres, glissé de mot en mot ---------------
+
+
+def test_deplacer_la_limite_entre_deux_sous_titres():
+    from ugc_studio.sous_titres import deplacer_la_limite
+
+    mots = _pub()
+    decoupage, reglages = _calculer(mots, mots_max=5)
+    assert _textes(decoupage) == ["Mais ce sérum Glowzy", "a vraiment changé ma", "peau en deux semaines !"]
+    # Vers la gauche : « Glowzy » passe au sous-titre 2 (celui qui reçoit des mots est choisi ensuite).
+    nouveau, resultat = _appliquer(deplacer_la_limite, mots, decoupage, reglages, 0, 3, mots_max=5)
+    assert _textes(nouveau)[:2] == ["Mais ce sérum", "Glowzy a vraiment changé ma"] and resultat.choisi == 1
+    assert [s.ajuste for s in nouveau.sous_titres][:2] == [True, True]
+    # Vers la droite : « a » passe au sous-titre 1.
+    nouveau, resultat = _appliquer(deplacer_la_limite, mots, decoupage, reglages, 0, 5, mots_max=5)
+    assert _textes(nouveau)[:2] == ["Mais ce sérum Glowzy a", "vraiment changé ma"] and resultat.choisi == 0
+    # Le moment des mots ne change jamais.
+    assert [(m.debut, m.fin) for m in nouveau.mots] == [(m.debut, m.fin) for m in decoupage.mots]
+
+
+def test_deplacer_la_limite_respecte_les_regles():
+    from ugc_studio.sous_titres import deplacer_la_limite
+
+    mots = _pub()
+    decoupage, reglages = _calculer(mots, mots_max=5)
+    refus = deplacer_la_limite(decoupage, 0, 2, reglages, ECRAN_TEST, mesure)  # 6 mots dans le sous-titre 2
+    assert not refus.possible and refus.refus[0].regle == MOTS
+    assert "sous-titre 2" in refus.message and "Mots au plus" in refus.message
+    with pytest.raises(ValueError):
+        deplacer_la_limite(decoupage, 0, 0, reglages, ECRAN_TEST, mesure)  # le sous-titre 1 resterait vide
+    with pytest.raises(ValueError):
+        deplacer_la_limite(decoupage, 2, 12, reglages, ECRAN_TEST, mesure)  # pas de sous-titre après le dernier
