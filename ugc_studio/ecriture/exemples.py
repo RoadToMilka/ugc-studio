@@ -6,8 +6,9 @@ puis même angle ; tes scripts gardés passent avant les scripts fournis) ; le m
 pour le ton et le rythme, sans les recopier.
 
 Au départ, 5 scripts fournis (annexe A du document V2), écrits sur des produits fictifs pour
-montrer le ton attendu. « Garder comme exemple » y ajoute tes scripts. Tu pourras retirer les
-scripts fournis (fenêtre « Mes meilleurs scripts », lot 2).
+montrer le ton attendu. « Garder comme exemple » y ajoute tes scripts ; la fenêtre « Mes meilleurs
+scripts » (lot 2) permet d'y coller un script qui a marché, écrit ailleurs, de noter chaque
+exemple (« CPA 9 € ») et de retirer les scripts fournis (puis de les remettre).
 
 Rangement : %APPDATA%\\UGC Studio\\scripts_exemples.json.
 """
@@ -21,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
+from ..estimation import duree_parlee
 from ..stockage import ecrire_json, lire_json
 from .brief import ANGLES_ANGLAIS, RESEAUX, Brief
 
@@ -219,6 +221,49 @@ EXEMPLES_FOURNIS: tuple[ExempleScript, ...] = (
 )
 
 
+def exemple_colle(
+    titre: str,
+    texte: str,
+    langue: str,
+    reseau: str,
+    angle: str = "",
+    tutoiement: str = "tu",
+    duree_s: int = 0,
+    note: str = "",
+) -> ExempleScript | None:
+    """Un script qui a marché, écrit ailleurs et collé dans « Mes meilleurs scripts ».
+
+    Un paragraphe (séparé par une ligne vide) devient une réplique ; un texte d'un seul bloc est
+    coupé après sa première phrase : l'accroche est toujours la réplique 1. Balises (« <laugh> »)
+    et mots entre astérisques sont gardés tels quels. Durée vide : estimée d'après le texte."""
+    blocs = [" ".join(b.split()) for b in re.split(r"\n\s*\n", texte) if b.strip()]
+    if len(blocs) == 1:
+        lignes = [" ".join(ligne.split()) for ligne in texte.splitlines() if ligne.strip()]
+        if len(lignes) > 1:
+            blocs = [lignes[0], " ".join(lignes[1:])]
+        else:
+            coupe = re.match(r"(.+?[.!?…])\s+(\S.*)", blocs[0])
+            if coupe:
+                blocs = [coupe.group(1), coupe.group(2)]
+    if not blocs:
+        return None
+    repliques = [_replique(["accroche"] if rang == 0 else [], bloc) for rang, bloc in enumerate(blocs)]
+    if duree_s <= 0:
+        duree_s = max(1, round(duree_parlee("\n".join(blocs).replace("*", ""))))
+    return ExempleScript(
+        identifiant=f"colle-{uuid.uuid4().hex[:12]}",
+        titre=" ".join(titre.split()) or "Script collé",
+        langue=langue,
+        reseau=reseau if reseau in RESEAUX else "autre",
+        angle=angle if angle in ANGLES_ANGLAIS else "",
+        tutoiement=tutoiement if tutoiement in ("tu", "vous") else "tu",
+        duree_s=duree_s,
+        brief="",
+        repliques=repliques,
+        note=" ".join(note.split()),
+    )
+
+
 def choisir_exemples(exemples: list[ExempleScript], brief: Brief, nombre: int = EXEMPLES_PAR_DEMANDE) -> list[ExempleScript]:
     """Jusqu'à `nombre` exemples proches du brief : même langue d'abord (variante exacte, puis même
     langue), puis même réseau, puis même angle ; tes scripts gardés passent avant les scripts
@@ -301,6 +346,9 @@ class BibliothequeExemples:
     def gardes(self) -> list[ExempleScript]:
         return list(self._gardes)
 
+    def fournis_retires(self) -> list[ExempleScript]:
+        return [e for e in EXEMPLES_FOURNIS if e.identifiant in self._fournis_retires]
+
     def ajouter(self, exemple: ExempleScript) -> None:
         exemple.fourni = False
         self._gardes = [e for e in self._gardes if e.identifiant != exemple.identifiant] + [exemple]
@@ -312,6 +360,19 @@ class BibliothequeExemples:
                 self._fournis_retires.append(identifiant)
         self._gardes = [e for e in self._gardes if e.identifiant != identifiant]
         self._enregistrer()
+
+    def remettre_fournis(self) -> None:
+        """« Remettre les exemples fournis » : les scripts fournis retirés reviennent."""
+        self._fournis_retires = []
+        self._enregistrer()
+
+    def noter(self, identifiant: str, note: str) -> None:
+        """Note libre d'un de tes exemples (ex. « CPA 9 € ») : le modèle la lit avec l'exemple."""
+        for exemple in self._gardes:
+            if exemple.identifiant == identifiant:
+                exemple.note = " ".join(note.split())
+                self._enregistrer()
+                return
 
     def contient(self, identifiant: str) -> bool:
         return any(e.identifiant == identifiant for e in self.exemples())

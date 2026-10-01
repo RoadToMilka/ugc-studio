@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.7, 01/10/2026 (V2 en cours : lot 1, module Script, version 1.2.0, §4 bis et §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.8, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis et §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -56,7 +56,7 @@ Dans l'ordre de la barre latérale (le module Script en tête depuis la V2 : c'e
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
 
 - Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription avec ses sous-titres réorganisés à la main, dictionnaire de remplacements du projet, réglages des sous-titres, module Script : brief, page produit lue avec son adresse et sa date, fiche comprise, accroches, scripts écrits avec leur relecture et leur coût), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite, ou de la prise dont on a créé les sous-titres).
-- Format du fichier : version 6 depuis la V2, lot 1 (module Script, §4 bis ; un projet plus ancien s'ouvre sans script). Version 5 depuis la V1.1 (sous-titres réorganisés à la main, §7.8 ; un projet plus ancien s'ouvre sans ajustement). Version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
+- Format du fichier : version 6 depuis la V2, lot 1 (module Script, §4 bis ; un projet plus ancien s'ouvre sans script). Le lot 2 y ajoute des informations sans changer de format (numéro, note, script retenu, série de variantes et retouche de chaque script ; nombres dits dans les réglages de voix) : un projet de la 1.2.0 s'ouvre tel quel, ses scripts numérotés dans leur ordre d'écriture. Version 5 depuis la V1.1 (sous-titres réorganisés à la main, §7.8 ; un projet plus ancien s'ouvre sans ajustement). Version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
 - Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
 - Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
 - Au démarrage, le dernier projet utilisé est rouvert automatiquement.
@@ -162,7 +162,7 @@ Où le modèle sert **en ce moment**, mis à jour en direct : **Script** (modèl
 ### 4.3 Suivi des coûts
 
 - Chaque appel API enregistre : date, projet, modèle, tokens entrée, tokens sortie, coût € (calculé avec les compteurs de tokens renvoyés par l'API). Une page web lue par Google (outil « URL context ») est facturée comme du texte envoyé mais comptée à part (`total_tool_use_tokens`) : l'app l'ajoute aux tokens d'entrée.
-- Une tâche en plusieurs appels (module Script : écriture puis relecture) note chaque appel dès qu'il est terminé, même si le suivant échoue.
+- Une tâche en plusieurs appels (module Script : écriture puis relecture, retouche puis relecture, accroches puis scripts d'une série de variantes) note chaque appel dès qu'il est terminé, même si le suivant échoue.
 - **Pendant une tâche** : affichage en temps réel des tokens et du coût.
 - Historique filtrable par période (aujourd'hui, ce mois-ci, le mois dernier, cette année, tout), projet et modèle, avec totaux (coût, nombre d'appels, tokens). Les 500 appels les plus récents de la période sont listés ; les totaux portent sur toute la période.
 - Rangement : un fichier par mois, `couts\AAAA-MM.jsonl`, une ligne par appel (le coût est calculé et figé au moment de l'appel).
@@ -205,11 +205,12 @@ Le modèle analyse ce qui a été lu (réflexion basse) et remplit la **fiche «
 ### 4 bis.2 Brief
 
 - Aucun champ obligatoire ; rien n'est inventé : sans information, le script reste sans chiffre.
-- **Essentiel** : Pays (France, Belgique, Suisse, Luxembourg, Canada, puis États-Unis, Royaume-Uni, Espagne, Italie, Pays-Bas, Allemagne), qui propose la langue et sa variante régionale (Belgique : français ou néerlandais ; Suisse : français ou allemand) et la devise ; Langue ; Réseau (TikTok, Snapchat, Facebook et Instagram, Autre) ; Durée (« Auto » : 25 s sur TikTok, 10 s sur Snapchat, 20 s sur Facebook et Instagram, 20 s pour Autre ; nombre de mots affiché, à 2,7 mots par seconde) ; Tutoiement (Automatique : tutoiement sur TikTok et Snapchat ; ailleurs, vouvoiement pour une clientèle de 35 ans et plus) ; Angle (Laisser le modèle choisir, Témoignage, Problème-solution, Unboxing, Routine, Comparaison, Avant/après raconté, Point de vue « POV », Liste).
+- **Essentiel** : Pays (France, Belgique, Suisse, Luxembourg, Canada, puis États-Unis, Royaume-Uni, Espagne, Italie, Pays-Bas, Allemagne), qui propose la langue et sa variante régionale (Belgique : français ou néerlandais ; Suisse : français ou allemand) et la devise ; Langue ; Réseau (TikTok, Snapchat, Facebook et Instagram, Autre) ; Durée (« Auto » : 25 s sur TikTok, 10 s sur Snapchat, 20 s sur Facebook et Instagram, 20 s pour Autre ; nombre de mots affiché, à la vitesse de parole de la voix du projet, §4 bis.7) ; Tutoiement (Automatique : tutoiement sur TikTok et Snapchat ; ailleurs, vouvoiement pour une clientèle de 35 ans et plus) ; Angle (Laisser le modèle choisir, Témoignage, Problème-solution, Unboxing, Routine, Comparaison, Avant/après raconté, Point de vue « POV », Liste).
 - **Sections repliables**, avec un résumé quand elles sont fermées (« 8 remplis, dont 7 d'après la page ») : Produit et offre (nom, type, prix, promo, livraison, garantie et retours, bénéfices, ce qui le distingue, description) ; Clientèle (âge, clientèle, problèmes, objections, preuves) ; Personne qui parle (genre, pré-rempli d'après la voix du projet car il change les accords ; âge ; profil) ; Contraintes (appel à l'action, mentions obligatoires reprises telles quelles, mots interdits, consigne libre).
-- **Options**, retenues d'une fois sur l'autre : Balises (décochée au départ), Styles de jeu (cochée), Accentuations (décochée), Modèle, nombre d'accroches (3 à 10, 6 au départ).
+- **Options**, retenues d'une fois sur l'autre : Balises (décochée au départ), Styles de jeu (cochée), Accentuations (décochée), Modèle, nombre d'accroches (3 à 10, 6 au départ). Sur la même ligne : « Mes meilleurs scripts… » (§4 bis.5).
 - Langue du brief différente de celle du projet : l'app propose de changer celle du projet (elle sert à la bibliothèque de voix et à la transcription ; les variantes du français partagent le français de France).
-- Le brief est enregistré automatiquement dans le projet. Bibliothèque de briefs : lot 2.
+- Le brief est enregistré automatiquement dans le projet.
+- **Bibliothèque de briefs** (lot 2) : « Enregistrer » (en haut du bloc Brief) range le brief sous un nom (proposé : « Produit (Réseau) »), avec la page produit lue et sa fiche ; un nom déjà pris remplace l'ancien brief, après confirmation. « Charger un brief » ouvre la fenêtre « Bibliothèque de briefs » (nom, résumé « produit · réseau · durée · pays », page lue et sa date, date d'enregistrement ; menu ⋯ : Renommer, Supprimer) : « Charger » remplace le brief du projet ouvert sans toucher aux options d'écriture ; la case « Reprendre aussi la page produit lue » (cochée au départ) reprend la page et sa fiche, sans relire la page ni repayer son analyse. Rangement : `briefs.json`, pour tous les projets.
 
 ### 4 bis.3 Accroches, écriture et relecture
 
@@ -224,22 +225,44 @@ Le modèle analyse ce qui a été lu (réflexion basse) et remplit la **fiche «
 
 ### 4 bis.4 Scripts et envoi dans Voix
 
-- Une **carte par script**, le plus récent en haut : angle, durée estimée (même formule que le module Voix, balises comprises) pour la durée visée, nombre de mots, réseau, modèle, date, coût réel ; chaque réplique avec ses rôles, son texte dans l'éditeur à badges du module Voix (**modifiable à la main** : l'app revérifie alors ce qui se compte et garde l'avis du modèle) et son style ; la relecture.
-- **« Envoyer dans Voix »** : les répliques du script remplacent celles du module Voix, avec styles, balises et mots accentués, après confirmation si le module Voix contient déjà un texte (« Remplacer les 2 répliques actuelles du module Voix par ce script ? ») ; le module Voix s'ouvre, prêt pour « Générer l'audio ». La carte affiche « Envoyé dans Voix ».
+- Une **carte par script**, numérotée à sa création (« Script 3 » ; le numéro ne change plus, même après une suppression ; les scripts écrits avec la 1.2.0 sont numérotés dans leur ordre à l'ouverture), le plus récent en haut ; les variantes d'une même série restent ensemble, dans l'ordre A, B, C (« Script 5 (variante B) »). Sur la carte : angle, durée estimée (même formule et même vitesse de parole que le module Voix, balises comprises) pour la durée visée, nombre de mots, réseau, modèle, date, coût réel ; sa place dans sa série (« Série « Accroches seulement » : variante B sur 3 ») et ce dont il vient (« Retouche du script 3 : « Plus court » », « Copie du script 3 ») ; chaque réplique avec ses rôles, son texte dans l'éditeur à badges du module Voix (**modifiable à la main** : l'app revérifie alors ce qui se compte et garde l'avis du modèle) et son style ; la relecture.
+- **« Envoyer dans Voix »** : les répliques du script remplacent celles du module Voix, avec styles, balises et mots accentués, après confirmation si le module Voix contient déjà un texte (« Remplacer les 2 répliques actuelles du module Voix par ce script ? ») ; le module Voix s'ouvre, prêt pour « Générer l'audio ». La carte affiche « Envoyé dans Voix ». Un script en français règle aussi les nombres dits dans le module Voix (à la belge pour le français de Belgique, à la suisse pour celui de Suisse, à la française sinon, §5.7).
 - Dans le module Voix, un avertissement orange signale une voix dont le genre ne correspond pas à la personne qui parle du brief (accords du texte).
-- **« Garder comme exemple »** : le script rejoint les exemples donnés au modèle (§4 bis.5) ; la carte affiche « Exemple ». Menu ⋯ : « Supprimer le script » (après confirmation ; l'exemple gardé reste).
-- Lot 2 : variantes (mêmes réglages, réglages par variante, accroches seulement), comparaison, « Retoucher… », ★, vitesse de parole mesurée sur les prises (aussi pour le module Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse.
+- Sous les répliques : **« Envoyer dans Voix »**, **« Retoucher… »** (§4 bis.4 bis), **« Retenir »** (devient « Retenu », avec la pastille « Retenu » : un script gardé pour ses pubs ; « Retenir » et non « Garder », pour ne pas le confondre avec « Garder comme exemple », alors que dans le module Voix « Garder » retient une variante de sa série) et la **note ★** (0 à 5 ; un clic sur l'étoile de la note actuelle la retire).
+- Menu ⋯ : **« Dupliquer »** (une copie à modifier à la main, sans coût, ni envoyée, ni notée, ni retenue) ; **« Garder comme exemple »** (le script rejoint les exemples donnés au modèle, §4 bis.5, et la carte affiche « Exemple » ; dans ce menu depuis le lot 2, pour que la carte tienne dans une fenêtre de 960 px) ; « Envoyer les N accroches en variantes » (série « Accroches seulement », §4 bis.4 bis) ; « Supprimer le script » (après confirmation ; l'exemple gardé reste).
+
+### 4 bis.4 bis Variantes, retouche et comparaison (lot 2)
+
+- **« Variantes… »** (à côté de « Écrire le script ») ouvre la fenêtre « Variantes de script », à trois onglets :
+  - **Mêmes réglages** (2 à 6 scripts) : une demande d'accroches, une par variante, chacune sur un angle différent (toutes sur l'angle du brief s'il est imposé), puis un script complet par accroche. Le coût des accroches est réparti entre les scripts.
+  - **Réglages par variante** : colonne « Brief », puis une colonne par variante (2 au départ, A et B identiques au brief). Lignes : angle, accroche imposée (facultatif), durée (« Auto »), réseau, personne qui parle, profil, consigne libre, modèle. Valeurs modifiées surlignées en mauve, comme dans le module Voix ; icônes « Dupliquer la variante » et « Supprimer » (2 au moins) en tête de colonne ; « Ajouter une variante » (6 au plus).
+  - **Accroches seulement** (2 à 6 scripts) : un script écrit et relu, puis une demande d'autres accroches pour sa réplique 1 (2 de plus que nécessaire : une accroche qui répète celle du script, ou qui contient un mot interdit, est écartée). Chaque variante garde exactement le même corps ; l'app la revérifie (durée, mots interdits, mentions) ; le signal orange d'une accroche devient un point ⚠ de sa relecture, et les points du modèle sur l'ancienne accroche ne sont pas repris. Le coût de la série est réparti entre ses scripts.
+  - Coût total estimé avant de lancer ; scripts écrits l'un après l'autre (« Arrêter » : après le script en cours). Les scripts d'une série partagent un identifiant de série et portent leur lettre et leur mode. Message de fin : « Comparer… », ou, pour « Accroches seulement », l'envoi en variantes de voix.
+- **« Envoyer les N accroches en variantes »** (menu ⋯ d'un script d'une série « Accroches seulement ») : le script de la variante A part dans le module Voix (même confirmation qu'« Envoyer dans Voix »), puis la fenêtre « Variantes A/B » du module Voix s'ouvre sur « Réglages par variante », une variante par accroche : seule la réplique 1 change, surlignée en mauve. Les scripts de la série sont marqués « Envoyé dans Voix ».
+- **« Retoucher… »** : fenêtre avec la consigne, des suggestions en un clic (« Plus court » et « Plus long », qui changent aussi la durée visée d'un quart ; « Plus drôle », « Plus d'énergie », « Plus simple », « Plus naturel »), la durée visée, le tutoiement et le coût estimé (retouche et relecture). Le nouveau script garde le réseau et la langue du script retouché ; il est relu comme un script écrit, la relecture ayant pour consigne de ne jamais défaire la retouche ; l'ancien reste. Coûts : « script : retouche », puis « script : relecture ».
+- **« Comparer… »** (au-dessus des scripts, à partir de 2 scripts) : fenêtre « Comparer les scripts », 3 colonnes (la troisième peut rester vide). Chacune choisit son script dans une liste et montre angle, durée estimée, mots, réseau, note, marques, coût, répliques (éditeur à badges en lecture seule), styles et relecture, avec « Envoyer dans Voix » dessous. Au départ : la dernière série de variantes ; ou une retouche (ou une copie) à côté de son original ; sinon les 3 scripts les plus récents.
 
 ### 4 bis.5 Exemples (« Mes meilleurs scripts »)
 
 - Chaque demande d'accroches ou de script reçoit jusqu'à 3 exemples proches : même langue (variante exacte d'abord), puis même réseau, puis même angle ; les scripts gardés passent avant les scripts fournis. Les exemples sont adaptés aux options du brief (sans balises, styles ou accentuations non demandés) ; le modèle s'en inspire pour le ton et le rythme, sans les recopier. Sans exemple dans la langue du brief, les autres servent pour la structure et le rythme seulement.
-- Au départ, 5 scripts fournis (annexe A du document V2, produits fictifs : sérum Glowzy, hachoir Choppy, brosse Brosso, écouteurs Runbeat, batterie Voltie). Rangement : `scripts_exemples.json` (scripts gardés, scripts fournis retirés). Fenêtre « Mes meilleurs scripts » (note libre, retrait, script collé écrit ailleurs) : lot 2.
+- Au départ, 5 scripts fournis (annexe A du document V2, produits fictifs : sérum Glowzy, hachoir Choppy, brosse Brosso, écouteurs Runbeat, batterie Voltie). Rangement : `scripts_exemples.json` (scripts gardés, scripts fournis retirés).
+- Fenêtre **« Mes meilleurs scripts »** (lot 2, bouton « Mes meilleurs scripts… » à côté du modèle) : « Tes scripts » (gardés ou collés, du plus récent au plus ancien, chacun avec le champ « Ta note », ex. « CPA 9 € », lue par le modèle avec l'exemple), puis « Fournis avec l'app » (pastille « Fourni », « Pourquoi il marche ») ; menu ⋯ « Retirer des exemples… » (après confirmation) ; « Ajouter un script qui a marché… » : produit, texte (une réplique par paragraphe, l'accroche en premier ; un texte d'un seul bloc est coupé après sa première ligne, ou sa première phrase), langue, réseau, angle, tutoiement, durée (« Auto » : estimée d'après le texte), note ; « Remettre les exemples fournis » quand des scripts fournis ont été retirés. Après la fenêtre, la marque « Exemple » des scripts suit la bibliothèque.
 
 ### 4 bis.6 Modèle de texte et coûts
 
 - Liste « Modèle » : les modèles de texte chargés qui savent donner une réponse structurée (capacités au survol). Par défaut **Gemini 3.8 Flash** ; **Gemini 3.1 Pro (aperçu)** chargé pour comparer sur de vrais produits (« aperçu » : Google peut le modifier ou le retirer).
-- Coût **estimé avant chaque demande** (analyse de la page, accroches, script écrit et relu, multiplié par le nombre de scripts à écrire), puis noté appel par appel dans le suivi des coûts : « script : lecture de page », « script : accroches », « script : écriture », « script : relecture ». Ordre de grandeur : 4 à 7 centimes de dollar pour un script complet avec Gemini 3.8 Flash. Température : celle par défaut (recommandation de Google pour Gemini 3).
+- Coût **estimé avant chaque demande** (analyse de la page, accroches, script écrit et relu, multiplié par le nombre de scripts à écrire), puis noté appel par appel dans le suivi des coûts : « script : lecture de page », « script : accroches », « script : écriture », « script : relecture », « script : retouche » (lot 2). Variantes : coût total de la série estimé avant de lancer. Ordre de grandeur : 4 à 7 centimes de dollar pour un script complet avec Gemini 3.8 Flash. Température : celle par défaut (recommandation de Google pour Gemini 3).
 - API Gemini (Interactions, documentation vérifiée le 01/10/2026) : réponse structurée par `response_format: {"type": "text", "mime_type": "application/json", "schema": …}` ; lecture d'une page par `tools: [{"type": "url_context"}]`, statut de chaque page (`success`, `error`, `paywall`, `unsafe`) dans les étapes `url_context_result` ; contenu lu compté dans `usage.total_tool_use_tokens`, ajouté aux tokens d'entrée.
+
+### 4 bis.7 Vitesse de parole (lot 2)
+
+- Au départ, 2,7 mots par seconde (environ 160 mots par minute). Chaque prise générée donne une mesure : mots dits (les balises ne comptent pas) ÷ temps de parole, c'est-à-dire la durée de la prise moins le temps estimé de ses balises (mêmes valeurs que l'estimation : pause courte 0,5 s, pause longue 1,2 s, autres 0,6 s). Les petits silences du début et de la fin restent comptés : la durée estimée d'un script correspond ainsi à la durée réelle de ses prises. (Le document V2 prévoyait aussi le temps de parole exact donné par les sous-titres d'une prise : écarté, car il exclut ces silences et l'estimation deviendrait trop courte.)
+- Une mesure par prise ; mesure ignorée si la prise est trop courte (moins de 4 mots ou d'1 s) ou incohérente (moins d'1 ou plus de 6 mots par seconde) ; 50 mesures gardées par voix.
+- Vitesse d'une voix : total des mots ÷ total des temps de ses 20 dernières prises ; sans prise de cette voix, de toutes les prises (« vitesse mesurée sur 12 prises d'autres voix ») ; sans aucune prise, 2,7.
+- Les prises d'un projet qui s'ouvre et qui ne sont pas encore mesurées (ex. créées avec la 1.2.0) le sont à l'ouverture.
+- Module Script : vitesse de la voix du projet. Sous la durée : « 25 s ≈ 65 mots (durée conseillée pour TikTok) · vitesse de Kore mesurée sur 9 prises : 2,6 mots/s ». Elle donne le nombre de mots demandé au modèle, la durée estimée des cartes et leur contrôle de durée (revérifié quand la vitesse change, par exemple après une nouvelle prise ou un changement de voix).
+- Module Voix : durée et coût estimés avec la vitesse de la voix choisie, variantes A/B comprises ; au survol de l'estimation : « Durée estimée avec la vitesse de Kore mesurée sur 9 prises : 2,6 mots/s ».
+- Rangement : `vitesses.json`, toutes voix et tous projets confondus (le document V2 parlait des préférences ; un fichier à part les garde légères).
 
 ---
 
@@ -374,6 +397,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 - Bouton **« Générer l'audio »** → lecture immédiate dans l'app. (Il s'appelait « Générer la voix » jusqu'à la 1.0.0 : on le confondait avec « Créer une voix ».)
 - Chaque génération = une **prise** conservée dans le projet (horodatée, avec voix/style/coût utilisés).
 - Comparer, renommer, noter (★), supprimer les prises.
+- La durée et le coût estimés avant de générer suivent la vitesse de parole de la voix choisie, mesurée sur les prises (§4 bis.7).
 - Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3 (encodeur LAME, 192 kb/s).
 - Appel technique (Gemini 3.8 TTS) : API **Interactions** (`POST /v1beta/interactions`) : texte dans `input` (avec l'annotation `speech_metadata.style` quand un style est donné), voix dans `generation_config.speech_config`. Réponse : WAV 24 kHz mono en base64, et nombres de tokens (`usage`) pour le coût.
 - En cas de surcharge passagère de Google (erreur 5xx), un nouvel essai est fait automatiquement après 3 s.
@@ -415,6 +439,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 - Français par défaut ; sélecteur de langue par projet : anglais (US), anglais (UK), espagnol (Espagne), italien, néerlandais (Belgique), néerlandais (Pays-Bas), allemand.
 - La langue filtre la bibliothèque de voix.
 - La langue n'est pas envoyée au TTS en V1 : le modèle la reconnaît dans le texte. Elle sert à la phrase d'extrait des voix et, plus tard, à la transcription.
+- **Nombres dits** (V2, lot 2 ; projets en français, ligne « Nombres dits » du bloc « Voix et modèle ») : à la française, à la belge (septante, nonante) ou à la suisse (septante, huitante, nonante). Comme le dictionnaire de prononciation, seul le texte envoyé à la voix change (appliqué après lui) : le script et les sous-titres gardent les chiffres. Seuls les nombres qui se lisent autrement qu'en France sont écrits en lettres (70 à 79 et 90 à 99, plus 80 à 89 à la suisse, y compris dans 170, 1 290 ou 1990) ; un prix est écrit en entier, dans l'ordre où on le dit (« 29,90 € » → « vingt-neuf euros nonante » ; CHF → francs) ; « 90 % » → « nonante pour cent » ; un nombre collé à des lettres (code promo « GLOW20 »), une heure (« 14:30 ») ou un numéro qui commence par 0 ne change pas ; les balises restent intactes. « Envoyer dans Voix » d'un script en français choisit la variante d'après sa langue. « À la belge » convient aussi à Genève, Neuchâtel et au Jura (« quatre-vingts ») ; « huitante » se dit dans les cantons de Vaud, du Valais et de Fribourg. Enregistré dans le projet (`voix.nombres`) ; l'estimation compte le texte réellement envoyé.
 
 ---
 
@@ -691,7 +716,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 
 ### 9.4 Hauteurs
 
-- Boutons et champs : **36 px**
+- Boutons et champs : **36 px** (champs de nombre compris, depuis le lot 2 de la V2 : Qt leur donnait quelques pixels de plus, qui les décalaient des listes posées sur la même ligne)
 - Petits boutons (icônes) : 28 px
 
 ### 9.4 bis Boutons
@@ -749,7 +774,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 
 - **Section repliable** (`composants/section_repliable.py`) : un titre cliquable (flèche vers la droite fermée, vers le bas ouverte ; mauve clair au survol) qui montre ou cache son contenu, décalé sous le texte du titre. Fermée, elle peut afficher un court résumé à côté du titre. Utilisée par le brief du module Script et la fiche « Ce que l'app a compris ».
 - **Étiquettes** grises (rôle « etiquette », comme les capacités d'un modèle) : marque « d'après la page » (ou « d'après la voix ») sur un champ rempli par l'app, rôles des répliques d'un script (« Accroche », « Preuve »…).
-- Boutons du module Script : principal « Écrire le script » (et « Envoyer dans Voix » sur chaque carte de script) ; normal « Lire la page », « Proposer des accroches », « Analyser ce texte » ; contour « Coller le texte du produit », « Changer la langue du projet », « Prononciation… », « Garder comme exemple ».
+- Boutons du module Script : principal « Écrire le script » (et « Envoyer dans Voix » sur chaque carte de script ; « Écrire les N scripts », « Retoucher », « Ajouter » dans les fenêtres) ; normal « Lire la page », « Proposer des accroches », « Analyser ce texte », « Variantes… », « Comparer… », « Charger » (bibliothèque de briefs), « Ajouter un script qui a marché… » ; contour « Coller le texte du produit », « Changer la langue du projet », « Prononciation… », « Charger un brief », « Enregistrer », « Mes meilleurs scripts… », « Retoucher… », « Retenir », suggestions de retouche, « Remettre les exemples fournis » ; icône ⋯ et étoiles de la note.
 - Une accroche se coche d'un clic n'importe où sur sa ligne : son texte passe à la ligne, ce qu'une case à cocher ne sait pas faire.
 
 ### 9.5 Typographie
@@ -779,7 +804,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 ## 10. Données et sécurité
 
 - Clés API : coffre-fort Windows uniquement (`keyring`). Jamais dans le code, les projets, les logs ni GitHub.
-- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json` ; options d'écriture du module Script retenues dans les préférences).
+- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json`, bibliothèque de briefs `briefs.json`, vitesses de parole mesurées `vitesses.json` ; options d'écriture du module Script retenues dans les préférences).
 - Lecture d'une page produit (module Script) : une seule demande, celle de l'utilisateur, avec les en-têtes d'un navigateur ordinaire ; 5 Mo lus au plus ; aucune clé envoyée au site.
 - Projets : dossier choisi par l'utilisateur (par défaut `Documents\UGC Studio\Projets\`).
 - Journal d'erreurs lisible, accessible depuis Réglages, sans aucune clé API.
@@ -825,7 +850,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lot 1, module Script, version 1.2.0.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -855,7 +880,7 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 | Lot | Version | Contenu | État |
 |---|---|---|---|
 | 1 | 1.2.0 | **Script (1)** : page Script, lecture de la page produit (app, Shopify, Google, texte collé), fiche comprise, brief, accroches, écriture, relecture, durée estimée, exemples (« Garder comme exemple », 5 scripts fournis), envoi dans Voix, coûts ; modèles de texte reconnus, Gemini 3.1 Pro au catalogue ; projet au format 6 | Fait |
-| 2 | 1.3.0 | **Script (2)** : variantes (3 modes), comparaison, retouche, ★ et « Garder », bibliothèque de briefs, fenêtre « Mes meilleurs scripts », vitesse mesurée sur les prises (aussi pour Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse | |
+| 2 | 1.3.0 | **Script (2)** : variantes (3 modes), comparaison, retouche, copie, ★ et « Retenir », bibliothèque de briefs, fenêtre « Mes meilleurs scripts », vitesse mesurée sur les prises (aussi pour Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse ; champs de nombre à la hauteur des autres champs | Fait |
 | 3 | 1.4.0 | **Studio (1)** : moteur de dessin commun, aperçu fidèle (vidéo, fond neutre, damier, zoom, boucle), repères, formats dont personnalisé, position verticale et alignement ; projet au format 7 | |
 | 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style | |
 | 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage | |

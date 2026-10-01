@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 from ...balises import FAMILLES, info_balise, nom_affiche
 from ...fournisseurs.capacites import modele_connu
 from ...generation import tokens_par_seconde
+from ...nombres import FRANCE
 from ...prononciation import Prononciation
 from ...script import normaliser, texte_pour_affichage
 from ...services import Services
@@ -83,7 +84,10 @@ class ColonneVariante:
 
 
 class DialogueVariantes(QDialog):
-    """`base` : les réglages de l'atelier ; `prononciations` : pour estimer le coût exact."""
+    """`base` : les réglages de l'atelier ; `prononciations` et `nombres` (nombres dits à la belge
+    ou à la suisse) : pour estimer le coût exact. `variantes` : variantes déjà préparées (ex. une
+    par accroche, envoyées par le module Script) ; la fenêtre s'ouvre alors sur « Réglages par
+    variante »."""
 
     def __init__(
         self,
@@ -91,13 +95,19 @@ class DialogueVariantes(QDialog):
         base: ReglagesVariante,
         prononciations: Sequence[Prononciation] = (),
         parent=None,
+        nombres: str = FRANCE,
+        variantes: Sequence[ReglagesVariante] | None = None,
     ):
         super().__init__(parent)
         self._services = services
         self._base = base.copie()
         self._prononciations = list(prononciations)
+        self._nombres = nombres
         # Au départ : deux variantes identiques à la base (on modifie la B pour la comparer à la A).
-        self._variantes: list[ReglagesVariante] = [base.copie() for _ in range(VARIANTES_MIN)]
+        if variantes:
+            self._variantes: list[ReglagesVariante] = [v.copie() for v in variantes[:VARIANTES_MAX]]
+        else:
+            self._variantes = [base.copie() for _ in range(VARIANTES_MIN)]
         self._colonnes: list[ColonneVariante] = []
         self.setWindowTitle("Variantes A/B")
         self.resize(Dimensions.DIALOGUE_VARIANTES_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
@@ -135,6 +145,8 @@ class DialogueVariantes(QDialog):
         disposition.addLayout(bas)
 
         self._construire_tableau()
+        if variantes:
+            self.onglets.setCurrentIndex(ONGLET_PAR_VARIANTE)
 
     # --- Onglet « Mêmes réglages » -----------------------------------------------------------
 
@@ -371,6 +383,8 @@ class DialogueVariantes(QDialog):
             self._services.prix,
             self._prononciations,
             lambda modele: tokens_par_seconde(self._services, modele),
+            self._nombres,
+            lambda voix: self._services.vitesses.vitesse(voix).mots_par_seconde,
         )
         self.info_cout.setText(f"Coût total estimé ({nombre} variantes) : ≈")
         if total is None:

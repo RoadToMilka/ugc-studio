@@ -110,7 +110,8 @@ def test_module_script_enregistre_dans_le_projet(gestion, tmp_path):
         modele="gemini-3.8-flash", reseau="meta", langue="fr-FR", angle="temoignage", duree_visee_s=20,
         repliques=[RepliqueEcrite(["accroche"], [{"texte": "Fini les fuites "}, {"balise": "laugh"}], "warm", "chaleureux")],
     )
-    etat.scripts = [script]
+    etat.ajouter(script)
+    script.note, script.retenu = 4, True  # lot 2 : même format, informations en plus
     gestion.enregistrer()
 
     rouvert = GestionnaireProjets(tmp_path / "recents.json").ouvrir(projet.dossier).ecriture
@@ -118,6 +119,18 @@ def test_module_script_enregistre_dans_le_projet(gestion, tmp_path):
     assert rouvert.adresse == etat.adresse and rouvert.page == etat.page and rouvert.fiche == etat.fiche
     assert rouvert.accroches == etat.accroches and rouvert.accroches_cochees()[0].texte == "Fini les fuites la nuit."
     assert rouvert.scripts == [script] and rouvert.script(script.identifiant) == script
+    assert rouvert.scripts[0].nom() == "Script 1" and rouvert.scripts[0].note == 4 and rouvert.scripts[0].retenu
+
+
+def test_scripts_de_la_1_2_0_numerotes_a_l_ouverture():
+    """Lot 2 : un script écrit avec la 1.2.0 n'a pas de numéro ; il en reçoit un, dans l'ordre d'écriture."""
+    from ugc_studio.ecriture.etat import EtatScript
+
+    brut = {"repliques": [{"roles": ["accroche"], "script": [{"texte": "Salut"}]}], "modele": "m", "reseau": "tiktok"}
+    etat = EtatScript.depuis_dict({"scripts": [dict(brut, identifiant="a"), dict(brut, identifiant="b")]})
+    assert [(s.identifiant, s.nom()) for s in etat.scripts] == [("a", "Script 1"), ("b", "Script 2")]
+    nouveau = etat.ajouter(etat.scripts[0].__class__.depuis_dict(dict(brut, identifiant="c")))
+    assert nouveau.nom() == "Script 3" and etat.scripts[-1] is nouveau
 
 
 def test_projet_de_la_v1_1_sans_script(gestion, tmp_path):

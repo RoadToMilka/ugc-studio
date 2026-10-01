@@ -73,10 +73,10 @@ def test_chaque_bouton_ouvre_une_page_qui_existe_et_chaque_page_sert():
     assert set(PAGES) <= set(utilisees), f"Conseils jamais affichés : {set(PAGES) - set(utilisees)}"
 
 
-def test_cinq_modules_et_onze_fenetres():
+def test_cinq_modules_et_quinze_fenetres():
     modules = {"script", "voix", "transcription", "sous-titres", "reglages"}
     assert modules <= set(PAGES)
-    assert len(set(PAGES) - modules) == 11
+    assert len(set(PAGES) - modules) == 15  # dont 4 au lot 2 de la V2 (variantes, comparaison, briefs, exemples)
     assert all(re.fullmatch(r"[a-z-]+", cle) for cle in PAGES)
 
 

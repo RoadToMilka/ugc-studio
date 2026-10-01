@@ -1,6 +1,10 @@
 """Atelier de voix off (§5) : modèle et voix (bibliothèque, favoris, voix créées), script en
 répliques (chacune avec son style), dictionnaire de prononciation, génération (avec écoute pendant
-le calcul), variantes A/B et écoute comparative, prises."""
+le calcul), variantes A/B et écoute comparative, prises.
+
+V2 (lot 2) : nombres dits à la belge ou à la suisse (projets en français), durée estimée avec la
+vitesse de parole mesurée sur les prises de la voix choisie, accroches du module Script envoyées
+en variantes A/B."""
 
 from __future__ import annotations
 
@@ -9,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QMessageBox, QVBoxLayout, QWidget
 
 from ....estimation import estimer_repliques
 from ....fournisseurs.base import Adaptateur
@@ -25,6 +29,8 @@ from ....generation import (
     tokens_par_seconde,
 )
 from ....modeles_charges import CHARGES, VOIX
+from ....nombres import FRANCE
+from ....nombres import VARIANTES as VARIANTES_NOMBRES
 from ....projets import LANGUES, Projet, RepliqueProjet
 from ....prononciation import fusionner
 from ....script import est_vide
@@ -119,6 +125,22 @@ class AtelierVoix(Page):
         self.info_modeles = libelle("", "avertissement")
         self.info_modeles.hide()
         d.addWidget(self.info_modeles)
+        # Nombres dits à la belge ou à la suisse (V2, lot 2) : projets en français seulement.
+        self.zone_nombres = QWidget()
+        ligne_nombres = QHBoxLayout(self.zone_nombres)
+        ligne_nombres.setContentsMargins(0, 0, 0, 0)
+        ligne_nombres.setSpacing(Espacements.M)
+        ligne_nombres.addWidget(libelle("Nombres dits", retour_a_la_ligne=False))
+        self.nombres = liste_deroulante(
+            "Façon dont la voix dit les prix et les nombres (septante, nonante…). Le script et les "
+            "sous-titres gardent les chiffres."
+        )
+        for code, nom in VARIANTES_NOMBRES.items():
+            self.nombres.addItem(nom, code)
+        self.nombres.currentIndexChanged.connect(self._reglage_change)
+        ligne_nombres.addWidget(self.nombres)
+        ligne_nombres.addStretch(1)
+        d.addWidget(self.zone_nombres)
         # Script écrit pour une femme, voix masculine (ou l'inverse) : avertissement (V2, §10.11).
         self.info_genre = libelle("", "legende-avertissement")
         self.info_genre.hide()
@@ -213,6 +235,7 @@ class AtelierVoix(Page):
         services.connexions.abonner(self._remplir_modeles)
         services.modeles.abonner(self._remplir_modeles, {CHARGES})  # modèles chargés ou retirés
         services.prix.abonner(self._mettre_a_jour_estimation)
+        services.vitesses.abonner(self._mettre_a_jour_estimation)  # vitesse de parole mesurée (V2)
         services.voix.abonner(self._remplir_voix)
         self._remplir_modeles()
         self._remplir_voix()
@@ -243,6 +266,8 @@ class AtelierVoix(Page):
         choisir(self.modele, projet.voix.modele)
         self._declarer_modele()
         self._selectionner_voix(projet.voix.voix or VOIX_PAR_DEFAUT)
+        choisir(self.nombres, projet.voix.nombres)
+        self.zone_nombres.setVisible(projet.langue.startswith("fr"))
         self.repliques.definir(projet.repliques)
         self._chargement = False
         self.statut.setText(f"Langue du projet : {LANGUES.get(projet.langue, projet.langue)}")
@@ -250,10 +275,14 @@ class AtelierVoix(Page):
         self._mettre_a_jour_estimation()
         self._verifier_genre()
 
-    def remplacer_repliques(self, repliques: list[RepliqueProjet], confirmer: bool = True) -> bool:
+    def remplacer_repliques(
+        self, repliques: list[RepliqueProjet], confirmer: bool = True, nombres: str | None = None
+    ) -> bool:
         """« Envoyer dans Voix » (module Script, V2) : ces répliques remplacent celles du projet, avec
         leurs styles, balises et mots accentués. Si le module contient déjà un script, confirmation
-        d'abord (l'ancien script reste dans l'historique du module Script). Renvoie True si c'est fait."""
+        d'abord (l'ancien script reste dans l'historique du module Script). `nombres` : nombres dits
+        à la française, à la belge ou à la suisse, d'après la langue du script (None : inchangé).
+        Renvoie True si c'est fait."""
         if self._projet is None or not repliques:
             return False
         actuelles = [r for r in self.repliques.repliques() if not est_vide(r.script)]
@@ -271,12 +300,29 @@ class AtelierVoix(Page):
         self._chargement = True
         self.repliques.definir(repliques)
         self._chargement = False
+        if nombres is not None:
+            self.definir_nombres(nombres)
         self._minuterie.stop()
         self._enregistrer()
         self._mettre_a_jour_estimation()
         self._verifier_genre()
-        self._afficher("Script reçu du module Script : prêt pour « Générer l'audio ».", "succes")
+        precision = ""
+        if self._nombres() != FRANCE:
+            precision = f" (nombres dits {VARIANTES_NOMBRES[self._nombres()].split(' (')[0].lower()})"
+        self._afficher(f"Script reçu du module Script{precision} : prêt pour « Générer l'audio ».", "succes")
         return True
+
+    def definir_nombres(self, variante: str) -> None:
+        """Nombres dits à la belge ou à la suisse (choisis d'après la langue d'un script envoyé)."""
+        if self._projet is None or variante not in VARIANTES_NOMBRES:
+            return
+        choisir(self.nombres, variante)  # → _reglage_change : enregistré, estimation à jour
+
+    def _nombres(self) -> str:
+        """Variante des nombres pour la voix : celle du projet s'il est en français."""
+        if self._projet is None or not self._projet.langue.startswith("fr"):
+            return FRANCE
+        return self.nombres.currentData() or FRANCE
 
     def _verifier_genre(self) -> None:
         """Personne qui parle du brief (module Script) et genre de la voix choisie : différents ?"""
@@ -345,6 +391,7 @@ class AtelierVoix(Page):
             return
         self._projet.voix.modele = self.modele.currentData() or self._projet.voix.modele
         self._projet.voix.voix = self.voix.currentData() or self._projet.voix.voix
+        self._projet.voix.nombres = self.nombres.currentData() or FRANCE
         self._minuterie.start()
         self._mettre_a_jour_estimation()
 
@@ -372,13 +419,18 @@ class AtelierVoix(Page):
 
     def _mettre_a_jour_estimation(self) -> None:
         modele = self.modele.currentData() or "gemini-3.8-flash-tts"
+        voix = self.voix.currentData() or VOIX_PAR_DEFAUT
+        vitesse = self._services.vitesses.vitesse(voix)
         estimation = estimer_repliques(
-            repliques_api(self.repliques.repliques(), self._prononciations()),
+            repliques_api(self.repliques.repliques(), self._prononciations(), self._nombres()),
             modele,
             self._services.prix,
             tokens_par_seconde(self._services, modele),
+            vitesse.mots_par_seconde,
         )
         self.estimation.setText(f"{estimation.caracteres} caractères  ·  ≈ {minutes_secondes(estimation.duree_s)}  ·  ≈")
+        # La même vitesse que le module Script (V2) : les deux modules annoncent la même durée.
+        self.estimation.setToolTip(f"Durée estimée avec la {vitesse.texte(self._services.voix.nom(voix))}")
         if estimation.cout_eur is None:
             self.cout_estime.setText("prix inconnu")
         else:
@@ -459,6 +511,7 @@ class AtelierVoix(Page):
             repliques,
             self._projet.nom,
             self._prononciations(),
+            self._nombres(),
         )
         vitesse = tokens_par_seconde(self._services, commande.modele)
         projet = self._projet
@@ -536,7 +589,28 @@ class AtelierVoix(Page):
         if all(est_vide(r.script) for r in base.repliques):
             self._afficher("Le script est vide : écris d'abord le texte à dire.", "erreur")
             return
-        dialogue = DialogueVariantes(self._services, base, self._prononciations(), self.window())
+        dialogue = DialogueVariantes(self._services, base, self._prononciations(), self.window(), self._nombres())
+        if dialogue.exec():
+            self.generer_variantes(dialogue.variantes())
+
+    def ouvrir_variantes_d_accroches(self, accroches: list[RepliqueProjet]) -> None:
+        """« Envoyer les accroches en variantes » (module Script, V2) : la fenêtre Variantes s'ouvre sur
+        « Réglages par variante », une variante par accroche (seule la réplique 1 change). Le script
+        (avec la première accroche) est déjà dans l'atelier."""
+        if self._projet is None or self._serie is not None or len(accroches) < 2:
+            return
+        self._enregistrer()
+        base = self.reglages_de_base()
+        if not base.repliques:
+            return
+        variantes = []
+        for replique in accroches[: len(LETTRES)]:
+            variante = base.copie()
+            variante.repliques[0] = copie_replique(replique)
+            variantes.append(variante)
+        dialogue = DialogueVariantes(
+            self._services, base, self._prononciations(), self.window(), self._nombres(), variantes
+        )
         if dialogue.exec():
             self.generer_variantes(dialogue.variantes())
 
@@ -549,9 +623,9 @@ class AtelierVoix(Page):
         except Exception as erreur:  # noqa: BLE001 — message clair affiché
             self._afficher(message_erreur(erreur), "erreur")
             return
-        prononciations = self._prononciations()
+        prononciations, nombres = self._prononciations(), self._nombres()
         a_faire = [
-            (LETTRES[index], preparer(FOURNISSEUR, v.modele, v.voix, v.repliques, self._projet.nom, prononciations))
+            (LETTRES[index], preparer(FOURNISSEUR, v.modele, v.voix, v.repliques, self._projet.nom, prononciations, nombres))
             for index, v in enumerate(variantes[: len(LETTRES)])
         ]
         self._serie = SerieEnCours(

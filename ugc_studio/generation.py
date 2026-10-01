@@ -2,7 +2,8 @@
 
 Étapes :
 1. chaque réplique du script est transformée en texte pour l'API (balises, mots accentués en
-   majuscules), puis le dictionnaire de prononciation y est appliqué (§5.2) ;
+   majuscules), puis le dictionnaire de prononciation y est appliqué (§5.2), et les nombres sont
+   écrits à la belge ou à la suisse si le projet le demande (V2) ;
 2. les répliques partent ensemble, chacune avec son style ; si c'est trop long pour une seule
    requête, elles sont réparties en plusieurs requêtes (§5.6 bis) et les audios sont recollés ;
 3. la prise est rangée dans le dossier du projet, et le coût est noté dans le suivi des coûts.
@@ -21,6 +22,8 @@ from .audio import FREQUENCE_TTS, concatener_wav, duree_wav, silence_pcm
 from .estimation import TOKENS_AUDIO_PAR_SECONDE_DEFAUT, ajuster_tokens_par_seconde, regrouper
 from .fournisseurs.base import Adaptateur
 from .fournisseurs.voix import RecepteurAudio, Replique, RequeteVoix, ResultatVoix
+from .nombres import FRANCE
+from .nombres import appliquer as appliquer_nombres
 from .projets import Prise, RepliqueProjet
 from .prononciation import Prononciation, appliquer
 from .script import est_vide, joindre_repliques, texte_pour_api
@@ -55,10 +58,16 @@ class Commande:
         return styles.pop() if styles else ""
 
 
-def repliques_api(repliques: Sequence[RepliqueProjet], prononciations: Sequence[Prononciation] = ()) -> list[Replique]:
-    """Répliques du projet → texte exact envoyé au TTS (répliques vides ignorées)."""
+def repliques_api(
+    repliques: Sequence[RepliqueProjet], prononciations: Sequence[Prononciation] = (), nombres: str = FRANCE
+) -> list[Replique]:
+    """Répliques du projet → texte exact envoyé au TTS (répliques vides ignorées).
+
+    `nombres` : nombres dits à la française, à la belge ou à la suisse (nombres.py) ; comme le
+    dictionnaire de prononciation, seul le texte envoyé change, pas le script ni les sous-titres."""
+    prononciations = list(prononciations)
     return [
-        Replique(appliquer(texte_pour_api(r.script), list(prononciations)), r.style.strip())
+        Replique(appliquer_nombres(appliquer(texte_pour_api(r.script), prononciations), nombres), r.style.strip())
         for r in repliques
         if not est_vide(r.script)
     ]
@@ -71,12 +80,13 @@ def preparer(
     repliques: Sequence[RepliqueProjet],
     projet: str | None,
     prononciations: Sequence[Prononciation] = (),
+    nombres: str = FRANCE,
 ) -> Commande:
     return Commande(
         fournisseur,
         modele,
         voix,
-        tuple(repliques_api(repliques, prononciations)),
+        tuple(repliques_api(repliques, prononciations, nombres)),
         joindre_repliques([r.script for r in repliques]),
         projet,
     )
@@ -151,11 +161,12 @@ def noter_cout(services: Services, commande: Commande, resultat: ResultatVoix) -
 def enregistrer_prise(
     services: Services, commande: Commande, resultat: ResultatVoix, serie: int = 0, variante: str = ""
 ) -> Prise:
-    """Dans la tâche principale : coût noté, prise rangée dans le projet.
+    """Dans la tâche principale : coût noté, prise rangée dans le projet, vitesse de parole de la
+    voix mesurée sur la prise (V2 : elle affine les durées estimées, vitesses.py).
 
     `serie` et `variante` : pour une prise d'une série de variantes A/B (§5.6)."""
     cout = noter_cout(services, commande, resultat)
-    return services.projets.ajouter_prise(
+    prise = services.projets.ajouter_prise(
         resultat.audio_wav,
         modele=commande.modele,
         voix=commande.voix,
@@ -170,3 +181,5 @@ def enregistrer_prise(
         serie=serie,
         variante=variante,
     )
+    services.vitesses.noter(prise.voix, prise.identifiant, prise.texte_api, prise.duree_s)
+    return prise

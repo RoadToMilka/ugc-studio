@@ -28,6 +28,7 @@ from ....ecriture.brief import (
     mots_vises,
     pays_de,
 )
+from ....estimation import MOTS_PAR_SECONDE
 from ....fournisseurs.capacites import LIBELLES, Capacite, deviner_capacites, modele_connu
 from ....modeles_charges import CHARGES
 from ....projets import LANGUES
@@ -166,12 +167,14 @@ class FormulaireBrief(QWidget):
 
     modifie = Signal()
     langue_projet_demandee = Signal(str)
+    exemples_demandes = Signal()  # « Mes meilleurs scripts… »
 
     def __init__(self, services: Services, parent=None):
         super().__init__(parent)
         self._services = services
         self._brief = Brief()
         self._chargement = False
+        self._mots_par_seconde = MOTS_PAR_SECONDE
         self._mots_par_seconde_texte = ""
         self._langue_projet: str | None = None
         disposition = QVBoxLayout(self)
@@ -307,6 +310,10 @@ class FormulaireBrief(QWidget):
         self.nombre_accroches = champ_entier(NOMBRE_ACCROCHES_MIN, NOMBRE_ACCROCHES_MAX, info="Nombre d'accroches proposées (3 à 10)")
         modele.addLayout(_avec_titre("Accroches proposées", self.nombre_accroches), 1)
         modele.addStretch(1)
+        self.bouton_exemples = bouton("Mes meilleurs scripts…", variante="contour", nom_icone="award")
+        self.bouton_exemples.setToolTip("Les exemples dont le modèle s'inspire : ajoute les tiens, note-les, retire les autres")
+        self.bouton_exemples.clicked.connect(self.exemples_demandes.emit)
+        modele.addWidget(self.bouton_exemples, 0, Qt.AlignmentFlag.AlignBottom)
         disposition.addLayout(modele)
 
         # Signaux : chaque changement met le brief à jour.
@@ -357,8 +364,10 @@ class FormulaireBrief(QWidget):
         """Après un pré-remplissage : les valeurs et les marques des champs remplis par l'app."""
         self.definir(self._brief)
 
-    def definir_vitesse(self, texte: str) -> None:
-        """Texte de la vitesse de parole utilisée (ex. « 2,7 mots/s »), affiché sous la durée."""
+    def definir_vitesse(self, mots_par_seconde: float, texte: str = "") -> None:
+        """Vitesse de parole de la voix du projet, mesurée sur tes prises (V2, lot 2) : elle donne le
+        nombre de mots de la durée visée. `texte` : « vitesse de Kore mesurée sur 9 prises : 2,7 mots/s »."""
+        self._mots_par_seconde = mots_par_seconde
         self._mots_par_seconde_texte = texte
         self._mettre_a_jour_infos()
 
@@ -448,7 +457,7 @@ class FormulaireBrief(QWidget):
     def _mettre_a_jour_infos(self) -> None:
         brief = self._brief
         duree = brief.duree_visee()
-        texte = f"{duree} s ≈ {mots_vises(duree)} mots"
+        texte = f"{duree} s ≈ {mots_vises(duree, self._mots_par_seconde)} mots"
         if brief.duree_s == 0:
             texte += f" (durée conseillée pour {RESEAUX.get(brief.reseau, brief.reseau)})"
         if self._mots_par_seconde_texte:

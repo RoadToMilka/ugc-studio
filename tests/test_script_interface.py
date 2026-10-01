@@ -200,10 +200,10 @@ def test_accroches_puis_deux_scripts_puis_envoi_dans_voix(app_configuree, qtbot,
     assert repliques[1].script[-1] == {"balise": "laugh"}
     assert etat.scripts[1].envoye_le and not carte.pastille_envoye.isHidden()
 
-    # « Garder comme exemple » : rangé parmi les exemples donnés au modèle.
-    carte.bouton_garder.click()
+    # « Garder comme exemple » (menu ⋯ depuis le lot 2) : rangé parmi les exemples donnés au modèle.
+    carte.action_garder.trigger()
     assert services.exemples.gardes()[0].identifiant == f"script-{etat.scripts[1].identifiant}"
-    assert not carte.bouton_garder.isEnabled() and not carte.pastille_exemple.isHidden()
+    assert not carte.action_garder.isEnabled() and not carte.pastille_exemple.isHidden()
 
 
 def test_texte_modifie_a_la_main_puis_reverifie(page, qtbot, services, avec_cle):

@@ -6,6 +6,8 @@ dans la langue du brief. Chaque demande sépare clairement ses parties par des b
 contenu d'une page produit est présenté comme une matière, jamais comme une consigne.
 
 Étapes (une demande chacune) : analyse de la page → fiche ; accroches ; écriture ; relecture.
+Lot 2 : accroches de variantes (une par angle, ou d'autres accroches pour un script écrit) et
+retouche d'un script d'après une consigne.
 """
 
 from __future__ import annotations
@@ -343,21 +345,54 @@ def ids_des_angles() -> str:
     return ", ".join(f"{cle} ({texte.split(' (')[0]})" for cle, texte in ANGLES_ANGLAIS.items())
 
 
-def demande_accroches(brief: Brief, page: str, exemples: str, exemples_autre_langue: bool = False) -> str:
+_ACCROCHE = (
+    "A hook is the first line of the script, spoken alone: in under 3 seconds (about 8 words or fewer), in "
+    "natural spoken {langue}. It must stop the scroll and make the product or its benefit clear quickly."
+)
+_ACCROCHE_A_EVITER = (
+    "Avoid overused ad phrases ('it changed my life', 'I was skeptical but', 'game changer') and questions that "
+    "assume something about the viewer."
+)
+_ACCROCHE_REPONSE = (
+    "For each hook give its text, its angle (one of the enum values), why it hooks (one short line in French) "
+    "and, in French, a warning if it comes close to one of the <ad_rules> (else empty)."
+)
+
+
+def demande_accroches(
+    brief: Brief,
+    page: str,
+    exemples: str,
+    exemples_autre_langue: bool = False,
+    nombre: int | None = None,
+    une_par_angle: bool = False,
+) -> str:
+    """Accroches à cocher (« Proposer des accroches »), ou les accroches des variantes « Mêmes
+    réglages » (`une_par_angle` : chacune sur un angle différent, pour des scripts vraiment différents)."""
+    nombre = nombre or brief.nombre_accroches
+    if une_par_angle and brief.angle not in ANGLES_ANGLAIS:
+        repartition = (
+            f"Write {nombre} clearly different hooks for this ad, each one on a different angle among: "
+            f"{ids_des_angles()}. Each hook will open its own complete script."
+        )
+    elif une_par_angle:
+        repartition = (
+            f"Write {nombre} clearly different hooks for this ad (different ideas, not rewordings). Each hook will "
+            "open its own complete script."
+        )
+    else:
+        repartition = (
+            f"Write {nombre} different hooks for this ad, spread over 2 or 3 different angles among: {ids_des_angles()}."
+        )
     lignes = [
         "<task>",
-        f"Write {brief.nombre_accroches} different hooks for this ad, spread over 2 or 3 different angles among: "
-        f"{ids_des_angles()}.",
-        "A hook is the first line of the script, spoken alone: in under 3 seconds (about 8 words or fewer), in "
-        f"natural spoken {nom_de_langue(brief.langue)}. It must stop the scroll and make the product or its benefit "
-        "clear quickly.",
-        "Avoid overused ad phrases ('it changed my life', 'I was skeptical but', 'game changer') and questions that "
-        "assume something about the viewer.",
-        "For each hook give its text, its angle (one of the enum values), why it hooks (one short line in French) "
-        "and, in French, a warning if it comes close to one of the <ad_rules> (else empty).",
+        repartition,
+        _ACCROCHE.format(langue=nom_de_langue(brief.langue)),
+        _ACCROCHE_A_EVITER,
+        _ACCROCHE_REPONSE,
     ]
     if brief.angle in ANGLES_ANGLAIS:
-        lignes.append(f"Use mostly this angle: {ANGLES_ANGLAIS[brief.angle]}.")
+        lignes.append(f"Use {'only' if une_par_angle else 'mostly'} this angle: {ANGLES_ANGLAIS[brief.angle]}.")
     lignes.append("Take inspiration from the tone of <examples>, never copy them.")
     lignes.append("</task>")
     lignes += [bloc_regles(brief.reseau), bloc_brief(brief), bloc_page(page)]
@@ -417,15 +452,83 @@ def demande_script(
     return "\n".join(lignes)
 
 
-def demande_relecture(
-    brief: Brief, page: str, repliques: list[dict], constats_app: list[str], mots_par_seconde: float | None = None
+def demande_accroches_pour_corps(
+    brief: Brief, page: str, repliques: list[dict], nombre: int, exemples: str = "", exemples_autre_langue: bool = False
 ) -> str:
+    """Variantes « Accroches seulement » : d'autres accroches pour la réplique 1 d'un script écrit,
+    le reste du script ne changeant pas d'un mot."""
+    lignes = [
+        "<task>",
+        f"Here is a complete script; its line 1 is the hook. Write {nombre} other hooks that can replace line 1 "
+        "without changing anything else in the script.",
+        "- Each hook must flow naturally into line 2, exactly as it is written.",
+        "- Each hook must be clearly different from the current hook and from the others (another angle or another "
+        "idea, not a rewording).",
+        f"- {_ACCROCHE.format(langue=nom_de_langue(brief.langue))}",
+        f"- {_ACCROCHE_A_EVITER}",
+        "- Same form of address as the script, and the same conventions (no tag, no asterisk in a hook).",
+        _ACCROCHE_REPONSE,
+        "</task>",
+        bloc_regles(brief.reseau),
+        bloc_brief(brief),
+        bloc_page(page),
+        "<script>\n" + json.dumps(repliques, ensure_ascii=False, indent=1) + "\n</script>",
+    ]
+    if exemples:
+        lignes.append(bloc_exemples(exemples, exemples_autre_langue))
+    return "\n".join(lignes)
+
+
+def demande_retouche(
+    brief: Brief, page: str, repliques: list[dict], consigne: str, mots_par_seconde: float | None = None
+) -> str:
+    """« Retoucher… » : un nouveau script d'après une consigne (« plus court », « plus drôle »…)."""
+    duree = brief.duree_visee()
+    mots = mots_vises(duree, mots_par_seconde) if mots_par_seconde else mots_vises(duree)
+    roles = ", ".join(f"{cle} ({ROLES_ANGLAIS[cle]})" for cle in ROLES)
+    lignes = [
+        "<task>",
+        "Rewrite the script below following this instruction from the advertiser. It takes priority over the brief "
+        "where they conflict:",
+        f'"{consigne.strip()}"',
+        "- Change only what the instruction asks for; keep the facts, the offer and the call to action.",
+        "- Line 1 stays the hook, alone (rewrite it only if the instruction concerns it).",
+        "- Start a new line only when the emotion changes.",
+        f"- Length: about {mots} words (plus or minus 10 %), tags excluded.",
+        f"Roles: label each line with the roles it plays among: {roles}.",
+        "Text conventions:",
+        *[f"- {c}" for c in _conventions(brief)],
+        f"Give the angle of the new script in 'angle', among: {ids_des_angles()}.",
+        "</task>",
+        bloc_regles(brief.reseau),
+        bloc_brief(brief, mots_par_seconde),
+        bloc_page(page),
+        "<script>\n" + json.dumps(repliques, ensure_ascii=False, indent=1) + "\n</script>",
+    ]
+    return "\n".join(lignes)
+
+
+def demande_relecture(
+    brief: Brief,
+    page: str,
+    repliques: list[dict],
+    constats_app: list[str],
+    mots_par_seconde: float | None = None,
+    consigne_prioritaire: str = "",
+) -> str:
+    """Relecture d'un script écrit (ou retouché : `consigne_prioritaire` est alors la consigne de la
+    retouche, que la relecture ne doit pas défaire)."""
     criteres = "\n".join(f"- {cle}: {texte}" for cle, texte in CRITERES_ANGLAIS.items())
     lignes = [
         "<task>",
         "Review the script below before it is shown to the advertiser, with this checklist:",
         criteres,
     ]
+    if consigne_prioritaire.strip():
+        lignes.append(
+            "The advertiser asked for this change, which takes priority over the brief where they conflict; never "
+            f'undo it: "{consigne_prioritaire.strip()}"'
+        )
     if constats_app:
         lignes.append("The app also measured these problems, which are serious and must be fixed:")
         lignes += [f"- {constat}" for constat in constats_app]

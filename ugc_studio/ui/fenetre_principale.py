@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QMainWindow, QStackedWidget, 
 
 from .. import NOM_APP
 from ..ecriture.scripts import ScriptEcrit
+from ..nombres import FRANCE, VARIANTE_DE_LANGUE
 from ..projets import ErreurProjet, Projet, RepliqueProjet
 from ..services import Services
 from .actions_projet import remplir_menu_projet
@@ -94,6 +95,8 @@ class FenetrePrincipale(QMainWindow):
         self.page("sous-titres").atelier.corriger_demande.connect(lambda: self.afficher_module("transcription"))
         # « Envoyer dans Voix » d'un script (V2) : ses répliques remplacent celles du module Voix.
         self.page("script").atelier.envoi_demande.connect(self.envoyer_dans_voix)
+        # Accroches d'une série « Accroches seulement » (V2, lot 2) : en variantes A/B de voix.
+        self.page("script").atelier.variantes_voix_demandees.connect(self.envoyer_accroches_en_variantes)
 
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
@@ -144,16 +147,35 @@ class FenetrePrincipale(QMainWindow):
         self.afficher_module("sous-titres")
         self.page("sous-titres").atelier.creer_depuis_prise(identifiant_prise)
 
-    def envoyer_dans_voix(self, script: ScriptEcrit) -> None:
+    def envoyer_dans_voix(self, script: ScriptEcrit) -> bool:
         """« Envoyer dans Voix » : les répliques du script (styles, balises, mots accentués) remplacent
         celles du module Voix, après confirmation s'il contient déjà un script ; puis le module Voix
-        s'ouvre, prêt pour « Générer l'audio »."""
+        s'ouvre, prêt pour « Générer l'audio ». Un script en français de Belgique ou de Suisse règle
+        aussi les nombres dits (septante, nonante…). Renvoie True si c'est fait."""
         atelier_script = self.page("script").atelier
         atelier_script.enregistrer_maintenant()
         repliques = [RepliqueProjet([dict(s) for s in r.script], r.style, r.style_fr) for r in script.repliques]
-        if self.page("voix").atelier.remplacer_repliques(repliques):
+        nombres = VARIANTE_DE_LANGUE.get(script.langue, FRANCE) if script.langue.startswith("fr") else None
+        if not self.page("voix").atelier.remplacer_repliques(repliques, nombres=nombres):
+            return False
+        atelier_script.script_envoye(script)
+        self.afficher_module("voix")
+        return True
+
+    def envoyer_accroches_en_variantes(self, scripts: list[ScriptEcrit]) -> None:
+        """« Envoyer les accroches en variantes » : le script de la variante A part dans le module Voix,
+        puis la fenêtre Variantes s'ouvre sur « Réglages par variante », une variante par accroche."""
+        if len(scripts) < 2 or not self.envoyer_dans_voix(scripts[0]):
+            return
+        accroches = [
+            RepliqueProjet([dict(s) for s in script.repliques[0].script], script.repliques[0].style, script.repliques[0].style_fr)
+            for script in scripts
+            if script.repliques
+        ]
+        atelier_script = self.page("script").atelier
+        for script in scripts[1:]:
             atelier_script.script_envoye(script)
-            self.afficher_module("voix")
+        self.page("voix").atelier.ouvrir_variantes_d_accroches(accroches)
 
     # --- Mémoire de la fenêtre (taille, position, dernier module) ----------------------------
 

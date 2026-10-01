@@ -80,11 +80,36 @@ SCRIPT = PageDeConseils(
             ),
         ),
         Rubrique(
-            "Durée",
+            "Plusieurs versions",
+            (
+                "« Variantes… » écrit de 2 à 6 scripts en un seul lancement : mêmes réglages (une accroche "
+                "différente pour chacun), réglages par variante (angle, durée, réseau…) ou accroches seulement "
+                "(le même corps, d'autres accroches).",
+                "« Retoucher… » : une consigne (« plus court », « plus drôle », « sans tutoiement ») donne un "
+                "nouveau script, relu comme les autres ; l'ancien reste.",
+                "« Comparer… » met 2 ou 3 scripts côte à côte : accroche, répliques, durée et relecture.",
+                "Note tes scripts avec les étoiles et « Retenir » ceux que tu gardes pour tes pubs. Menu ⋯ "
+                "d'un script : dupliquer, garder comme exemple, supprimer.",
+                "Série « Accroches seulement » : menu ⋯, « Envoyer les accroches en variantes » les envoie dans "
+                "le module Voix, une variante de voix par accroche (tests A/B).",
+            ),
+        ),
+        Rubrique(
+            "Briefs réutilisables",
+            (
+                "« Enregistrer » range le brief, avec la page produit lue, dans ta bibliothèque de briefs.",
+                "« Charger un brief » le reprend, dans ce projet ou un autre : pratique pour un même produit "
+                "décliné par réseau ou par langue.",
+            ),
+        ),
+        Rubrique(
+            "Durée et vitesse de parole",
             (
                 "Durée vide : 25 s sur TikTok, 10 s sur Snapchat, 20 s sur Facebook et Instagram.",
-                "L'app compte 2,7 mots par seconde (environ 160 mots par minute), comme le module Voix : chaque "
-                "script affiche sa durée estimée, balises comprises.",
+                "Au départ, l'app compte 2,7 mots par seconde (environ 160 mots par minute). Ensuite, elle "
+                "mesure la vitesse de chaque voix sur tes prises (moyenne des 20 dernières).",
+                "Le nombre de mots visé et la durée estimée de chaque script suivent la voix du projet, avec "
+                "la même vitesse que le module Voix : les deux modules annoncent la même durée.",
             ),
         ),
         Rubrique(
@@ -111,8 +136,11 @@ SCRIPT = PageDeConseils(
                 "Gemini 3.8 Flash par défaut ; Gemini 3.1 Pro (aperçu) est chargé pour comparer sur tes produits.",
                 "Le coût est estimé avant chaque demande, puis noté dans le suivi des coûts (« script : "
                 "écriture »…) : quelques centimes pour un script complet avec Gemini 3.8 Flash.",
-                "« Garder comme exemple » range un script parmi les exemples donnés au modèle : il s'en inspire "
-                "pour le ton et le rythme, sans le recopier. Au départ, 5 scripts fournis servent d'exemples.",
+                "« Garder comme exemple » (menu ⋯ d'un script) range un script parmi les exemples donnés au "
+                "modèle : il s'en inspire pour le ton et le rythme, sans le recopier. Au départ, 5 scripts "
+                "fournis servent d'exemples.",
+                "« Mes meilleurs scripts… » : colle un script qui a marché, note tes exemples (ex. « CPA 9 € ») "
+                "ou retire les scripts fournis.",
             ),
         ),
     ),
@@ -154,6 +182,10 @@ VOIX = PageDeConseils(
                 "« Prononciation » : pour un nom de marque mal prononcé, écris comment le dire (ex. "
                 "« Glowzy » se dit « Glo-zi »). Seul le texte envoyé à la voix change : le script et les "
                 "sous-titres gardent la bonne orthographe.",
+                "« Nombres dits » (projets en français) : à la belge (septante, nonante) ou à la suisse "
+                "(septante, huitante, nonante). Seul le texte envoyé à la voix change : le script et les "
+                "sous-titres gardent les chiffres.",
+                "À Genève, à Neuchâtel et dans le Jura, on dit « quatre-vingts » : choisis « À la belge ».",
             ),
         ),
         Rubrique(
@@ -163,6 +195,8 @@ VOIX = PageDeConseils(
                 "pratique pour essayer un script.",
                 "L'estimation (caractères, durée, coût) s'affiche avant de générer. Elle s'ajuste après "
                 "chaque génération, avec les vrais chiffres de Google.",
+                "La durée estimée suit la vitesse de parole de la voix choisie, mesurée sur tes prises : "
+                "laisse la souris sur l'estimation pour la voir.",
                 "« Écouter pendant la génération » fait entendre le début avant la fin du calcul.",
                 "« Variantes… » génère plusieurs versions du script en un seul lancement (tests A/B), puis "
                 "ouvre l'écoute comparative.",
@@ -543,6 +577,8 @@ VARIANTES = PageDeConseils(
                 "que tu veux comparer (voix, style, modèle, texte d'une réplique). Les valeurs modifiées "
                 "sont en mauve.",
                 "« Dupliquer la variante » en crée une voisine, pour tester un petit changement.",
+                "Les accroches d'une série « Accroches seulement » du module Script arrivent ici, une par "
+                "variante : seule la réplique 1 change.",
             ),
         ),
         Rubrique(
@@ -576,6 +612,112 @@ COMPARAISON = PageDeConseils(
                 "Note les variantes avec les étoiles, puis « Garder » la meilleure : une seule variante est "
                 "retenue par série, signalée « Retenue » dans la liste des prises.",
                 "Cette fenêtre se rouvre depuis le menu ⋯ d'une prise de la série.",
+            ),
+        ),
+    ),
+)
+
+VARIANTES_SCRIPT = PageDeConseils(
+    "Variantes de script",
+    (
+        Rubrique(
+            "Trois façons de faire",
+            (
+                "« Mêmes réglages » : le modèle propose autant d'accroches que de variantes, sur des angles "
+                "différents, puis écrit un script complet pour chacune.",
+                "« Réglages par variante » : chaque colonne part du brief ; change seulement ce que tu veux "
+                "comparer (angle, accroche, durée, réseau, personne qui parle, consigne, modèle). Les valeurs "
+                "modifiées sont en mauve.",
+                "« Accroches seulement » : un seul script est écrit et relu, puis le modèle propose d'autres "
+                "accroches pour sa réplique 1. Le corps reste identique : c'est la bonne façon de tester des "
+                "accroches.",
+            ),
+        ),
+        Rubrique(
+            "Écriture",
+            (
+                "Le coût total estimé s'affiche avant de lancer.",
+                "Les scripts s'écrivent l'un après l'autre ; « Arrêter » stoppe après celui en cours, et ceux "
+                "déjà écrits sont gardés.",
+                "Les scripts d'une série portent une lettre (« Script 5 (variante B) ») et restent ensemble "
+                "dans la liste ; « Comparer… » les met côte à côte.",
+                "Série « Accroches seulement » : menu ⋯ d'un de ses scripts, « Envoyer les accroches en "
+                "variantes » ouvre les variantes A/B du module Voix, une par accroche.",
+            ),
+        ),
+    ),
+)
+
+COMPARAISON_SCRIPTS = PageDeConseils(
+    "Comparer les scripts",
+    (
+        Rubrique(
+            "Comparer",
+            (
+                "Choisis 2 ou 3 scripts en haut des colonnes : accroche, répliques, durée estimée et relecture "
+                "s'affichent côte à côte.",
+                "Au départ, la fenêtre montre ta dernière série de variantes, ou une retouche à côté de son "
+                "original, sinon tes scripts les plus récents.",
+                "« Envoyer dans Voix » sous une colonne envoie ce script dans le module Voix.",
+            ),
+        ),
+        Rubrique(
+            "Choisir",
+            (
+                "Sur la carte d'un script : note-le avec les étoiles, et « Retenir » ceux que tu gardes.",
+                "Pour comparer des accroches à l'écoute, écris une série « Accroches seulement », puis envoie-la "
+                "en variantes dans le module Voix.",
+            ),
+        ),
+    ),
+)
+
+BIBLIOTHEQUE_BRIEFS = PageDeConseils(
+    "Bibliothèque de briefs",
+    (
+        Rubrique(
+            "Enregistrer et charger",
+            (
+                "« Enregistrer » (bloc Brief) range le brief du projet ouvert sous un nom ; un nom déjà pris "
+                "remplace l'ancien brief, après confirmation.",
+                "« Charger » remplace le brief du projet ouvert. Tes options d'écriture (cases, modèle, nombre "
+                "d'accroches) ne changent pas.",
+                "« Reprendre aussi la page produit lue » : la page et sa fiche reviennent avec le brief, sans "
+                "relire la page ni repayer son analyse.",
+            ),
+        ),
+        Rubrique(
+            "Organiser",
+            (
+                "Menu ⋯ d'un brief : le renommer ou le supprimer.",
+                "La bibliothèque sert à tous tes projets : un même produit peut avoir un projet par réseau ou "
+                "par langue.",
+            ),
+        ),
+    ),
+)
+
+MEILLEURS_SCRIPTS = PageDeConseils(
+    "Mes meilleurs scripts",
+    (
+        Rubrique(
+            "Comment le modèle s'en sert",
+            (
+                "Le guide de Google le dit : une demande avec des exemples marche mieux. Pour chaque script, "
+                "l'app choisit jusqu'à 3 exemples proches : même langue, puis même réseau, puis même angle.",
+                "Le modèle s'en inspire pour le ton et le rythme, sans les recopier. Tes scripts passent avant "
+                "les scripts fournis.",
+            ),
+        ),
+        Rubrique(
+            "Ajouter, noter, retirer",
+            (
+                "« Garder comme exemple » (menu ⋯ d'un script) ajoute un script écrit dans l'app.",
+                "« Ajouter un script qui a marché… » : colle un script écrit ailleurs, une réplique par "
+                "paragraphe, l'accroche en premier.",
+                "Ta note (ex. « CPA 9 € », « meilleur ROAS ») accompagne l'exemple : le modèle la lit.",
+                "Les 5 scripts fournis parlent de produits imaginaires : retire-les quand tu as assez de vrais "
+                "scripts ; « Remettre les exemples fournis » les fait revenir.",
             ),
         ),
     ),
@@ -628,4 +770,8 @@ PAGES: dict[str, PageDeConseils] = {
     "variantes": VARIANTES,
     "comparaison": COMPARAISON,
     "cle-api": CLE_API,
+    "variantes-script": VARIANTES_SCRIPT,
+    "comparaison-scripts": COMPARAISON_SCRIPTS,
+    "bibliotheque-briefs": BIBLIOTHEQUE_BRIEFS,
+    "meilleurs-scripts": MEILLEURS_SCRIPTS,
 }

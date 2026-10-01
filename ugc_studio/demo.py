@@ -2,7 +2,8 @@
 
 Elles remplissent un dossier temporaire (jamais les vraies données) pour que les captures
 d'écran montrent des écrans réalistes : deux clés, quelques appels payants, un projet avec
-un script, des prises et une série de variantes A/B.
+un script, des prises et une série de variantes A/B ; dans le module Script, des scripts (dont une
+série « Accroches seulement » et une retouche), deux briefs enregistrés et deux exemples gardés.
 """
 
 from __future__ import annotations
@@ -22,7 +23,18 @@ from .ecriture.etat import EtatScript
 from .ecriture.exemples import EXEMPLES_FOURNIS
 from .ecriture.fiche import FicheProduit
 from .ecriture.page_produit import SHOPIFY, PageLue
-from .ecriture.scripts import Accroche, PointRelecture, nouveau_script, repliques_depuis_reponse
+from .ecriture.briefs import nom_propose
+from .ecriture.exemples import ExempleScript, exemple_colle
+from .ecriture.redaction import variantes_d_accroches
+from .ecriture.scripts import (
+    Accroche,
+    PointRelecture,
+    dupliquer,
+    nouveau_script,
+    repliques_depuis_reponse,
+    repliques_pour_modele,
+)
+from .generation import repliques_api
 from .projets import DOSSIER_SOURCES, RepliqueProjet
 from .prononciation import Prononciation
 from .script import joindre_repliques
@@ -141,11 +153,11 @@ def ecriture_demo() -> EtatScript:
         ],
         True, True, False,
     )
-    scripts = []
+    etat = EtatScript(brief=brief, adresse=ADRESSE_DEMO, page=page, fiche=fiche, accroches=accroches)
     for repliques, accroche, quand, cout, envoye, points, corrections in (
-        (premier, accroches[0].texte, 24, "0.0161", True,
+        (premier, accroches[0].texte, 44, "0.0161", True,
          [PointRelecture("produit_3s", "leger", "Le produit n'est nommé qu'à la réplique 2, vers 6 secondes.", "modele")], []),
-        (second, accroches[1].texte, 21, "0.0174", False, [],
+        (second, accroches[1].texte, 41, "0.0174", False, [],
          ["« Résultat garanti dès le premier jour » remplacé par « mon teint a l'air reposé » (promesse invérifiable)."]),
     ):
         script = nouveau_script(
@@ -157,8 +169,46 @@ def ecriture_demo() -> EtatScript:
         script.envoye_le = (maintenant - timedelta(minutes=quand - 2)).isoformat() if envoye else ""
         script.corrections = corrections
         script.relecture = controler(script, brief) + points
-        scripts.append(script)
-    return EtatScript(brief=brief, adresse=ADRESSE_DEMO, page=page, fiche=fiche, accroches=accroches, scripts=scripts)
+        etat.ajouter(script)
+    premier_script, second_script = etat.scripts
+    premier_script.note, premier_script.retenu = 4, True
+
+    # Lot 2 : une série « Accroches seulement » (même corps que le script 2, trois accroches) et une
+    # retouche « plus court » du script 1.
+    serie = "serie-demo"
+    autres = [
+        Accroche("POV : ton teint a l'air d'avoir dormi huit heures.", "pov", alerte=""),
+        Accroche("Le sérum que je mets avant même mon café.", "routine",
+                 alerte="Évite de promettre un résultat immédiat dans la suite du script."),
+    ]
+    variantes = [dupliquer(second_script), *variantes_d_accroches(second_script, autres, brief)]
+    for lettre, (variante, note) in zip("ABC", zip(variantes, (0, 5, 3)), strict=True):
+        variante.origine = ""
+        variante.serie, variante.lettre, variante.mode = serie, lettre, "accroches"
+        variante.cout_eur, variante.note = "0.0068", note
+        variante.date = (maintenant - timedelta(minutes=30)).isoformat()
+        variante.relecture = variante.relecture or controler(variante, brief)
+        etat.ajouter(variante)
+    retouche, _notes = repliques_depuis_reponse(
+        [
+            {"roles": ["accroche"], "texte": "J'ai arrêté le fond de teint.", "style": "intrigued and conspiratorial",
+             "style_fr": "intriguée et complice"},
+            {"roles": ["solution", "offre", "appel_action"],
+             "texte": "Trois gouttes de sérum Glowzy le matin, et mon teint a l'air reposé. Avec mon code GLOW20, t'as "
+             "20 % en moins. Clique sur le lien en dessous.",
+             "style": "warm and upbeat", "style_fr": "chaleureuse et enjouée"},
+        ],
+        True, True, False,
+    )
+    court = nouveau_script(
+        modele="gemini-3.8-flash", reseau="tiktok", langue="fr-FR", angle="temoignage", duree_visee_s=12,
+        repliques=retouche, tutoiement="tu", balises=True, styles=True, cout_eur="0.0119",
+        origine=premier_script.identifiant, consigne_retouche="Plus court",
+    )
+    court.date = (maintenant - timedelta(minutes=12)).isoformat()
+    court.relecture = controler(court, brief)
+    etat.ajouter(court)
+    return etat
 
 
 def son_de_demonstration(secondes: float, frequence: float = 220.0) -> bytes:
@@ -254,15 +304,18 @@ def remplir_donnees_demo(services: Services) -> None:
         projet.prononciations = [Prononciation("Glowzy", "Glo-zi")]
         projet.ecriture = ecriture_demo()
         services.projets.enregistrer()
-        for duree, voix, note, frequence in ((7.4, "Kore", 4, 220.0), (8.1, "Leda", 0, 262.0)):
+        # Texte réellement envoyé (prononciation appliquée) : la vitesse de chaque voix se mesure dessus.
+        envoyees = repliques_api(REPLIQUES_DEMO, projet.prononciations)
+        texte_api = "\n".join(r.texte for r in envoyees)
+        for duree, voix, note, frequence in ((10.2, "Kore", 4, 220.0), (10.8, "Leda", 0, 262.0)):
             services.projets.ajouter_prise(
                 son_de_demonstration(duree, frequence),
                 modele="gemini-3.8-flash-tts",
                 voix=voix,
                 style="styles par réplique",
-                texte_api="…",
+                texte_api=texte_api,
                 script=joindre_repliques([r.script for r in REPLIQUES_DEMO]),
-                repliques=[{"texte_api": "…", "style": r.style} for r in REPLIQUES_DEMO],
+                repliques=[{"texte_api": r.texte, "style": r.style} for r in envoyees],
                 duree_s=duree,
                 tokens_entree=120,
                 tokens_sortie=int(duree * 25),
@@ -271,9 +324,9 @@ def remplir_donnees_demo(services: Services) -> None:
             )
         # Une série de variantes A/B (§5.6) : même script, voix ou style de la 1re réplique différents.
         variantes = (
-            ("A", "Kore", REPLIQUES_DEMO[0].style, 7.2, 3, 196.0),
-            ("B", "Puck", REPLIQUES_DEMO[0].style, 7.8, 5, 247.0),
-            ("C", "Kore", "calm and intimate, slow-paced", 9.1, 0, 294.0),
+            ("A", "Kore", REPLIQUES_DEMO[0].style, 9.8, 3, 196.0),
+            ("B", "Puck", REPLIQUES_DEMO[0].style, 10.5, 5, 247.0),
+            ("C", "Kore", "calm and intimate, slow-paced", 11.6, 0, 294.0),
         )
         retenue = None
         for lettre, voix, style, duree, note, frequence in variantes:
@@ -282,9 +335,9 @@ def remplir_donnees_demo(services: Services) -> None:
                 modele="gemini-3.8-flash-tts",
                 voix=voix,
                 style="styles par réplique",
-                texte_api="…",
+                texte_api=texte_api,
                 script=joindre_repliques([r.script for r in REPLIQUES_DEMO]),
-                repliques=[{"texte_api": "…", "style": style}, {"texte_api": "…", "style": REPLIQUES_DEMO[1].style}],
+                repliques=[{"texte_api": envoyees[0].texte, "style": style}, {"texte_api": envoyees[1].texte, "style": REPLIQUES_DEMO[1].style}],
                 duree_s=duree,
                 tokens_entree=120,
                 tokens_sortie=int(duree * 25),
@@ -303,3 +356,32 @@ def remplir_donnees_demo(services: Services) -> None:
         projet.transcription = transcription_demo()
         projet.remplacements = [Remplacement("sérum glowzy", "Sérum Glowzy")]
         services.projets.enregistrer()
+        services.vitesses.noter_prises(projet.prises)  # (les prises de démonstration ne passent pas par Google)
+
+        # Lot 2 : un brief enregistré dans la bibliothèque, et deux de « Mes meilleurs scripts ».
+        etat = projet.ecriture
+        if not services.briefs.briefs():
+            services.briefs.enregistrer(nom_propose(etat.brief), etat.brief, etat.adresse, etat.page, etat.fiche)
+            services.briefs.enregistrer(
+                "Brosse lissante (Facebook et Instagram)",
+                Brief(produit="Brosse lissante chauffante", reseau="meta", duree_s=20, age="35-44", tutoiement="vous"),
+            )
+        if not services.exemples.gardes():
+            premier = etat.scripts[0]
+            services.exemples.ajouter(
+                ExempleScript(
+                    f"script-{premier.identifiant}", "Sérum éclat Glowzy", premier.langue, premier.reseau, premier.angle,
+                    premier.tutoiement, premier.duree_visee_s, "29,90 € ; code GLOW20 (-20 %)",
+                    repliques_pour_modele(premier.repliques), note="CPA 9 €",
+                )
+            )
+            premier.garde_comme_exemple = True
+            colle = exemple_colle(
+                "Gourde isotherme",
+                "J'ai arrêté d'acheter des bouteilles d'eau.\n\nCette gourde garde mon eau froide toute la journée, "
+                "même dans la voiture. Le lien est en dessous.",
+                "fr-FR", "tiktok", "temoignage", note="Meilleur ROAS de septembre",
+            )
+            if colle is not None:
+                services.exemples.ajouter(colle)
+            services.projets.enregistrer()

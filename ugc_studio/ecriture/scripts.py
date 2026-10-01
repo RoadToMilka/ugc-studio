@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from ..balises import balise_depuis_nom
-from ..estimation import duree_parlee
+from ..estimation import MOTS_PAR_SECONDE, duree_parlee
 from ..script import Segment, depuis_texte, est_vide, normaliser, texte_brut, texte_pour_api
 
 ROLES = {
@@ -33,6 +33,7 @@ ROLES = {
     "appel_action": "Appel à l'action",
 }
 GRAVITES = ("ok", "leger", "grave")
+NOTE_MAX = 5
 
 _ACCENT = re.compile(r"\*{1,2}([^*\n]{1,40}?)\*{1,2}")
 _BALISE_RESTANTE = re.compile(r"<\s*([^<>\n]{1,40}?)\s*>")
@@ -132,18 +133,37 @@ class ScriptEcrit:
     cout_eur: str | None = None
     envoye_le: str = ""  # date de l'envoi dans le module Voix
     garde_comme_exemple: bool = False
+    # Lot 2 (même format de projet : valeurs par défaut pour un script de la 1.2.0).
+    numero: int = 0  # « Script 3 » : donné à la création, il ne change plus (voir etat.py)
+    note: int = 0  # 0 à 5 étoiles
+    retenu: bool = False  # « Retenir » : un script que tu gardes pour tes pubs
+    serie: str = ""  # scripts écrits ensemble par « Variantes… » : même identifiant de série
+    lettre: str = ""  # A, B, C… dans la série
+    mode: str = ""  # mode de la série (variantes.py) : « memes », « par_variante » ou « accroches »
+    origine: str = ""  # identifiant du script retouché ou dupliqué
+    consigne_retouche: str = ""  # consigne de la retouche (vide pour une simple copie)
 
     @staticmethod
     def nouvel_identifiant() -> str:
         return uuid.uuid4().hex[:12]
 
+    def nom(self) -> str:
+        """« Script 3 », ou « Script 5 (variante B) » pour un script d'une série de variantes."""
+        nom = f"Script {self.numero}" if self.numero else "Script"
+        return f"{nom} (variante {self.lettre})" if self.lettre else nom
+
     def texte_api(self) -> str:
         """Texte envoyé à la voix, répliques séparées par un retour à la ligne (balises et accents)."""
         return "\n".join(texte_pour_api(r.script) for r in self.repliques if not est_vide(r.script))
 
-    def duree_estimee(self) -> float:
-        """Durée estimée avec la même formule que le module Voix, balises comprises."""
-        return sum(duree_parlee(texte_pour_api(r.script)) for r in self.repliques)
+    def accroche(self) -> str:
+        """Texte de la réplique 1 (l'accroche), tel qu'il s'affiche."""
+        return texte_brut(self.repliques[0].script).strip() if self.repliques else ""
+
+    def duree_estimee(self, mots_par_seconde: float = MOTS_PAR_SECONDE) -> float:
+        """Durée estimée avec la même formule que le module Voix, balises comprises.
+        `mots_par_seconde` : vitesse de la voix du projet, mesurée sur tes prises (vitesses.py)."""
+        return sum(duree_parlee(texte_pour_api(r.script), mots_par_seconde) for r in self.repliques)
 
     def nombre_de_mots(self) -> int:
         return sum(len(re.findall(r"\w+", texte_brut(r.script))) for r in self.repliques)
@@ -182,6 +202,14 @@ class ScriptEcrit:
             cout_eur=None if brut.get("cout_eur") in (None, "") else str(brut["cout_eur"]),
             envoye_le=str(brut.get("envoye_le") or ""),
             garde_comme_exemple=bool(brut.get("garde_comme_exemple")),
+            numero=max(0, _entier(brut.get("numero"))),
+            note=min(max(_entier(brut.get("note")), 0), NOTE_MAX),
+            retenu=bool(brut.get("retenu")),
+            serie=str(brut.get("serie") or ""),
+            lettre=str(brut.get("lettre") or "") if brut.get("serie") else "",
+            mode=str(brut.get("mode") or "") if brut.get("serie") else "",
+            origine=str(brut.get("origine") or ""),
+            consigne_retouche=str(brut.get("consigne_retouche") or ""),
         )
 
 
@@ -287,3 +315,23 @@ def repliques_pour_modele(repliques: list[RepliqueEcrite]) -> list[dict]:
 
 def nouveau_script(**valeurs) -> ScriptEcrit:
     return ScriptEcrit(identifiant=ScriptEcrit.nouvel_identifiant(), date=_maintenant(), **valeurs)
+
+
+def dupliquer(script: ScriptEcrit) -> ScriptEcrit:
+    """« Dupliquer » : une copie à modifier à la main, l'original reste tel quel. La copie ne coûte
+    rien, ne fait partie d'aucune série et n'a encore été ni envoyée, ni notée, ni retenue."""
+    copie = ScriptEcrit.depuis_dict(script.en_dict())
+    assert copie is not None  # un script valide se relit toujours
+    copie.identifiant = ScriptEcrit.nouvel_identifiant()
+    copie.date = _maintenant()
+    copie.numero = 0
+    copie.tokens_entree = copie.tokens_sortie = 0
+    copie.cout_eur = None
+    copie.envoye_le = ""
+    copie.garde_comme_exemple = False
+    copie.note = 0
+    copie.retenu = False
+    copie.serie = copie.lettre = copie.mode = ""
+    copie.origine = script.identifiant
+    copie.consigne_retouche = ""
+    return copie

@@ -1,7 +1,8 @@
 """Relecture par l'app (V2, §10.8) : tout ce qui se compte est vérifié ici, exactement et gratuitement.
 
-- durée estimée (même formule que le module Voix, balises comprises) : à ± 10 % de la cible, sinon
-  ⚠ ; au-delà de 15 %, point grave (le modèle corrige le script avant de te le montrer) ;
+- durée estimée (même formule et même vitesse de parole que le module Voix, balises comprises) :
+  à ± 10 % de la cible, sinon ⚠ ; au-delà de 15 %, point grave (le modèle corrige le script avant
+  de te le montrer) ;
 - mots interdits absents, mentions obligatoires présentes (points graves) ;
 - balises connues de l'app, un mot accentué au plus par réplique (retraits signalés) ;
 - styles de jeu courts et en anglais : mêmes vérifications que dans le module Voix (§5.5).
@@ -15,6 +16,7 @@ import re
 import unicodedata
 
 from ..conseils import verifier_style
+from ..estimation import MOTS_PAR_SECONDE
 from ..script import texte_brut
 from .brief import Brief
 from .scripts import PointRelecture, ScriptEcrit
@@ -33,8 +35,8 @@ def _texte_complet(script: ScriptEcrit) -> str:
     return " ".join(texte_brut(r.script) for r in script.repliques)
 
 
-def controle_duree(script: ScriptEcrit) -> PointRelecture:
-    estimee, visee = script.duree_estimee(), script.duree_visee_s
+def controle_duree(script: ScriptEcrit, mots_par_seconde: float = MOTS_PAR_SECONDE) -> PointRelecture:
+    estimee, visee = script.duree_estimee(mots_par_seconde), script.duree_visee_s
     if visee <= 0:
         return PointRelecture("duree", "ok", f"≈ {round(estimee)} s")
     ecart = (estimee - visee) / visee
@@ -61,10 +63,16 @@ def mentions_absentes(script: ScriptEcrit, brief: Brief) -> list[str]:
     return [m for m in brief.liste_mentions() if " ".join(m.casefold().split()) not in texte]
 
 
-def controler(script: ScriptEcrit, brief: Brief, retraits: list[str] | None = None) -> list[PointRelecture]:
+def controler(
+    script: ScriptEcrit,
+    brief: Brief,
+    retraits: list[str] | None = None,
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
+) -> list[PointRelecture]:
     """Points de relecture vérifiés par l'app. `retraits` : ce que la conversion du texte du modèle a
-    retiré (balise inconnue, accent en trop…)."""
-    points = [controle_duree(script)]
+    retiré (balise inconnue, accent en trop…) ; `mots_par_seconde` : vitesse de la voix du projet,
+    mesurée sur tes prises (vitesses.py)."""
+    points = [controle_duree(script, mots_par_seconde)]
     interdits = mots_interdits_presents(script, brief)
     if brief.liste_mots_interdits():
         if interdits:

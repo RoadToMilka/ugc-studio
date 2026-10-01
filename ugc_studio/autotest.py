@@ -23,16 +23,23 @@ from . import __version__
 from .chemins import fichier_journal
 from .conseils_des_pages import PAGES
 from .demo import SCRIPT_DEMO
+from .projets import RepliqueProjet
 from .script import normaliser
 from .ui.composants.conseils import DialogueConseils
 from .ui.composants.tableau import Tableau
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
+from .ui.dialogues.briefs import DialogueBibliothequeBriefs
 from .ui.dialogues.choix_modeles import DialogueChoixModeles
 from .ui.dialogues.comparaison import DialogueComparaison
+from .ui.dialogues.comparer_scripts import DialogueComparerScripts
+from .ui.dialogues.meilleurs_scripts import DialogueAjoutExemple, DialogueMeilleursScripts
 from .ui.dialogues.prononciation import DialoguePrononciation
+from .ui.dialogues.retouche import DialogueRetouche
 from .ui.dialogues.styles import DialogueBibliothequeStyles, DialogueStyle
 from .ui.dialogues.variantes import ONGLET_MEMES_REGLAGES, ONGLET_PAR_VARIANTE, DialogueVariantes
+from .ui.dialogues.variantes_script import ONGLET_ACCROCHES, DialogueVariantesScript
+from .ui.dialogues.variantes_script import ONGLET_PAR_VARIANTE as ONGLET_SCRIPT_PAR_VARIANTE
 from .ui.dialogues.voice_design import DialogueVoiceDesign
 from .ui.dialogues.voix import DialogueBibliothequeVoix
 from .ui.composants.choix_voix import choisir
@@ -65,8 +72,46 @@ VERIFICATIONS_OBLIGATOIRES = (
     "sous_titres",
     "reorganisation",
     "module_script",
+    "script_lot2",
 )
 ELEMENTS_SIGNALES_MAX = 6
+
+
+def _verifier_variantes_script(dialogue) -> bool:
+    champs = dialogue.colonnes()[1].champs
+    return all(bool(champs[nom].property("modifie")) for nom in ("angle", "duree_s", "accroche")) and not bool(
+        champs["reseau"].property("modifie")
+    )
+
+
+def _verifier_comparaison(dialogue) -> bool:
+    """Au départ : la retouche de démonstration (script 6) à côté de son original (script 1)."""
+    noms = [colonne.script.nom() if colonne.script else "" for colonne in dialogue.colonnes()]
+    return noms == ["Script 1", "Script 6", ""]
+
+
+def _verifier_retouche(dialogue) -> bool:
+    """« Plus court » : durée visée réduite d'un quart (25 s → 19 s), consigne complétée."""
+    return dialogue.duree.value() == 19 and dialogue.texte_consigne() == "Plus court, plus drôle"
+
+
+def _verifier_variantes_d_accroches(dialogue) -> bool:
+    """Une variante par accroche : seule la réplique 1 change (surlignée en mauve)."""
+    from .variantes import TEXTE, differences
+
+    variantes = dialogue.variantes()
+    return len(variantes) == 3 and all(differences(variantes[0], v) == {(TEXTE, 0)} for v in variantes[1:])
+
+
+# Fenêtres du lot 2 vérifiées pendant leur capture (vérification « script_lot2 »).
+VERIFIER_DANS_LA_FENETRE = {
+    "dialogue-variantes-script": _verifier_variantes_script,
+    "dialogue-comparer-scripts": _verifier_comparaison,
+    "dialogue-retouche": _verifier_retouche,
+    "dialogue-variantes-accroches": _verifier_variantes_d_accroches,
+    "dialogue-bibliotheque-briefs": lambda dialogue: len(dialogue.lignes()) == 2,
+    "dialogue-meilleurs-scripts": lambda dialogue: len(dialogue.lignes()) == 7,  # 2 gardés et 5 fournis
+}
 
 
 def _laisser_afficher(secondes: float = PAUSE_AFFICHAGE_S) -> None:
@@ -270,6 +315,44 @@ def _variantes_remplies(services, atelier, parent, onglet: int) -> DialogueVaria
     return dialogue
 
 
+def _variantes_script_remplies(services, ecriture, parent, onglet: int) -> DialogueVariantesScript:
+    """Variantes de script : la B change d'angle, de durée et d'accroche (valeurs surlignées en mauve)."""
+    brief = services.projets.projet.ecriture.brief
+    dialogue = DialogueVariantesScript(
+        services, brief, ecriture._texte_page(), ecriture._exemples(brief), ecriture._mots_par_seconde(), parent
+    )
+    dialogue.onglets.setCurrentIndex(onglet)
+    colonne_b = dialogue.colonnes()[1].champs
+    choisir(colonne_b["angle"], "pov")
+    colonne_b["duree_s"].setValue(15)
+    colonne_b["accroche"].setText("POV : ton teint a l'air d'avoir dormi huit heures.")
+    return dialogue
+
+
+def _retouche_remplie(services, ecriture, parent) -> DialogueRetouche:
+    etat = services.projets.projet.ecriture
+    dialogue = DialogueRetouche(
+        services, etat.scripts[0], etat.brief, ecriture._texte_page(), ecriture._mots_par_seconde(), parent
+    )
+    dialogue.ajouter_suggestion("Plus court", -0.25)
+    dialogue.ajouter_suggestion("Plus drôle", 0.0)
+    return dialogue
+
+
+def _variantes_d_accroches(services, atelier, parent) -> DialogueVariantes:
+    """Voix : une variante par accroche de la série « Accroches seulement » de démonstration. Comme
+    dans l'app, les réglages de base sont ceux de la variante A (son script est dans l'atelier)."""
+    serie = [s for s in services.projets.projet.ecriture.scripts if s.serie]
+    depart = atelier.reglages_de_base()
+    variantes = []
+    for script in serie:
+        variante = depart.copie()
+        premiere = script.repliques[0]
+        variante.repliques[0] = RepliqueProjet([dict(s) for s in premiere.script], premiere.style, premiere.style_fr)
+        variantes.append(variante)
+    return DialogueVariantes(services, variantes[0], atelier._prononciations(), parent, atelier._nombres(), variantes)
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -368,6 +451,13 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             atelier.voix.hidePopup()
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
+            # V2, lot 2 : nombres dits (projet en français) et durée estimée avec la vitesse mesurée.
+            rapport["voix_lot2"] = {
+                "nombres_visibles": not atelier.zone_nombres.isHidden(),
+                "nombres": atelier.nombres.currentText(),
+                "estimation": atelier.estimation.text(),
+                "aide_estimation": atelier.estimation.toolTip(),
+            }
             verifs["lecture_audio"] = atelier.lecteur._lecteur is not None  # Qt Multimedia embarqué
 
             # Page Script (V2, lot 1) : brief pré-rempli d'après la page, accroches, deux scripts relus.
@@ -383,15 +473,21 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 "produit": champ_produit.valeur(),
                 "marque_d_apres_la_page": not champ_produit.marque.isHidden(),
                 "accroches": len(ecriture.accroches.lignes()),
-                "scripts": [carte.details.text() for carte in ecriture.scripts.cartes()],
+                "scripts": [f"{carte.titre.text()} : {carte.details.text()}" for carte in ecriture.scripts.cartes()],
+                "origines": [carte.origine.text() for carte in ecriture.scripts.cartes()],
                 "bouton_ecrire": ecriture.bouton_ecrire.text(),
+                "duree_et_vitesse": ecriture.formulaire.info_duree.text(),
             }
+            # Lot 2 : 6 scripts (dont une série « Accroches seulement » et une retouche), la vitesse
+            # de la voix du projet mesurée sur les prises de démonstration.
             verifs["module_script"] = (
                 champ_produit.valeur() == "Sérum éclat Glowzy"
                 and not champ_produit.marque.isHidden()
                 and len(ecriture.accroches.lignes()) == 6
-                and len(ecriture.scripts.cartes()) == 2
+                and len(ecriture.scripts.cartes()) == 6
                 and ecriture.bouton_ecrire.text() == "Écrire les 2 scripts"
+                and not ecriture.barre_scripts.isHidden()
+                and "vitesse de Kore mesurée sur 3 prises" in ecriture.formulaire.info_duree.text()
             )
             defilement = ecriture.findChild(QScrollArea)
             if defilement is not None:
@@ -483,6 +579,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
 
             # Fenêtres de l'étape 4 : bibliothèque de styles, style, assistant, prononciation.
             services = fenetre.services
+            lot2: dict = {}
             carte = atelier.repliques.cartes()[0]
             for nom, fenetre_dialogue in (
                 (
@@ -518,11 +615,26 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 ("conseils-creer-une-voix", DialogueConseils(PAGES["creer-une-voix"], fenetre)),
                 # V1.1, lot 5 : modèles chargés.
                 ("dialogue-choix-modeles", DialogueChoixModeles(services, fenetre)),
+                # V2, lot 2 : variantes de script (deux onglets), comparaison, retouche, briefs, exemples,
+                # accroches envoyées en variantes de voix.
+                ("dialogue-variantes-script", _variantes_script_remplies(services, ecriture, fenetre, ONGLET_SCRIPT_PAR_VARIANTE)),
+                ("dialogue-variantes-script-accroches", _variantes_script_remplies(services, ecriture, fenetre, ONGLET_ACCROCHES)),
+                ("dialogue-comparer-scripts", DialogueComparerScripts(services.projets.projet.ecriture.scripts, None, ecriture._mots_par_seconde(), fenetre)),
+                ("dialogue-retouche", _retouche_remplie(services, ecriture, fenetre)),
+                ("dialogue-bibliotheque-briefs", DialogueBibliothequeBriefs(services, fenetre)),
+                ("dialogue-meilleurs-scripts", DialogueMeilleursScripts(services, services.projets.projet.ecriture.brief, fenetre)),
+                ("dialogue-ajout-exemple", DialogueAjoutExemple(services.projets.projet.ecriture.brief, fenetre)),
+                ("dialogue-variantes-accroches", _variantes_d_accroches(services, atelier, fenetre)),
+                ("conseils-variantes-script", DialogueConseils(PAGES["variantes-script"], fenetre)),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)
                 debordements += _debordements(fenetre_dialogue, f"fenêtre {nom}")
+                if nom in VERIFIER_DANS_LA_FENETRE:
+                    lot2[nom] = VERIFIER_DANS_LA_FENETRE[nom](fenetre_dialogue)
                 fenetre_dialogue.reject()
+            rapport["script_lot2"] = lot2
+            verifs["script_lot2"] = all(lot2.get(nom) is True for nom in VERIFIER_DANS_LA_FENETRE)
 
             # Fenêtre principale à sa largeur minimale : chaque page doit y tenir sans être coupée.
             fenetre.resize(Dimensions.FENETRE_LARGEUR_MIN, fenetre.height())

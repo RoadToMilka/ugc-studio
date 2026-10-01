@@ -406,6 +406,9 @@ def _preparer_champ(champ: QAbstractSpinBox, suffixe: str, info: str | None) -> 
     champ.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)  # on tape la valeur (ou ↑ ↓)
     champ.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     champ.setFixedWidth(Dimensions.CHAMP_NOMBRE_LARGEUR)
+    # Même hauteur que les autres champs (§9.4) : sans cela, Qt donne à un champ de nombre quelques
+    # pixels de plus, et il dépasse des listes posées sur la même ligne (ex. « Durée » du brief).
+    champ.setFixedHeight(Hauteurs.CONTROLE)
     champ.setSuffix(suffixe)
     champ.setKeyboardTracking(False)  # valeur prise en compte à la fin de la saisie
     if info:

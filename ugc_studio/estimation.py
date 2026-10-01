@@ -1,7 +1,8 @@
 """Estimation de la durée et du coût d'une voix off AVANT de la générer (§5.2).
 
 - Tokens d'entrée : le texte envoyé (environ 1 token pour 4 caractères).
-- Durée : d'après le nombre de mots (débit parlé d'une pub UGC) et les pauses.
+- Durée : d'après le nombre de mots et les pauses. La vitesse de parole part de 2,7 mots par
+  seconde, puis elle est mesurée sur tes prises, voix par voix (V2, vitesses.py).
 - Tokens de sortie : l'audio produit, proportionnel à sa durée. Le nombre de tokens par seconde
   est ajusté automatiquement après chaque génération, avec les vrais chiffres renvoyés par Google :
   l'estimation devient donc de plus en plus juste.
@@ -47,13 +48,25 @@ def tokens_texte(texte: str) -> int:
     return math.ceil(len(texte) / CARACTERES_PAR_TOKEN) if texte else 0
 
 
-def duree_parlee(texte_api: str) -> float:
-    """Durée approximative (s) d'un texte envoyé au TTS, balises comprises."""
-    duree = 0.0
-    for trouve in MOTIF_BALISE.finditer(texte_api):
-        duree += DUREE_BALISES.get(" ".join(trouve.group(1).lower().split()), DUREE_AUTRE_BALISE)
-    mots = re.findall(r"\w+", MOTIF_BALISE.sub(" ", texte_api))
-    return duree + len(mots) / MOTS_PAR_SECONDE
+def duree_des_balises(texte_api: str) -> float:
+    """Temps estimé des balises d'un texte (pauses, rires…), en secondes."""
+    return sum(
+        DUREE_BALISES.get(" ".join(trouve.group(1).lower().split()), DUREE_AUTRE_BALISE)
+        for trouve in MOTIF_BALISE.finditer(texte_api)
+    )
+
+
+def mots_dits(texte_api: str) -> int:
+    """Nombre de mots dits (les balises ne comptent pas)."""
+    return len(re.findall(r"\w+", MOTIF_BALISE.sub(" ", texte_api)))
+
+
+def duree_parlee(texte_api: str, mots_par_seconde: float = MOTS_PAR_SECONDE) -> float:
+    """Durée approximative (s) d'un texte envoyé au TTS, balises comprises.
+
+    `mots_par_seconde` : vitesse de parole de la voix, mesurée sur tes prises (vitesses.py) ;
+    2,7 au départ."""
+    return duree_des_balises(texte_api) + mots_dits(texte_api) / mots_par_seconde
 
 
 def estimer(
@@ -62,8 +75,9 @@ def estimer(
     modele: str,
     prix: CataloguePrix,
     tokens_par_seconde: float = TOKENS_AUDIO_PAR_SECONDE_DEFAUT,
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
 ) -> Estimation:
-    return estimer_repliques([Replique(texte_api, style)], modele, prix, tokens_par_seconde)
+    return estimer_repliques([Replique(texte_api, style)], modele, prix, tokens_par_seconde, mots_par_seconde)
 
 
 def estimer_repliques(
@@ -71,10 +85,12 @@ def estimer_repliques(
     modele: str,
     prix: CataloguePrix,
     tokens_par_seconde: float = TOKENS_AUDIO_PAR_SECONDE_DEFAUT,
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
 ) -> Estimation:
-    """Estimation pour tout le script : chaque réplique envoie son texte et son propre style."""
+    """Estimation pour tout le script : chaque réplique envoie son texte et son propre style.
+    `mots_par_seconde` : vitesse de la voix choisie, mesurée sur tes prises (V2)."""
     avec_texte = [r for r in repliques if r.texte.strip()]
-    duree = sum(duree_parlee(r.texte) for r in avec_texte)
+    duree = sum(duree_parlee(r.texte, mots_par_seconde) for r in avec_texte)
     entree = sum(tokens_texte(r.texte) + tokens_texte(r.style) for r in avec_texte)
     sortie = math.ceil(duree * tokens_par_seconde)
     cout = prix.cout_eur(modele, entree, sortie) if avec_texte else Decimal(0)

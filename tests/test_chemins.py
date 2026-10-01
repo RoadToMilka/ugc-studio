@@ -22,8 +22,9 @@ def test_ressources_embarquees_presentes():
 
 
 def test_chaque_icone_utilisee_existe():
-    """Chaque nom d'icône écrit dans le code (nom_icone="…", icone("…"), icone_menu("…"), modules de la
-    barre latérale) a son fichier SVG dans les ressources : sinon, le bouton s'afficherait sans icône."""
+    """Chaque nom d'icône écrit dans le code (nom_icone="…", icone("…"), icone_menu("…"),
+    definir_icone("…"), modules de la barre latérale) a son fichier SVG dans les ressources :
+    sinon, le bouton s'afficherait sans icône."""
     import re
     from pathlib import Path
 
@@ -31,6 +32,7 @@ def test_chaque_icone_utilisee_existe():
     motifs = (
         r'nom_icone="([a-z0-9-]+)"',
         r'\bicone(?:_menu)?\("([a-z0-9-]+)"',
+        r'definir_icone\("([a-z0-9-]+)"',
         r'Module\("[^"]+", "[^"]+", "([a-z0-9-]+)"\)',
         r'fichier_icone\("([a-z0-9-]+)"',
     )
