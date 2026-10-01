@@ -128,6 +128,12 @@ class OngletModeles(QWidget):
                 "secondaire",
             )
         )
+        # Le bouton suit l'explication qui le cite. En bas, avec les deux autres, la rangée dépassait
+        # de la partie visible à la largeur minimale de la fenêtre (960 px).
+        choisir = QHBoxLayout()
+        choisir.addWidget(bouton("Choisir les modèles…", nom_icone="list-plus", action=self.choisir_les_modeles))
+        choisir.addStretch(1)
+        d.addLayout(choisir)
         self._grille = QGridLayout()
         self._grille.setHorizontalSpacing(Espacements.L)
         self._grille.setVerticalSpacing(0)
@@ -142,7 +148,6 @@ class OngletModeles(QWidget):
         )
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
-        actions.addWidget(bouton("Choisir les modèles…", nom_icone="list-plus", action=self.choisir_les_modeles))
         actions.addWidget(bouton("Rétablir les prix par défaut", variante="contour", nom_icone="rotate-ccw", action=self._retablir))
         actions.addWidget(
             bouton(
