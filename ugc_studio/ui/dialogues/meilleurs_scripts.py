@@ -298,7 +298,9 @@ class DialogueAjoutExemple(QDialog):
         self.bouton_ajouter = bouton("Ajouter", variante="principal", nom_icone="plus", action=self.valider)
         boutons.addWidget(self.bouton_ajouter)
         disposition.addLayout(boutons)
-        self.resize(Dimensions.DIALOGUE_LARGEUR, 0)  # hauteur : celle du contenu
+        # Hauteur : celle du contenu à cette largeur (les textes qui passent à la ligne comptent ; la
+        # hauteur minimale de Qt, elle, ne les compte que sur une ligne et serrait les éléments).
+        self.resize(Dimensions.DIALOGUE_LARGEUR, self.heightForWidth(Dimensions.DIALOGUE_LARGEUR))
         self._actualiser()
 
     def _actualiser(self) -> None:

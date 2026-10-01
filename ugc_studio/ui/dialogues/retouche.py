@@ -129,7 +129,9 @@ class DialogueRetouche(QDialog):
         self.bouton_retoucher = bouton("Retoucher", variante="principal", nom_icone="wand-sparkles", action=self.accept)
         bas.addWidget(self.bouton_retoucher)
         disposition.addLayout(bas)
-        self.resize(Dimensions.DIALOGUE_LARGEUR, 0)  # hauteur : celle du contenu
+        # Hauteur : celle du contenu à cette largeur (les textes qui passent à la ligne comptent ; la
+        # hauteur minimale de Qt, elle, ne les compte que sur une ligne et serrait les éléments).
+        self.resize(Dimensions.DIALOGUE_LARGEUR, self.heightForWidth(Dimensions.DIALOGUE_LARGEUR))
         self._actualiser()
 
     def ajouter_suggestion(self, texte: str, variation: float) -> None:

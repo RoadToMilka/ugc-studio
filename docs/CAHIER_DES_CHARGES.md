@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.8, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis et §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.9, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -48,7 +48,7 @@ Dans l'ordre de la barre latérale (le module Script en tête depuis la V2 : c'e
 1. **Script** *(V2, depuis la 1.2.0)* : écriture de scripts UGC avec un modèle de texte (Google seulement en V2 ; OpenAI et Anthropic avec leurs adaptateurs, V4), à partir de la page produit et d'un brief, puis envoi dans le module Voix (§4 bis).
 2. **Voix (TTS)** : script, voix, styles, balises, génération, historique des prises.
 3. **Transcription (STT)** : import vidéo/audio, extraction du son, transcription mot par mot, correction.
-4. **Studio sous-titres** : découpage, style, mot actif, aperçu, export.
+4. **Studio sous-titres** : découpage, style, mot actif, aperçu fidèle sur la vidéo, export (studio depuis la 1.4.0, §7.9).
 5. **Réglages** : connexions API, catalogue des modèles et prix, taux de change, suivi des coûts, préférences.
 
 ### 3.2 Notion de Projet
@@ -56,7 +56,7 @@ Dans l'ordre de la barre latérale (le module Script en tête depuis la V2 : c'e
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
 
 - Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription avec ses sous-titres réorganisés à la main, dictionnaire de remplacements du projet, réglages des sous-titres, module Script : brief, page produit lue avec son adresse et sa date, fiche comprise, accroches, scripts écrits avec leur relecture et leur coût), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite, ou de la prise dont on a créé les sous-titres).
-- Format du fichier : version 6 depuis la V2, lot 1 (module Script, §4 bis ; un projet plus ancien s'ouvre sans script). Le lot 2 y ajoute des informations sans changer de format (numéro, note, script retenu, série de variantes et retouche de chaque script ; nombres dits dans les réglages de voix) : un projet de la 1.2.0 s'ouvre tel quel, ses scripts numérotés dans leur ordre d'écriture. Version 5 depuis la V1.1 (sous-titres réorganisés à la main, §7.8 ; un projet plus ancien s'ouvre sans ajustement). Version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
+- Format du fichier : version 7 depuis la V2, lot 3 (sous-titres rangés en trois parties, « style », « ecran » et « apercu », §7.9 ; un projet plus ancien s'ouvre avec l'apparence de la V1, qui garde exactement son découpage). Version 6 depuis la V2, lot 1 (module Script, §4 bis ; un projet plus ancien s'ouvre sans script). Le lot 2 y ajoute des informations sans changer de format (numéro, note, script retenu, série de variantes et retouche de chaque script ; nombres dits dans les réglages de voix) : un projet de la 1.2.0 s'ouvre tel quel, ses scripts numérotés dans leur ordre d'écriture. Version 5 depuis la V1.1 (sous-titres réorganisés à la main, §7.8 ; un projet plus ancien s'ouvre sans ajustement). Version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
 - Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
 - Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
 - Au démarrage, le dernier projet utilisé est rouvert automatiquement.
@@ -507,14 +507,14 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 
 ### 7.1 Formats de vidéo
 
-- Préréglages : **9:16** (TikTok, Reels, Snap, Shorts), **4:5** (fil Facebook/Instagram), **3:4**, **1:1**, **16:9**, **personnalisé** (largeur × hauteur).
-- Si une vidéo est importée, son format est repris automatiquement.
+- Préréglages : **9:16** (TikTok, Reels, Snap, Shorts), **4:5** (fil Facebook/Instagram), **3:4**, **1:1**, **16:9**, **personnalisé** (largeur × hauteur, de 240 à 4 096 px, arrondis à un nombre pair).
+- Si une vidéo est importée, **son format s'impose** (liste grisée, « Celui de la vidéo (1080 × 1920) ») : l'overlay de la V3 doit avoir sa taille exacte. Une vidéo choisie seulement pour l'aperçu (projet sans vidéo, §7.9) l'impose aussi.
 - Toutes les tailles et positions sont exprimées **en proportion de la hauteur de la vidéo** : un style garde le même aspect quel que soit le format.
 
 ### 7.2 Texte affiché
 
 - Le texte des sous-titres est distinct du texte TTS (pas de balises, pas de majuscules d'accentuation).
-- Option **« Tout en majuscules »** (affichage uniquement ; le nom de l'option, lui, n'est pas écrit en capitales).
+- **Casse** (affichage uniquement) : comme écrit, TOUT EN MAJUSCULES ou tout en minuscules (V2 ; en V1, la case « Tout en majuscules », reprise à l'ouverture d'un ancien projet).
 - Typographie automatique selon la langue (ex. français : espace insécable avant `! ? : ;`).
 - Ponctuation affichée ou masquée (option).
 
@@ -576,10 +576,10 @@ Options **combinables** :
 
 ### 7.7 Aperçu
 
-- Lecteur vidéo (ou fond neutre si audio seul) avec les sous-titres rendus **exactement comme à l'export** (même moteur de dessin).
-- Repères activables : zone de sécurité (pointillés mauves), marge maximum (rouge), grille.
+- Lecteur vidéo (ou fond neutre si audio seul) avec les sous-titres rendus **exactement comme à l'export** (même moteur de dessin). Fait au lot 3 de la V2 (§7.9).
+- Repères activables : zone de sécurité (pointillés mauves), marge maximum (rouge), grille. Fait (§7.9).
 - Choix de la plateforme pour la zone de sécurité.
-- Timeline des sous-titres : blocs déplaçables/redimensionnables, sous-titres signalés en orange (cf. §7.3), édition du texte au double-clic.
+- Timeline des sous-titres (lot 7 de la V2) : les bords se déplacent **de mot en mot** entre deux sous-titres voisins (le moment des mots ne change jamais), sous-titres signalés en orange (cf. §7.3), double-clic : « Corriger les mots » (module Transcription).
 
 ### 7.8 Mise en œuvre (étape 8)
 
@@ -594,8 +594,8 @@ Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Cré
 - Caractères et mots : deux maximums (un mot plus long que la limite de caractères reste seul) ; un mot n'est jamais coupé.
 - Parmi tous les découpages possibles, l'app retient le meilleur (programmation dynamique) : des sous-titres bien remplis et de longueurs proches (l'écart au maximum de caractères compte au carré), qui finissent si possible sur une ponctuation (bonus), en restant de préférence dans la zone de sécurité (petite pénalité pour la marge).
 
-**Écran (§7.3)** : la largeur de chaque ligne est mesurée en pixels par Qt, avec la police Inter SemiBold (celle de l'app, en attendant le style complet de la V2) à la taille du texte (en % de la hauteur de la vidéo).
-- Formats : celui de la vidéo importée (dimensions remises à l'endroit pour une vidéo de téléphone enregistrée « couchée », rotation de 90°), sinon 9:16 (1080 × 1920), 4:5 (1080 × 1350), 3:4 (1080 × 1440), 1:1 (1080 × 1080), 16:9 (1920 × 1080). Le format personnalisé arrive en V2.
+**Écran (§7.3)** : la largeur de chaque ligne est mesurée en pixels par le moteur de dessin (V2, §7.9 ; en V1 par Qt), avec la police Inter SemiBold à la taille du texte (en % de la hauteur de la vidéo, arrondie au pixel).
+- Formats : celui de la vidéo importée (dimensions remises à l'endroit pour une vidéo de téléphone enregistrée « couchée », rotation de 90°), sinon 9:16 (1080 × 1920), 4:5 (1080 × 1350), 3:4 (1080 × 1440), 1:1 (1080 × 1080), 16:9 (1920 × 1080), ou personnalisé (V2).
 - Ordre : une ligne dans la zone de sécurité ; sinon deux lignes équilibrées dans la zone (si 2 lignes permises ; retour à la ligne de préférence après une ponctuation) ; sinon la même chose jusqu'à la marge maximum ; sinon le sous-titre est redécoupé (aucune taille ne change). Un mot seul trop large est rapetissé jusqu'à tenir dans la marge maximum, sans descendre sous 60 % de la taille du texte : il est signalé en orange (liste des sous-titres et aperçu), avec le conseil de le raccourcir s'il ne tient toujours pas.
 - Sous-titres centrés : la zone de sécurité retient le plus large des deux côtés (ex. YouTube Shorts : 10 % des deux côtés). Si elle est plus large que la zone de la marge maximum, c'est la marge maximum qui compte.
 
@@ -603,13 +603,13 @@ Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Cré
 
 | Plateforme | Gauche | Droite | Haut | Bas | Source |
 |---|---|---|---|---|---|
-| TikTok | 11,1 % (120 px) | 11,1 % (120 px) | 12,5 % | 34,4 % | Modèle de zone de sécurité de TikTok Ads (avril 2025) ; à droite, 300 px sous le milieu de l'écran (boutons) : utilisé avec la position verticale (V2) |
+| TikTok | 11,1 % (120 px) | 11,1 % (120 px) | 12,5 % | 34,4 % | Modèle de zone de sécurité de TikTok Ads (avril 2025). La réserve « 300 px à droite sous le milieu de l'écran » n'est pas appliquée (lot 3) : le modèle officiel (fichier à télécharger dans le gestionnaire de publicités) n'a pas pu être relu, des sources de 2026 citent 140 px sur toute la hauteur, et elle rétrécirait toutes les lignes (découpage des anciens projets changé) |
 | Instagram, Facebook (Reels, Stories) | 6 % | 6 % | 14 % | 35 % | Guide des publicités Meta |
 | YouTube Shorts | 0 % | 10 % | 10 % | 25 % | Google Ads, emplacement Shorts |
 | Snapchat | 3,7 % (40 px) | 3,7 % | 10,4 % | 19,3 % | Valeurs courantes, non confirmées par Snapchat |
 | Aucune | 0 % | 0 % | 0 % | 0 % | Marge maximum seulement |
 
-Seuls les côtés servent en V1 (largeur des lignes) ; le haut et le bas serviront à placer les sous-titres (V2).
+Les côtés donnent la largeur des lignes ; le haut et le bas placent les sous-titres (« Haut » et « Bas », V2, §7.9).
 
 **Temps** : un sous-titre va du début de son premier mot à la fin du dernier ; s'il dure moins que la durée minimale, il est prolongé jusqu'au sous-titre suivant au plus (et jusqu'à la fin de l'audio pour le dernier), puis avancé jusqu'au précédent au plus ; un trou de 0,3 s au plus entre deux sous-titres est comblé (pas de clignotement).
 
@@ -625,7 +625,59 @@ Seuls les côtés servent en V1 (largeur des lignes) ; le haut et le bas serviro
 - Une nouvelle transcription (autre source, autre prise, ou nouvelle transcription de la même source) efface les ajustements ; les confirmations déjà demandées le précisent quand il y en a.
 - L'export SRT reprend exactement la liste affichée.
 
-**Liste et écoute** : numéro, temps, texte (lignes comprises), remarque ; les sous-titres signalés sont en orange. Pendant l'écoute, le sous-titre en cours est surligné et affiché en grand (aperçu simple ; l'aperçu fidèle sur la vidéo arrive en V2). Clic sur un sous-titre : il est montré, et la lecture s'y place si elle est en cours (sinon « ▶ » part de lui). Changer de module arrête la lecture de la page quittée (et libère la piste son).
+**Liste et écoute** : numéro, temps, texte (lignes comprises), remarque ; les sous-titres signalés sont en orange. Pendant la lecture, le sous-titre en cours est surligné dans la liste. Clic sur un sous-titre : il est choisi, et l'aperçu (la lecture) se place sur lui. Changer de module arrête la lecture de la page quittée (et libère les fichiers). Le grand texte de l'aperçu simple de la V1 est remplacé par l'aperçu fidèle (§7.9).
+
+### 7.9 Studio (V2, lot 3, version 1.4.0)
+
+La page Sous-titres devient un **studio** : le bloc « Mots des sous-titres » (inchangé), puis l'**aperçu** à gauche (400 px) et les **réglages** à droite ; l'un sous l'autre quand la page a moins de 880 px de large (fenêtre étroite). Dessous, la liste des sous-titres, « Réorganiser à la main » et l'export SRT (inchangés). Choix détaillés : document « UGC Studio - V2 Studio de style et Script », §3 à §7.
+
+**Moteur de dessin commun** (`rendu/moteur.py`) :
+- Le texte devient des **formes** (le contour exact de chaque lettre) à la taille réelle de la vidéo ; l'aperçu les dessine en plus petit, l'export de la V3 les dessinera à 100 % sur un fond transparent (`image()` : une image transparente à la taille de la vidéo). Un test vérifie que l'aperçu à 100 % et cette image sont identiques au pixel près.
+- Le **découpage** mesure la largeur des lignes avec ce moteur (« ça tient » = « ça tient une fois dessiné »). Police du lot 3 : Inter SemiBold à la taille du texte arrondie au pixel, exactement la mesure de la V1 : le découpage d'un projet de la 1.1.0 ou de la 1.3.0 ne change pas (vérifié par un test).
+- Place des lignes et des mots : `mise_en_page.py` (sans interface, testé seul). Une ligne a exactement la largeur mesurée par le découpage ; un mot commence là où finit la ligne, moins la largeur de ce qui le suit.
+- Apparence du lot 3 : celle de la V1, texte blanc avec une **ombre légère** (noire à 55 %, floutée de 0,4 % de la hauteur, décalée de 0,2 % vers le bas). Ordre de dessin : ombre, remplissage (contour, fond et lueur : lot 4). Un sous-titre dessiné est gardé en mémoire pour chaque taille d'affichage : pendant la lecture, l'aperçu le recopie.
+
+**Aperçu** (`ui/composants/apercu.py`, `ui/pages/sous_titres/apercu.py`) :
+- Fond : la **vidéo** du projet, un **gris** neutre, ou un **damier** (pour juger un texte prévu pour l'overlay transparent). Zoom : **Ajusté** (la vidéo entière, 540 px de haut au plus) ou **100 %** (un pixel de la vidéo par pixel de l'écran ; l'aperçu défile).
+- Lecture et pause (bouton, ou barre Espace), barre de position, temps, **boucle** sur le sous-titre choisi dans la liste.
+- **Repères** (cases) : zone de sécurité de la plateforme (pointillés mauves), marge maximum (trait rouge), grille (tiers et milieu, traits fins). Fond, zoom, repères et boucle sont retenus d'une fois sur l'autre (préférences).
+- **Synchronisation** : le temps des sous-titres est celui de l'image réellement affichée (son moment de présentation, donné par Qt Multimedia) : le sous-titre change exactement sur la bonne image. Son seul (prise de voix) : la position du son, affinée entre deux nouvelles de Qt (qui la donne toutes les 50 ms).
+- Le sous-titre se **glisse verticalement** dans l'aperçu (curseur ↕ au survol) : le réglage fin suit, dans ses limites.
+- Projet ouvert : l'aperçu montre le premier sous-titre, sans le choisir dans la liste.
+- **Vidéo introuvable** (déplacée ou supprimée : elle n'est pas copiée dans le projet) : message orange, fond gris, son de la piste du projet, et « Retrouver la vidéo… ».
+- Vidéo de téléphone en HDR (couleurs étendues) : l'image peut paraître un peu terne dans l'aperçu (ses couleurs sont converties pour un écran normal) ; le texte, lui, est exact. La gestion du HDR est un sujet de la V3 (§8.3).
+- **Projet sans vidéo** (prise de voix, audio importé) : onglet Écran, « Vidéo d'aperçu » : « Choisir une vidéo… » (ex. le montage exporté de Premiere Pro), « La voix commence à » (décalage, en secondes), « Son de la vidéo » (sinon la voix de la prise, sous la vidéo muette, recalée sur elle au-delà de 0,15 s d'écart), « Retirer ». Sa résolution, lue par Qt Multimedia, impose le format.
+
+**Réglages en onglets** (`ui/pages/sous_titres/reglages.py`) :
+- **Texte** : taille (en % de la hauteur, avec les pixels à côté), casse, ponctuation ; info : police et apparence (lot 4 : style complet).
+- **Position** : Haut, Centre ou Bas (« Haut » : juste sous le haut de la zone de sécurité ; « Bas » : juste au-dessus de son bas ; « Centre » : milieu de l'écran) ; **réglage fin** (glissière, en dixièmes de % de la hauteur, bouton « Revenir à 0 % ») ; **alignement** gauche, centre ou droite ; réglages avancés : **largeur des lignes** (30 à 100 % de la largeur utile). Point fixe du bloc : son haut, son milieu ou son bas (un sous-titre de 2 lignes grandit vers le bas, des deux côtés, ou vers le haut). Le bloc ne dépasse jamais la marge maximum (en haut et en bas : en % de la hauteur) ; la glissière s'arrête à temps pour le plus grand sous-titre possible (« Lignes au plus »).
+- **Découpage** : caractères, mots et lignes au plus, durée minimale, coupure après la ponctuation, hésitations masquées.
+- **Écran** : format (§7.1), zone de sécurité, marge maximum, mesures de l'écran (« Vidéo 1080 × 1920, texte de 77 px (Inter SemiBold) : une ligne tient en 840 px… »), vidéo d'aperçu.
+- Largeur utile d'une ligne selon l'alignement : centré, la zone de sécurité retient le plus large des deux côtés (comme en V1) ; à gauche, la ligne part du bord gauche de la zone (jamais de la marge maximum) et va jusqu'au bord droit de la zone (souple), ou jusqu'à la marge maximum (strict) ; à droite, l'inverse. La largeur des lignes la réduit d'autant.
+- Haut, centre, bas et réglage fin ne changent que l'aperçu (jamais le découpage : la liste n'est pas recalculée ; enregistré quand la glissière s'arrête). Alignement, largeur des lignes, format, taille… refont le découpage, avec la question de la V1.1 s'ils défont un ajustement fait à la main.
+
+**Projet au format 7** : `sous_titres` est rangé en trois parties, la forme écrite qui servira aussi aux préréglages exportés (lot 7) :
+
+```json
+"sous_titres": {
+  "style": {
+    "texte": {"police": "Inter", "graisse": 600, "taille_pct": 4.0, "casse": "normale", "ponctuation": true,
+              "couleur": {"code": "#FFFFFF", "opacite": 100.0},
+              "ombre": {"active": true, "couleur": {"code": "#000000", "opacite": 55.0},
+                        "flou_pct": 0.4, "decalage_x_pct": 0.0, "decalage_y_pct": 0.2}},
+    "position": {"verticale": "bas", "decalage_pct": 0.0, "alignement": "centre", "largeur_lignes_pct": 100.0},
+    "decoupage": {"caracteres_max": 24, "mots_max": 5, "lignes_max": 2, "couper_sur_ponctuation": true, "duree_min_s": 0.6}
+  },
+  "ecran": {"format": "auto", "largeur": 1080, "hauteur": 1920, "plateforme": "tiktok", "marge_max_pct": 5.0},
+  "apercu": {"chemin": "", "decalage_s": 0.0, "largeur": 0, "hauteur": 0, "son_de_la_video": true}
+}
+```
+
+- Tailles en % de la hauteur de la vidéo ; couleurs « #RRGGBB » avec une opacité de 0 à 100 % (ce sont des choix de la vidéo, pas des couleurs de l'interface : elles ne sont pas dans `theme.py`). « auto » : le format de la vidéo, sinon 9:16 (valeur des projets de la V1).
+- Lecture tolérante (`style_sous_titres.py`) : une valeur absente ou illisible garde sa valeur par défaut, une valeur hors limites est ramenée dans les limites, un choix inconnu est ignoré.
+- Projet des formats 4 à 6 : « Tout en majuscules », la ponctuation et la taille passent dans le style du texte ; apparence de la V1 ; en bas de la zone de sécurité, centré.
+
+**Autotest** : une petite vidéo de test (AVI « Motion JPEG », écrite par l'app elle-même, `avi.py` et `rendu/video_test.py`) remplace la vidéo de démonstration : le `.exe` doit en recevoir la première image (taille et couleur vérifiées), puis la lire 1,5 s (le temps avance). Captures : studio sur la vidéo, damier et grille, zoom 100 %, chaque onglet, sous-titre en haut à gauche.
 
 ---
 
@@ -777,6 +829,14 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Boutons du module Script : principal « Écrire le script » (et « Envoyer dans Voix » sur chaque carte de script ; « Écrire les N scripts », « Retoucher », « Ajouter » dans les fenêtres) ; normal « Lire la page », « Proposer des accroches », « Analyser ce texte », « Variantes… », « Comparer… », « Charger » (bibliothèque de briefs), « Ajouter un script qui a marché… » ; contour « Coller le texte du produit », « Changer la langue du projet », « Prononciation… », « Charger un brief », « Enregistrer », « Mes meilleurs scripts… », « Retoucher… », « Retenir », suggestions de retouche, « Remettre les exemples fournis » ; icône ⋯ et étoiles de la note.
 - Une accroche se coche d'un clic n'importe où sur sa ligne : son texte passe à la ligne, ce qu'une case à cocher ne sait pas faire.
 
+### 9.4 nonies Studio des sous-titres (V2, lot 3)
+
+- **Choix en boutons** (`composants/choix.py`) : deux ou trois choix exclusifs côte à côte (Haut, Centre, Bas ; Gauche, Centre, Droite ; Vidéo, Gris, Damier ; Ajusté, 100 %) ; le choix actif a l'allure « sélectionné » des boutons, comme un onglet. Pourquoi : tous les choix restent visibles et se changent d'un clic.
+- Aperçu : autour de la vidéo, un fond plus sombre que l'app ; fond neutre gris moyen (un texte blanc ou noir y reste lisible) ; damier de cases de 12 px. Repères : traits de 1 px à l'écran quel que soit le zoom ; zone de sécurité en pointillés mauves (4 px, 4 px), marge maximum en rouge, grille en blanc à 35 %. Couleurs dans `theme.CouleursApercu`.
+- Boutons : icône lecture et pause, **boucle** (icône Lucide « repeat », mauve quand elle est active) ; contour « Retrouver la vidéo… », « Choisir une vidéo… » (icône « film »), « Retirer » ; icône « Revenir à 0 % » du réglage fin.
+- Largeurs : colonne de l'aperçu 400 px, studio sur deux colonnes à partir de 880 px de large, aperçu de 200 à 540 px de haut.
+- Les onglets des réglages prennent la hauteur de l'onglet affiché (option `hauteur_selon_l_onglet` des onglets en boutons ; ailleurs, la hauteur reste celle du plus haut) : pas de grand vide sous un onglet court. Une ligne qui ne sert pas disparaît avec son libellé (« Taille » hors format personnalisé), et un message d'état vide ne laisse pas de ligne vide en bas d'un bloc.
+
 ### 9.5 Typographie
 
 - Police : **Inter** (embarquée dans l'app)
@@ -814,7 +874,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 ## 11. Distribution
 
 - Chaque version publiée = une **Release GitHub** avec le `.exe` construit automatiquement (GitHub Actions, machine Windows, PyInstaller).
-- Fabrication automatique à chaque envoi de code : tests, fabrication de `UGC-Studio.exe`, démarrage du `.exe` en mode autotest (vérifications + captures d'écran de chaque module), rapport joint au run.
+- Fabrication automatique à chaque envoi de code : tests, fabrication de `UGC-Studio.exe`, démarrage du `.exe` en mode autotest (vérifications, dont la lecture d'une vidéo de test depuis la 1.4.0, + captures d'écran de chaque module), rapport joint au run.
 - Le numéro de version est dans `ugc_studio/__init__.py`. Quand il change sur la branche `main`, une Release `v<version>` est publiée automatiquement. Les versions `0.x` (étapes de la V1) sont marquées « pré-version ».
 - La police Inter et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer. FFmpeg en ligne de commande sera ajouté avec les exports vidéo (V3).
 - *(plus tard)* Installateur qui crée l'icône sur le bureau et dans le menu Démarrer.
@@ -881,7 +941,7 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 |---|---|---|---|
 | 1 | 1.2.0 | **Script (1)** : page Script, lecture de la page produit (app, Shopify, Google, texte collé), fiche comprise, brief, accroches, écriture, relecture, durée estimée, exemples (« Garder comme exemple », 5 scripts fournis), envoi dans Voix, coûts ; modèles de texte reconnus, Gemini 3.1 Pro au catalogue ; projet au format 6 | Fait |
 | 2 | 1.3.0 | **Script (2)** : variantes (3 modes), comparaison, retouche, copie, ★ et « Retenir », bibliothèque de briefs, fenêtre « Mes meilleurs scripts », vitesse mesurée sur les prises (aussi pour Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse ; champs de nombre à la hauteur des autres champs | Fait |
-| 3 | 1.4.0 | **Studio (1)** : moteur de dessin commun, aperçu fidèle (vidéo, fond neutre, damier, zoom, boucle), repères, formats dont personnalisé, position verticale et alignement ; projet au format 7 | |
+| 3 | 1.4.0 | **Studio (1)** : moteur de dessin commun, aperçu fidèle (vidéo, fond neutre, damier, zoom, boucle), repères, formats dont personnalisé, position verticale et alignement, sous-titre glissé dans l'aperçu, vidéo d'aperçu pour un projet sans vidéo, « Retrouver la vidéo… » ; projet au format 7 (§7.9) | Fait |
 | 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style | |
 | 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage | |
 | 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre | |
@@ -906,7 +966,7 @@ Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient 
 - Liste définitive des **catégories de pub** et de leur ton (l'utilisateur les créera dans la bibliothèque de styles ; quelques exemples fournis par défaut).
 - Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
 - Syntaxe exacte des API au moment du code (la doc évolue vite : toujours vérifier la doc officielle avant d'écrire un adaptateur). Les prix de Gemini 3.5 Transcribe sont connus depuis la v1.9 (§4.2).
-- **Zones de sécurité** par plateforme : documentées au §7.8 (TikTok, Meta et YouTube d'après leurs guides ; Snapchat à confirmer). À revoir avec la position verticale des sous-titres (V2) : la zone de TikTok s'élargit à droite sous le milieu de l'écran.
+- **Zones de sécurité** par plateforme : documentées au §7.8 (TikTok, Meta et YouTube d'après leurs guides ; Snapchat à confirmer). TikTok : la réserve à droite sous le milieu de l'écran (300 px d'après une ancienne note, 140 px sur toute la hauteur d'après des sources de 2026) n'est pas appliquée tant que le modèle officiel n'a pas été relu (lot 3, §7.8).
 - **Lecture de pages par Google avec Gemini 3.8 Flash** (module Script) : les deux pages de Google sur l'outil « URL context » ne listaient pas les mêmes modèles (01/10/2026). Si Google refuse l'outil pour un modèle, l'app essaie un autre modèle chargé qui sait lire les pages, sinon propose de coller le texte. À confirmer au premier vrai essai.
 - **Qualité des scripts** : consignes et exemples s'affineront avec les retours de l'utilisateur sur de vrais produits (lot 2).
 - **Durée de conservation des voix créées** (Voice Design) : la documentation officielle « Voice Design » indique 1 an et 200 voix par projet ; le guide « Get_Started_Voices » indique 7 jours. L'app affiche la date renvoyée par Google (`expire_time`).

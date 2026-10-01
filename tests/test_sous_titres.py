@@ -21,6 +21,7 @@ from ugc_studio.sous_titres import (
     texte_affiche,
     typographie,
 )
+from ugc_studio.style_sous_titres import CASSE_MAJUSCULES, CASSE_MINUSCULES, StyleTexte
 from ugc_studio.transcription import Mot, resolution_video
 
 # Écran de test : 10 px par caractère ; 20 caractères dans la zone de sécurité, 30 jusqu'à la marge.
@@ -68,13 +69,16 @@ def test_typographie_des_autres_langues():
 
 
 def test_ponctuation_masquee_et_majuscules():
-    reglages = ReglagesSousTitres(ponctuation=False)
+    reglages = ReglagesSousTitres(texte=StyleTexte(ponctuation=False))
     assert texte_affiche("l'huile,", reglages, "fr-FR") == "l'huile"
     assert texte_affiche("anti-rides.", reglages, "fr-FR") == "anti-rides"
     assert texte_affiche("3.5", reglages, "fr-FR") == "3.5"
     assert texte_affiche("semaines !", reglages, "fr-FR") == "semaines"
     assert texte_affiche("…", reglages, "fr-FR") == ""
-    assert texte_affiche("Sérum Glowzy !", ReglagesSousTitres(majuscules=True), "fr-FR") == f"SÉRUM GLOWZY{NBSP}!"
+    majuscules = ReglagesSousTitres(texte=StyleTexte(casse=CASSE_MAJUSCULES))
+    assert texte_affiche("Sérum Glowzy !", majuscules, "fr-FR") == f"SÉRUM GLOWZY{NBSP}!"
+    minuscules = ReglagesSousTitres(texte=StyleTexte(casse=CASSE_MINUSCULES))
+    assert texte_affiche("Sérum Glowzy !", minuscules, "fr-FR") == f"sérum glowzy{NBSP}!"
 
 
 def test_mots_a_afficher():
@@ -85,7 +89,7 @@ def test_mots_a_afficher():
     affiches = mots_a_afficher(mots, ReglagesSousTitres(), "fr-FR", {"euh"}, False)
     assert [m.texte for m in affiches] == ["Franchement,", "euh", f"top{NBSP}!"]
     # Ponctuation masquée : le mot garde son texte d'origine, qui sert à couper sur la ponctuation.
-    affiches = mots_a_afficher(mots, ReglagesSousTitres(ponctuation=False), "fr-FR", {"euh"}, True)
+    affiches = mots_a_afficher(mots, ReglagesSousTitres(texte=StyleTexte(ponctuation=False)), "fr-FR", {"euh"}, True)
     assert [(m.texte, m.original) for m in affiches] == [("Franchement", "Franchement,"), ("top", "top !")]
 
 
@@ -190,9 +194,11 @@ def test_duree_minimale_et_petits_trous_combles():
 
 
 def test_ecran_selon_format_et_plateforme():
-    assert resolution("auto", (1080, 1920)) == (1080, 1920)
-    assert resolution("auto", None) == FORMATS["9:16"]
-    assert resolution("16:9", (1080, 1920)) == (1920, 1080)
+    assert resolution(ReglagesSousTitres(), (1080, 1920)) == (1080, 1920)
+    assert resolution(ReglagesSousTitres(), None) == FORMATS["9:16"]
+    # V2 : une vidéo impose son format (l'overlay de la V3 doit avoir sa taille exacte).
+    assert resolution(ReglagesSousTitres(format="16:9"), (1080, 1920)) == (1080, 1920)
+    assert resolution(ReglagesSousTitres(format="16:9"), None) == (1920, 1080)
     tiktok = ecran(ReglagesSousTitres())
     assert (tiktok.largeur, tiktok.hauteur) == (1080, 1920)
     assert tiktok.largeur_max == pytest.approx(972) and tiktok.largeur_securite == pytest.approx(840)
@@ -219,7 +225,8 @@ def test_reglages_relus_et_ramenes_dans_les_limites():
     assert reglages.duree_min_s == ReglagesSousTitres().duree_min_s
     assert (reglages.format, reglages.plateforme) == ("auto", "tiktok")
     assert ReglagesSousTitres.depuis_dict(None) == ReglagesSousTitres()
-    assert ReglagesSousTitres.depuis_dict(ReglagesSousTitres(majuscules=True).en_dict()).majuscules
+    majuscules = ReglagesSousTitres(texte=StyleTexte(casse=CASSE_MAJUSCULES))
+    assert ReglagesSousTitres.depuis_dict(majuscules.en_dict()) == majuscules
 
 
 # --- SRT (§8.1) ---

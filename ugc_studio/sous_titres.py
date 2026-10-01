@@ -22,24 +22,42 @@
    jamais.
 
 Ce module ne dépend pas de l'interface : la largeur d'un texte en pixels est mesurée par une
-fonction fournie (Qt dans l'app, une règle simple dans les tests).
+fonction fournie (le moteur de dessin dans l'app, rendu/moteur.py ; une règle simple dans les tests).
+
+V2, lot 3 : le style (police, taille, casse, ponctuation, couleur, ombre) et la position sont décrits
+dans style_sous_titres.py ; la largeur utile d'une ligne dépend de l'alignement et de la largeur
+maximale des lignes ; format personnalisé ; projet au format 7 (forme écrite documentée, §7.9).
 """
 
 from __future__ import annotations
 
+import bisect
 import math
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
+from .style_sous_titres import (
+    CASSE_MAJUSCULES,
+    CASSE_MINUSCULES,
+    CENTRE,
+    DROITE,
+    GAUCHE,
+    Position,
+    StyleTexte,
+    VideoApercu,
+    en_dict,
+    lire,
+)
 from .transcription import PONCTUATION, Mot, mots_affiches
 
 Mesure = Callable[[str], float]  # largeur d'un texte, en pixels, à la taille normale du texte
 
 # --- Formats de vidéo (§7.1) -------------------------------------------------------------------
 
-FORMAT_AUTO = "auto"  # celui de la vidéo importée (sinon 9:16)
+FORMAT_AUTO = "auto"  # celui de la vidéo, sinon 9:16 (valeur des projets de la V1)
+FORMAT_PERSONNALISE = "personnalise"  # largeur × hauteur choisies (V2)
 FORMATS: dict[str, tuple[int, int]] = {
     "9:16": (1080, 1920),
     "4:5": (1080, 1350),
@@ -48,14 +66,22 @@ FORMATS: dict[str, tuple[int, int]] = {
     "16:9": (1920, 1080),
 }
 FORMAT_PAR_DEFAUT = "9:16"
+# Formats proposés quand aucune vidéo n'impose le sien (avec une vidéo, la liste est grisée).
 NOMS_FORMATS = {
-    FORMAT_AUTO: "Celui de la vidéo (sinon 9:16)",
     "9:16": "9:16 (TikTok, Reels, Snap, Shorts)",
     "4:5": "4:5 (fil Facebook, Instagram)",
     "3:4": "3:4",
     "1:1": "1:1 (carré)",
     "16:9": "16:9 (horizontal)",
+    FORMAT_PERSONNALISE: "Personnalisé",
 }
+COTE_MIN, COTE_MAX = 240, 4096  # format personnalisé : de 240 à 4 096 px de côté
+
+
+def cote_pair(valeur: float) -> int:
+    """Côté d'un format personnalisé : entier pair entre 240 et 4 096 px (la plupart des formats
+    vidéo exigent des dimensions paires)."""
+    return int(min(max(math.floor(valeur / 2 + 0.5) * 2, COTE_MIN), COTE_MAX))  # 1081 → 1082
 
 
 # --- Zones de sécurité des plateformes (§7.3) ---------------------------------------------------
@@ -107,60 +133,119 @@ LIMITES: dict[str, tuple] = {  # valeurs permises (champs de la page Sous-titres
     "lignes_max": (1, 2),
     "duree_min_s": (0.0, 5.0),
     "marge_max_pct": (0.0, 20.0),
-    "taille_pct": (1.0, 15.0),
+    "taille_pct": StyleTexte.LIMITES["taille_pct"],
+    "largeur_lignes_pct": Position.LIMITES["largeur_lignes_pct"],
+    "largeur_perso": (COTE_MIN, COTE_MAX),
+    "hauteur_perso": (COTE_MIN, COTE_MAX),
 }
+_DECOUPAGE = ("caracteres_max", "mots_max", "lignes_max", "couper_sur_ponctuation", "duree_min_s")
 
 
 @dataclass
 class ReglagesSousTitres:
-    """Réglages du projet (§7.2, §7.3), enregistrés dans projet.json."""
+    """Réglages des sous-titres du projet (§7), enregistrés dans projet.json.
+
+    - Découpage (§7.3) : caractères, mots et lignes au plus, coupure sur la ponctuation, durée minimale.
+    - Style : texte (§7.4, style_sous_titres.StyleTexte) et position (onglet « Position »).
+    - Écran (§7.1, §7.3) : format, zone de sécurité de la plateforme, marge maximum.
+    - Vidéo choisie seulement pour l'aperçu (projet sans vidéo).
+
+    Dans projet.json (format 7), ils sont rangés en trois parties : « style » (texte, position,
+    découpage : le contenu d'un préréglage, lot 7), « ecran » et « apercu » (voir en_dict)."""
 
     caracteres_max: int = 24  # par sous-titre, espaces comprises
     mots_max: int = 5
     lignes_max: int = 2
     couper_sur_ponctuation: bool = True
     duree_min_s: float = 0.6
-    majuscules: bool = False  # « Tout en majuscules » (affichage seulement)
-    ponctuation: bool = True  # ponctuation affichée
+    texte: StyleTexte = StyleTexte()
+    position: Position = Position()
     format: str = FORMAT_AUTO
+    largeur_perso: int = 1080  # format personnalisé
+    hauteur_perso: int = 1920
     plateforme: str = PLATEFORME_PAR_DEFAUT
     marge_max_pct: float = 5.0  # de chaque bord : le texte ne la dépasse jamais
-    taille_pct: float = 4.0  # taille du texte, en % de la hauteur de la vidéo
+    apercu: VideoApercu = VideoApercu()
 
     def en_dict(self) -> dict:
-        return asdict(self)
+        """Forme écrite documentée (format 7 des projets, §7.9 du cahier des charges)."""
+        return {
+            "style": {
+                "texte": en_dict(self.texte),
+                "position": en_dict(self.position),
+                "decoupage": {nom: getattr(self, nom) for nom in _DECOUPAGE},
+            },
+            "ecran": {
+                "format": self.format,
+                "largeur": self.largeur_perso,
+                "hauteur": self.hauteur_perso,
+                "plateforme": self.plateforme,
+                "marge_max_pct": self.marge_max_pct,
+            },
+            "apercu": en_dict(self.apercu),
+        }
 
     @classmethod
     def depuis_dict(cls, brut) -> ReglagesSousTitres:
         """Réglages lus dans un projet : une valeur absente ou illisible garde sa valeur par
-        défaut ; une valeur hors limites est ramenée dans les limites."""
+        défaut ; une valeur hors limites est ramenée dans les limites. Lit le format 7 (style,
+        écran, aperçu) comme les formats 4 à 6 (une seule liste de réglages, sans style ni position :
+        l'apparence de la V1, qui garde exactement le découpage)."""
         reglages = cls()
         if not isinstance(brut, dict):
             return reglages
-        for champ in fields(cls):
-            if champ.name not in brut:
-                continue
-            defaut = getattr(reglages, champ.name)
-            try:
-                if isinstance(defaut, bool):
-                    valeur = bool(brut[champ.name])
-                elif isinstance(defaut, int):
-                    valeur = int(brut[champ.name])
-                elif isinstance(defaut, float):
-                    valeur = float(brut[champ.name])
-                else:
-                    valeur = str(brut[champ.name])
-            except (TypeError, ValueError):
-                continue
-            if champ.name in LIMITES:
-                bas, haut = LIMITES[champ.name]
-                valeur = type(defaut)(min(max(valeur, bas), haut))
-            setattr(reglages, champ.name, valeur)
-        if reglages.format not in (FORMAT_AUTO, *FORMATS):
+        if isinstance(brut.get("style"), dict) or isinstance(brut.get("ecran"), dict):
+            style = brut.get("style") if isinstance(brut.get("style"), dict) else {}
+            ecran_brut = brut.get("ecran") if isinstance(brut.get("ecran"), dict) else {}
+            plats = dict(style.get("decoupage") or {}) if isinstance(style.get("decoupage"), dict) else {}
+            plats.update({
+                "format": ecran_brut.get("format"),
+                "largeur_perso": ecran_brut.get("largeur"),
+                "hauteur_perso": ecran_brut.get("hauteur"),
+                "plateforme": ecran_brut.get("plateforme"),
+                "marge_max_pct": ecran_brut.get("marge_max_pct"),
+            })
+            reglages = _lire_plats(reglages, {cle: valeur for cle, valeur in plats.items() if valeur is not None})
+            reglages.texte = lire(StyleTexte, style.get("texte"))
+            reglages.position = lire(Position, style.get("position"))
+            reglages.apercu = lire(VideoApercu, brut.get("apercu"))
+        else:
+            # Formats 4 à 6 : « Tout en majuscules », ponctuation et taille passent dans le style du texte.
+            reglages = _lire_plats(reglages, brut)
+            texte = {"ponctuation": brut.get("ponctuation"), "taille_pct": brut.get("taille_pct")}
+            if brut.get("majuscules"):
+                texte["casse"] = CASSE_MAJUSCULES
+            reglages.texte = lire(StyleTexte, {cle: valeur for cle, valeur in texte.items() if valeur is not None})
+        if reglages.format not in (FORMAT_AUTO, FORMAT_PERSONNALISE, *FORMATS):
             reglages.format = FORMAT_AUTO
         if reglages.plateforme not in {p.identifiant for p in PLATEFORMES}:
             reglages.plateforme = PLATEFORME_PAR_DEFAUT
+        reglages.largeur_perso, reglages.hauteur_perso = cote_pair(reglages.largeur_perso), cote_pair(reglages.hauteur_perso)
         return reglages
+
+
+def _lire_plats(reglages: ReglagesSousTitres, brut: dict) -> ReglagesSousTitres:
+    """Réglages simples (nombres, cases, textes) : valeur convertie, ramenée dans les limites."""
+    for champ in fields(ReglagesSousTitres):
+        if champ.name not in brut or champ.name in ("texte", "position", "apercu"):
+            continue
+        defaut = getattr(reglages, champ.name)
+        try:
+            if isinstance(defaut, bool):
+                valeur = bool(brut[champ.name])
+            elif isinstance(defaut, int):
+                valeur = int(brut[champ.name])
+            elif isinstance(defaut, float):
+                valeur = float(brut[champ.name])
+            else:
+                valeur = str(brut[champ.name])
+        except (TypeError, ValueError):
+            continue
+        if champ.name in LIMITES:
+            bas, haut = LIMITES[champ.name]
+            valeur = type(defaut)(min(max(valeur, bas), haut))
+        setattr(reglages, champ.name, valeur)
+    return reglages
 
 
 # --- Écran ----------------------------------------------------------------------------------------
@@ -177,20 +262,71 @@ class Ecran:
     largeur_max: float  # largeur d'une ligne jusqu'à la marge maximum (limite stricte)
 
 
-def resolution(format_video: str, resolution_source: tuple[int, int] | None = None) -> tuple[int, int]:
-    """Largeur × hauteur de la vidéo : celle de la source (format « auto »), ou du format choisi."""
-    if format_video == FORMAT_AUTO:
-        return resolution_source or FORMATS[FORMAT_PAR_DEFAUT]
-    return FORMATS.get(format_video, FORMATS[FORMAT_PAR_DEFAUT])
+def resolution(reglages: ReglagesSousTitres, resolution_source: tuple[int, int] | None = None) -> tuple[int, int]:
+    """Largeur × hauteur de la vidéo (§7.1). Une vidéo (celle du projet, ou celle choisie pour
+    l'aperçu) impose la sienne : l'overlay de la V3 doit avoir sa taille exacte. Sinon le format
+    choisi (« auto », valeur des projets de la V1 : 9:16), ou le format personnalisé."""
+    if resolution_source:
+        return resolution_source
+    if reglages.format == FORMAT_PERSONNALISE:
+        return reglages.largeur_perso, reglages.hauteur_perso
+    return FORMATS.get(reglages.format, FORMATS[FORMAT_PAR_DEFAUT])
+
+
+@dataclass(frozen=True)
+class Cadre:
+    """Où un sous-titre peut se placer, en pixels de la vidéo (§7.3, §7.4) : la zone de sécurité de
+    la plateforme, la marge maximum, et la ligne de départ selon l'alignement."""
+
+    largeur: int
+    hauteur: int
+    marge_x: float  # marge maximum à gauche et à droite
+    marge_y: float  # en haut et en bas
+    securite_gauche: float  # bords de la zone de sécurité
+    securite_droite: float
+    securite_haut: float
+    securite_bas: float
+    alignement: str
+    x_depart: float  # gauche : début des lignes ; droite : leur fin ; centre : le milieu de l'écran
+    largeur_securite: float  # largeur d'une ligne dans la zone de sécurité (limite souple)
+    largeur_max: float  # largeur d'une ligne jusqu'à la marge maximum (limite stricte)
+
+
+def cadre(reglages: ReglagesSousTitres, largeur: int, hauteur: int) -> Cadre:
+    """Largeur utile d'une ligne selon l'alignement (§7.4) :
+    - centre : la zone de sécurité retient le plus large des deux côtés (comme en V1) ;
+    - gauche ou droite : les vrais côtés (la ligne part du bord de la zone, jamais de la marge) ;
+    puis la largeur maximale des lignes (en % de cette largeur utile) la réduit."""
+    zone = plateforme(reglages.plateforme)
+    marge_x = largeur * reglages.marge_max_pct / 100
+    marge_y = hauteur * reglages.marge_max_pct / 100
+    gauche, droite = largeur * zone.gauche, largeur * (1 - zone.droite)
+    haut, bas = hauteur * zone.haut, hauteur * (1 - zone.bas)
+    alignement = reglages.position.alignement
+    if alignement == GAUCHE:
+        x_depart = max(gauche, marge_x)
+        securite = min(droite, largeur - marge_x) - x_depart
+        maximum = largeur - marge_x - x_depart
+    elif alignement == DROITE:
+        x_depart = min(droite, largeur - marge_x)
+        securite = x_depart - max(gauche, marge_x)
+        maximum = x_depart - marge_x
+    else:
+        x_depart = largeur / 2
+        maximum = largeur * (1 - 2 * reglages.marge_max_pct / 100)
+        # Sous-titres centrés : un côté plus large que l'autre réduit d'autant les deux côtés.
+        securite = min(maximum, largeur * (1 - 2 * max(zone.gauche, zone.droite)))
+    part = reglages.position.largeur_lignes_pct / 100
+    return Cadre(
+        largeur, hauteur, marge_x, marge_y, gauche, droite, haut, bas, alignement if alignement in (GAUCHE, DROITE) else CENTRE,
+        x_depart, max(0.0, securite) * part, max(0.0, maximum) * part,
+    )
 
 
 def ecran(reglages: ReglagesSousTitres, resolution_source: tuple[int, int] | None = None) -> Ecran:
-    largeur, hauteur = resolution(reglages.format, resolution_source)
-    largeur_max = largeur * (1 - 2 * reglages.marge_max_pct / 100)
-    # Sous-titres centrés : un côté plus large que l'autre réduit d'autant les deux côtés.
-    zone = plateforme(reglages.plateforme)
-    largeur_securite = min(largeur_max, largeur * (1 - 2 * max(zone.gauche, zone.droite)))
-    return Ecran(largeur, hauteur, hauteur * reglages.taille_pct / 100, largeur_securite, largeur_max)
+    largeur, hauteur = resolution(reglages, resolution_source)
+    zone = cadre(reglages, largeur, hauteur)
+    return Ecran(largeur, hauteur, hauteur * reglages.texte.taille_pct / 100, zone.largeur_securite, zone.largeur_max)
 
 
 # --- Texte affiché (§7.2) -----------------------------------------------------------------------
@@ -243,8 +379,10 @@ def sans_ponctuation(texte: str) -> str:
 
 def texte_affiche(texte: str, reglages: ReglagesSousTitres, langue: str) -> str:
     texte = " ".join(texte.split())
-    texte = typographie(texte, langue) if reglages.ponctuation else sans_ponctuation(texte)
-    return texte.upper() if reglages.majuscules else texte
+    texte = typographie(texte, langue) if reglages.texte.ponctuation else sans_ponctuation(texte)
+    if reglages.texte.casse == CASSE_MAJUSCULES:
+        return texte.upper()
+    return texte.lower() if reglages.texte.casse == CASSE_MINUSCULES else texte
 
 
 @dataclass
@@ -457,6 +595,16 @@ def caler_les_temps(sous_titres: list[SousTitre], duree_min: float, duree_totale
             sous_titre.fin = suivant.debut
     for sous_titre in sous_titres:
         sous_titre.debut, sous_titre.fin = round(sous_titre.debut, 3), round(sous_titre.fin, 3)
+
+
+def sous_titre_au_temps(sous_titres: list[SousTitre], temps: float, debuts: list[float] | None = None) -> int:
+    """Indice du sous-titre affiché à cet instant (-1 : aucun). `debuts` : les débuts des
+    sous-titres, s'ils sont déjà rangés dans une liste (recherche plus rapide pendant la lecture)."""
+    debuts = debuts if debuts is not None else [s.debut for s in sous_titres]
+    index = bisect.bisect_right(debuts, temps) - 1
+    if 0 <= index < len(sous_titres) and temps < sous_titres[index].fin:
+        return index
+    return -1
 
 
 # --- Réorganisation à la main (V1.1) ----------------------------------------------------------

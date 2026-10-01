@@ -277,8 +277,41 @@ SOUS_TITRES = PageDeConseils(
                 "L'app choisit le meilleur découpage : des sous-titres bien remplis, de longueurs proches, "
                 "qui finissent si possible sur une ponctuation.",
                 "La durée minimale allonge les sous-titres trop courts, sans chevaucher le suivant.",
-                "« Tout en majuscules » et la ponctuation ne changent que l'affichage : le moment des mots "
-                "ne bouge jamais.",
+                "La casse (TOUT EN MAJUSCULES…) et la ponctuation ne changent que l'affichage : le moment des "
+                "mots ne bouge jamais.",
+            ),
+        ),
+        Rubrique(
+            "Aperçu",
+            (
+                "L'aperçu dessine les sous-titres avec le même moteur que les futurs exports : ce que tu vois "
+                "est ce qui sera exporté, à la finesse de ton écran près.",
+                "Fond « Vidéo » : la vidéo du projet ; « Gris » : un fond neutre ; « Damier » : pour juger un "
+                "texte prévu pour une incrustation transparente.",
+                "« 100 % » montre un pixel de la vidéo par pixel de ton écran, pour juger la netteté ; la "
+                "zone défile.",
+                "La boucle rejoue le sous-titre choisi dans la liste ; la barre Espace lance ou arrête la "
+                "lecture. Le sous-titre change exactement sur l'image où son premier mot commence.",
+                "Repères : pointillés mauves pour la zone de sécurité, trait rouge pour la marge maximum, "
+                "grille des tiers et du milieu.",
+                "La vidéo n'est pas copiée dans le projet : si elle a été déplacée, « Retrouver la vidéo… » "
+                "te la fait choisir à son nouvel endroit.",
+            ),
+        ),
+        Rubrique(
+            "Position et format",
+            (
+                "« Haut » et « Bas » placent le sous-titre juste à l'intérieur de la zone de sécurité de la "
+                "plateforme : le même réglage convient à TikTok comme à Reels. Le réglage fin le décale (tu "
+                "peux aussi le glisser dans l'aperçu) ; il s'arrête avant la marge maximum.",
+                "Un sous-titre de deux lignes grandit vers le bas (Haut), des deux côtés (Centre) ou vers le "
+                "haut (Bas).",
+                "L'alignement à gauche ou à droite part du bord de la zone de sécurité ; il peut changer le "
+                "découpage, comme la largeur maximale des lignes (réglages avancés).",
+                "Avec une vidéo, le format est le sien : l'incrustation transparente de la V3 doit avoir sa "
+                "taille exacte. Sans vidéo, choisis-le (9:16, 4:5…) ou donne une taille personnalisée.",
+                "Sous-titres d'une prise de voix : « Choisir une vidéo… » (onglet Écran) montre tes "
+                "sous-titres sur ton montage, avec le moment où la voix commence.",
             ),
         ),
         Rubrique(
@@ -288,7 +321,8 @@ SOUS_TITRES = PageDeConseils(
                 "boutons de l'application (TikTok, Reels…) ne cachent pas. Le texte y reste normalement.",
                 "Une ligne trop large peut déborder jusqu'à la marge maximum, jamais au-delà ; sinon, le "
                 "sous-titre est redécoupé.",
-                "Les largeurs sont mesurées en pixels, avec la police et la taille du texte.",
+                "Les largeurs sont mesurées en pixels par le moteur de dessin, avec la police et la taille du "
+                "texte : « ça tient » veut dire « ça tient une fois dessiné ».",
             ),
         ),
         Rubrique(

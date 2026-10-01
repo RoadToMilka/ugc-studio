@@ -4,10 +4,14 @@ Elles remplissent un dossier temporaire (jamais les vraies données) pour que le
 d'écran montrent des écrans réalistes : deux clés, quelques appels payants, un projet avec
 un script, des prises et une série de variantes A/B ; dans le module Script, des scripts (dont une
 série « Accroches seulement » et une retouche), deux briefs enregistrés et deux exemples gardés.
+Studio des sous-titres (V2, lot 3) : la vidéo transcrite est une petite vidéo de test (AVI Motion
+JPEG, rendu/video_test.py), deux fois plus petite que le format du projet pour garder le rapport
+léger : l'autotest vérifie que le .exe la lit, et l'aperçu la montre en fond.
 """
 
 from __future__ import annotations
 
+import logging
 import math
 import struct
 from dataclasses import replace
@@ -16,7 +20,7 @@ from datetime import datetime, timedelta
 from .fournisseurs.voix import VoixBibliotheque
 
 from .audio import FREQUENCE_TTS, wav_depuis_pcm
-from .chemins import dossier_projets_defaut
+from .chemins import dossier_donnees, dossier_projets_defaut
 from .ecriture.brief import Brief
 from .ecriture.controles import controler
 from .ecriture.etat import EtatScript
@@ -40,6 +44,8 @@ from .prononciation import Prononciation
 from .script import joindre_repliques
 from .services import Services
 from .transcription import Mot, Remplacement, Transcription
+
+journal = logging.getLogger(__name__)
 
 CLE_DEMO = "AIzaDEMO-cle-de-demonstration-0000-4f2c"
 
@@ -67,6 +73,8 @@ MOTS_DEMO = (
     "en deux semaines ! Le lien est juste en dessous."
 ).split()
 DUREE_TRANSCRIPTION_DEMO = 7.4
+# Vidéo de test (V2, lot 3) : 540 × 960, 10 images par seconde (le projet, lui, est en 1080 × 1920).
+LARGEUR_VIDEO_DEMO, HAUTEUR_VIDEO_DEMO, IMAGES_PAR_SECONDE_DEMO = 540, 960, 10
 
 
 def transcription_demo() -> Transcription:
@@ -76,7 +84,10 @@ def transcription_demo() -> Transcription:
         source="Vidéos/pub-glowzy-v1.mp4",
         audio=f"{DOSSIER_SOURCES}/audio.wav",
         duree_s=DUREE_TRANSCRIPTION_DEMO,
-        infos={"duree_s": DUREE_TRANSCRIPTION_DEMO, "video": True, "resolution": [1080, 1920], "images_par_seconde": 30, "codec_video": "H264"},
+        infos={
+            "duree_s": DUREE_TRANSCRIPTION_DEMO, "video": True, "resolution": [1080, 1920],
+            "images_par_seconde": IMAGES_PAR_SECONDE_DEMO, "codec_video": "MJPEG",
+        },
         modele="gemini-3.5-transcribe",
         langue="fr-FR",
         texte=" ".join(MOTS_DEMO),
@@ -354,6 +365,7 @@ def remplir_donnees_demo(services: Services) -> None:
         piste.parent.mkdir(parents=True, exist_ok=True)
         piste.write_bytes(son_de_demonstration(DUREE_TRANSCRIPTION_DEMO, 175.0))
         projet.transcription = transcription_demo()
+        projet.transcription.source = _video_de_demonstration() or projet.transcription.source
         projet.remplacements = [Remplacement("sérum glowzy", "Sérum Glowzy")]
         services.projets.enregistrer()
         services.vitesses.noter_prises(projet.prises)  # (les prises de démonstration ne passent pas par Google)
@@ -385,3 +397,16 @@ def remplir_donnees_demo(services: Services) -> None:
             if colle is not None:
                 services.exemples.ajouter(colle)
             services.projets.enregistrer()
+
+
+def _video_de_demonstration() -> str:
+    """Écrit la vidéo de test dans le dossier de démonstration ; renvoie son chemin (vide si Qt
+    Multimedia ou l'écriture échoue : l'aperçu montre alors le fond gris et « Vidéo introuvable »)."""
+    try:
+        from .rendu.video_test import ecrire_video_de_test
+
+        chemin = dossier_donnees() / "videos" / "pub-glowzy-v1.avi"
+        return str(ecrire_video_de_test(chemin, LARGEUR_VIDEO_DEMO, HAUTEUR_VIDEO_DEMO, DUREE_TRANSCRIPTION_DEMO, IMAGES_PAR_SECONDE_DEMO))
+    except Exception:  # noqa: BLE001 — la démonstration continue sans vidéo
+        journal.warning("Vidéo de démonstration non écrite", exc_info=True)
+        return ""
