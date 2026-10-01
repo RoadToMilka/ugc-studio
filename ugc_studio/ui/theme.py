@@ -164,6 +164,11 @@ class Dimensions:
     CHAMP_DESCRIPTION_HAUTEUR = 88  # description d'une voix (Voice Design) : environ 3 lignes
     CHAMP_BRIEF_HAUTEUR = 88  # champ de plusieurs lignes du brief (bénéfices, preuves…) : 3 lignes
     CHAMP_TEXTE_COLLE_HAUTEUR = 160  # texte d'une page produit collé à la main (module Script)
+    # Module Script, lot 2 : tableau « Réglages par variante » (« Personne qui parle »…) et
+    # comparaison de scripts côte à côte (2 ou 3 colonnes, la fenêtre défile au-delà).
+    COLONNE_TITRES_VARIANTES_SCRIPT_LARGEUR = 136
+    DIALOGUE_COMPARER_SCRIPTS_LARGEUR = 1000
+    COLONNE_SCRIPT_COMPARE_LARGEUR = 296
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320
@@ -531,8 +536,9 @@ QTextEdit:disabled, QPlainTextEdit:disabled {
 QLineEdit[invalide="true"] {
     border-color: $erreur;
 }
-/* Variantes A/B (§5.6) : valeur modifiée par rapport aux réglages de base, surlignée en mauve */
-QLineEdit[modifie="true"], QComboBox[modifie="true"], QTextEdit[modifie="true"] {
+/* Variantes A/B (§5.6) et variantes de script (V2) : valeur modifiée par rapport aux réglages de
+   base, surlignée en mauve */
+QLineEdit[modifie="true"], QComboBox[modifie="true"], QTextEdit[modifie="true"], QSpinBox[modifie="true"] {
     border-color: $accent;
     background: $teinte_selection;
 }

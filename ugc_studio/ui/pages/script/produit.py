@@ -3,11 +3,10 @@ collé à la main en dernier recours, et la fiche « Ce que l'app a compris »."
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
 
+from ....ecriture.affichage import date_lisible
 from ....ecriture.fiche import FicheProduit
 from ....ecriture.page_produit import GOOGLE, LIBELLES_SOURCES, PageLue
 from ...composants.elements import bloc, bouton, info, libelle, vider_disposition
@@ -16,21 +15,6 @@ from ...composants.section_repliable import SectionRepliable
 from ...theme import Dimensions, Espacements, Typo
 
 COPIE_ANCIENNE = "Google a pu lire une copie un peu ancienne de la page : vérifie le prix et la promo."
-
-
-def date_lisible(iso: str) -> str:
-    """« aujourd'hui à 14:32 », « hier à 09:05 » ou « le 28/09/2026 à 18:10 »."""
-    try:
-        moment = datetime.fromisoformat(iso)
-    except ValueError:
-        return ""
-    jours = (datetime.now(moment.tzinfo).date() - moment.date()).days
-    heure = moment.strftime("%H:%M")
-    if jours == 0:
-        return f"aujourd'hui à {heure}"
-    if jours == 1:
-        return f"hier à {heure}"
-    return f"le {moment:%d/%m/%Y} à {heure}"
 
 
 def etat_de_la_page(page: PageLue | None) -> str:

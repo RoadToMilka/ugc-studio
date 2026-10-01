@@ -2,9 +2,13 @@
 
 - Accroches : une ligne par accroche, à cocher ; « Écrire le script » écrit un script par accroche
   cochée.
-- Scripts : une carte par script (le plus récent en haut) : ses répliques dans le même éditeur à
-  badges que le module Voix (modifiables à la main), leurs rôles et leurs styles, sa durée estimée,
-  sa relecture, son coût ; « Envoyer dans Voix », « Garder comme exemple », ⋯ « Supprimer ».
+- Scripts : une carte par script (le plus récent en haut ; les variantes d'une même série restent
+  ensemble, dans l'ordre A, B, C) : ses répliques dans le même éditeur à badges que le module Voix
+  (modifiables à la main), leurs rôles et leurs styles, sa durée estimée, sa relecture, son coût.
+  Actions : « Envoyer dans Voix », « Retoucher… », « Retenir », la note ★, et dans ⋯ : dupliquer,
+  garder comme exemple, envoyer les accroches en variantes (série « Accroches seulement »),
+  supprimer. (« Garder comme exemple » est dans ⋯ depuis le lot 2 : la carte tient ainsi dans une
+  fenêtre de 960 px.)
 """
 
 from __future__ import annotations
@@ -12,21 +16,19 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QCheckBox, QFrame, QHBoxLayout, QMenu, QVBoxLayout, QWidget
 
-from ....ecriture.brief import ANGLES, RESEAUX
-from ....ecriture.consignes import CRITERES
+from ....ecriture.affichage import date_lisible, nom_angle, ordre_d_affichage, texte_d_origine, texte_du_point
+from ....ecriture.brief import RESEAUX
 from ....ecriture.regles import LIMITE_DE_LA_RELECTURE, RAPPEL_IA_TIKTOK
-from ....ecriture.scripts import ROLES, Accroche, PointRelecture, ScriptEcrit
+from ....ecriture.scripts import ROLES, Accroche, ScriptEcrit
+from ....ecriture.variantes import ACCROCHES
+from ....estimation import MOTS_PAR_SECONDE
 from ....fournisseurs.capacites import modele_connu
 from ...composants.editeur_script import EditeurScript
 from ...composants.elements import bouton, info, libelle, pastille, vider_disposition
+from ...composants.etoiles import boutons_etoiles
 from ...composants.montant_label import MontantLabel
 from ...icones import icone_menu
 from ...theme import Couleurs, Espacements
-from .produit import date_lisible
-
-
-def nom_angle(angle: str) -> str:
-    return ANGLES.get(angle, "") if angle and angle != "auto" else ""
 
 
 class LigneAccroche(QFrame):
@@ -117,28 +119,49 @@ class ListeAccroches(QWidget):
 
 
 class CarteScript(QFrame):
-    """Un script écrit. Signaux : `envoyer`, `garder`, `supprimer` (le script), `modifie` (texte
-    modifié à la main : le script est à revérifier et à enregistrer)."""
+    """Un script écrit. Signaux (avec le script) : `envoyer`, `retoucher`, `retenir`, `noter` (et la
+    note), `dupliquer`, `garder` (comme exemple), `accroches_en_variantes`, `supprimer`, `modifie`
+    (texte modifié à la main : le script est à revérifier et à enregistrer).
+
+    `origine` : sa place dans sa série de variantes et ce dont il vient (« Retouche du script 3 :
+    « plus court » », voir ecriture/affichage.py) ; `taille_serie` : nombre de scripts de sa série."""
 
     envoyer = Signal(object)
+    retoucher = Signal(object)
+    retenir = Signal(object)
+    noter = Signal(object, int)
+    dupliquer = Signal(object)
     garder = Signal(object)
+    accroches_en_variantes = Signal(object)
     supprimer = Signal(object)
     modifie = Signal(object)
 
-    def __init__(self, script: ScriptEcrit, numero: int, parent=None):
+    def __init__(
+        self,
+        script: ScriptEcrit,
+        mots_par_seconde: float = MOTS_PAR_SECONDE,
+        origine: str = "",
+        taille_serie: int = 0,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setProperty("role", "bloc")
         self.script = script
+        self._mots_par_seconde = mots_par_seconde
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
 
         entete = QHBoxLayout()
         entete.setSpacing(Espacements.S)
-        entete.addWidget(libelle(f"Script {numero}", "titre-bloc", retour_a_la_ligne=False))
+        self.titre = libelle(script.nom(), "titre-bloc", retour_a_la_ligne=False)
+        entete.addWidget(self.titre)
         self.pastille_envoye = pastille("Envoyé dans Voix")
         self.pastille_envoye.setToolTip("Ses répliques ont été envoyées dans le module Voix")
         entete.addWidget(self.pastille_envoye)
+        self.pastille_retenu = pastille("Retenu")
+        self.pastille_retenu.setToolTip("Retenu pour tes pubs (bouton « Retenu » pour annuler)")
+        entete.addWidget(self.pastille_retenu)
         self.pastille_exemple = pastille("Exemple")
         self.pastille_exemple.setToolTip("Gardé comme exemple : le modèle s'en inspire pour les prochains scripts")
         entete.addWidget(self.pastille_exemple)
@@ -146,16 +169,31 @@ class CarteScript(QFrame):
         if script.cout_eur is not None:
             entete.addWidget(MontantLabel(script.cout_eur))
         plus = bouton("", variante="icone", nom_icone="ellipsis")
-        plus.setToolTip("Plus d'actions")
+        plus.setToolTip("Plus d'actions : dupliquer, garder comme exemple, supprimer…")
         menu = QMenu(plus)
+        menu.addAction(icone_menu("copy-plus"), "Dupliquer").triggered.connect(lambda: self.dupliquer.emit(self.script))
+        self.action_garder = menu.addAction(icone_menu("bookmark-plus"), "Garder comme exemple")
+        self.action_garder.setToolTip("Le modèle s'en inspirera (ton, rythme) pour les prochains scripts")
+        self.action_garder.triggered.connect(lambda: self.garder.emit(self.script))
+        self.action_variantes = None
+        if script.mode == ACCROCHES and taille_serie >= 2:
+            self.action_variantes = menu.addAction(
+                icone_menu("git-compare-arrows"), f"Envoyer les {taille_serie} accroches en variantes"
+            )
+            self.action_variantes.triggered.connect(lambda: self.accroches_en_variantes.emit(self.script))
+        menu.addSeparator()
         menu.addAction(icone_menu("trash", Couleurs.ERREUR), "Supprimer le script").triggered.connect(
             lambda: self.supprimer.emit(self.script)
         )
+        menu.setToolTipsVisible(True)
         plus.setMenu(menu)
         entete.addWidget(plus)
         disposition.addLayout(entete)
         self.details = libelle("", "legende")
         disposition.addWidget(self.details)
+        self.origine = libelle(origine, "legende")
+        self.origine.setVisible(bool(origine))
+        disposition.addWidget(self.origine)
 
         self.editeurs: list[EditeurScript] = []
         for rang, replique in enumerate(script.repliques, start=1):
@@ -187,21 +225,33 @@ class CarteScript(QFrame):
         self.bouton_envoyer.setToolTip("Ses répliques remplacent celles du module Voix, avec styles, balises et accents")
         self.bouton_envoyer.clicked.connect(lambda: self.envoyer.emit(self.script))
         actions.addWidget(self.bouton_envoyer)
-        self.bouton_garder = bouton("Garder comme exemple", variante="contour", nom_icone="bookmark-plus")
-        self.bouton_garder.setToolTip("Le modèle s'en inspirera (ton, rythme) pour les prochains scripts")
-        self.bouton_garder.clicked.connect(lambda: self.garder.emit(self.script))
-        actions.addWidget(self.bouton_garder)
+        self.bouton_retoucher = bouton("Retoucher…", variante="contour", nom_icone="wand-sparkles")
+        self.bouton_retoucher.setToolTip("Une consigne (« plus court », « plus drôle »…) donne un nouveau script ; celui-ci reste")
+        self.bouton_retoucher.clicked.connect(lambda: self.retoucher.emit(self.script))
+        actions.addWidget(self.bouton_retoucher)
+        self.bouton_retenir = bouton("Retenir", variante="contour", nom_icone="pin")
+        self.bouton_retenir.clicked.connect(lambda: self.retenir.emit(self.script))
+        actions.addWidget(self.bouton_retenir)
         actions.addStretch(1)
+        self._etoiles = QHBoxLayout()
+        self._etoiles.setSpacing(0)
+        actions.addLayout(self._etoiles)
         disposition.addLayout(actions)
+        self.etoiles = []
+        self.rafraichir()
+
+    def definir_vitesse(self, mots_par_seconde: float) -> None:
+        """Vitesse de parole de la voix du projet (mesurée sur les prises) : la durée estimée change."""
+        self._mots_par_seconde = mots_par_seconde
         self.rafraichir()
 
     def rafraichir(self) -> None:
-        """Durée, relecture et marques (« Envoyé dans Voix », « Exemple »)."""
+        """Durée, relecture, note et marques (« Envoyé dans Voix », « Retenu », « Exemple »)."""
         script = self.script
         connu = modele_connu(script.modele)
         details = [
             nom_angle(script.angle),
-            f"≈ {round(script.duree_estimee())} s pour {script.duree_visee_s} visées",
+            f"≈ {round(script.duree_estimee(self._mots_par_seconde))} s pour {script.duree_visee_s} visées",
             f"{script.nombre_de_mots()} mots",
             RESEAUX.get(script.reseau, script.reseau),
             connu.nom if connu else script.modele,
@@ -209,8 +259,22 @@ class CarteScript(QFrame):
         ]
         self.details.setText("  ·  ".join(d for d in details if d))
         self.pastille_envoye.setVisible(bool(script.envoye_le))
+        self.pastille_retenu.setVisible(script.retenu)
         self.pastille_exemple.setVisible(script.garde_comme_exemple)
-        self.bouton_garder.setEnabled(not script.garde_comme_exemple)
+        self.action_garder.setEnabled(not script.garde_comme_exemple)
+        self.action_garder.setText("Gardé comme exemple" if script.garde_comme_exemple else "Garder comme exemple")
+        self.bouton_retenir.setText("Retenu" if script.retenu else "Retenir")
+        if script.retenu:
+            self.bouton_retenir.definir_icone("check")
+        else:
+            self.bouton_retenir.definir_icone("pin")
+        self.bouton_retenir.setToolTip(
+            "Script retenu : clique pour annuler" if script.retenu else "Retenir ce script pour tes pubs (marqué « Retenu »)"
+        )
+        vider_disposition(self._etoiles)
+        self.etoiles = boutons_etoiles(script.note, lambda note: self.noter.emit(self.script, note))
+        for etoile in self.etoiles:
+            self._etoiles.addWidget(etoile)
         self._afficher_relecture()
 
     def _afficher_relecture(self) -> None:
@@ -230,19 +294,16 @@ class CarteScript(QFrame):
         self.modifie.emit(self.script)
 
 
-def texte_du_point(point: PointRelecture) -> str:
-    """« Langage parlé naturel : une phrase un peu longue. » (le critère, puis l'explication)."""
-    if point.par == "modele":
-        critere = CRITERES.get(point.critere, point.critere)
-        return f"{critere} : {point.explication}" if point.explication else critere
-    return point.explication
-
-
 class ListeScripts(QWidget):
-    """Les cartes des scripts, du plus récent au plus ancien."""
+    """Les cartes des scripts (voir `ordre_d_affichage`). Ses signaux relaient ceux des cartes."""
 
     envoyer = Signal(object)
+    retoucher = Signal(object)
+    retenir = Signal(object)
+    noter = Signal(object, int)
+    dupliquer = Signal(object)
     garder = Signal(object)
+    accroches_en_variantes = Signal(object)
     supprimer = Signal(object)
     modifie = Signal(object)
 
@@ -252,15 +313,24 @@ class ListeScripts(QWidget):
         self._disposition.setContentsMargins(0, 0, 0, 0)
         self._disposition.setSpacing(Espacements.L)
         self._cartes: list[CarteScript] = []
+        self._mots_par_seconde = MOTS_PAR_SECONDE
 
-    def definir(self, scripts: list[ScriptEcrit]) -> None:
+    def definir(self, scripts: list[ScriptEcrit], mots_par_seconde: float | None = None) -> None:
+        if mots_par_seconde is not None:
+            self._mots_par_seconde = mots_par_seconde
         vider_disposition(self._disposition)
         self._cartes = []
-        for numero, script in reversed(list(enumerate(scripts, start=1))):
-            carte = CarteScript(script, numero)
+        for script in ordre_d_affichage(scripts):
+            taille = sum(1 for s in scripts if script.serie and s.serie == script.serie)
+            carte = CarteScript(script, self._mots_par_seconde, texte_d_origine(script, scripts), taille)
             for signal, cible in (
                 (carte.envoyer, self.envoyer),
+                (carte.retoucher, self.retoucher),
+                (carte.retenir, self.retenir),
+                (carte.noter, self.noter),
+                (carte.dupliquer, self.dupliquer),
                 (carte.garder, self.garder),
+                (carte.accroches_en_variantes, self.accroches_en_variantes),
                 (carte.supprimer, self.supprimer),
                 (carte.modifie, self.modifie),
             ):
@@ -269,9 +339,13 @@ class ListeScripts(QWidget):
             self._disposition.addWidget(carte)
         self.setVisible(bool(scripts))
 
+    def definir_vitesse(self, mots_par_seconde: float) -> None:
+        self._mots_par_seconde = mots_par_seconde
+        for carte in self._cartes:
+            carte.definir_vitesse(mots_par_seconde)
+
     def cartes(self) -> list[CarteScript]:
         return list(self._cartes)
 
     def carte(self, script: ScriptEcrit) -> CarteScript | None:
         return next((c for c in self._cartes if c.script is script), None)
-

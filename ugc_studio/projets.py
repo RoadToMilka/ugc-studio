@@ -20,7 +20,10 @@ Format 5 (V1.1) : les **sous-titres réorganisés à la main**, rangés dans la 
 (`ajustements_sous_titres`). Un projet d'un format plus ancien s'ouvre sans ajustement.
 
 Format 6 (V2, lot 1) : le **module Script** (`ecriture`) : brief, page produit lue, fiche comprise,
-accroches et scripts écrits. Un projet d'un format plus ancien s'ouvre sans script.
+accroches et scripts écrits. Un projet d'un format plus ancien s'ouvre sans script. Le lot 2 y
+ajoute des informations (note, script retenu, séries de variantes, retouches ; nombres dits à la
+belge ou à la suisse dans les réglages de voix) sans changer de format : un projet de la 1.2.0
+s'ouvre tel quel, avec leurs valeurs par défaut.
 """
 
 from __future__ import annotations
@@ -36,6 +39,8 @@ from pathlib import Path
 
 from .chemins import dossier_donnees
 from .ecriture.etat import EtatScript
+from .nombres import FRANCE
+from .nombres import VARIANTES as VARIANTES_NOMBRES
 from .prononciation import Prononciation, depuis_liste
 from .script import joindre_repliques
 from .sous_titres import ReglagesSousTitres
@@ -88,6 +93,13 @@ def nom_de_dossier(nom: str) -> str:
 class ReglagesVoix:
     modele: str = "gemini-3.8-flash-tts"
     voix: str = "Kore"
+    # Nombres dits à la française, à la belge ou à la suisse (V2, lot 2) : seul le texte envoyé à
+    # la voix change (septante, nonante…), les sous-titres gardent les chiffres. Projets en français.
+    nombres: str = FRANCE
+
+    def __post_init__(self) -> None:
+        if self.nombres not in VARIANTES_NOMBRES:
+            self.nombres = FRANCE
 
 
 @dataclass

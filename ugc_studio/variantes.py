@@ -12,12 +12,13 @@ Chaque variante devient une prise normale, marquée de sa série (« série 2 »
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from .estimation import estimer_repliques
+from .estimation import MOTS_PAR_SECONDE, TOKENS_AUDIO_PAR_SECONDE_DEFAUT, estimer_repliques
 from .generation import repliques_api
+from .nombres import FRANCE
 from .prix import CataloguePrix
 from .projets import Prise, RepliqueProjet
 from .prononciation import Prononciation
@@ -87,15 +88,24 @@ def cout_total(
     variantes: Sequence[ReglagesVariante],
     prix: CataloguePrix,
     prononciations: Sequence[Prononciation] = (),
-    tokens_par_seconde=None,
+    tokens_par_seconde: Callable[[str], float] | None = None,
+    nombres: str = FRANCE,
+    mots_par_seconde: Callable[[str], float] | None = None,
 ) -> Decimal | None:
     """Coût estimé de toutes les variantes (None si le prix d'un modèle est inconnu).
 
-    `tokens_par_seconde(modele)` : valeur ajustée pour chaque modèle (voir generation.py)."""
+    `tokens_par_seconde(modele)` : valeur ajustée pour chaque modèle (voir generation.py) ;
+    `mots_par_seconde(voix)` : vitesse de parole mesurée pour chaque voix (vitesses.py) ;
+    `nombres` : nombres dits à la belge ou à la suisse (nombres.py)."""
     total = Decimal(0)
     for variante in variantes:
-        arguments = () if tokens_par_seconde is None else (tokens_par_seconde(variante.modele),)
-        estimation = estimer_repliques(repliques_api(variante.repliques, prononciations), variante.modele, prix, *arguments)
+        estimation = estimer_repliques(
+            repliques_api(variante.repliques, prononciations, nombres),
+            variante.modele,
+            prix,
+            TOKENS_AUDIO_PAR_SECONDE_DEFAUT if tokens_par_seconde is None else tokens_par_seconde(variante.modele),
+            MOTS_PAR_SECONDE if mots_par_seconde is None else mots_par_seconde(variante.voix),
+        )
         if estimation.cout_eur is None:
             return None
         total += estimation.cout_eur

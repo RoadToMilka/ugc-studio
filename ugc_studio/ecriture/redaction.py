@@ -6,8 +6,11 @@ Appel terminé, pour que son coût soit noté tout de suite dans le suivi des co
 suivante échoue.
 
 Niveau de réflexion du modèle (§10.12) : bas pour l'analyse de la page, moyen pour les accroches,
-l'écriture et la relecture (plus de réflexion coûte plus cher, rarement mieux pour un texte
-court). Température : celle par défaut, comme le recommande Google pour Gemini 3.
+l'écriture, la retouche et la relecture (plus de réflexion coûte plus cher, rarement mieux pour
+un texte court). Température : celle par défaut, comme le recommande Google pour Gemini 3.
+
+Vitesse de parole : le nombre de mots demandé et la durée estimée d'un script dépendent de la
+vitesse de la voix du projet, mesurée sur tes prises (`mots_par_seconde`, voir vitesses.py).
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ..estimation import MOTS_PAR_SECONDE
 from ..fournisseurs.base import Adaptateur, ErreurFournisseur
 from ..fournisseurs.texte import RequeteTexte, ResultatTexte
 from .brief import ANGLES_ANGLAIS, Brief, mots_vises
@@ -27,9 +31,11 @@ from .consignes import (
     SCHEMA_RELECTURE,
     SCHEMA_SCRIPT,
     demande_accroches,
+    demande_accroches_pour_corps,
     demande_fiche,
     demande_fiche_par_adresse,
     demande_relecture,
+    demande_retouche,
     demande_script,
 )
 from .controles import controler, mentions_absentes, mots_interdits_presents, points_graves
@@ -39,10 +45,13 @@ from .page_produit import GOOGLE, ErreurLecture, PageLue, maintenant
 from .scripts import (
     Accroche,
     PointRelecture,
+    RepliqueEcrite,
     ScriptEcrit,
+    dupliquer,
     nouveau_script,
     repliques_depuis_reponse,
     repliques_pour_modele,
+    segments_depuis_modele,
 )
 
 # Opérations notées dans le suivi des coûts (§4.3).
@@ -50,6 +59,7 @@ LECTURE = "script : lecture de page"
 ACCROCHES = "script : accroches"
 ECRITURE = "script : écriture"
 RELECTURE = "script : relecture"
+RETOUCHE = "script : retouche"
 
 REFLEXION_FICHE = "low"
 REFLEXION_ECRITURE = "medium"
@@ -62,6 +72,8 @@ SORTIE_FICHE = 700
 SORTIE_PAR_ACCROCHE = 60
 SORTIE_SCRIPT = 700
 SORTIE_RELECTURE = 900  # la relecture renvoie parfois le script corrigé
+SCRIPT_TYPIQUE = 1_200  # caractères d'un script, pour estimer une demande qui le contient avant qu'il existe
+ACCROCHES_EN_PLUS = 2  # variantes « Accroches seulement » : 2 de plus, au cas où une serait écartée
 REFLEXION_ESTIMEE = {"low": 400, "medium": 1500, "high": 4000}
 PAGE_LUE_PAR_GOOGLE = 8_000  # tokens d'une page produit lue par Google (comptés en entrée)
 
@@ -153,16 +165,48 @@ def estimer_lecture_par_google(adresse: str, modele: str, langue: str) -> Estima
     return estimer(requete, SORTIE_FICHE) + Estimation(PAGE_LUE_PAR_GOOGLE, 0)
 
 
-def estimer_accroches(brief: Brief, page: str, exemples: list[ExempleScript]) -> Estimation:
-    requete = requete_accroches(brief, page, exemples)
-    return estimer(requete, SORTIE_PAR_ACCROCHE * brief.nombre_accroches)
+def estimer_accroches(
+    brief: Brief, page: str, exemples: list[ExempleScript], nombre: int | None = None, une_par_angle: bool = False
+) -> Estimation:
+    requete = requete_accroches(brief, page, exemples, nombre, une_par_angle)
+    return estimer(requete, SORTIE_PAR_ACCROCHE * (nombre or brief.nombre_accroches))
 
 
-def estimer_script(brief: Brief, page: str, exemples: list[ExempleScript], accroche: str = "") -> Estimation:
-    """Écriture, puis relecture (la relecture renvoie le script et une demande un peu plus longue)."""
-    ecriture = estimer(requete_script(brief, page, exemples, accroche), SORTIE_SCRIPT)
-    relecture = Estimation(ecriture.tokens_entree + SORTIE_SCRIPT, SORTIE_RELECTURE + REFLEXION_ESTIMEE[REFLEXION_ECRITURE])
-    return ecriture + relecture
+def _estimer_relecture(demande: Estimation) -> Estimation:
+    """La relecture renvoie le script et une demande un peu plus longue que celle qu'elle relit."""
+    return Estimation(demande.tokens_entree + SORTIE_SCRIPT, SORTIE_RELECTURE + REFLEXION_ESTIMEE[REFLEXION_ECRITURE])
+
+
+def estimer_script(
+    brief: Brief,
+    page: str,
+    exemples: list[ExempleScript],
+    accroche: str = "",
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
+) -> Estimation:
+    """Écriture, puis relecture."""
+    ecriture = estimer(requete_script(brief, page, exemples, accroche, mots_par_seconde), SORTIE_SCRIPT)
+    return ecriture + _estimer_relecture(ecriture)
+
+
+def estimer_retouche(
+    brief: Brief, page: str, script: ScriptEcrit, consigne: str, mots_par_seconde: float = MOTS_PAR_SECONDE
+) -> Estimation:
+    """Retouche, puis relecture du nouveau script."""
+    retouche = estimer(requete_retouche(brief, page, script, consigne, mots_par_seconde), SORTIE_SCRIPT)
+    return retouche + _estimer_relecture(retouche)
+
+
+def estimer_accroches_pour_corps(brief: Brief, page: str, nombre: int, script: ScriptEcrit | None = None) -> Estimation:
+    """Autres accroches pour un script (avant qu'il soit écrit : un script de taille habituelle)."""
+    if script is not None:
+        requete = requete_accroches_pour_corps(brief, page, script, nombre)
+        return estimer(requete, SORTIE_PAR_ACCROCHE * (nombre + ACCROCHES_EN_PLUS))
+    vide = nouveau_script(
+        modele=brief.modele, reseau=brief.reseau, langue=brief.langue, angle="", duree_visee_s=brief.duree_visee(),
+        repliques=[RepliqueEcrite(["accroche"], [{"texte": "x" * SCRIPT_TYPIQUE}])],
+    )
+    return estimer(requete_accroches_pour_corps(brief, page, vide, nombre), SORTIE_PAR_ACCROCHE * (nombre + ACCROCHES_EN_PLUS))
 
 
 # --- Page produit ----------------------------------------------------------------------------------
@@ -241,38 +285,122 @@ def _autre_langue(exemples: list[ExempleScript], brief: Brief) -> bool:
     return bool(exemples) and all(e.langue.split("-")[0] != langue for e in exemples)
 
 
-def requete_accroches(brief: Brief, page: str, exemples: list[ExempleScript]) -> RequeteTexte:
-    texte = demande_accroches(brief, page, texte_des_exemples(exemples, brief), _autre_langue(exemples, brief))
+def requete_accroches(
+    brief: Brief, page: str, exemples: list[ExempleScript], nombre: int | None = None, une_par_angle: bool = False
+) -> RequeteTexte:
+    texte = demande_accroches(
+        brief, page, texte_des_exemples(exemples, brief), _autre_langue(exemples, brief), nombre, une_par_angle
+    )
     return _requete(brief.modele, texte, SCHEMA_ACCROCHES)
 
 
-def proposer_accroches(
-    adaptateur: Adaptateur, brief: Brief, page: str, exemples: list[ExempleScript], signaler: Signaleur = _rien
-) -> list[Accroche]:
-    signaler("Le modèle cherche des accroches…")
-    resultat = _appeler(adaptateur, requete_accroches(brief, page, exemples), ACCROCHES, signaler)
-    donnees = lire_json_du_modele(resultat.texte)
+def _lire_accroches(texte: str) -> list[Accroche]:
+    donnees = lire_json_du_modele(texte)
     accroches = [a for a in (Accroche.depuis_dict(b) for b in donnees.get("accroches") or []) if a is not None]
     if not accroches:
         raise ErreurRedaction("Le modèle n'a proposé aucune accroche. Réessaie dans un instant.")
-    return accroches[: brief.nombre_accroches]
+    return accroches
+
+
+def proposer_accroches(
+    adaptateur: Adaptateur,
+    brief: Brief,
+    page: str,
+    exemples: list[ExempleScript],
+    signaler: Signaleur = _rien,
+    nombre: int | None = None,
+    une_par_angle: bool = False,
+) -> list[Accroche]:
+    """Accroches à cocher ; ou, pour les variantes « Mêmes réglages », `nombre` accroches sur des
+    angles différents (`une_par_angle`)."""
+    signaler("Le modèle cherche des accroches…")
+    resultat = _appeler(adaptateur, requete_accroches(brief, page, exemples, nombre, une_par_angle), ACCROCHES, signaler)
+    return _lire_accroches(resultat.texte)[: nombre or brief.nombre_accroches]
+
+
+def requete_accroches_pour_corps(brief: Brief, page: str, script: ScriptEcrit, nombre: int) -> RequeteTexte:
+    texte = demande_accroches_pour_corps(brief, page, repliques_pour_modele(script.repliques), nombre + ACCROCHES_EN_PLUS)
+    return _requete(brief.modele, texte, SCHEMA_ACCROCHES)
+
+
+def accroches_pour_corps(
+    adaptateur: Adaptateur, brief: Brief, page: str, script: ScriptEcrit, nombre: int, signaler: Signaleur = _rien
+) -> list[Accroche]:
+    """Variantes « Accroches seulement » : `nombre` autres accroches pour la réplique 1 de ce script.
+    Le modèle en propose 2 de plus : une accroche qui contient un mot interdit, ou qui répète celle
+    du script, est écartée."""
+    signaler("Le modèle cherche d'autres accroches pour ce script…")
+    resultat = _appeler(adaptateur, requete_accroches_pour_corps(brief, page, script, nombre), ACCROCHES, signaler)
+    actuelle = " ".join(script.accroche().casefold().split())
+    retenues: list[Accroche] = []
+    for accroche in _lire_accroches(resultat.texte):
+        texte = " ".join(accroche.texte.casefold().split())
+        essai = nouveau_script(
+            modele=script.modele, reseau=script.reseau, langue=script.langue, angle="", duree_visee_s=0,
+            repliques=[RepliqueEcrite(["accroche"], [{"texte": accroche.texte}])],
+        )
+        if texte == actuelle or any(" ".join(a.texte.casefold().split()) == texte for a in retenues):
+            continue
+        if mots_interdits_presents(essai, brief):
+            continue
+        retenues.append(accroche)
+    if not retenues:
+        raise ErreurRedaction("Le modèle n'a proposé aucune autre accroche utilisable. Réessaie dans un instant.")
+    return retenues[:nombre]
+
+
+# Points de la relecture du modèle qui portent sur l'accroche : ils ne valent pas pour une autre accroche.
+CRITERES_DE_L_ACCROCHE = ("accroche", "produit_3s")
+
+
+def variantes_d_accroches(
+    script: ScriptEcrit,
+    accroches: list[Accroche],
+    brief: Brief,
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
+) -> list[ScriptEcrit]:
+    """Un script par autre accroche : le même corps, seule la réplique 1 change (son style reste).
+    Chacun est revérifié par l'app (durée, mots interdits, mentions) ; le signal orange d'une
+    accroche (règle frôlée) devient un point ⚠ de sa relecture."""
+    variantes = []
+    for accroche in accroches:
+        variante = dupliquer(script)
+        variante.origine = ""
+        segments, retraits = segments_depuis_modele(accroche.texte, brief.balises, brief.accents)
+        variante.repliques[0].script = segments or [{"texte": accroche.texte}]
+        variante.accroche_imposee = accroche.texte
+        points_modele = [p for p in script.relecture if p.par == "modele" and p.critere not in CRITERES_DE_L_ACCROCHE]
+        if accroche.alerte:
+            points_modele.append(PointRelecture("regles", "leger", f"Accroche : {accroche.alerte}", "modele"))
+        variante.relecture = controler(variante, brief, retraits, mots_par_seconde) + points_modele
+        variante.corrections = []
+        variantes.append(variante)
+    return variantes
 
 
 # --- Écriture et relecture -------------------------------------------------------------------------
 
 
-def requete_script(brief: Brief, page: str, exemples: list[ExempleScript], accroche: str = "") -> RequeteTexte:
-    texte = demande_script(brief, page, texte_des_exemples(exemples, brief), accroche, _autre_langue(exemples, brief))
+def requete_script(
+    brief: Brief,
+    page: str,
+    exemples: list[ExempleScript],
+    accroche: str = "",
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
+) -> RequeteTexte:
+    texte = demande_script(
+        brief, page, texte_des_exemples(exemples, brief), accroche, _autre_langue(exemples, brief), mots_par_seconde
+    )
     return _requete(brief.modele, texte, SCHEMA_SCRIPT)
 
 
-def constats_pour_le_modele(script: ScriptEcrit, brief: Brief) -> list[str]:
+def constats_pour_le_modele(script: ScriptEcrit, brief: Brief, mots_par_seconde: float = MOTS_PAR_SECONDE) -> list[str]:
     """Problèmes graves mesurés par l'app, écrits pour le modèle (en anglais)."""
     constats = []
     visee = script.duree_visee_s
-    estimee = script.duree_estimee()
+    estimee = script.duree_estimee(mots_par_seconde)
     if visee > 0 and abs(estimee - visee) / visee > 0.15:
-        cible = mots_vises(visee)
+        cible = mots_vises(visee, mots_par_seconde)
         sens = "shorten" if estimee > visee else "lengthen"
         constats.append(
             f"Estimated duration {round(estimee)} s for {visee} s targeted ({script.nombre_de_mots()} words): {sens} "
@@ -287,17 +415,8 @@ def constats_pour_le_modele(script: ScriptEcrit, brief: Brief) -> list[str]:
     return constats
 
 
-def ecrire_script(
-    adaptateur: Adaptateur,
-    brief: Brief,
-    page: str,
-    exemples: list[ExempleScript],
-    accroche: str = "",
-    signaler: Signaleur = _rien,
-) -> ScriptEcrit:
-    """Écrit un script complet, le relit (app, puis modèle) et le corrige si un point est grave."""
-    signaler("Écriture du script…")
-    resultat = _appeler(adaptateur, requete_script(brief, page, exemples, accroche), ECRITURE, signaler)
+def _script_depuis_reponse(resultat: ResultatTexte, brief: Brief, accroche: str) -> tuple[ScriptEcrit, list[str]]:
+    """Réponse d'écriture (ou de retouche) → nouveau script, et ce que la conversion a retiré."""
     donnees = lire_json_du_modele(resultat.texte)
     repliques, retraits = repliques_depuis_reponse(donnees.get("repliques"), brief.balises, brief.styles, brief.accents)
     if not repliques:
@@ -318,9 +437,30 @@ def ecrire_script(
         tokens_entree=resultat.tokens_entree,
         tokens_sortie=resultat.tokens_sortie,
     )
+    return script, retraits
 
+
+def _relire(
+    adaptateur: Adaptateur,
+    brief: Brief,
+    page: str,
+    script: ScriptEcrit,
+    retraits: list[str],
+    signaler: Signaleur,
+    mots_par_seconde: float,
+    consigne_prioritaire: str = "",
+) -> None:
+    """Relecture par le modèle (après les contrôles de l'app) ; un point grave est corrigé avant que
+    tu voies le script, et la carte du script dit ce qui a été corrigé."""
     signaler("Relecture du script…")
-    texte_relecture = demande_relecture(brief, page, repliques_pour_modele(script.repliques), constats_pour_le_modele(script, brief))
+    texte_relecture = demande_relecture(
+        brief,
+        page,
+        repliques_pour_modele(script.repliques),
+        constats_pour_le_modele(script, brief, mots_par_seconde),
+        mots_par_seconde,
+        consigne_prioritaire,
+    )
     relecture = _appeler(adaptateur, _requete(brief.modele, texte_relecture, SCHEMA_RELECTURE), RELECTURE, signaler)
     script.tokens_entree += relecture.tokens_entree
     script.tokens_sortie += relecture.tokens_sortie
@@ -339,8 +479,55 @@ def ecrire_script(
         if point is None or (corrige and point.gravite == "grave"):
             continue  # un point grave corrigé est décrit dans les corrections
         points_modele.append(point)
-    script.relecture = controler(script, brief, retraits) + points_modele
+    script.relecture = controler(script, brief, retraits, mots_par_seconde) + points_modele
+
+
+def ecrire_script(
+    adaptateur: Adaptateur,
+    brief: Brief,
+    page: str,
+    exemples: list[ExempleScript],
+    accroche: str = "",
+    signaler: Signaleur = _rien,
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
+) -> ScriptEcrit:
+    """Écrit un script complet, le relit (app, puis modèle) et le corrige si un point est grave.
+
+    `mots_par_seconde` : vitesse de la voix du projet, mesurée sur tes prises : le nombre de mots
+    demandé et la durée estimée en dépendent (vitesses.py)."""
+    signaler("Écriture du script…")
+    resultat = _appeler(adaptateur, requete_script(brief, page, exemples, accroche, mots_par_seconde), ECRITURE, signaler)
+    script, retraits = _script_depuis_reponse(resultat, brief, accroche)
+    _relire(adaptateur, brief, page, script, retraits, signaler, mots_par_seconde)
     return script
+
+
+def requete_retouche(
+    brief: Brief, page: str, script: ScriptEcrit, consigne: str, mots_par_seconde: float = MOTS_PAR_SECONDE
+) -> RequeteTexte:
+    texte = demande_retouche(brief, page, repliques_pour_modele(script.repliques), consigne, mots_par_seconde)
+    return _requete(brief.modele, texte, SCHEMA_SCRIPT)
+
+
+def retoucher_script(
+    adaptateur: Adaptateur,
+    brief: Brief,
+    page: str,
+    script: ScriptEcrit,
+    consigne: str,
+    signaler: Signaleur = _rien,
+    mots_par_seconde: float = MOTS_PAR_SECONDE,
+) -> ScriptEcrit:
+    """« Retoucher… » : un nouveau script d'après une consigne (« plus court », « plus drôle »…),
+    relu comme un script écrit ; l'ancien script reste. `brief` : le brief du projet, avec la durée
+    et le tutoiement choisis pour la retouche."""
+    signaler("Retouche du script…")
+    resultat = _appeler(adaptateur, requete_retouche(brief, page, script, consigne, mots_par_seconde), RETOUCHE, signaler)
+    nouveau, retraits = _script_depuis_reponse(resultat, brief, "")
+    nouveau.origine = script.identifiant
+    nouveau.consigne_retouche = " ".join(consigne.split())
+    _relire(adaptateur, brief, page, nouveau, retraits, signaler, mots_par_seconde, consigne)
+    return nouveau
 
 
 def reste_grave(script: ScriptEcrit) -> bool:

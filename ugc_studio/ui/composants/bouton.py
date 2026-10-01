@@ -156,8 +156,7 @@ class Bouton(QAbstractButton):
         cote = Dimensions.ICONE if self._variante == "icone" else Dimensions.ICONE_PETITE
         self.setIconSize(QSize(cote, cote))
         if nom_icone:
-            couleur = Couleurs.TEXTE if self._variante == "principal" else Couleurs.TEXTE_SECONDAIRE
-            self.setIcon(icone(nom_icone, couleur, taille=cote))
+            self.definir_icone(nom_icone)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # Le contour de « focus » n'apparaît qu'en naviguant au clavier (touche Tab),
         # pas après un simple clic de souris.
@@ -170,6 +169,13 @@ class Bouton(QAbstractButton):
     @property
     def variante(self) -> str:
         return self._variante
+
+    def definir_icone(self, nom_icone: str) -> None:
+        """Icône du bouton, dans la couleur de sa variante (ex. « Retenir » devient « Retenu », avec
+        une coche)."""
+        couleur = Couleurs.TEXTE if self._variante == "principal" else Couleurs.TEXTE_SECONDAIRE
+        self.setIcon(icone(nom_icone, couleur, taille=self.iconSize().width()))
+        self.updateGeometry()
 
     def definir_attenue(self, attenue: bool) -> None:
         """Texte en gris secondaire (ex. « Aucun projet ouvert » dans le bandeau)."""
