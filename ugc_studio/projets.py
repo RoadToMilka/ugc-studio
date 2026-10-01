@@ -18,6 +18,9 @@ Un projet d'un format plus ancien s'ouvre avec les réglages par défaut.
 
 Format 5 (V1.1) : les **sous-titres réorganisés à la main**, rangés dans la transcription
 (`ajustements_sous_titres`). Un projet d'un format plus ancien s'ouvre sans ajustement.
+
+Format 6 (V2, lot 1) : le **module Script** (`ecriture`) : brief, page produit lue, fiche comprise,
+accroches et scripts écrits. Un projet d'un format plus ancien s'ouvre sans script.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .chemins import dossier_donnees
+from .ecriture.etat import EtatScript
 from .prononciation import Prononciation, depuis_liste
 from .script import joindre_repliques
 from .sous_titres import ReglagesSousTitres
@@ -141,8 +145,9 @@ class Projet:
     transcription: Transcription | None = None  # §6
     remplacements: list[Remplacement] = field(default_factory=list)  # dictionnaire du projet (§6.3)
     sous_titres: ReglagesSousTitres = field(default_factory=ReglagesSousTitres)  # §7
+    ecriture: EtatScript = field(default_factory=EtatScript)  # module Script (V2, §3.1)
 
-    VERSION_FORMAT = 5
+    VERSION_FORMAT = 6
 
     @property
     def script(self) -> list[dict]:
@@ -170,6 +175,7 @@ class Projet:
             "transcription": self.transcription.en_dict() if self.transcription else None,
             "remplacements": [asdict(r) for r in self.remplacements],
             "sous_titres": self.sous_titres.en_dict(),
+            "ecriture": self.ecriture.en_dict(),
         }
 
     @classmethod
@@ -208,6 +214,7 @@ class Projet:
             transcription=_transcription(donnees.get("transcription")),
             remplacements=remplacements_depuis_liste(donnees.get("remplacements")),
             sous_titres=ReglagesSousTitres.depuis_dict(donnees.get("sous_titres")),
+            ecriture=EtatScript.depuis_dict(donnees.get("ecriture")),
         )
 
 
@@ -285,11 +292,15 @@ class GestionnaireProjets:
         self.projet = None
         self._notifier()
 
-    def enregistrer(self) -> None:
-        if self.projet is None:
+    def enregistrer(self, projet: Projet | None = None) -> None:
+        """Enregistre le projet ouvert, ou `projet` : un module qui enregistre ses dernières
+        modifications au moment où un autre projet s'ouvre passe l'ancien projet (sinon ses
+        modifications iraient dans le nouveau, déjà ouvert)."""
+        projet = projet or self.projet
+        if projet is None:
             return
-        self.projet.modifie_le = _maintenant()
-        ecrire_json(self.projet.fichier, self.projet.en_dict())
+        projet.modifie_le = _maintenant()
+        ecrire_json(projet.fichier, projet.en_dict())
 
     def renommer(self, nom: str) -> None:
         nom = " ".join(nom.split())
@@ -298,6 +309,15 @@ class GestionnaireProjets:
         self.projet.nom = nom
         self.enregistrer()
         self._memoriser_recent(self.projet)
+        self._notifier()
+
+    def changer_langue(self, langue: str) -> None:
+        """Nouvelle langue du projet (ex. proposée par le module Script) : elle filtre les voix et
+        sert à la transcription ; tous les modules sont prévenus."""
+        if self.projet is None or langue not in LANGUES or langue == self.projet.langue:
+            return
+        self.projet.langue = langue
+        self.enregistrer()
         self._notifier()
 
     # --- Prises ------------------------------------------------------------------------------

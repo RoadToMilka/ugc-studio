@@ -15,6 +15,15 @@ SDK officiel google-genai 2.25 et guides officiels du « Gemini API Cookbook »
 - Texte (ex. Gemini 3.8 Flash) : même API ; la réponse contient des étapes (`steps`) dont la
   dernière « model_output » porte le texte. Niveau de réflexion dans
   `generation_config.thinking_level` (Gemini 3.8 Flash : « low », « medium » ou « high »).
+  Module Script (V2, documentation vérifiée le 01/10/2026) :
+  - « réponse structurée » : `response_format: {"type": "text", "mime_type": "application/json",
+    "schema": {…}}` ; le texte de la réponse est alors un objet JSON conforme au schéma ;
+  - lecture de pages web : `tools: [{"type": "url_context"}]` (adresses écrites dans la demande,
+    20 au plus, pages publiques seulement). Chaque lecture laisse une étape « url_context_result »
+    dont `result` donne, pour chaque adresse, `url` et `status` (« success », « error »,
+    « paywall », « unsafe »). Le contenu lu est facturé comme du texte envoyé, mais compté à part
+    dans `usage.total_tool_use_tokens` : il est ajouté ici aux tokens d'entrée.
+  Les deux se combinent avec les modèles Gemini 3.
 - Transcription (ex. Gemini 3.5 Transcribe) : l'audio est d'abord déposé avec l'API Files
   (téléversement « resumable » : POST /upload/v1beta/files, puis envoi des octets à l'adresse
   donnée dans l'en-tête `x-goog-upload-url` ; fichier gardé 48 h), puis POST /v1beta/interactions
@@ -48,7 +57,7 @@ from ..audio import FREQUENCE_TTS, duree_wav, en_wav, lire_wav, wav_depuis_pcm
 from .base import Adaptateur, ErreurFournisseur, InfoModele
 from .http import EvenementSse, ReponseHttp, ouvrir_flux, requete
 from .stt import FichierTeleverse, MotTranscrit, RequeteTranscription, ResultatTranscription
-from .texte import RequeteTexte, ResultatTexte
+from .texte import AdresseLue, RequeteTexte, ResultatTexte
 from .voix import (
     RecepteurAudio,
     RequeteVoiceDesign,
@@ -193,7 +202,11 @@ class AdaptateurGoogle(Adaptateur):
         }
         if requete_texte.consigne_systeme:
             corps["system_instruction"] = requete_texte.consigne_systeme
-        return lire_resultat_texte(self._interaction(corps, DELAI_TEXTE))
+        if requete_texte.schema is not None:
+            corps["response_format"] = {"type": "text", "mime_type": "application/json", "schema": requete_texte.schema}
+        if requete_texte.lire_adresses:
+            corps["tools"] = [{"type": "url_context"}]
+        return lire_resultat_texte(self._interaction(corps, requete_texte.delai or DELAI_TEXTE))
 
     # --- Transcription (STT) et fichiers ----------------------------------------------------------
 
@@ -385,11 +398,38 @@ def _verifier_statut(donnees: dict, quoi: str) -> None:
 
 
 def _tokens(donnees: dict) -> tuple[int, int]:
-    """(tokens d'entrée, tokens de sortie) ; la « réflexion » est facturée comme de la sortie."""
+    """(tokens d'entrée, tokens de sortie) ; la « réflexion » est facturée comme de la sortie, et le
+    contenu des pages lues par l'outil « URL context » (compté à part par Google) comme de l'entrée."""
     usage = donnees.get("usage") or {}
-    entree = int(usage.get("total_input_tokens") or 0)
+    entree = int(usage.get("total_input_tokens") or 0) + int(usage.get("total_tool_use_tokens") or 0)
     sortie = int(usage.get("total_output_tokens") or 0) + int(usage.get("total_thought_tokens") or 0)
     return entree, sortie
+
+
+def lire_adresses_lues(donnees: dict) -> list[AdresseLue]:
+    """Pages lues par l'outil « URL context » et leur statut, d'après les étapes « url_context_result »
+    (une même adresse n'est gardée qu'une fois, avec son dernier statut)."""
+    statuts: dict[str, str] = {}
+    for etape in donnees.get("steps") or []:
+        if not isinstance(etape, dict):
+            continue
+        blocs = [etape] if etape.get("type") == "url_context_result" else []
+        blocs += [c for c in etape.get("content") or [] if isinstance(c, dict) and c.get("type") == "url_context_result"]
+        for bloc in blocs:
+            resultats = bloc.get("result")
+            if isinstance(resultats, dict):
+                resultats = [resultats]
+            for resultat in resultats if isinstance(resultats, list) else []:
+                if not isinstance(resultat, dict):
+                    continue
+                adresse = str(resultat.get("url") or "").strip()
+                if not adresse:
+                    continue
+                statut = str(resultat.get("status") or "").lower()
+                if not statut:
+                    statut = "error" if resultat.get("is_error") or bloc.get("is_error") else "success"
+                statuts[adresse] = statut
+    return [AdresseLue(adresse, statut) for adresse, statut in statuts.items()]
 
 
 def trouver_texte(donnees: dict) -> str:
@@ -425,7 +465,13 @@ def lire_resultat_texte(donnees: dict) -> ResultatTexte:
             json.dumps({k: v for k, v in donnees.items() if k != "input"}, ensure_ascii=False)[:1000],
         )
     entree, sortie = _tokens(donnees)
-    return ResultatTexte(texte, entree, sortie, {"statut": donnees.get("status"), "usage": donnees.get("usage") or {}})
+    return ResultatTexte(
+        texte,
+        entree,
+        sortie,
+        {"statut": donnees.get("status"), "usage": donnees.get("usage") or {}},
+        lire_adresses_lues(donnees),
+    )
 
 
 def pcm_du_morceau(delta: dict) -> tuple[bytes, int]:

@@ -3,6 +3,7 @@
 from ugc_studio.fournisseurs.voix import VoixBibliotheque
 from ugc_studio.modeles_charges import (
     MODELES_DE_DEPART,
+    SCRIPT,
     SOUS_TITRES,
     TRADUCTIONS,
     TRANSCRIPTION,
@@ -20,15 +21,39 @@ def _modeles(tmp_path) -> tuple[ModelesCharges, GestionnaireVoix, BibliothequeSt
 
 
 def test_modeles_charges_au_depart(tmp_path):
-    """Ceux dont l'app se sert, plus Flash-Lite TTS ; pas les anciennes générations."""
+    """Ceux dont l'app se sert, plus Flash-Lite TTS et 3.1 Pro (à comparer pour les scripts) ; pas
+    les anciennes générations."""
     modeles, _voix, _styles = _modeles(tmp_path)
     assert modeles.charges() == list(MODELES_DE_DEPART) == [
         "gemini-3.8-flash-tts",
         "gemini-3.8-flash-lite-tts",
         "gemini-3.5-transcribe",
         "gemini-3.8-flash",
+        "gemini-3.1-pro-preview",
     ]
     assert not modeles.est_charge("gemini-2.5-flash-preview-tts")
+
+
+def test_gemini_pro_propose_une_seule_fois_aux_fichiers_de_la_v1_1(tmp_path):
+    """Fichier de la v1.1.0 (format 1) : 3.1 Pro est chargé une fois ; retiré ensuite, il ne revient pas."""
+    import json
+
+    chemin = tmp_path / "modeles.json"
+    chemin.write_text(json.dumps({"version_format": 1, "modeles": ["gemini-3.8-flash-tts", "gemini-3.8-flash"]}))
+    modeles, _voix, _styles = _modeles(tmp_path)
+    assert modeles.est_charge("gemini-3.1-pro-preview")
+    assert json.loads(chemin.read_text())["version_format"] == 2
+    modeles.definir(["gemini-3.8-flash-tts"])
+    relu, _voix2, _styles2 = _modeles(tmp_path)
+    assert not relu.est_charge("gemini-3.1-pro-preview")
+
+
+def test_modele_du_module_script(tmp_path):
+    modeles, _voix, _styles = _modeles(tmp_path)
+    modeles.choisir(SCRIPT, "gemini-3.1-pro-preview")
+    assert modeles.utilise_dans("gemini-3.1-pro-preview") == [SCRIPT]
+    modeles.choisir(SCRIPT, "gemini-3.8-flash")
+    assert modeles.utilise_dans("gemini-3.8-flash") == [SCRIPT, TRADUCTIONS]  # dans l'ordre de la barre latérale
 
 
 def test_utilise_dans(tmp_path):

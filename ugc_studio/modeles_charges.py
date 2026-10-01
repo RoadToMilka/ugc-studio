@@ -2,17 +2,21 @@
 
 Seuls les modèles chargés apparaissent dans Réglages → Modèles et prix et dans les listes « Modèle »
 des modules. Au départ : ceux dont l'app se sert (Gemini 3.8 Flash TTS, 3.5 Transcribe, et 3.8
-Flash pour les traductions), plus 3.8 Flash-Lite TTS, pratique et lié à Flash TTS. La fenêtre
+Flash pour les scripts et les traductions), plus 3.8 Flash-Lite TTS, pratique et lié à Flash TTS,
+et Gemini 3.1 Pro (aperçu), à comparer à 3.8 Flash pour écrire les scripts (V2). La fenêtre
 « Choisir les modèles… » en ajoute ou en retire.
 
-« Utilisé dans » : où un modèle sert en ce moment (le modèle choisi dans le module Voix, dans les
-options de Transcription, pour créer les sous-titres d'une prise ; celui d'une voix créée ou d'un
-style enregistré ; celui des traductions). Un modèle utilisé reste toujours chargé : aucun module
-ne peut se retrouver sans modèle. Un projet, une voix créée ou un style qui se sert d'un modèle non
-chargé le recharge donc automatiquement, sans rien changer dans le projet.
+« Utilisé dans » : où un modèle sert en ce moment (le modèle choisi dans le module Script ou Voix,
+dans les options de Transcription, pour créer les sous-titres d'une prise ; celui d'une voix créée
+ou d'un style enregistré ; celui des traductions). Un modèle utilisé reste toujours chargé : aucun
+module ne peut se retrouver sans modèle. Un projet, une voix créée ou un style qui se sert d'un
+modèle non chargé le recharge donc automatiquement, sans rien changer dans le projet.
 
 Rangement : %APPDATA%\\UGC Studio\\modeles.json. Les prix saisis à la main (prix.json) sont gardés,
 même si le modèle est retiré puis rechargé.
+
+Format 2 (V2, lot 1) : un fichier du format 1 (v1.1.0) reçoit une seule fois les modèles ajoutés au
+départ depuis (Gemini 3.1 Pro). Si tu le retires ensuite, il ne revient pas.
 """
 
 from __future__ import annotations
@@ -31,14 +35,19 @@ MODELES_DE_DEPART = (
     "gemini-3.8-flash-lite-tts",
     "gemini-3.5-transcribe",
     "gemini-3.8-flash",
+    "gemini-3.1-pro-preview",
 )
+VERSION_FORMAT = 2
+# Modèles ajoutés au départ après la v1.1.0 (format 1) : proposés une seule fois aux anciens fichiers.
+AJOUTES_AU_FORMAT_2 = ("gemini-3.1-pro-preview",)
 
 # Où un modèle peut servir, dans l'ordre d'affichage de la colonne « Utilisé dans ».
+SCRIPT = "Script"
 VOIX = "Voix"
 TRANSCRIPTION = "Transcription"
 SOUS_TITRES = "Sous-titres"
 TRADUCTIONS = "Traductions"
-MODULES = (VOIX, TRANSCRIPTION, SOUS_TITRES, TRADUCTIONS)
+MODULES = (SCRIPT, VOIX, TRANSCRIPTION, SOUS_TITRES, TRADUCTIONS)
 
 # Ce qui a changé : la liste des modèles chargés, ou seulement où ils servent.
 CHARGES = "charges"
@@ -62,6 +71,10 @@ class ModelesCharges:
         self._charges: list[str] = (
             dans_l_ordre(str(m) for m in liste if m) if isinstance(liste, list) else list(MODELES_DE_DEPART)
         )
+        if isinstance(liste, list) and donnees.get("version_format", 1) < VERSION_FORMAT:
+            # Fichier de la v1.1.0 : les modèles ajoutés au départ depuis sont chargés une fois.
+            self._charges = dans_l_ordre([*self._charges, *AJOUTES_AU_FORMAT_2])
+            self._enregistrer()
         # Modèle choisi en ce moment dans chaque module (déclaré par le module lui-même).
         self._choisis: dict[str, str] = {TRADUCTIONS: MODELE_TRADUCTION}
         self._abonnes: list[tuple[Callable[[], None], frozenset[str]]] = []
@@ -88,7 +101,7 @@ class ModelesCharges:
     # --- Où les modèles servent ----------------------------------------------------------------
 
     def choisir(self, module: str, identifiant: str | None) -> None:
-        """Le module (VOIX, TRANSCRIPTION, SOUS_TITRES) se sert maintenant de ce modèle (ou d'aucun)."""
+        """Le module (SCRIPT, VOIX, TRANSCRIPTION, SOUS_TITRES) se sert maintenant de ce modèle (ou d'aucun)."""
         if self._choisis.get(module, "") == (identifiant or ""):
             return
         self._choisis[module] = identifiant or ""
@@ -137,4 +150,4 @@ class ModelesCharges:
                 fonction()
 
     def _enregistrer(self) -> None:
-        ecrire_json(self._chemin, {"version_format": 1, "modeles": self._charges})
+        ecrire_json(self._chemin, {"version_format": VERSION_FORMAT, "modeles": self._charges})

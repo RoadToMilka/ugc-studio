@@ -8,12 +8,14 @@ from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from .. import NOM_APP
-from ..projets import ErreurProjet, Projet
+from ..ecriture.scripts import ScriptEcrit
+from ..projets import ErreurProjet, Projet, RepliqueProjet
 from ..services import Services
 from .actions_projet import remplir_menu_projet
 from .composants.barre_laterale import BarreLaterale, Module
 from .composants.entete import Entete
 from .pages.reglages import PageReglages
+from .pages.script import PageScript
 from .pages.sous_titres import PageSousTitres
 from .pages.transcription import PageTranscription
 from .pages.voix import PageVoix
@@ -21,7 +23,9 @@ from .theme import Dimensions
 
 journal = logging.getLogger(__name__)
 
+# Le module Script vient en tête (V2) : c'est la première étape d'une pub.
 MODULES_HAUT = (
+    Module("script", "Script", "scroll-text"),
     Module("voix", "Voix", "mic"),
     Module("transcription", "Transcription", "audio-lines"),
     Module("sous-titres", "Sous-titres", "captions"),
@@ -31,6 +35,7 @@ MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
 
 def _creer_pages(services: Services) -> dict[str, QWidget]:
     return {
+        "script": PageScript(services),
         "voix": PageVoix(services),
         "transcription": PageTranscription(services),
         "sous-titres": PageSousTitres(services),
@@ -87,6 +92,8 @@ class FenetrePrincipale(QMainWindow):
         self.page("voix").atelier.prises.sous_titres_demandes.connect(self.creer_sous_titres)
         # « Corriger les mots » des sous-titres : dans le module Transcription.
         self.page("sous-titres").atelier.corriger_demande.connect(lambda: self.afficher_module("transcription"))
+        # « Envoyer dans Voix » d'un script (V2) : ses répliques remplacent celles du module Voix.
+        self.page("script").atelier.envoi_demande.connect(self.envoyer_dans_voix)
 
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
@@ -137,6 +144,17 @@ class FenetrePrincipale(QMainWindow):
         self.afficher_module("sous-titres")
         self.page("sous-titres").atelier.creer_depuis_prise(identifiant_prise)
 
+    def envoyer_dans_voix(self, script: ScriptEcrit) -> None:
+        """« Envoyer dans Voix » : les répliques du script (styles, balises, mots accentués) remplacent
+        celles du module Voix, après confirmation s'il contient déjà un script ; puis le module Voix
+        s'ouvre, prêt pour « Générer l'audio »."""
+        atelier_script = self.page("script").atelier
+        atelier_script.enregistrer_maintenant()
+        repliques = [RepliqueProjet([dict(s) for s in r.script], r.style, r.style_fr) for r in script.repliques]
+        if self.page("voix").atelier.remplacer_repliques(repliques):
+            atelier_script.script_envoye(script)
+            self.afficher_module("voix")
+
     # --- Mémoire de la fenêtre (taille, position, dernier module) ----------------------------
 
     def _restaurer_etat(self) -> None:
@@ -162,6 +180,7 @@ class FenetrePrincipale(QMainWindow):
         self.move(cadre.topLeft())
 
     def closeEvent(self, evenement) -> None:
+        self.page("script").atelier.enregistrer_maintenant()
         voix = self.page("voix")
         voix.atelier.lecteur.arreter()
         voix.atelier.enregistrer_maintenant()

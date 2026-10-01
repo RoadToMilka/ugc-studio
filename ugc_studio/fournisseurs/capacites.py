@@ -12,6 +12,7 @@ automatiquement celui qui est en vigueur le jour de l'appel.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -28,9 +29,11 @@ TOKENS_AUDIO_PAR_SECONDE = 25
 TOKENS_TEXTE_PAR_MINUTE_TRANSCRITE = 175
 # Texte d'une minute de voix off : ≈ 160 mots ≈ 1 000 caractères ≈ 250 tokens.
 TOKENS_TEXTE_PAR_MINUTE_DE_VOIX = 250
-# Traduction d'un style : consigne + quelques mots envoyés, quelques mots (et un peu de réflexion) reçus.
-TOKENS_TRADUCTION_ENTREE = 150
-TOKENS_TRADUCTION_SORTIE = 60
+# Script complet du module Script (V2, §3.1) : lecture de la page, accroches, écriture et relecture.
+# Envoyé : consignes, règles, exemples, brief et extrait de la page à chaque étape (≈ 19 000 tokens
+# en tout) ; reçu : la fiche, les accroches, le script et la relecture, réflexion comprise (≈ 9 000).
+TOKENS_SCRIPT_ENTREE = 19_000
+TOKENS_SCRIPT_SORTIE = 9_000
 
 
 class Capacite(StrEnum):
@@ -43,6 +46,8 @@ class Capacite(StrEnum):
     STT_MOTS_HORODATES = "stt_mots_horodates"
     STT_VOCABULAIRE = "stt_vocabulaire"
     TEXTE = "texte"
+    TEXTE_STRUCTURE = "texte_structure"  # réponse structurée : un objet JSON conforme à un schéma
+    TEXTE_PAGES_WEB = "texte_pages_web"  # lit une page web à partir de son adresse (outil « URL context »)
 
 
 LIBELLES = {
@@ -55,11 +60,16 @@ LIBELLES = {
     Capacite.STT_MOTS_HORODATES: "Mots horodatés",
     Capacite.STT_VOCABULAIRE: "Vocabulaire",
     Capacite.TEXTE: "Texte",
+    Capacite.TEXTE_STRUCTURE: "Réponse structurée",
+    Capacite.TEXTE_PAGES_WEB: "Lecture de pages web",
 }
 
 _VOIX = frozenset(
     {Capacite.TTS, Capacite.TTS_BALISES, Capacite.TTS_VOICE_DESIGN, Capacite.TTS_MULTI_VOIX, Capacite.TTS_FLUX}
 )
+# Modèles de texte Gemini 3 (documentation Google, 01/10/2026) : réponse structurée et outil « URL
+# context » (Gemini 3.8 Flash, 3.5 Flash, 3.1 Pro…), utilisables ensemble.
+_TEXTE = frozenset({Capacite.TEXTE, Capacite.TEXTE_STRUCTURE, Capacite.TEXTE_PAGES_WEB})
 
 
 @dataclass(frozen=True)
@@ -113,7 +123,7 @@ _MINUTE_DE_VOIX = Reference(TOKENS_TEXTE_PAR_MINUTE_DE_VOIX, 60 * TOKENS_AUDIO_P
 _MINUTE_TRANSCRITE = Reference(
     60 * TOKENS_AUDIO_PAR_SECONDE, TOKENS_TEXTE_PAR_MINUTE_TRANSCRITE, "par minute transcrite"
 )
-_TRADUCTION = Reference(TOKENS_TRADUCTION_ENTREE, TOKENS_TRADUCTION_SORTIE, "par style traduit")
+_SCRIPT = Reference(TOKENS_SCRIPT_ENTREE, TOKENS_SCRIPT_SORTIE, "par script complet")
 
 # Prix vérifiés sur la page officielle des tarifs Google le PRIX_VERIFIES_LE (§4.2).
 MODELES_CONNUS: tuple[ModeleConnu, ...] = (
@@ -156,14 +166,26 @@ MODELES_CONNUS: tuple[ModeleConnu, ...] = (
         "gemini-3.8-flash",
         "google",
         "Gemini 3.8 Flash",
-        frozenset({Capacite.TEXTE}),
+        _TEXTE,
         (
             Tarif(Decimal("0.75"), Decimal("3.75")),
             Tarif(Decimal("1.50"), Decimal("7.50"), HAUSSE_GOOGLE_2027),
         ),
         sortie="texte",
-        reference=_TRADUCTION,
-        note="Modèle de texte : traduit tes styles en anglais.",
+        reference=_SCRIPT,
+        note="Modèle de texte : écrit tes scripts, traduit tes styles en anglais.",
+    ),
+    # Prix vérifiés le 01/10/2026 (jusqu'à 200 000 tokens envoyés ; au-delà, 4 $ et 18 $, jamais
+    # atteint par un script). « Aperçu » : Google peut le modifier ou le retirer.
+    ModeleConnu(
+        "gemini-3.1-pro-preview",
+        "google",
+        "Gemini 3.1 Pro (aperçu)",
+        _TEXTE,
+        (Tarif(Decimal("2.00"), Decimal("12.00")),),
+        sortie="texte",
+        reference=_SCRIPT,
+        note="Le plus capable de Google pour le raisonnement : à comparer pour tes scripts.",
     ),
     # Anciennes générations de voix (documentation Google : ni Voice Design ni balises).
     # Listées seulement si elles sont accessibles avec une clé.
@@ -205,12 +227,23 @@ def modele_connu(identifiant: str) -> ModeleConnu | None:
     return next((m for m in MODELES_CONNUS if m.identifiant == identifiant), None)
 
 
+# Modèles Gemini qui ne produisent pas de texte (images, vidéo, musique, vecteurs…) ou qui ne
+# s'utilisent pas comme un simple modèle de texte (agents, robots, contrôle d'un ordinateur).
+_PAS_UN_MODELE_DE_TEXTE = (
+    "image", "imagen", "veo", "lyria", "music", "embedding", "audio", "robotics", "computer-use",
+    "research", "agent", "aqa",
+)
+_VERSION_GEMINI = re.compile(r"gemini-(\d+)(?:\.\d+)?-")
+
+
 def deviner_capacites(identifiant: str) -> frozenset[Capacite]:
     """Capacités probables d'un modèle inconnu du catalogue, d'après son nom.
 
     Permet de proposer automatiquement un nouveau modèle (ex. une future version « …-tts »).
     Les modèles « Live » (conversation en temps réel, ex. « gemini-3.5-transcribe-live ») passent
-    par une autre API que celle de l'app : ils ne sont jamais proposés.
+    par une autre API que celle de l'app : ils ne sont jamais proposés. Les modèles de texte Gemini 3
+    et suivants (ex. « gemini-3.5-flash ») sont reconnus ; les plus anciens ne comprennent pas tous
+    les réglages envoyés par l'app (niveau de réflexion) : ils ne sont pas proposés.
     """
     connu = modele_connu(identifiant)
     if connu is not None:
@@ -222,6 +255,9 @@ def deviner_capacites(identifiant: str) -> frozenset[Capacite]:
         return _VOIX
     if "transcribe" in nom:
         return frozenset({Capacite.STT, Capacite.STT_MOTS_HORODATES})
+    version = _VERSION_GEMINI.match(nom)
+    if version and int(version.group(1)) >= 3 and not any(mot in nom for mot in _PAS_UN_MODELE_DE_TEXTE):
+        return _TEXTE
     return frozenset()
 
 

@@ -1,6 +1,6 @@
 # UGC Studio
 
-Application Windows pour créer des publicités UGC / influenceur : voix off (TTS), transcription (STT) et sous-titres animés, avec export SRT, overlay transparent ProRes 4444 ou vidéo finale.
+Application Windows pour créer des publicités UGC / influenceur : scripts écrits avec un modèle de texte à partir de la page produit, voix off (TTS), transcription (STT) et sous-titres animés, avec export SRT, overlay transparent ProRes 4444 ou vidéo finale.
 
 - Cahier des charges : [docs/CAHIER_DES_CHARGES.md](docs/CAHIER_DES_CHARGES.md)
 - **Télécharger l'app** : section **Releases** du dépôt → `UGC-Studio.exe`. Les versions `0.x` sont les étapes de construction de la V1 (marquées « Pre-release »).
@@ -13,6 +13,7 @@ Au premier lancement, Windows affiche « Windows a protégé votre ordinateur »
 |---|---|
 | `ugc_studio/` | Le code de l'app (Python) |
 | `ugc_studio/ui/theme.py` | **Toutes** les couleurs, tailles et espacements de l'interface (§9) |
+| `ugc_studio/ecriture/` | Le module Script, sans interface : lecture de la page produit, brief, consignes du modèle, relecture, exemples |
 | `ugc_studio/ui/` | L'interface : fenêtre principale, pages, composants réutilisables |
 | `ugc_studio/ressources/` | Police Inter, icônes (Lucide) et icône de l'app, embarquées dans le `.exe` |
 | `tests/` | Tests automatiques, lancés à chaque envoi de code |

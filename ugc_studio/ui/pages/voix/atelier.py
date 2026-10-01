@@ -9,7 +9,7 @@ import logging
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QMessageBox, QVBoxLayout
 
 from ....estimation import estimer_repliques
 from ....fournisseurs.base import Adaptateur
@@ -25,7 +25,7 @@ from ....generation import (
     tokens_par_seconde,
 )
 from ....modeles_charges import CHARGES, VOIX
-from ....projets import LANGUES, Projet
+from ....projets import LANGUES, Projet, RepliqueProjet
 from ....prononciation import fusionner
 from ....script import est_vide
 from ....services import Services
@@ -119,6 +119,10 @@ class AtelierVoix(Page):
         self.info_modeles = libelle("", "avertissement")
         self.info_modeles.hide()
         d.addWidget(self.info_modeles)
+        # Script écrit pour une femme, voix masculine (ou l'inverse) : avertissement (V2, §10.11).
+        self.info_genre = libelle("", "legende-avertissement")
+        self.info_genre.hide()
+        d.addWidget(self.info_genre)
         self.contenu.addWidget(cadre)
 
         # --- Script : répliques, outils, palette de balises ---
@@ -244,6 +248,49 @@ class AtelierVoix(Page):
         self.statut.setText(f"Langue du projet : {LANGUES.get(projet.langue, projet.langue)}")
         self.prises.rafraichir()
         self._mettre_a_jour_estimation()
+        self._verifier_genre()
+
+    def remplacer_repliques(self, repliques: list[RepliqueProjet], confirmer: bool = True) -> bool:
+        """« Envoyer dans Voix » (module Script, V2) : ces répliques remplacent celles du projet, avec
+        leurs styles, balises et mots accentués. Si le module contient déjà un script, confirmation
+        d'abord (l'ancien script reste dans l'historique du module Script). Renvoie True si c'est fait."""
+        if self._projet is None or not repliques:
+            return False
+        actuelles = [r for r in self.repliques.repliques() if not est_vide(r.script)]
+        if confirmer and actuelles:
+            quoi = "la réplique actuelle" if len(actuelles) == 1 else f"les {len(actuelles)} répliques actuelles"
+            reponse = QMessageBox.question(
+                self,
+                "Envoyer dans Voix",
+                f"Remplacer {quoi} du module Voix par ce script ?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reponse != QMessageBox.StandardButton.Yes:
+                return False
+        self._chargement = True
+        self.repliques.definir(repliques)
+        self._chargement = False
+        self._minuterie.stop()
+        self._enregistrer()
+        self._mettre_a_jour_estimation()
+        self._verifier_genre()
+        self._afficher("Script reçu du module Script : prêt pour « Générer l'audio ».", "succes")
+        return True
+
+    def _verifier_genre(self) -> None:
+        """Personne qui parle du brief (module Script) et genre de la voix choisie : différents ?"""
+        voulu = self._projet.ecriture.brief.genre if self._projet is not None else ""
+        voix = self._services.voix.voix(self.voix.currentData() or "")
+        genre_voix = {"female": "femme", "male": "homme"}.get(voix.genre if voix else "", "")
+        differents = bool(voulu and genre_voix and voulu != genre_voix and self._projet.ecriture.scripts)
+        if differents:
+            self.info_genre.setText(
+                f"Le script a été écrit pour {'une femme' if voulu == 'femme' else 'un homme'}, et cette voix est "
+                f"{'féminine' if genre_voix == 'femme' else 'masculine'} : les accords du texte (« ravie », « ravi ») "
+                "peuvent sonner faux."
+            )
+        self.info_genre.setVisible(differents)
 
     def _remplir_modeles(self) -> None:
         """Modèles de voix chargés et accessibles avec les clés (croisement avec les capacités, §3.4)."""
@@ -274,6 +321,7 @@ class AtelierVoix(Page):
         if voix is not None and voix.creee and voix.modele and self.modele.findData(voix.modele) >= 0:
             choisir(self.modele, voix.modele)
         self._reglage_change()
+        self._verifier_genre()
 
     def ouvrir_bibliotheque_voix(self) -> None:
         dialogue = DialogueBibliothequeVoix(
@@ -315,7 +363,8 @@ class AtelierVoix(Page):
         if self._projet is None:
             return
         self._projet.repliques = self.repliques.repliques()
-        self._services.projets.enregistrer()
+        # Le projet de cette page (et pas forcément celui qui vient de s'ouvrir, voir _projet_change).
+        self._services.projets.enregistrer(self._projet)
 
     def _prononciations(self):
         projet = self._projet.prononciations if self._projet else []

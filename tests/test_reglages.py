@@ -132,8 +132,9 @@ def test_prix_personnalise_signale_puis_retabli(app_configuree, qtbot, services)
 
 
 def test_seuls_les_modeles_charges_sont_listes(app_configuree, qtbot, services):
-    """Au départ : les modèles dont l'app se sert, plus Flash-Lite TTS. Un ancien modèle accessible
-    avec la clé n'est listé qu'une fois chargé (« Choisir les modèles… »)."""
+    """Au départ : les modèles dont l'app se sert, plus Flash-Lite TTS et 3.1 Pro (à comparer pour les
+    scripts, V2). Un ancien modèle accessible avec la clé n'est listé qu'une fois chargé (« Choisir les
+    modèles… »)."""
     page = PageReglages(services)
     qtbot.addWidget(page)
     assert list(page.modeles._lignes) == [
@@ -141,6 +142,7 @@ def test_seuls_les_modeles_charges_sont_listes(app_configuree, qtbot, services):
         "gemini-3.8-flash-lite-tts",
         "gemini-3.5-transcribe",
         "gemini-3.8-flash",
+        "gemini-3.1-pro-preview",
     ]
     connexion = services.connexions.ajouter("google", "Perso", CLE)
     services.connexions.enregistrer_test(

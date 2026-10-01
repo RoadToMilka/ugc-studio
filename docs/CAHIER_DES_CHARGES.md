@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.6, 01/10/2026 (V1.1 terminée, version 1.1.0 : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; lot 4, fondu, listes déroulantes intégrées, bibliothèque de voix plus rapide, tableaux ; lot 5, modèles chargés et colonne « Utilisé dans » ; lot 6, sous-titres réorganisés à la main ; voir §12.2)
+> Version du document : 3.7, 01/10/2026 (V2 en cours : lot 1, module Script, version 1.2.0, §4 bis et §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -43,21 +43,24 @@ Le `.exe` n'est pas signé : au premier lancement, Windows affiche « Windows a 
 
 ### 3.1 Modules
 
-1. **Voix (TTS)** : script, voix, styles, balises, génération, historique des prises.
-2. **Transcription (STT)** : import vidéo/audio, extraction du son, transcription mot par mot, correction.
-3. **Studio sous-titres** : découpage, style, mot actif, aperçu, export.
-4. **Réglages** : connexions API, catalogue des modèles et prix, taux de change, suivi des coûts, préférences.
-5. *(V2)* **Script** : aide à l'écriture de scripts UGC avec un modèle de texte (Claude, GPT, Gemini…).
+Dans l'ordre de la barre latérale (le module Script en tête depuis la V2 : c'est la première étape d'une pub) :
+
+1. **Script** *(V2, depuis la 1.2.0)* : écriture de scripts UGC avec un modèle de texte (Google seulement en V2 ; OpenAI et Anthropic avec leurs adaptateurs, V4), à partir de la page produit et d'un brief, puis envoi dans le module Voix (§4 bis).
+2. **Voix (TTS)** : script, voix, styles, balises, génération, historique des prises.
+3. **Transcription (STT)** : import vidéo/audio, extraction du son, transcription mot par mot, correction.
+4. **Studio sous-titres** : découpage, style, mot actif, aperçu, export.
+5. **Réglages** : connexions API, catalogue des modèles et prix, taux de change, suivi des coûts, préférences.
 
 ### 3.2 Notion de Projet
 
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
 
-- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription avec ses sous-titres réorganisés à la main, dictionnaire de remplacements du projet, réglages des sous-titres), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite, ou de la prise dont on a créé les sous-titres).
-- Format du fichier : version 5 depuis la V1.1 (sous-titres réorganisés à la main, §7.8 ; un projet plus ancien s'ouvre sans ajustement). Version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
+- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription avec ses sous-titres réorganisés à la main, dictionnaire de remplacements du projet, réglages des sous-titres, module Script : brief, page produit lue avec son adresse et sa date, fiche comprise, accroches, scripts écrits avec leur relecture et leur coût), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite, ou de la prise dont on a créé les sous-titres).
+- Format du fichier : version 6 depuis la V2, lot 1 (module Script, §4 bis ; un projet plus ancien s'ouvre sans script). Version 5 depuis la V1.1 (sous-titres réorganisés à la main, §7.8 ; un projet plus ancien s'ouvre sans ajustement). Version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
 - Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
 - Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
 - Au démarrage, le dernier projet utilisé est rouvert automatiquement.
+- Langue du projet : choisie à la création ; le module Script propose de la changer quand la langue du brief diffère (§4 bis.2).
 
 ### 3.3 Lien TTS → sous-titres
 
@@ -128,35 +131,38 @@ Un modèle absent du tableau mais accessible avec une clé est reconnu d'après 
 | `gemini-3.8-flash-tts` | 0,50 $ (texte) | 9,00 $ (audio) | 0,00225 $ pour 10 s d'audio |
 | `gemini-3.8-flash-lite-tts` | 0,50 $ | 6,00 $ | |
 | `gemini-3.5-transcribe` | 2,00 $ (audio) | 12,00 $ (texte) | ≈ 0,005 $ par minute transcrite |
-| `gemini-3.8-flash` (texte : traduction des styles) | 0,75 $ | 3,75 $ | réflexion comprise en sortie |
+| `gemini-3.8-flash` (texte : scripts, traduction des styles) | 0,75 $ | 3,75 $ | réflexion comprise en sortie ; ≈ 0,05 $ par script complet |
+| `gemini-3.1-pro-preview` (texte : scripts, aperçu) | 2,00 $ | 12,00 $ | jusqu'à 200 000 tokens envoyés (4,00 $ et 18,00 $ au-delà) ; vérifié le 01/10/2026 |
 | `gemini-3.1-flash-tts-preview` | 1,00 $ | 20,00 $ | ancienne génération |
 | `gemini-2.5-pro-preview-tts` | 1,00 $ | 20,00 $ | ancienne génération |
 | `gemini-2.5-flash-preview-tts` | 0,50 $ | 10,00 $ | ancienne génération |
 
 - **Changements de prix annoncés** : Google double les prix des modèles 3.8 **à partir du 01/01/2027** (Flash TTS : 1,00 $ / 18,00 $ ; Flash-Lite TTS : 1,00 $ / 12,00 $ ; Flash : 1,50 $ / 7,50 $). Chaque modèle a donc une liste de tarifs datés ; l'app applique **automatiquement** le tarif en vigueur le jour de l'appel et affiche le prochain changement sous le modèle.
 - **Prix modifiables** par modèle (entrée et sortie). Un prix saisi à la main est signalé (« Prix modifié à la main », avec le tarif Google) et s'applique jusqu'au prochain changement de tarif annoncé par Google : l'information la plus récente l'emporte.
-- **Ordre de grandeur en euros** sous chaque prix : coût d'une minute de voix (≈ 250 tokens de texte + 60 s × 25 tokens audio) ou d'une minute transcrite (60 s × 25 tokens audio + ≈ 175 tokens de texte), d'après les chiffres de la page des tarifs.
+- **Ordre de grandeur en euros** sous chaque prix : coût d'une minute de voix (≈ 250 tokens de texte + 60 s × 25 tokens audio), d'une minute transcrite (60 s × 25 tokens audio + ≈ 175 tokens de texte), d'après les chiffres de la page des tarifs, ou d'un script complet du module Script (≈ 19 000 tokens envoyés et 9 000 reçus : lecture de la page, accroches, écriture, relecture).
 - Les anciennes générations de voix n'ont ni balises ni Voice Design (doc officielle). Les modèles « Live » (temps réel, ex. `gemini-3.5-transcribe-live`) utilisent une autre API et ne sont jamais proposés.
+- Modèles de texte (V2) : deux capacités en plus, « Réponse structurée » et « Lecture de pages web ». Un modèle de texte Gemini 3 ou suivant absent du catalogue (ex. `gemini-3.5-flash`) est reconnu d'après son nom (sauf images, vidéo, musique, vecteurs, agents) ; les plus anciens ne comprennent pas tous les réglages envoyés par l'app (niveau de réflexion) et ne sont pas proposés.
 - **Niveau gratuit** de Google (clé sans moyen de paiement) : ces modèles n'y sont pas facturés (limites d'usage plus basses). L'app affiche quand même le coût au tarif payant ; une note le rappelle.
 - Bouton « Page des tarifs Google » pour vérifier les prix.
 
 ### 4.2 bis Modèles chargés (depuis la 1.0.5)
 
-- L'app garde la liste des **modèles chargés**, c'est-à-dire mis à disposition dans l'app (`modeles.json`). Au départ : les modèles utilisés (Gemini 3.8 Flash TTS, 3.5 Transcribe, 3.8 Flash pour les traductions), plus **3.8 Flash-Lite TTS**, pratique et lié à Flash TTS. Les anciennes générations et les modèles inconnus n'y sont plus d'office.
-- L'onglet « Modèles et prix » et les listes « Modèle » des modules (Voix, Variantes, Créer une voix, Style, Transcription) ne proposent que les modèles chargés (et, comme avant, accessibles avec la clé et capables de la tâche). Le modèle déjà choisi reste toujours dans sa liste.
-- Bouton **« Choisir les modèles… »** : une fenêtre liste les modèles accessibles avec la clé (dernier test réussi) que l'app sait utiliser (voix, transcription, texte des traductions ; ni images, ni vidéo, ni « Live »), avec une case à cocher, les capacités et le prix s'il est connu. Sans clé testée, elle l'explique et renvoie vers « Connexions API ».
+- L'app garde la liste des **modèles chargés**, c'est-à-dire mis à disposition dans l'app (`modeles.json`). Au départ : les modèles utilisés (Gemini 3.8 Flash TTS, 3.5 Transcribe, 3.8 Flash pour les scripts et les traductions), plus **3.8 Flash-Lite TTS**, pratique et lié à Flash TTS, et **Gemini 3.1 Pro (aperçu)**, à comparer à 3.8 Flash pour les scripts (V2). Un fichier de la 1.1.0 (format 1) reçoit une seule fois Gemini 3.1 Pro (format 2) ; retiré ensuite, il ne revient pas. Les anciennes générations et les modèles inconnus n'y sont plus d'office.
+- L'onglet « Modèles et prix » et les listes « Modèle » des modules (Script, Voix, Variantes, Créer une voix, Style, Transcription) ne proposent que les modèles chargés (et, comme avant, accessibles avec la clé et capables de la tâche). Le modèle déjà choisi reste toujours dans sa liste.
+- Bouton **« Choisir les modèles… »** : une fenêtre liste les modèles accessibles avec la clé (dernier test réussi) que l'app sait utiliser (voix, transcription, texte des scripts et des traductions ; ni images, ni vidéo, ni « Live »), avec une case à cocher, les capacités et le prix s'il est connu. Sans clé testée, elle l'explique et renvoie vers « Connexions API ».
 - Un modèle **utilisé** (§4.2 ter) reste coché et ne peut pas être décoché (l'infobulle dit où il sert) : aucun module ne peut se retrouver sans modèle.
 - Sécurités : un projet (ou une voix créée, un style) qui se sert d'un modèle non chargé le recharge automatiquement, sans rien changer dans le projet. Les prix saisis à la main sont gardés, même si le modèle est retiré puis rechargé.
 
 ### 4.2 ter Colonne « Utilisé dans »
 
-Où le modèle sert **en ce moment**, mis à jour en direct : **Voix** (modèle choisi dans le module Voix, projet ouvert ; ou modèle d'une voix créée ou d'un style enregistré), **Transcription** (modèle choisi dans ses options), **Sous-titres** (modèle qui transcrit une prise pour créer ses sous-titres), **Traductions** (Gemini 3.8 Flash : traduction des styles et des descriptions de voix). Modèle chargé mais pas utilisé : « Aucun ». Chaque module déclare lui-même le modèle qu'il utilise (`modeles_charges.py`).
+Où le modèle sert **en ce moment**, mis à jour en direct : **Script** (modèle choisi dans le brief du module Script, projet ouvert), **Voix** (modèle choisi dans le module Voix, projet ouvert ; ou modèle d'une voix créée ou d'un style enregistré), **Transcription** (modèle choisi dans ses options), **Sous-titres** (modèle qui transcrit une prise pour créer ses sous-titres), **Traductions** (Gemini 3.8 Flash : traduction des styles et des descriptions de voix). Modèle chargé mais pas utilisé : « Aucun ». Chaque module déclare lui-même le modèle qu'il utilise (`modeles_charges.py`).
 - **Taux de change USD → EUR** modifiable (champ manuel), ou récupéré en un clic auprès de la Banque centrale européenne (taux de référence du jour). Valeur de départ : 0,86, signalée « à vérifier ».
 - Prix et taux rangés dans `prix.json` (seuls les prix modifiés y sont écrits ; bouton « Rétablir les prix par défaut »).
 
 ### 4.3 Suivi des coûts
 
-- Chaque appel API enregistre : date, projet, modèle, tokens entrée, tokens sortie, coût € (calculé avec les compteurs de tokens renvoyés par l'API).
+- Chaque appel API enregistre : date, projet, modèle, tokens entrée, tokens sortie, coût € (calculé avec les compteurs de tokens renvoyés par l'API). Une page web lue par Google (outil « URL context ») est facturée comme du texte envoyé mais comptée à part (`total_tool_use_tokens`) : l'app l'ajoute aux tokens d'entrée.
+- Une tâche en plusieurs appels (module Script : écriture puis relecture) note chaque appel dès qu'il est terminé, même si le suivant échoue.
 - **Pendant une tâche** : affichage en temps réel des tokens et du coût.
 - Historique filtrable par période (aujourd'hui, ce mois-ci, le mois dernier, cette année, tout), projet et modèle, avec totaux (coût, nombre d'appels, tokens). Les 500 appels les plus récents de la période sont listés ; les totaux portent sur toute la période.
 - Rangement : un fichier par mois, `couts\AAAA-MM.jsonl`, une ligne par appel (le coût est calculé et figé au moment de l'appel).
@@ -171,6 +177,69 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 - ex. `0.00` + `71` €. Composant réutilisable `MontantLabel`.
 - Un montant non nul qui s'afficherait `0.0000 €` (ex. 0.00004 €) reçoit des décimales supplémentaires jusqu'au premier chiffre utile (6 au maximum) : `0.00` + `004` €. Un coût réel n'apparaît jamais comme gratuit.
 - Calculs en nombres décimaux exacts (`Decimal`), arrondi au plus proche (5 vers le haut).
+
+---
+
+## 4 bis. Module Script (V2, depuis la 1.2.0)
+
+Écriture de scripts de pub UGC avec un modèle de texte, puis envoi dans le module Voix. Le module est en tête de la barre latérale (Script, Voix, Transcription, Sous-titres, Réglages). Recherches et choix détaillés : document « UGC Studio - V2 Studio de style et Script » (projet ECOM BUILDR), §10 et annexe A. Le code est dans `ugc_studio/ecriture/` (sans interface, testé seul) et `ugc_studio/ui/pages/script/`.
+
+### 4 bis.1 Lecture de la page produit
+
+« Lire la page » enchaîne trois étapes, pour ne jamais bloquer :
+1. **L'app lit la page elle-même**, comme un navigateur (gratuit, toujours à jour).
+   - Boutique **Shopify** : données officielles du produit à l'adresse de la page suivie de « .js » (nom, marque, type, étiquettes, description, prix et prix barré en centimes, variantes). Si l'adresse désigne une variante (`?variant=…`), son prix est retenu ; sinon celui de la première variante disponible, comme la page l'affiche. Ces données sont lues même si la page elle-même est refusée.
+   - Autre site : données « JSON-LD » de type Product (nom, marque, prix, devise, note moyenne, nombre d'avis, extraits d'avis sans le nom de leur auteur) et balises « og: ».
+   - Plus le texte visible de la page : menus, listes de choix, code et dessins ignorés ; texte caché gardé (les onglets « Livraison et retours » le sont souvent jusqu'au clic) ; lignes répétées gardées une fois ; 20 000 caractères au plus.
+2. Rien d'utilisable (site qui bloque, page remplie par le navigateur) : **Google lit la page** avec l'outil officiel « URL context » (pages publiques seulement, contenu facturé comme du texte envoyé). Google peut lire une copie ancienne : l'app le signale (« vérifie le prix et la promo »). Si Google refuse l'outil pour le modèle choisi, un autre modèle chargé qui sait lire les pages essaie. Une adresse invalide ou une page qui n'existe pas (404) ne part pas chez Google.
+3. Sinon : **« Coller le texte du produit »**, puis « Analyser ce texte ».
+
+Le modèle analyse ce qui a été lu (réflexion basse) et remplit la **fiche « Ce que l'app a compris »** (réponse structurée) : nom, marque, type, prix et prix barré, offre (livraison, garantie, retours), 3 à 5 bénéfices, ce qui le distingue, problèmes résolus, objections probables, preuves, clientèle probable, noms que la voix pourrait mal prononcer.
+- Les prix exacts lus par l'app (Shopify) l'emportent sur ceux du modèle. La remise est arrondie vers le bas (21,5 % → 21 %) : elle ne paraît jamais plus forte qu'elle n'est.
+- La fiche **pré-remplit les champs vides du brief**, marqués « d'après la page » jusqu'à ce qu'on les modifie ; un champ tapé à la main n'est jamais écrasé ; une nouvelle page remplace ce qui était encore « d'après la page ». Les corrections se font dans le brief (une seule place pour corriger).
+- Sans clé API, l'app lit quand même la page et pré-remplit nom, prix et promo ; elle explique comment obtenir l'analyse.
+- Noms à prononcer : « Prononciation… » ouvre le dictionnaire avec ces noms ajoutés à celui du projet (▶ avec la voix du projet ; une ligne laissée sans prononciation n'est pas gardée).
+- L'app dit toujours ce qui s'est passé : « Lu par l'app (données Shopify), aujourd'hui à 14:32. », « Lu par Google… », « Texte collé… », ou la raison d'un échec.
+- Adresse, page lue (texte donné au modèle, source, date, valeurs exactes) et fiche sont enregistrées dans le projet.
+
+### 4 bis.2 Brief
+
+- Aucun champ obligatoire ; rien n'est inventé : sans information, le script reste sans chiffre.
+- **Essentiel** : Pays (France, Belgique, Suisse, Luxembourg, Canada, puis États-Unis, Royaume-Uni, Espagne, Italie, Pays-Bas, Allemagne), qui propose la langue et sa variante régionale (Belgique : français ou néerlandais ; Suisse : français ou allemand) et la devise ; Langue ; Réseau (TikTok, Snapchat, Facebook et Instagram, Autre) ; Durée (« Auto » : 25 s sur TikTok, 10 s sur Snapchat, 20 s sur Facebook et Instagram, 20 s pour Autre ; nombre de mots affiché, à 2,7 mots par seconde) ; Tutoiement (Automatique : tutoiement sur TikTok et Snapchat ; ailleurs, vouvoiement pour une clientèle de 35 ans et plus) ; Angle (Laisser le modèle choisir, Témoignage, Problème-solution, Unboxing, Routine, Comparaison, Avant/après raconté, Point de vue « POV », Liste).
+- **Sections repliables**, avec un résumé quand elles sont fermées (« 8 remplis, dont 7 d'après la page ») : Produit et offre (nom, type, prix, promo, livraison, garantie et retours, bénéfices, ce qui le distingue, description) ; Clientèle (âge, clientèle, problèmes, objections, preuves) ; Personne qui parle (genre, pré-rempli d'après la voix du projet car il change les accords ; âge ; profil) ; Contraintes (appel à l'action, mentions obligatoires reprises telles quelles, mots interdits, consigne libre).
+- **Options**, retenues d'une fois sur l'autre : Balises (décochée au départ), Styles de jeu (cochée), Accentuations (décochée), Modèle, nombre d'accroches (3 à 10, 6 au départ).
+- Langue du brief différente de celle du projet : l'app propose de changer celle du projet (elle sert à la bibliothèque de voix et à la transcription ; les variantes du français partagent le français de France).
+- Le brief est enregistré automatiquement dans le projet. Bibliothèque de briefs : lot 2.
+
+### 4 bis.3 Accroches, écriture et relecture
+
+- **« Proposer des accroches »** : 3 à 10 accroches réparties sur 2 ou 3 angles, chacune avec son angle, pourquoi elle accroche et, en orange, la règle qu'elle frôle. On coche celles à développer ; **« Écrire les N scripts »** écrit un script par accroche cochée, l'un après l'autre (bouton « Arrêter »). Sans accroche cochée, « Écrire le script » laisse le modèle choisir.
+- Étapes enchaînées, une demande chacune (réflexion moyenne) : écriture, puis relecture. Consignes en anglais ; le contenu de la page est une matière, jamais une consigne ; aucun fait absent du brief ou de la page ; aucun nom de personne réelle ; langue, variante régionale (mots de Belgique, de Suisse, du Québec), devise et accords selon la personne qui parle ; pas de formules publicitaires usées ; produit ou bénéfice dans les 3 premières secondes ; un seul appel à l'action, à la fin, l'offre juste avant ; structure selon la durée (moins de 15 s : accroche, bénéfice, appel à l'action ; 15 à 30 s : plus le problème et une preuve ; au-delà : plus une démonstration ou la réponse à une objection) ; nombre de mots de la durée visée, à 10 % près ; chiffres et prix écrits en chiffres (les sous-titres les gardent).
+- Le script arrive **en répliques** : l'accroche toujours en réplique 1 ; ensuite, une nouvelle réplique seulement quand l'émotion change. Les rôles de chaque réplique (accroche, problème, solution, démonstration, preuve, offre, appel à l'action) s'affichent en étiquettes, sans créer de répliques.
+- Balises : seulement celles de l'app, écrites en anglais par le modèle (`<laugh>`), en badges dans l'app ; une balise inconnue ou non demandée est retirée, et la relecture le signale. Styles de jeu : seulement si l'émotion change, courts, en anglais avec leur traduction, identiques pour une même émotion. Accentuations : un mot au plus par réplique (le modèle l'écrit `*mot*`, l'app en fait un mot accentué).
+- **Relecture par l'app** (exacte, gratuite) : durée estimée à ± 10 % de la cible (au-delà de 15 %, point grave) ; mots interdits absents (sans tenir compte des accents ni des majuscules, mots entiers) ; mentions obligatoires présentes ; balises retirées ; styles (mêmes vérifications que dans le module Voix) ; un mot accentué par réplique ; accroche choisie gardée en réplique 1.
+- **Relecture par le modèle** (liste de contrôle) : accroche forte dite en moins de 3 s ; produit ou bénéfice dans les 3 premières secondes ; langage parlé naturel ; un seul appel à l'action ; adapté au réseau ; tutoiement ou vouvoiement constant ; aucune information absente du brief et de la page ; règles publicitaires de la liste intégrée.
+- Un point grave (promesse risquée, information inventée, règle enfreinte, ou problème mesuré par l'app) est **corrigé avant l'affichage** ; la carte du script dit ce qui a été corrigé, puis l'app revérifie le script corrigé. Point léger : ⚠ avec l'explication. Info : « La relecture limite les refus, elle ne les empêche pas : la plateforme reste seule juge (ce n'est pas un avis juridique). »
+- **Liste intégrée des règles publicitaires** (`ecriture/regles.py`, chacune avec sa source et sa date de vérification, 01/10/2026) : pas de résultat garanti, immédiat ou exagéré (une promesse chiffrée de la marque reste possible telle qu'écrite sur la page) ; pas de superlatif impossible à prouver ; pas de promesse de santé ou de guérison ; pas d'avant/après de poids ou de peau promis ; prix et promo exactement ceux du brief ou de la page ; pas d'urgence ou de rareté inventée ; appel à l'action faisable dans la pub ; jamais le nom d'une personne réelle ; produits intimes sans vocabulaire anatomique ni description crue ; pour Facebook et Instagram, aucune caractéristique personnelle supposée de la personne qui regarde (règle « Personal attributes » de Meta : « Tu as de l'acné ? » refusé). Toutes s'appliquent pour « Autre ». Rappel sur chaque script TikTok : activer l'étiquette « contenu généré par l'IA » (règle TikTok d'avril 2026).
+
+### 4 bis.4 Scripts et envoi dans Voix
+
+- Une **carte par script**, le plus récent en haut : angle, durée estimée (même formule que le module Voix, balises comprises) pour la durée visée, nombre de mots, réseau, modèle, date, coût réel ; chaque réplique avec ses rôles, son texte dans l'éditeur à badges du module Voix (**modifiable à la main** : l'app revérifie alors ce qui se compte et garde l'avis du modèle) et son style ; la relecture.
+- **« Envoyer dans Voix »** : les répliques du script remplacent celles du module Voix, avec styles, balises et mots accentués, après confirmation si le module Voix contient déjà un texte (« Remplacer les 2 répliques actuelles du module Voix par ce script ? ») ; le module Voix s'ouvre, prêt pour « Générer l'audio ». La carte affiche « Envoyé dans Voix ».
+- Dans le module Voix, un avertissement orange signale une voix dont le genre ne correspond pas à la personne qui parle du brief (accords du texte).
+- **« Garder comme exemple »** : le script rejoint les exemples donnés au modèle (§4 bis.5) ; la carte affiche « Exemple ». Menu ⋯ : « Supprimer le script » (après confirmation ; l'exemple gardé reste).
+- Lot 2 : variantes (mêmes réglages, réglages par variante, accroches seulement), comparaison, « Retoucher… », ★, vitesse de parole mesurée sur les prises (aussi pour le module Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse.
+
+### 4 bis.5 Exemples (« Mes meilleurs scripts »)
+
+- Chaque demande d'accroches ou de script reçoit jusqu'à 3 exemples proches : même langue (variante exacte d'abord), puis même réseau, puis même angle ; les scripts gardés passent avant les scripts fournis. Les exemples sont adaptés aux options du brief (sans balises, styles ou accentuations non demandés) ; le modèle s'en inspire pour le ton et le rythme, sans les recopier. Sans exemple dans la langue du brief, les autres servent pour la structure et le rythme seulement.
+- Au départ, 5 scripts fournis (annexe A du document V2, produits fictifs : sérum Glowzy, hachoir Choppy, brosse Brosso, écouteurs Runbeat, batterie Voltie). Rangement : `scripts_exemples.json` (scripts gardés, scripts fournis retirés). Fenêtre « Mes meilleurs scripts » (note libre, retrait, script collé écrit ailleurs) : lot 2.
+
+### 4 bis.6 Modèle de texte et coûts
+
+- Liste « Modèle » : les modèles de texte chargés qui savent donner une réponse structurée (capacités au survol). Par défaut **Gemini 3.8 Flash** ; **Gemini 3.1 Pro (aperçu)** chargé pour comparer sur de vrais produits (« aperçu » : Google peut le modifier ou le retirer).
+- Coût **estimé avant chaque demande** (analyse de la page, accroches, script écrit et relu, multiplié par le nombre de scripts à écrire), puis noté appel par appel dans le suivi des coûts : « script : lecture de page », « script : accroches », « script : écriture », « script : relecture ». Ordre de grandeur : 4 à 7 centimes de dollar pour un script complet avec Gemini 3.8 Flash. Température : celle par défaut (recommandation de Google pour Gemini 3).
+- API Gemini (Interactions, documentation vérifiée le 01/10/2026) : réponse structurée par `response_format: {"type": "text", "mime_type": "application/json", "schema": …}` ; lecture d'une page par `tools: [{"type": "url_context"}]`, statut de chaque page (`success`, `error`, `paywall`, `unsafe`) dans les étapes `url_context_result` ; contenu lu compté dans `usage.total_tool_use_tokens`, ajouté aux tokens d'entrée.
 
 ---
 
@@ -676,6 +745,13 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Suivi des coûts : colonnes « Entrée » et « Sortie » (tokens, détail au survol du titre) au lieu de « Tokens entrée » et « Tokens sortie », pour que le tableau tienne en entier à 960 px, coût compris.
 - Modèles et prix (lot 5) : nom, description et capacités du modèle, chacun sur une seule ligne (abrégés par « … », texte complet au survol).
 
+### 9.4 octies Sections repliables et marques (V2)
+
+- **Section repliable** (`composants/section_repliable.py`) : un titre cliquable (flèche vers la droite fermée, vers le bas ouverte ; mauve clair au survol) qui montre ou cache son contenu, décalé sous le texte du titre. Fermée, elle peut afficher un court résumé à côté du titre. Utilisée par le brief du module Script et la fiche « Ce que l'app a compris ».
+- **Étiquettes** grises (rôle « etiquette », comme les capacités d'un modèle) : marque « d'après la page » (ou « d'après la voix ») sur un champ rempli par l'app, rôles des répliques d'un script (« Accroche », « Preuve »…).
+- Boutons du module Script : principal « Écrire le script » (et « Envoyer dans Voix » sur chaque carte de script) ; normal « Lire la page », « Proposer des accroches », « Analyser ce texte » ; contour « Coller le texte du produit », « Changer la langue du projet », « Prononciation… », « Garder comme exemple ».
+- Une accroche se coche d'un clic n'importe où sur sa ligne : son texte passe à la ligne, ce qu'une case à cocher ne sait pas faire.
+
 ### 9.5 Typographie
 
 - Police : **Inter** (embarquée dans l'app)
@@ -703,7 +779,8 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 ## 10. Données et sécurité
 
 - Clés API : coffre-fort Windows uniquement (`keyring`). Jamais dans le code, les projets, les logs ni GitHub.
-- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets).
+- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json` ; options d'écriture du module Script retenues dans les préférences).
+- Lecture d'une page produit (module Script) : une seule demande, celle de l'utilisateur, avec les en-têtes d'un navigateur ordinaire ; 5 Mo lus au plus ; aucune clé envoyée au site.
 - Projets : dossier choisi par l'utilisateur (par défaut `Documents\UGC Studio\Projets\`).
 - Journal d'erreurs lisible, accessible depuis Réglages, sans aucune clé API.
 
@@ -748,7 +825,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). Suite : V2, Studio de style.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lot 1, module Script, version 1.2.0.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -765,11 +842,27 @@ Demandes de l'utilisateur du 30/09/2026, réécrites et validées dans le docume
 
 Coins arrondis de la fenêtre : non pour le moment (Windows 10 dessine des coins carrés ; les arrondir demanderait de redessiner toute la barre de titre, avec un vrai risque de bugs).
 
-### V2 : Studio de style
+### V2 : Studio de style et module Script
+- Module Script (§4 bis) : aide à l'écriture avec un modèle de texte, envoi dans le module Voix.
 - Style du texte complet (§7.4), mot actif (§7.5), préréglages de style (§7.6).
 - Aperçu vidéo fidèle avec zones de sécurité et timeline (§7.7).
 - Formats vidéo (§7.1).
-- Module Script (aide à l'écriture avec un modèle de texte).
+
+#### 12.3 V2 : lots
+
+Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document « UGC Studio - V2 Studio de style et Script » (projet ECOM BUILDR ; réponses : oui à toutes les questions). Même méthode que la V1.1 : une branche et une Pull Request par lot, fabrication automatique verte, captures relues, fusion et Release, puis le lot suivant sans attendre de validation.
+
+| Lot | Version | Contenu | État |
+|---|---|---|---|
+| 1 | 1.2.0 | **Script (1)** : page Script, lecture de la page produit (app, Shopify, Google, texte collé), fiche comprise, brief, accroches, écriture, relecture, durée estimée, exemples (« Garder comme exemple », 5 scripts fournis), envoi dans Voix, coûts ; modèles de texte reconnus, Gemini 3.1 Pro au catalogue ; projet au format 6 | Fait |
+| 2 | 1.3.0 | **Script (2)** : variantes (3 modes), comparaison, retouche, ★ et « Garder », bibliothèque de briefs, fenêtre « Mes meilleurs scripts », vitesse mesurée sur les prises (aussi pour Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse | |
+| 3 | 1.4.0 | **Studio (1)** : moteur de dessin commun, aperçu fidèle (vidéo, fond neutre, damier, zoom, boucle), repères, formats dont personnalisé, position verticale et alignement ; projet au format 7 | |
+| 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style | |
+| 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage | |
+| 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre | |
+| 7 | 2.0.0 | **Studio (5)** : timeline (bords de mot en mot, double-clic), préréglages (fenêtre, vignettes animées, les 6 styles fournis, nouveau, export et import), finitions | |
+
+Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient une prise (caler les mots transcrits sur le script) : V3.
 
 ### V3 : exports vidéo
 - Overlay transparent MOV ProRes 4444 (§8.2).
@@ -789,6 +882,8 @@ Coins arrondis de la fenêtre : non pour le moment (Windows 10 dessine des coins
 - Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
 - Syntaxe exacte des API au moment du code (la doc évolue vite : toujours vérifier la doc officielle avant d'écrire un adaptateur). Les prix de Gemini 3.5 Transcribe sont connus depuis la v1.9 (§4.2).
 - **Zones de sécurité** par plateforme : documentées au §7.8 (TikTok, Meta et YouTube d'après leurs guides ; Snapchat à confirmer). À revoir avec la position verticale des sous-titres (V2) : la zone de TikTok s'élargit à droite sous le milieu de l'écran.
+- **Lecture de pages par Google avec Gemini 3.8 Flash** (module Script) : les deux pages de Google sur l'outil « URL context » ne listaient pas les mêmes modèles (01/10/2026). Si Google refuse l'outil pour un modèle, l'app essaie un autre modèle chargé qui sait lire les pages, sinon propose de coller le texte. À confirmer au premier vrai essai.
+- **Qualité des scripts** : consignes et exemples s'affineront avec les retours de l'utilisateur sur de vrais produits (lot 2).
 - **Durée de conservation des voix créées** (Voice Design) : la documentation officielle « Voice Design » indique 1 an et 200 voix par projet ; le guide « Get_Started_Voices » indique 7 jours. L'app affiche la date renvoyée par Google (`expire_time`).
 
 ---

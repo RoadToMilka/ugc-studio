@@ -73,8 +73,16 @@ def test_chaque_bouton_ouvre_une_page_qui_existe_et_chaque_page_sert():
     assert set(PAGES) <= set(utilisees), f"Conseils jamais affichés : {set(PAGES) - set(utilisees)}"
 
 
-def test_quatre_modules_et_onze_fenetres():
-    modules = {"voix", "transcription", "sous-titres", "reglages"}
+def test_cinq_modules_et_onze_fenetres():
+    modules = {"script", "voix", "transcription", "sous-titres", "reglages"}
     assert modules <= set(PAGES)
     assert len(set(PAGES) - modules) == 11
     assert all(re.fullmatch(r"[a-z-]+", cle) for cle in PAGES)
+
+
+def test_regles_publicitaires_dans_les_conseils_du_script():
+    from ugc_studio.ecriture.regles import REGLES
+
+    conseils = {c for rubrique in PAGES["script"].rubriques for c in rubrique.conseils}
+    assert {regle.francais for regle in REGLES} <= conseils
+    assert any("étiquette « contenu généré par l'IA »" in c for c in conseils)

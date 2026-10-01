@@ -64,6 +64,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "sans_debordement",
     "sous_titres",
     "reorganisation",
+    "module_script",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -369,6 +370,37 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
             verifs["lecture_audio"] = atelier.lecteur._lecteur is not None  # Qt Multimedia embarqué
 
+            # Page Script (V2, lot 1) : brief pré-rempli d'après la page, accroches, deux scripts relus.
+            # Toutes les sections du brief sont ouvertes (elles le restent pour le test à 960 px).
+            ecriture = fenetre.page("script").atelier
+            fenetre.afficher_module("script")
+            for section in ecriture.formulaire.sections:
+                section.ouvrir()
+            ecriture.produit.section_fiche.ouvrir()
+            _laisser_afficher()  # la page s'allonge : la barre de défilement doit le savoir avant les captures
+            champ_produit = ecriture.formulaire.champs["produit"]
+            rapport["script_demo"] = {
+                "produit": champ_produit.valeur(),
+                "marque_d_apres_la_page": not champ_produit.marque.isHidden(),
+                "accroches": len(ecriture.accroches.lignes()),
+                "scripts": [carte.details.text() for carte in ecriture.scripts.cartes()],
+                "bouton_ecrire": ecriture.bouton_ecrire.text(),
+            }
+            verifs["module_script"] = (
+                champ_produit.valeur() == "Sérum éclat Glowzy"
+                and not champ_produit.marque.isHidden()
+                and len(ecriture.accroches.lignes()) == 6
+                and len(ecriture.scripts.cartes()) == 2
+                and ecriture.bouton_ecrire.text() == "Écrire les 2 scripts"
+            )
+            defilement = ecriture.findChild(QScrollArea)
+            if defilement is not None:
+                barre = defilement.verticalScrollBar()
+                for numero, position in enumerate(range(barre.pageStep(), barre.maximum() + barre.pageStep(), barre.pageStep()), 2):
+                    barre.setValue(min(position, barre.maximum()))
+                    capturer(fenetre, f"script-{numero}")
+                barre.setValue(0)
+
             # Page Transcription (étape 7) : un mot choisi, et une capture par hauteur d'écran.
             transcription = fenetre.page("transcription").atelier
             fenetre.afficher_module("transcription")
@@ -477,6 +509,12 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 ("dialogue-comparaison", DialogueComparaison(services, 1, fenetre)),
                 # V1.1, lot 3 : fenêtres « Conseils » (un module, une fenêtre).
                 ("conseils-voix", DialogueConseils(PAGES["voix"], fenetre)),
+                ("conseils-script", DialogueConseils(PAGES["script"], fenetre)),
+                # V2, lot 1 : noms repérés sur la page produit, proposés au dictionnaire de prononciation.
+                (
+                    "dialogue-prononciation-noms",
+                    DialoguePrononciation(services, None, fenetre, mots_proposes=["Glowzy", "Sérum éclat"]),
+                ),
                 ("conseils-creer-une-voix", DialogueConseils(PAGES["creer-une-voix"], fenetre)),
                 # V1.1, lot 5 : modèles chargés.
                 ("dialogue-choix-modeles", DialogueChoixModeles(services, fenetre)),
