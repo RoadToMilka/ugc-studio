@@ -285,7 +285,7 @@ class Ecran:
 
 def resolution(reglages: ReglagesSousTitres, resolution_source: tuple[int, int] | None = None) -> tuple[int, int]:
     """Largeur × hauteur de la vidéo (§7.1). Une vidéo (celle du projet, ou celle choisie pour
-    l'aperçu) impose la sienne : l'overlay de la V3 doit avoir sa taille exacte. Sinon le format
+    l'aperçu) impose la sienne : le calque transparent (V3) doit avoir sa taille exacte. Sinon le format
     choisi (« auto », valeur des projets de la V1 : 9:16), ou le format personnalisé."""
     if resolution_source:
         return resolution_source

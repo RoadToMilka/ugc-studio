@@ -377,10 +377,10 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Aperçu",
             (
-                "L'aperçu dessine les sous-titres avec le même moteur que les futurs exports : ce que tu vois "
-                "est ce qui sera exporté, à la finesse de ton écran près.",
+                "L'aperçu dessine les sous-titres avec le même moteur que les exports : ce que tu vois "
+                "est ce qui est exporté, à la finesse de ton écran près.",
                 "Fond « Vidéo » : la vidéo du projet ; « Gris » : un fond neutre ; « Damier » : pour juger un "
-                "texte prévu pour une incrustation transparente.",
+                "texte prévu pour le calque transparent.",
                 "« 100 % » montre un pixel de la vidéo par pixel de ton écran, pour juger la netteté ; la "
                 "zone défile.",
                 "La boucle rejoue le sous-titre choisi dans la liste ; la barre Espace lance ou arrête la "
@@ -401,8 +401,8 @@ SOUS_TITRES = PageDeConseils(
                 "haut (Bas).",
                 "L'alignement à gauche ou à droite part du bord de la zone de sécurité ; il peut changer le "
                 "découpage, comme la largeur maximale des lignes (réglages avancés).",
-                "Avec une vidéo, le format est le sien : l'incrustation transparente de la V3 doit avoir sa "
-                "taille exacte. Sans vidéo, choisis-le (9:16, 4:5…) ou donne une taille personnalisée.",
+                "Avec une vidéo, le format est le sien : le calque transparent doit avoir sa taille exacte. "
+                "Sans vidéo, choisis-le (9:16, 4:5…) ou donne une taille personnalisée.",
                 "Sous-titres d'une prise de voix : « Choisir une vidéo… » (onglet Écran) montre tes "
                 "sous-titres sur ton montage, avec le moment où la voix commence.",
             ),

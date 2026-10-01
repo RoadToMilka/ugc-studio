@@ -1,5 +1,5 @@
 """Moteur de dessin des sous-titres (V2 ; cahier des charges §7.7, §7.9, §7.10 et §7.11) : un seul
-morceau de code pour l'aperçu et, en V3, pour les exports.
+morceau de code pour l'aperçu et pour les exports (V3, en 16 bits par couleur).
 
 Le principe :
 - Le texte devient des **formes** (le contour exact de chaque lettre, QPainterPath) à la taille
@@ -1013,7 +1013,8 @@ class Moteur:
 
     def image(self, sous_titre: SousTitre | None, mots: list[MotAffiche], temps: float | None = None) -> QImage:
         """Image transparente à la taille de la vidéo, avec ce sous-titre à ce moment (aucun : image
-        vide). C'est l'image que l'export de la V3 assemblera, une par image du film."""
+        vide). C'est l'image du calque transparent (V3), une par image du film ; l'export la dessine
+        avec un moteur en 16 bits (exports/calque.py)."""
         image = self._vide(self.largeur, self.hauteur)
         if sous_titre is not None:
             peintre = QPainter(image)

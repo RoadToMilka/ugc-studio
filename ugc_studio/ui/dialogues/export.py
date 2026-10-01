@@ -394,10 +394,10 @@ class DialogueExportCalque(QDialog):
             element = self.messages.takeAt(0).widget()
             if element is not None:
                 element.deleteLater()
-        for texte in resume.erreurs:
-            self.messages.addWidget(libelle(texte, "erreur"))
-        for texte in resume.avertissements:
-            self.messages.addWidget(libelle(texte, "avertissement"))
+        for texte, role in [*((t, "erreur") for t in resume.erreurs), *((t, "avertissement") for t in resume.avertissements)]:
+            message = libelle(texte, role)
+            self.messages.addWidget(message)
+            message.show()  # tout de suite (sinon Qt ne l'affiche qu'au prochain passage de la boucle)
 
     def messages_affiches(self) -> list[str]:
         """Avertissements et erreurs affichés sous le résumé (pour les tests et l'autotest)."""

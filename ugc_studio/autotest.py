@@ -924,8 +924,10 @@ def _calque(atelier, capturer, capturer_image, rapport: dict) -> bool:
                 "relu_transparence": relu_alpha, "relu_couleur": relu_couleur,
                 "apercu_transparence": apercu_alpha, "apercu_couleur": apercu_couleur,
             }
+            # ProRes 10 bits : 3 niveaux sur 255 au plus. Aperçu (8 bits) : les lettres à 3 niveaux près,
+            # les ombres et lueurs floues à quelques niveaux (le 16 bits y garde plus de nuances).
             etat["image_relue_fidele"] = relu_alpha <= 2 and relu_couleur <= 3
-            etat["image_comme_l_apercu"] = apercu_alpha <= 2 and apercu_couleur <= 3
+            etat["image_comme_l_apercu"] = apercu_alpha <= 6 and apercu_couleur <= 3
             relue = QImage(lue, plan.largeur, plan.hauteur, plan.largeur * 8, QImage.Format.Format_RGBA64).copy()
             capturer_image(_damier_sous(relue.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)).copy(zone), "calque-relu-sur-damier")
             capturer_image(_damier_sous(apercu.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)).copy(zone), "calque-apercu-sur-damier")

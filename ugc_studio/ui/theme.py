@@ -66,7 +66,7 @@ class CouleursApercu:
 
     AUTOUR = "#09090D"  # autour de la vidéo, dans la toile (plus sombre que le fond de l'app)
     FOND_NEUTRE = "#52525B"  # gris moyen : un texte blanc ou noir y reste lisible
-    DAMIER_CLAIR = "#71717A"  # damier : pour juger un texte prévu pour l'overlay transparent (V3)
+    DAMIER_CLAIR = "#71717A"  # damier : pour juger un texte prévu pour le calque transparent (V3)
     DAMIER_FONCE = "#3F3F46"
     ZONE_DE_SECURITE = Couleurs.ACCENT  # pointillés mauves
     MARGE_MAXIMUM = Couleurs.ERREUR  # trait rouge

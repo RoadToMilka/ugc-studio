@@ -66,12 +66,17 @@ def _ecarts(a, b) -> tuple[int, int]:
     return alpha, max(couleurs, default=0)
 
 
+def _ecart_moyen_de_transparence(a, b) -> float:
+    return sum(abs(p[3] - q[3]) for p, q in zip(a, b, strict=True)) / len(a)
+
+
 # --- Moteur en 16 bits et images du calque -------------------------------------------------------
 
 
 def test_moteur_16_bits_identique_a_l_apercu_a_8_bits_pres(app_configuree):
-    """Aperçu = export : le dessin en 16 bits par couleur, ramené à 8 bits, est celui de l'aperçu
-    (ombre, lueur et contour compris) à un niveau sur 255 près ; il garde seulement plus de nuances."""
+    """Aperçu = export : le dessin en 16 bits par couleur est celui de l'aperçu à 8 bits. Les lettres
+    (opaques) ont les mêmes couleurs à 3 niveaux sur 255 près ; les ombres et lueurs floues, plus
+    fines en 16 bits, s'écartent de quelques niveaux au plus, et en moyenne de presque rien."""
     from PySide6.QtGui import QImage
 
     from ugc_studio.rendu.moteur import Moteur
@@ -84,8 +89,10 @@ def test_moteur_16_bits_identique_a_l_apercu_a_8_bits_pres(app_configuree):
         export = Moteur(reglages, LARGEUR, HAUTEUR, profondeur=16).image(sous_titre, contenu.mots, temps)
         assert apercu.format() == QImage.Format.Format_ARGB32_Premultiplied
         assert export.format() == QImage.Format.Format_RGBA64_Premultiplied
-        alpha, couleur = _ecarts(_pixels(apercu), _pixels(export))
-        assert alpha <= 2 * 257 and couleur <= 3 * 257, (temps, alpha / 257, couleur / 257)
+        a, b = _pixels(apercu), _pixels(export)
+        alpha, couleur = _ecarts(a, b)
+        assert alpha <= 6 * 257 and couleur <= 3 * 257, (temps, alpha / 257, couleur / 257)
+        assert _ecart_moyen_de_transparence(a, b) <= 0.25 * 257, temps
 
 
 def test_images_du_calque(app_configuree):
@@ -101,7 +108,9 @@ def test_images_du_calque(app_configuree):
     premier = contenu.sous_titres[0]
     pendant_le_pop = images.image(contenu.mots[0].debut + 0.05)
     assert pendant_le_pop != images.vide
-    fixe = premier.debut + 0.25  # « Mais » actif, pop fini
+    serum = next(m for m in contenu.mots if m.texte == "sérum")
+    fixe = serum.debut + 0.23  # « sérum » actif, son pop (180 ms) fini, « Glowzy » pas encore dit
+    assert premier.debut <= fixe < premier.fin
     une = images.image(fixe)
     assert images.image(fixe + 0.01) is une  # rien n'a bougé : pas redessinée
     dessinees = images.dessinees
@@ -194,7 +203,7 @@ def test_export_du_calque_puis_relu(app_configuree, qtbot, services, projet_pris
         envoyee = _depuis_octets(images.image(plan.temps(numero)))
         lue = _depuis_octets(executer(commande_lire_une_image(FFMPEG, plan.sortie, numero), binaire=True).stdout)
         alpha, couleur = _ecarts(envoyee, lue)
-        assert alpha <= 0x0080 and couleur <= 2 * 257, (numero, alpha, couleur)
+        assert alpha <= 0x0080 and couleur <= 3 * 257, (numero, alpha, couleur)  # ProRes 10 bits : 3 niveaux sur 255 au plus
     assert services.preferences.lire("export_calque_frequence") == "autre"
     assert services.preferences.lire("export_calque_frequence_libre") == 10
 
