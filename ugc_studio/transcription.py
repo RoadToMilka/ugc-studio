@@ -47,6 +47,9 @@ class Mot:
     debut: float  # secondes depuis le début de l'audio
     fin: float
     locuteur: str = ""  # « spk_1 », « spk_2 »… quand les voix sont séparées
+    # Mot accentué dans le script d'une prise (V2, lot 5) : repéré au moment des sous-titres, d'après
+    # le script, jamais enregistré (voir sous_titres_du_projet.marquer_les_accentues).
+    accentue: bool = False
 
     @property
     def duree(self) -> float:
@@ -83,7 +86,10 @@ class Transcription:
         return bool(self.mots)
 
     def en_dict(self) -> dict:
-        return asdict(self)
+        resultat = asdict(self)
+        for mot in resultat["mots"]:
+            mot.pop("accentue", None)  # repéré d'après le script de la prise, jamais enregistré
+        return resultat
 
     @classmethod
     def depuis_dict(cls, brut: dict) -> Transcription:

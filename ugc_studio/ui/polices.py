@@ -10,6 +10,7 @@ démarrage, et on indique à chaque texte la bonne famille (voir `famille_pour_g
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from PySide6.QtGui import QFont, QFontDatabase
 
@@ -27,17 +28,34 @@ _POIDS_QT = {
 _STYLES = {Typo.GRAISSE_MOYENNE: "Medium", Typo.GRAISSE_FORTE: "SemiBold"}
 
 _familles_par_graisse: dict[int, str] = {}
+_declarees: dict[str, list[str]] = {}  # fichier de police déjà déclaré à Qt → ses familles
+
+
+def declarer_police(fichier: Path) -> list[str]:
+    """Déclare un fichier de police à Qt, une seule fois par lancement ; renvoie ses familles (liste
+    vide : ce n'est pas une police lisible).
+
+    Pourquoi une seule fois : Qt ne reconnaît pas un fichier déjà déclaré. Il le chargerait de
+    nouveau en mémoire (une copie de plus à chaque fois) et viderait sa mémoire des polices déjà
+    préparées. Les tests automatiques, qui préparent l'app avant chacun d'eux, en étaient ralentis."""
+    cle = str(fichier.resolve())
+    if cle not in _declarees:
+        identifiant = QFontDatabase.addApplicationFont(str(fichier))
+        if identifiant < 0:
+            return []
+        _declarees[cle] = list(QFontDatabase.applicationFontFamilies(identifiant))
+    return list(_declarees[cle])
 
 
 def charger_polices() -> list[str]:
     """Déclare à Qt les fichiers de police embarqués. Renvoie les familles chargées."""
     familles: list[str] = []
     for fichier in sorted((dossier_ressources() / "polices").glob("*.ttf")):
-        identifiant = QFontDatabase.addApplicationFont(str(fichier))
-        if identifiant < 0:
+        trouvees = declarer_police(fichier)
+        if not trouvees:
             journal.warning("Police non chargée : %s", fichier.name)
             continue
-        for famille in QFontDatabase.applicationFontFamilies(identifiant):
+        for famille in trouvees:
             if famille not in familles:
                 familles.append(famille)
     _reperer_familles(familles)

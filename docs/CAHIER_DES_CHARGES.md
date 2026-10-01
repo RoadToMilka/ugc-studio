@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.10, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; lot 4, style du texte, version 1.5.0, §7.10 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.11, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; lot 4, style du texte, version 1.5.0, §7.10 ; lot 5, mots, version 1.6.0, §7.11 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -560,6 +560,8 @@ Fait au lot 4 de la V2 (détails au §7.10) ; position et alignement : lot 3 (§
 
 ### 7.5 Mot actif (mot en cours de prononciation)
 
+États des mots (à venir, actif, déjà dits, accentués) faits au lot 5 de la V2 (§7.11) ; animations (« pop », apparition…) : lot 6.
+
 Options **combinables** :
 - couleur du texte du mot actif ;
 - contour propre au mot actif (couleur, épaisseur) ;
@@ -635,7 +637,7 @@ Les côtés donnent la largeur des lignes ; le haut et le bas placent les sous-t
 La page Sous-titres devient un **studio** : le bloc « Mots des sous-titres » (inchangé), puis l'**aperçu** à gauche (400 px) et les **réglages** à droite ; l'un sous l'autre quand la page a moins de 880 px de large (fenêtre étroite), ou moins que ce que demandent les deux colonnes (depuis le lot 4 : l'onglet affiché peut demander plus de place). Dessous, la liste des sous-titres, « Réorganiser à la main » et l'export SRT (inchangés). Choix détaillés : document « UGC Studio - V2 Studio de style et Script », §3 à §7.
 
 **Moteur de dessin commun** (`rendu/moteur.py`) :
-- Le texte devient des **formes** (le contour exact de chaque lettre) à la taille réelle de la vidéo ; l'aperçu les dessine en plus petit, l'export de la V3 les dessinera à 100 % sur un fond transparent (`image()` : une image transparente à la taille de la vidéo). Un test vérifie que l'aperçu à 100 % et cette image sont identiques au pixel près.
+- Le texte devient des **formes** (le contour exact de chaque lettre) à la taille réelle de la vidéo ; l'aperçu les dessine en plus petit, l'export de la V3 les dessinera à 100 % sur un fond transparent (`image()` : une image transparente à la taille de la vidéo). Un test vérifie que l'aperçu à 100 % et cette image sont identiques au pixel près. À chaque instant, le sous-titre est **une seule image transparente**, posée d'un coup sur la vidéo (aperçu) ou sur le fond transparent (export), même quand quelque chose bouge (fond qui glisse, lot 5) : poser plusieurs couches l'une après l'autre sur la vidéo arrondirait leurs bords et leurs transparences d'un ou deux niveaux sur 255, et l'aperçu ne serait plus exactement l'export.
 - Le **découpage** mesure la largeur des lignes avec ce moteur (« ça tient » = « ça tient une fois dessiné »). Police du lot 3 : Inter SemiBold à la taille du texte arrondie au pixel, exactement la mesure de la V1 : le découpage d'un projet de la 1.1.0 ou de la 1.3.0 ne change pas (vérifié par un test).
 - Place des lignes et des mots : `mise_en_page.py` (sans interface, testé seul). Une ligne a exactement la largeur mesurée par le découpage ; un mot commence là où finit la ligne, moins la largeur de ce qui le suit.
 - Apparence du lot 3 : celle de la V1, texte blanc avec une **ombre légère** (noire à 55 %, floutée de 0,4 % de la hauteur, décalée de 0,2 % vers le bas). Ordre de dessin : ombre, remplissage (contour, fond et lueur : lot 4, §7.10). Un sous-titre dessiné est gardé en mémoire pour chaque taille d'affichage : pendant la lecture, l'aperçu le recopie.
@@ -737,6 +739,42 @@ Onglet **Texte** du studio (`ui/pages/sous_titres/onglet_texte.py`) : tout ce qu
 **Conseils** de la page : rubriques « Style du texte » et « Polices et licences ».
 
 **Autotest** : polices fournies chargées à la bonne graisse (Montserrat 700 et 800, Poppins 700 et 800, Anton, Bebas Neue) ; style de départ du projet de démonstration ; onglet Texte avec tous ses groupes ouverts (capture du panneau entier) ; six styles proches de ceux de l'annexe B du document V2, faits avec les seuls réglages de l'onglet (une image à la taille de la vidéo, recadrée sur le sous-titre : contour, fond par mot, dégradé, grand texte en majuscules, bandeau par ligne, lueur) ; pipette (elle prend le gris du fond, pas les repères).
+
+### 7.11 Mots (V2, lot 5, version 1.6.0)
+
+Onglet **Mots** du studio, entre Texte et Position (`ui/pages/sous_titres/onglet_mots.py`) : ce qui change pour le mot en train d'être dit. Choix détaillés : document « UGC Studio - V2 Studio de style et Script », §8.
+
+- **Raccourci** (liste) : Sous-titre fixe, Surlignage, Karaoké, Apparition, Mot par mot. Il remplit les trois états ; tout reste modifiable ensuite (la liste montre alors « Personnalisé »). Surlignage : le mot actif en jaune (#FFD43B), à 108 %. Karaoké : le mot actif en jaune (#FACC15), à 106 %, et les mots déjà dits restent jaunes. Apparition : les mots à venir sont invisibles (chaque mot apparaît quand il est dit, puis reste). Mot par mot : seul le mot actif est visible. Les accentués et l'avance de l'allumage ne changent pas.
+- **États** (boutons) : À venir, Mot actif, Déjà dits, Accentués. Un état à la fois s'affiche, avec ses réglages : visibilité (un mot invisible garde sa place), opacité ; puis en groupes repliables : remplissage (couleur, dégradé), contour, lueur, **fond surligné** derrière le mot (couleur, marges, arrondi ; pour le mot actif, réglage avancé : il **glisse** d'un mot à l'autre, avec sa durée), **soulignement** (couleur, épaisseur, distance sous la ligne de base), taille (agrandissement autour du centre du mot) et décalage vertical.
+- **« Comme le texte »** : chaque réglage d'un état vaut celui de l'onglet Texte tant qu'on ne le change pas (le champ montre la valeur du texte). Un réglage changé a son libellé en mauve et un bouton ↺ (« Comme le texte ») qui le rétablit. Un nouveau projet, comme un projet plus ancien, commence en « Sous-titre fixe » (aucun état réglé).
+- **Accentués** (facultatif, case « Utiliser l'état « Accentués » ») : pour les sous-titres d'une prise, les mots mis en valeur dans son script (bouton « Accentuer » du module Voix) prennent cet état, sauf quand ils sont actifs. Ils sont retrouvés à chaque calcul en comparant les mots du script et ceux des sous-titres, comme l'alignement (`alignement.marquer_les_accentues`) : rien n'est enregistré dans la transcription, et un mot corrigé depuis dans le module Transcription n'est plus reconnu. L'onglet dit combien de mots accentués compte le script (ou que les sous-titres ne viennent pas d'une prise). Couleur au départ : jaune.
+- Réglages avancés : **avance de l'allumage**, de −200 à +200 ms (positif : les mots s'allument plus tôt). Le moment des mots ne change pas.
+
+**Règles** (`rendu/moteur.py`) :
+- Le mot actif est le dernier mot du sous-titre déjà commencé, à l'instant affiché (avance comprise) : pendant un petit silence entre deux mots, le dernier dit reste allumé ; avant le premier mot (sous-titre affiché un peu plus tôt pour la durée minimale), aucun ; après le dernier, il reste allumé jusqu'à la fin du sous-titre. Les mots d'avant sont « déjà dits », ceux d'après « à venir ».
+- Les mots d'un même état sont dessinés ensemble (lueur, contour, remplissage, soulignement), puis posés avec l'opacité de l'état (un contour ne se voit pas à travers des lettres à moitié transparentes) ; le mot actif en dernier, par-dessus ses voisins. L'ombre suit les mots visibles (à moitié transparente pour un état à moitié transparent) ; le fond « derrière chaque mot » de l'onglet Texte suit l'état de son mot (invisible avec lui, agrandi avec lui) ; ceux derrière chaque ligne ou en bloc restent.
+- **Place** : agrandissements et décalages autour du centre du mot, sans pousser ses voisins (la place des mots est calculée une fois pour le sous-titre entier : rien ne bouge pendant la lecture). Le plus grand agrandissement prévu, le contour, le fond surligné et le soulignement des états comptent dans la place : dans la largeur mesurée par le découpage (le plus large mot d'une ligne, agrandi, dépasse de chaque côté de la moitié de ce qu'il gagne), et dans la boîte du sous-titre (en haut et en bas : ce que gagne la hauteur des lettres) ; rien ne sort jamais de la marge maximum.
+- **Fond qui glisse** : il part du fond du mot précédent et arrive sous le mot actif en sa durée (courbe douce) ; sur une autre ligne, il ne glisse pas. C'est la seule chose redessinée à chaque image : un sous-titre avec un mot actif donné est dessiné une fois par taille d'affichage et gardé en mémoire (48 dessins au plus), fond du mot actif compris, et l'aperçu ne se redessine que quand le mot actif change. Pendant le glissement, l'image de chaque instant est refaite à partir de deux couches gardées en mémoire (ce qui passe sous le fond, puis les lettres), avec le fond entre les deux : une seule image, comme toujours (§7.9).
+- Forme écrite (projet au format 7, numéro inchangé ; un projet de la 1.5.0, sans « mots », s'ouvre en sous-titre fixe) : `sous_titres.style.mots`, avec `a_venir`, `actif`, `dits`, `accentues` (chacun : `visible`, puis `opacite_pct`, `couleur`, `degrade`, `contour`, `lueur`, `fond` (`couleur`, `marge_x_pct`, `marge_y_pct`, `arrondi_pct`, `glisse`, `duree_glisse_ms`), `soulignement` (`couleur`, `epaisseur_pct`, `distance_pct`), `taille_pct`, `decalage_y_pct` ; `null` : comme le texte), `accentues_actifs` et `avance_ms`.
+
+```json
+"mots": {
+  "a_venir": {"visible": true, "opacite_pct": null, "couleur": null, "degrade": null, "contour": null, "lueur": null,
+              "fond": null, "soulignement": null, "taille_pct": null, "decalage_y_pct": null},
+  "actif": {"visible": true, "opacite_pct": null, "couleur": {"code": "#FFD43B", "opacite": 100.0}, "degrade": null,
+            "contour": null, "lueur": null, "fond": null, "soulignement": null, "taille_pct": 108.0, "decalage_y_pct": null},
+  "dits": {"visible": true, "opacite_pct": null, "couleur": null, "degrade": null, "contour": null, "lueur": null,
+           "fond": null, "soulignement": null, "taille_pct": null, "decalage_y_pct": null},
+  "accentues_actifs": false,
+  "accentues": {"visible": true, "opacite_pct": null, "couleur": {"code": "#FFD43B", "opacite": 100.0}, "degrade": null,
+                "contour": null, "lueur": null, "fond": null, "soulignement": null, "taille_pct": null, "decalage_y_pct": null},
+  "avance_ms": 0
+}
+```
+
+**Conseils** de la page : rubrique « Mots : le mot en train d'être dit ».
+
+**Autotest** : sur la vidéo de démonstration, l'aperçu placé pendant « Sérum » : Surlignage, Karaoké et Apparition appliqués depuis l'onglet (le mot actif est bien « Sérum » ; une image à la taille de la vidéo, recadrée sur le sous-titre, pour chacun), puis un fond qui glisse de « Sérum » à « Glowzy » (capture au milieu du glissement) ; le sous-titre fixe revient ensuite.
 
 ---
 
@@ -897,6 +935,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - **Champ couleur** (lot 4) : sur une ligne, la pastille (carré de la couleur, sur un damier quand elle est transparente ; un clic ouvre le menu), le code, l'opacité et le bouton pipette (icône Lucide « pipette »). Couleurs proposées dans le menu : celles des styles de l'annexe B du document V2.
 - **Onglet Texte** (lot 4) : groupes en sections repliables (Police, Taille et casse, Remplissage ouverts au départ) ; un groupe replié montre un résumé (ex. le code de la couleur du contour et son épaisseur) ; « Réglages avancés » replié dans le groupe ; « Rétablir » en bouton contour (icône « rotate-ccw ») ; « Importer une police… » en bouton contour (icône « type ») ; réglages d'un effet décoché grisés, libellés compris.
 - Pendant la pipette : curseur en croix sur l'aperçu, et une info sous l'aperçu.
+- **Onglet Mots** (lot 5) : « Raccourci » en liste déroulante (« Personnalisé » en tête quand les états ne sont plus ceux d'un raccourci), « État » en choix en boutons, puis les réglages de l'état en grille à trois colonnes : libellé, champ, bouton icône ↺ (« rotate-ccw », infobulle « Comme le texte »), visible seulement pour un réglage changé, dont le libellé passe en mauve (rôle `legende-modifiee`, couleur `ACCENT_SURVOL`). Groupes repliables comme l'onglet Texte (Remplissage et Taille et place ouverts au départ), réglages d'un effet décoché grisés.
 - Les onglets des réglages prennent la hauteur de l'onglet affiché (option `hauteur_selon_l_onglet` des onglets en boutons ; ailleurs, la hauteur reste celle du plus haut) : pas de grand vide sous un onglet court. Une ligne qui ne sert pas disparaît avec son libellé (« Taille » hors format personnalisé), et un message d'état vide ne laisse pas de ligne vide en bas d'un bloc.
 
 ### 9.5 Typographie
@@ -972,7 +1011,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0 ; lot 5 (mots), version 1.6.0.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -1005,7 +1044,7 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 | 2 | 1.3.0 | **Script (2)** : variantes (3 modes), comparaison, retouche, copie, ★ et « Retenir », bibliothèque de briefs, fenêtre « Mes meilleurs scripts », vitesse mesurée sur les prises (aussi pour Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse ; champs de nombre à la hauteur des autres champs | Fait |
 | 3 | 1.4.0 | **Studio (1)** : moteur de dessin commun, aperçu fidèle (vidéo, fond neutre, damier, zoom, boucle), repères, formats dont personnalisé, position verticale et alignement, sous-titre glissé dans l'aperçu, vidéo d'aperçu pour un projet sans vidéo, « Retrouver la vidéo… » ; projet au format 7 (§7.9) | Fait |
 | 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style, style de départ des nouveaux projets (§7.10) | Fait |
-| 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage | |
+| 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage ; agrandissement compté dans la place (§7.11) | Fait |
 | 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre | |
 | 7 | 2.0.0 | **Studio (5)** : timeline (bords de mot en mot, double-clic), préréglages (fenêtre, vignettes animées, les 6 styles fournis, nouveau, export et import), finitions | |
 
@@ -1043,3 +1082,4 @@ Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient 
 - Aucune action demandant un terminal à l'utilisateur.
 - Mettre à jour ce document quand une décision change.
 - Une étape = une branche + une **Pull Request** dont la description explique ce qui change et pourquoi. Quand la fabrication automatique est verte, Claude fusionne la PR, la Release est publiée, et l'étape suivante démarre **sans attendre la validation** de l'utilisateur, qui teste quand il est disponible et signale les problèmes.
+- **Tests d'interface** (lot 5) : après chaque test, les fenêtres qu'il a ouvertes sont vraiment supprimées (`tests/conftest.py`), et un fichier de police n'est déclaré à Qt qu'une fois par lancement (`ui/polices.py`, `declarer_police`). Sans cela, les fenêtres des tests précédents restaient en mémoire et chaque préparation de l'app les repeignait toutes, avec une copie de plus des polices : la série ralentissait au fil des tests (415 s au lot 3, 1 290 s au lot 4, plus de 1 900 s au lot 5).

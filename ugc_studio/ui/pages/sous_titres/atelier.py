@@ -26,6 +26,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
 
+from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
 from ....fournisseurs.stt import MODE_VERBATIM
 from ....mise_en_page import limites_du_reglage_fin
@@ -78,6 +79,7 @@ from ...sous_titres_du_projet import (
     confirmer_reglage,
     ranger_ajustements,
     resolution_imposee,
+    script_de_la_prise,
 )
 from ...theme import Couleurs, Dimensions, Espacements, qcolor
 from ..base import Page
@@ -239,6 +241,7 @@ class AtelierSousTitres(Page):
         panneau.retirer_video_demande.connect(self.retirer_video_apercu)
         panneau.video_apercu_change.connect(self._video_apercu_change)
         panneau.texte.pipette_demandee.connect(self.prendre_une_couleur)
+        panneau.mots.pipette_demandee.connect(self.prendre_une_couleur)
         apercu.bouton_lecture.clicked.connect(self.basculer_lecture)
         apercu.position.sliderMoved.connect(lecteur.aller_a_position)
         apercu.bouton_boucle.toggled.connect(lambda _coche: self._actualiser_boucle())
@@ -406,7 +409,15 @@ class AtelierSousTitres(Page):
             a_sa_video(transcription),
             resolution(reglages, imposee)[1],
             police_remplacee(reglages.texte),
+            self._accentues_du_script(),
         )
+
+    def _accentues_du_script(self) -> int | None:
+        """Mots accentués dans le script de la prise des sous-titres (None : pas une prise)."""
+        script = script_de_la_prise(self._projet, self.transcription)
+        if script is None:
+            return None
+        return sum(1 for _texte, accentue in mots_du_script_accentues(script) if accentue)
 
     def reglages(self):
         """Réglages tels que choisis dans la page."""
@@ -543,9 +554,11 @@ class AtelierSousTitres(Page):
     # --- Aperçu : sous-titre affiché, sous-titre choisi ----------------------------------------
 
     def _actualiser_toile(self) -> None:
-        """L'aperçu montre le sous-titre du moment affiché (celui de l'image de la vidéo)."""
+        """L'aperçu montre le sous-titre du moment affiché (celui de l'image de la vidéo), avec le mot
+        en train d'être dit."""
         index = sous_titre_au_temps(self.sous_titres, self.lecteur.temps, self._debuts)
         self.toile.montrer(self.sous_titres[index] if index >= 0 else None)
+        self.toile.definir_temps(self.lecteur.temps)
 
     def _au_debut(self) -> None:
         """Projet ouvert : l'aperçu montre le premier sous-titre (sans le choisir dans la liste)."""

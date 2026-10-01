@@ -98,7 +98,7 @@ def _reglages_complets() -> ReglagesSousTitres:
 def test_format_7_ecrit_en_trois_parties():
     ecrit = _reglages_complets().en_dict()
     assert set(ecrit) == {"style", "ecran", "apercu"}
-    assert set(ecrit["style"]) == {"texte", "position", "decoupage"}
+    assert set(ecrit["style"]) == {"texte", "mots", "position", "decoupage"}  # « mots » : lot 5
     assert ecrit["style"]["decoupage"] == {
         "caracteres_max": 30, "mots_max": 4, "lignes_max": 1, "couper_sur_ponctuation": False, "duree_min_s": 0.8,
     }

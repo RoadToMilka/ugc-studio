@@ -1,7 +1,9 @@
-"""Réglages du studio des sous-titres (V2, lot 3 ; cahier des charges §7.9) : quatre onglets.
+"""Réglages du studio des sous-titres (V2, lot 3 ; cahier des charges §7.9) : cinq onglets.
 
 - Texte (onglet_texte.py) : police, graisse, taille, casse, ponctuation, remplissage, contour,
   ombre, lueur, fond, espaces (lot 4).
+- Mots (onglet_mots.py) : états des mots (à venir, actif, déjà dits, accentués), raccourcis,
+  avance de l'allumage (lot 5).
 - Position : haut, centre ou bas, réglage fin, alignement ; avancé : largeur maximale des lignes.
 - Découpage : caractères, mots et lignes au plus, durée minimale, coupure sur la ponctuation,
   hésitations masquées.
@@ -47,10 +49,11 @@ from ...composants.elements import (
 from ...composants.onglets import Onglets
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements
+from .onglet_mots import OngletMots
 from .onglet_texte import OngletTexte
 from .reglages_communs import grille, nombre_lisible
 
-ONGLET_TEXTE, ONGLET_POSITION, ONGLET_DECOUPAGE, ONGLET_ECRAN = range(4)
+ONGLET_TEXTE, ONGLET_MOTS, ONGLET_POSITION, ONGLET_DECOUPAGE, ONGLET_ECRAN = range(5)
 PAS_REGLAGE_FIN = 10  # la glissière du réglage fin compte en dixièmes de % de la hauteur
 
 
@@ -71,6 +74,9 @@ class PanneauReglages(QWidget):
         self.texte = OngletTexte()
         self.texte.change.connect(self.change.emit)
         self.onglets.addTab(self.texte, "Texte")
+        self.mots = OngletMots()
+        self.mots.change.connect(self.change.emit)
+        self.onglets.addTab(self.mots, "Mots")
         self.onglets.addTab(self._onglet_position(), "Position")
         self.onglets.addTab(self._onglet_decoupage(), "Découpage")
         self.onglets.addTab(self._onglet_ecran(), "Écran")
@@ -280,6 +286,7 @@ class PanneauReglages(QWidget):
         video_du_projet: bool,
         hauteur_video: int,
         police_remplacee: bool = False,
+        accentues_du_script: int | None = None,
     ) -> None:
         """Montre les réglages du projet. `resolution_imposee` : une vidéo impose son format ;
         `video_du_projet` : le projet a sa propre vidéo (pas de vidéo d'aperçu à choisir) ;
@@ -287,6 +294,7 @@ class PanneauReglages(QWidget):
         self.texte.charger(
             reglages.texte, hauteur_video, max(1, round(hauteur_video * reglages.texte.taille_pct / 100)), police_remplacee
         )
+        self.mots.charger(reglages.mots, reglages.texte, hauteur_video, accentues_du_script)
         elements = (
             self.verticale, self.reglage_fin, self.alignement,
             self.largeur_lignes, self.caracteres, self.mots_max, self.lignes, self.duree_min, self.couper_ponctuation,
@@ -370,6 +378,7 @@ class PanneauReglages(QWidget):
             couper_sur_ponctuation=self.couper_ponctuation.isChecked(),
             duree_min_s=round(self.duree_min.value(), 2),
             texte=self.texte.style(base.texte),
+            mots=self.mots.mots(),
             position=Position(
                 self.verticale.valeur(),
                 round(self.reglage_fin.value() / PAS_REGLAGE_FIN, 2),

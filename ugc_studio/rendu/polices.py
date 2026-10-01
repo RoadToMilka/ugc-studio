@@ -23,6 +23,7 @@ from pathlib import Path
 from PySide6.QtGui import QFontDatabase
 
 from ..chemins import dossier_donnees
+from ..ui.polices import declarer_police
 
 journal = logging.getLogger(__name__)
 
@@ -51,10 +52,7 @@ def dossier_polices_importees() -> Path:
 
 
 def _ajouter(fichier: Path) -> list[str]:
-    identifiant = QFontDatabase.addApplicationFont(str(fichier))
-    if identifiant < 0:
-        return []
-    return list(QFontDatabase.applicationFontFamilies(identifiant))
+    return declarer_police(fichier)  # une seule fois par lancement (voir ui/polices.py)
 
 
 def charger_polices_importees() -> list[str]:

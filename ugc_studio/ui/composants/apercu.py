@@ -51,6 +51,8 @@ class ToileApercu(QWidget):
         self._moteur: Moteur | None = None
         self._mots: list[MotAffiche] = []
         self._sous_titre: SousTitre | None = None
+        self._temps: float | None = None  # moment affiché (mot actif, lot 5)
+        self._dessine: tuple | None = None  # (mot actif, en mouvement) du dernier dessin
         self._image = None  # image de la vidéo affichée (QVideoFrame), ou None
         self._fond = FOND_GRIS
         self._reperes = {"zone": True, "marge": True, "grille": False}
@@ -69,11 +71,25 @@ class ToileApercu(QWidget):
         """Nouveau calcul des sous-titres (réglage changé, mots corrigés) : nouveau moteur."""
         self._moteur, self._mots = moteur, mots
         self._sous_titre = None
+        self._dessine = None
         self.update()
 
     def montrer(self, sous_titre: SousTitre | None) -> None:
         if sous_titre is not self._sous_titre:
             self._sous_titre = sous_titre
+            self._dessine = None
+            self.update()
+
+    def definir_temps(self, temps: float | None) -> None:
+        """Moment de la vidéo affiché : le mot actif en dépend (lot 5). L'aperçu n'est redessiné que
+        si le mot actif change, ou pendant qu'un fond glisse d'un mot à l'autre."""
+        self._temps = temps
+        if self._moteur is None or self._sous_titre is None:
+            return
+        instant = self._moteur.instant(self._sous_titre, self._mots, temps)
+        etat = (instant.actif, self._moteur.en_mouvement(self._sous_titre, self._mots, instant))
+        if etat != self._dessine or etat[1]:
+            self._dessine = etat
             self.update()
 
     @property
@@ -144,7 +160,7 @@ class ToileApercu(QWidget):
             if self._glisse is not None:  # le sous-titre suit le pointeur
                 decale = (self._glisse[2] - self._moteur.reglages.position.decalage_pct) / 100 * cible.height()
                 origine = QPointF(origine.x(), origine.y() + decale)
-            self._moteur.dessiner(peintre, origine, echelle, self._sous_titre, self._mots, self.devicePixelRatioF())
+            self._moteur.dessiner(peintre, origine, echelle, self._sous_titre, self._mots, self.devicePixelRatioF(), self._temps)
         if reperes:
             self._dessiner_reperes(peintre, cible)
 

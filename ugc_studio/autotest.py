@@ -76,6 +76,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "lecture_video",
     "studio",
     "style_texte",
+    "mots_du_studio",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -399,6 +400,7 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     l'autotest réorganise les sous-titres de démonstration)."""
     from .style_sous_titres import BAS, CENTRE, GAUCHE, HAUT
     from .ui.composants.apercu import FOND_DAMIER, FOND_VIDEO, ZOOM_AJUSTE, ZOOM_REEL
+    from .ui.pages.sous_titres.reglages import ONGLET_POSITION
 
     bloc, panneau, toile = atelier.bloc_apercu, atelier.panneau, atelier.toile
     rapport["studio_deux_colonnes"] = atelier.studio.deux_colonnes
@@ -429,7 +431,7 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     for index in range(panneau.onglets.count()):
         panneau.onglets.setCurrentIndex(index)
         capturer(atelier.window(), f"studio-onglet-{index + 1}")
-    panneau.onglets.setCurrentIndex(1)  # Position
+    panneau.onglets.setCurrentIndex(ONGLET_POSITION)
     panneau.verticale.bouton(HAUT).click()
     panneau.alignement.bouton(GAUCHE).click()
     rect, video = toile.rect_du_sous_titre(), toile.rect_video()
@@ -500,6 +502,7 @@ def _image_du_sous_titre(toile) -> QImage | None:
     moteur, sous_titre, mots = toile._moteur, toile.sous_titre, toile._mots
     if moteur is None or sous_titre is None:
         return None
+    temps = toile._temps
     image = QImage(moteur.largeur, moteur.hauteur, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(qcolor(CouleursApercu.FOND_NEUTRE))
     peintre = QPainter(image)
@@ -507,7 +510,7 @@ def _image_du_sous_titre(toile) -> QImage | None:
         cadre = toile._image.toImage()
         if not cadre.isNull():
             peintre.drawImage(QRect(0, 0, moteur.largeur, moteur.hauteur), cadre)
-    peintre.drawImage(QPoint(0, 0), moteur.image(sous_titre, mots))
+    peintre.drawImage(QPoint(0, 0), moteur.image(sous_titre, mots, temps))
     peintre.end()
     bloc = moteur.bloc(sous_titre, mots)
     marge = round(moteur.hauteur * 0.04)
@@ -583,6 +586,59 @@ def _style_texte(atelier, capturer, capturer_image, rapport: dict) -> bool:
     bloc.fond.bouton(FOND_VIDEO).click()
     etat["retour_au_style_de_depart"] = atelier.reglages_du_projet().texte == depart
     rapport["style_texte"] = etat
+    return all(etat.values())
+
+
+def _mots_du_studio(atelier, capturer, capturer_image, rapport: dict) -> bool:
+    """V2, lot 5 : l'onglet Mots. Raccourcis Surlignage, Karaoké et Apparition, puis un fond qui
+    glisse d'un mot à l'autre : chacun appliqué depuis l'onglet, l'aperçu placé pendant « Sérum »
+    (une image à la taille de la vidéo, recadrée sur le sous-titre) ; puis le sous-titre fixe revient."""
+    from dataclasses import replace
+
+    from .style_sous_titres import ACTIF, Couleur, EtatMot, FondMot, Mots, appliquer_raccourci
+    from .ui.pages.sous_titres.reglages import ONGLET_MOTS
+
+    panneau, onglet, toile, lecteur = atelier.panneau, atelier.panneau.mots, atelier.toile, atelier.lecteur
+    etat: dict = {}
+    panneau.onglets.setCurrentIndex(ONGLET_MOTS)
+    depart = atelier.reglages_du_projet().mots
+    hauteur = toile.taille_video()[1]
+
+    def appliquer(mots: Mots) -> None:
+        onglet.charger(mots, atelier.reglages_du_projet().texte, hauteur)
+        onglet.change.emit()
+        _laisser_afficher()
+
+    # « Sérum » : mot de la démonstration (demo.py), prononcé de 2,48 à 2,72 s.
+    serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), None)
+    moment = atelier.mots[serum].debut + 0.12 if serum is not None else 0.0
+    lecteur.aller_a(moment)
+    _attendre(lambda: abs(lecteur.temps - moment) < 0.06, 3)
+    actifs = {}
+    for nom in ("surlignage", "karaoke", "apparition"):
+        appliquer(appliquer_raccourci(Mots(), nom))
+        atelier._actualiser_toile()
+        actifs[nom] = toile._dessine[0] if toile._dessine else None
+        capturer_image(_image_du_sous_titre(toile), f"mots-{nom}")
+        if nom == "surlignage":
+            capturer(atelier.window(), "studio-mots")
+    etat["mot_actif"] = all(actif == serum for actif in actifs.values()) and serum is not None
+    etat["raccourci_enregistre"] = atelier.reglages_du_projet().mots == appliquer_raccourci(Mots(), "apparition")
+    # Fond surligné du mot actif, qui glisse depuis le mot précédent, sur la même ligne (« Sérum » →
+    # « Glowzy ») : capture au milieu du glissement.
+    glisse = replace(Mots(), actif=EtatMot(couleur=Couleur(255, 255, 255), fond=FondMot(glisse=True, duree_glisse_ms=400)))
+    appliquer(glisse)
+    glowzy = serum + 1 if serum is not None and serum + 1 < len(atelier.mots) else None
+    lecteur.aller_a(atelier.mots[glowzy].debut + 0.1 if glowzy is not None else 0.0)
+    atelier._actualiser_toile()
+    instant = toile._moteur.instant(toile.sous_titre, toile._mots, toile._temps) if toile.sous_titre else None
+    etat["fond_qui_glisse"] = bool(instant and toile._moteur.en_mouvement(toile.sous_titre, toile._mots, instant))
+    capturer_image(_image_du_sous_titre(toile), "mots-fond-qui-glisse")
+    rapport["mots_actifs"] = actifs
+    appliquer(depart)
+    panneau.onglets.setCurrentIndex(0)
+    etat["retour_au_depart"] = atelier.reglages_du_projet().mots == depart and onglet._nom == ACTIF
+    rapport["mots_du_studio"] = etat
     return all(etat.values())
 
 
@@ -764,6 +820,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["sous_titres"] = bool(sous_titres.sous_titres)
             verifs["studio"] = _studio(sous_titres, capturer, rapport)
             verifs["style_texte"] = _style_texte(sous_titres, capturer, capturer_image, rapport)
+            verifs["mots_du_studio"] = _mots_du_studio(sous_titres, capturer, capturer_image, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()

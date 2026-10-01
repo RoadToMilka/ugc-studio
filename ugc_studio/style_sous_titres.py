@@ -16,6 +16,9 @@ espaces). Les valeurs par défaut ci-dessous restent l'apparence de la V1 (Inter
 ombre légère, sans contour ni fond) : un projet plus ancien, à qui il manque ces réglages, garde
 exactement son apparence et son découpage. Un nouveau projet prend le style de départ
 (style_de_depart.json : Montserrat ExtraBold, blanc, contour noir).
+Lot 5 (version 1.6.0) : les mots (onglet « Mots ») : trois états (à venir, actif, déjà dits), plus
+les mots accentués du script, chacun avec ses propres réglages ; un réglage d'un état laissé vide
+(None) vaut « comme le texte ».
 """
 
 from __future__ import annotations
@@ -217,17 +220,22 @@ def lire(classe, brut, base=None):
     """Instance de `classe` (une des classes de ce fichier) d'après un dictionnaire lu dans un projet
     ou un préréglage. Une valeur absente ou illisible garde celle de `base` (sinon celle par défaut) ;
     une valeur hors limites est ramenée dans les limites ; un choix inconnu est ignoré. Ainsi, un
-    fichier plus ancien (ou écrit à la main) s'ouvre toujours."""
+    fichier plus ancien (ou écrit à la main) s'ouvre toujours. Un champ qui vaut None par défaut
+    (« comme le texte », états des mots) est lu d'après son type, donné par TYPES."""
     objet = base if base is not None else classe()
     if not isinstance(brut, dict):
         return objet
     limites = getattr(classe, "LIMITES", {})
     choix = getattr(classe, "CHOIX", {})
+    types = getattr(classe, "TYPES", {})
     valeurs = {}
     for champ in fields(classe):
         if champ.name not in brut:
             continue
-        valeur = _convertir(brut[champ.name], getattr(objet, champ.name))
+        defaut = getattr(objet, champ.name)
+        if defaut is None and champ.name in types:
+            defaut = types[champ.name]()  # lu comme une valeur de ce type (ex. une couleur)
+        valeur = _convertir(brut[champ.name], defaut)
         if valeur is None:
             continue
         if champ.name in limites:
@@ -275,6 +283,147 @@ def en_dict(objet) -> dict:
         else:
             resultat[champ.name] = valeur
     return resultat
+
+
+# --- Mots (lot 5, §7.5) : trois états, plus les mots accentués du script ---------------------
+
+A_VENIR, ACTIF, DITS, ACCENTUES = "a_venir", "actif", "dits", "accentues"
+ETATS = {A_VENIR: "À venir", ACTIF: "Mot actif", DITS: "Déjà dits", ACCENTUES: "Accentués"}
+
+
+@dataclass(frozen=True)
+class FondMot:
+    """Fond surligné derrière un mot (d'un état des mots). Pour le mot actif, il peut glisser d'un
+    mot à l'autre (sur une même ligne)."""
+
+    couleur: Couleur = Couleur(124, 58, 237)
+    marge_x_pct: float = 0.94  # 18 px en 1920
+    marge_y_pct: float = 0.16  # 3 px
+    arrondi_pct: float = 1.25  # 24 px
+    glisse: bool = False
+    duree_glisse_ms: int = 140
+
+    LIMITES: ClassVar[dict] = {
+        "marge_x_pct": (0.0, 5.0), "marge_y_pct": (0.0, 5.0), "arrondi_pct": (0.0, 5.0), "duree_glisse_ms": (0, 1000),
+    }
+
+
+@dataclass(frozen=True)
+class Soulignement:
+    """Trait sous le mot : couleur, épaisseur, distance sous la ligne de base (en % de la hauteur)."""
+
+    couleur: Couleur = BLANC
+    epaisseur_pct: float = 0.25  # 5 px en 1920
+    distance_pct: float = 0.35  # 7 px
+
+    LIMITES: ClassVar[dict] = {"epaisseur_pct": (0.05, 2.0), "distance_pct": (-2.0, 3.0)}
+
+
+@dataclass(frozen=True)
+class EtatMot:
+    """Apparence d'un état des mots. Chaque réglage laissé à None vaut « comme le texte » (onglet
+    Texte) : opacité 100 %, taille 100 %, sans décalage, sans fond surligné ni soulignement. Un mot
+    invisible garde sa place (rien ne bouge pendant la lecture)."""
+
+    visible: bool = True
+    opacite_pct: float | None = None
+    couleur: Couleur | None = None
+    degrade: Degrade | None = None
+    contour: Contour | None = None
+    lueur: Lueur | None = None
+    fond: FondMot | None = None
+    soulignement: Soulignement | None = None
+    taille_pct: float | None = None  # agrandissement autour du centre du mot (100 : comme le texte)
+    decalage_y_pct: float | None = None  # vers le bas (négatif : vers le haut)
+
+    TYPES: ClassVar[dict] = {
+        "opacite_pct": float, "couleur": Couleur, "degrade": Degrade, "contour": Contour, "lueur": Lueur,
+        "fond": FondMot, "soulignement": Soulignement, "taille_pct": float, "decalage_y_pct": float,
+    }
+    LIMITES: ClassVar[dict] = {"opacite_pct": (0.0, 100.0), "taille_pct": (50.0, 200.0), "decalage_y_pct": (-5.0, 5.0)}
+
+    @property
+    def change(self) -> bool:
+        """Au moins un réglage qui n'est pas « comme le texte » ?"""
+        return self != EtatMot()
+
+    @property
+    def echelle(self) -> float:
+        return (self.taille_pct if self.taille_pct is not None else 100.0) / 100
+
+    @property
+    def opacite(self) -> float:
+        return (self.opacite_pct if self.opacite_pct is not None else 100.0) / 100
+
+    @property
+    def decalage_pct(self) -> float:
+        return self.decalage_y_pct or 0.0
+
+
+RACCOURCI_FIXE, RACCOURCI_SURLIGNAGE, RACCOURCI_KARAOKE = "fixe", "surlignage", "karaoke"
+RACCOURCI_APPARITION, RACCOURCI_MOT_PAR_MOT = "apparition", "mot_par_mot"
+RACCOURCIS = {
+    RACCOURCI_FIXE: "Sous-titre fixe",
+    RACCOURCI_SURLIGNAGE: "Surlignage",
+    RACCOURCI_KARAOKE: "Karaoké",
+    RACCOURCI_APPARITION: "Apparition",
+    RACCOURCI_MOT_PAR_MOT: "Mot par mot",
+}
+JAUNE_ACTIF = Couleur(255, 212, 59)  # « Blanc contour noir » (annexe B du document V2)
+JAUNE_KARAOKE = Couleur(250, 204, 21)
+
+
+@dataclass(frozen=True)
+class Mots:
+    """Onglet « Mots » : l'apparence des mots à venir, du mot actif (en train d'être dit), des mots
+    déjà dits et, si `accentues_actifs`, des mots accentués du script d'une prise ; `avance_ms` :
+    les mots s'allument un peu plus tôt (positif) ou plus tard à l'écran (leur moment ne change pas)."""
+
+    a_venir: EtatMot = EtatMot()
+    actif: EtatMot = EtatMot()
+    dits: EtatMot = EtatMot()
+    accentues_actifs: bool = False
+    accentues: EtatMot = EtatMot(couleur=JAUNE_ACTIF)
+    avance_ms: int = 0
+
+    LIMITES: ClassVar[dict] = {"avance_ms": (-200, 200)}
+
+    def etat(self, nom: str) -> EtatMot:
+        return getattr(self, nom)
+
+    @property
+    def fixe(self) -> bool:
+        """Aucun état ne change l'apparence des mots : le sous-titre est dessiné d'un bloc."""
+        return not (self.a_venir.change or self.actif.change or self.dits.change or self.accentues_actifs)
+
+
+def etats_du_raccourci(nom: str) -> dict[str, EtatMot]:
+    """Ce qu'un raccourci met dans les trois états (à venir, actif, déjà dits)."""
+    a_venir = actif = dits = EtatMot()
+    if nom == RACCOURCI_SURLIGNAGE:
+        actif = EtatMot(couleur=JAUNE_ACTIF, taille_pct=108.0)
+    elif nom == RACCOURCI_KARAOKE:
+        actif = EtatMot(couleur=JAUNE_KARAOKE, taille_pct=106.0)
+        dits = EtatMot(couleur=JAUNE_KARAOKE)
+    elif nom == RACCOURCI_APPARITION:
+        a_venir = EtatMot(visible=False)
+    elif nom == RACCOURCI_MOT_PAR_MOT:
+        a_venir = dits = EtatMot(visible=False)
+    return {A_VENIR: a_venir, ACTIF: actif, DITS: dits}
+
+
+def appliquer_raccourci(mots: Mots, nom: str) -> Mots:
+    """Un raccourci remplit les trois états ; tout reste modifiable ensuite (accentués et avance
+    de l'allumage ne changent pas)."""
+    return replace(mots, **etats_du_raccourci(nom))
+
+
+def raccourci_de(mots: Mots) -> str | None:
+    """Le raccourci dont les états sont exactement ceux-ci (None : réglages personnalisés)."""
+    for nom in RACCOURCIS:
+        if {A_VENIR: mots.a_venir, ACTIF: mots.actif, DITS: mots.dits} == etats_du_raccourci(nom):
+            return nom
+    return None
 
 
 @dataclass(frozen=True)
