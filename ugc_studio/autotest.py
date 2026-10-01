@@ -15,8 +15,8 @@ import traceback
 from pathlib import Path
 
 import PySide6
-from PySide6.QtCore import QPoint, Qt, QTimer, qVersion
-from PySide6.QtGui import QColor, QFontDatabase, QFontInfo, QIcon, QImageReader, QPainter
+from PySide6.QtCore import QPoint, QPointF, QRect, Qt, QTimer, qVersion
+from PySide6.QtGui import QColor, QFontDatabase, QFontInfo, QIcon, QImage, QImageReader, QPainter
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidget
 
 from . import __version__
@@ -75,6 +75,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "script_lot2",
     "lecture_video",
     "studio",
+    "style_texte",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -444,6 +445,146 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     return all(etat.values())
 
 
+def _styles_proposes() -> dict:
+    """Six styles proches de ceux de l'annexe B du document V2, faits avec les seuls réglages de
+    l'onglet « Texte » (le mot actif viendra aux lots 5 et 6). Tailles en % de la hauteur de la
+    vidéo : pour 1920 px, 1 % = 19,2 px."""
+    from .style_sous_titres import (
+        CASSE_MAJUSCULES,
+        FOND_LIGNE,
+        FOND_MOT,
+        Contour,
+        Couleur,
+        Degrade,
+        Espaces,
+        Fond,
+        Lueur,
+        Ombre,
+        StyleTexte,
+        style_de_depart,
+    )
+
+    noir, sans_ombre = Couleur(0, 0, 0), Ombre(active=False)
+    return {
+        "style-1-contour": style_de_depart(),
+        "style-2-fond-par-mot": StyleTexte(
+            police="Poppins", graisse=700, taille_pct=4.1, ombre=Ombre(True, Couleur(0, 0, 0, 55.0), 0.94, 0.0, 0.31),
+            fond=Fond(FOND_MOT, Couleur(124, 58, 237), 0.94, 0.16, 1.25),
+        ),
+        "style-3-degrade": StyleTexte(
+            police="Poppins", graisse=800, taille_pct=4.1, degrade=Degrade(True, Couleur(250, 204, 21)),
+            contour=Contour(True, noir, 0.31), ombre=sans_ombre,
+        ),
+        "style-4-grand-contour": StyleTexte(
+            police="Anton", graisse=400, taille_pct=7.8, casse=CASSE_MAJUSCULES, contour=Contour(True, noir, 0.47),
+            ombre=Ombre(True, Couleur(0, 0, 0, 45.0), 1.56, 0.0, 0.94),
+        ),
+        "style-5-bandeau": StyleTexte(
+            police="Montserrat", graisse=700, taille_pct=3.4, couleur=Couleur(17, 24, 39), ombre=sans_ombre,
+            fond=Fond(FOND_LIGNE, Couleur(255, 255, 255), 1.875, 0.625, 1.5625), espaces=Espaces(interligne_pct=152.0),
+        ),
+        "style-6-lueur": StyleTexte(
+            police="Bebas Neue", graisse=400, taille_pct=6.3, casse=CASSE_MAJUSCULES,
+            ombre=Ombre(True, Couleur(0, 0, 0, 60.0), 0.625, 0.0, 0.31), lueur=Lueur(True, Couleur(245, 158, 11), 2.19, 80.0),
+            espaces=Espaces(lettres_pct=0.078),
+        ),
+    }
+
+
+def _image_du_sous_titre(toile) -> QImage | None:
+    """Le sous-titre affiché, à la taille réelle de la vidéo (l'image de l'export de la V3), posé sur
+    l'image de la vidéo, recadré sur lui : pour juger la netteté et les effets."""
+    from .ui.theme import CouleursApercu, qcolor
+
+    moteur, sous_titre, mots = toile._moteur, toile.sous_titre, toile._mots
+    if moteur is None or sous_titre is None:
+        return None
+    image = QImage(moteur.largeur, moteur.hauteur, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(qcolor(CouleursApercu.FOND_NEUTRE))
+    peintre = QPainter(image)
+    if toile._image is not None:
+        cadre = toile._image.toImage()
+        if not cadre.isNull():
+            peintre.drawImage(QRect(0, 0, moteur.largeur, moteur.hauteur), cadre)
+    peintre.drawImage(QPoint(0, 0), moteur.image(sous_titre, mots))
+    peintre.end()
+    bloc = moteur.bloc(sous_titre, mots)
+    marge = round(moteur.hauteur * 0.04)
+    haut = max(0, round(bloc.y) - marge)
+    return image.copy(0, haut, moteur.largeur, min(moteur.hauteur - haut, round(bloc.hauteur) + 2 * marge))
+
+
+def _style_texte(atelier, capturer, capturer_image, rapport: dict) -> bool:
+    """V2, lot 4 : le style du texte. Polices fournies à la bonne graisse, style de départ du projet
+    de démonstration, onglet « Texte » avec tous ses groupes ouverts, six styles (une image à la
+    taille de la vidéo, recadrée sur le sous-titre), pipette ; puis le style de départ revient."""
+    from .rendu.moteur import police_du_texte
+    from .rendu.polices import POLICES_FOURNIES, familles
+    from .style_sous_titres import StyleTexte, style_de_depart
+    from .ui.composants.apercu import FOND_GRIS, FOND_VIDEO
+    from .ui.composants.section_repliable import SectionRepliable
+    from .ui.theme import CouleursApercu, qcolor
+
+    panneau, texte, toile, bloc = atelier.panneau, atelier.panneau.texte, atelier.toile, atelier.bloc_apercu
+    etat: dict = {}
+    # 1. Polices fournies : chacune à la graisse demandée (pas une autre graisse « approchante »).
+    rendus, justes = {}, []
+    for famille, graisse in (("Montserrat", 800), ("Montserrat", 700), ("Poppins", 700), ("Poppins", 800), ("Anton", 400), ("Bebas Neue", 400)):
+        qpolice, remplacee = police_du_texte(StyleTexte(police=famille, graisse=graisse), Typo.TITRE_PAGE)
+        info = QFontInfo(qpolice)
+        rendus[f"{famille} {graisse}"] = f"{info.family()} / {info.styleName()} / {info.weight()}"
+        justes.append(not remplacee and info.family().startswith(famille) and info.weight() == graisse)
+    rapport["polices_sous_titres"] = rendus
+    etat["polices_fournies"] = familles()[: len(POLICES_FOURNIES)] == list(POLICES_FOURNIES) and all(justes)
+    depart = atelier.reglages_du_projet().texte
+    etat["style_de_depart"] = depart == style_de_depart()
+
+    # 2. Onglet « Texte », tous les groupes ouverts (le panneau entier, même la partie à faire défiler).
+    panneau.onglets.setCurrentIndex(0)
+    sections = list(texte.sections.values()) + [s for s in texte.findChildren(SectionRepliable) if s not in texte.sections.values()]
+    ouvertes = [section.est_ouverte() for section in sections]
+    for section in sections:
+        section.ouvrir()
+    _laisser_afficher()
+    capturer(panneau, "studio-texte-reglages")
+    etat["onglet_texte_tient_dans_sa_colonne"] = panneau.minimumSizeHint().width() <= panneau.width()
+    for section, ouverte in zip(sections, ouvertes, strict=True):
+        section.ouvrir(ouverte)
+
+    # 3. Six styles, appliqués comme depuis l'onglet (le projet est enregistré, le découpage refait).
+    hauteur = toile.taille_video()[1]
+    appliques = []
+    for nom, style in _styles_proposes().items():
+        texte.charger(style, hauteur, round(hauteur * style.taille_pct / 100), False)
+        texte.change.emit()
+        _laisser_afficher()
+        appliques.append(
+            atelier.reglages_du_projet().texte == style and not toile._moteur.police_remplacee and toile.sous_titre is not None
+        )
+        capturer_image(_image_du_sous_titre(toile), nom)
+    rapport["styles_appliques"] = appliques
+    etat["styles_appliques"] = all(appliques)
+    texte.charger(depart, hauteur, round(hauteur * depart.taille_pct / 100), False)
+    texte.change.emit()
+    _laisser_afficher()
+    capturer(atelier.window(), "studio-texte")
+
+    # 4. Pipette : sur le fond gris, elle prend le gris (et pas les repères dessinés par-dessus).
+    bloc.fond.bouton(FOND_GRIS).click()
+    atelier.prendre_une_couleur(texte.couleur)
+    _laisser_afficher()
+    capturer(atelier.window(), "studio-pipette")
+    gris = qcolor(CouleursApercu.FOND_NEUTRE)
+    prise = toile.couleur_affichee(toile.rect_video().topLeft() + QPointF(Espacements.S, Espacements.S))
+    attente = toile.pipette_active and not bloc.info_pipette.isHidden()
+    toile.finir_pipette()
+    etat["pipette"] = attente and prise == (gris.red(), gris.green(), gris.blue()) and not toile.pipette_active
+    bloc.fond.bouton(FOND_VIDEO).click()
+    etat["retour_au_style_de_depart"] = atelier.reglages_du_projet().texte == depart
+    rapport["style_texte"] = etat
+    return all(etat.values())
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -513,6 +654,14 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 peintre.end()
                 chemin = dossier / f"{nom}.png"
                 if image.save(str(chemin)):
+                    rapport["captures"].append(chemin.name)
+
+            def capturer_image(image, nom: str) -> None:
+                """Image faite par l'app (ex. un sous-titre à la taille de la vidéo)."""
+                nonlocal attendues
+                attendues += 1
+                chemin = dossier / f"{nom}.png"
+                if image is not None and image.save(str(chemin)):
                     rapport["captures"].append(chemin.name)
 
             for identifiant in fenetre.identifiants_modules():
@@ -613,6 +762,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             rapport["sous_titres_demo"] = [s.texte for s in sous_titres.sous_titres]
             verifs["sous_titres"] = bool(sous_titres.sous_titres)
             verifs["studio"] = _studio(sous_titres, capturer, rapport)
+            verifs["style_texte"] = _style_texte(sous_titres, capturer, capturer_image, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()

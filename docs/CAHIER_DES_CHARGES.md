@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.9, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.10, 01/10/2026 (V2 en cours : lots 1 et 2, module Script, version 1.3.0, §4 bis ; lot 3, studio des sous-titres, version 1.4.0, §7.9 ; lot 4, style du texte, version 1.5.0, §7.10 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -546,13 +546,16 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 
 ### 7.4 Style du texte
 
-- Police : choix parmi les polices installées sur Windows + import de fichiers `.ttf` / `.otf` ; graisse.
-- Taille (proportionnelle à la hauteur vidéo).
-- Couleur du texte.
-- **Contour** : oui/non, couleur, épaisseur.
-- **Ombre** : oui/non, couleur, opacité, flou, décalage X/Y.
-- **Fond** derrière le sous-titre : oui/non, couleur, opacité, marge intérieure, arrondi.
-- Interlignage, espacement des lettres.
+Fait au lot 4 de la V2 (détails au §7.10) ; position et alignement : lot 3 (§7.9).
+
+- Police : polices fournies avec l'app, polices installées sur Windows, et import de fichiers `.ttf` / `.otf` ; graisse (celles de la police).
+- Taille (proportionnelle à la hauteur de la vidéo), casse, ponctuation.
+- Couleur du texte, ou dégradé de deux couleurs ; toutes les couleurs ont leur opacité, et se prennent aussi dans l'aperçu (pipette).
+- **Contour** : oui/non, couleur, épaisseur, angles arrondis ou nets ; dessiné autour des lettres.
+- **Ombre** : oui/non, couleur et opacité, flou, décalage X/Y, portée par le texte ou par le fond.
+- **Lueur** : oui/non, couleur, taille, intensité.
+- **Fond** : aucun, derrière chaque mot, derrière chaque ligne ou un seul bloc ; couleur et opacité, marges intérieures, arrondi, bordure.
+- Interlignage, espace entre les lettres, espace entre les mots.
 - Position verticale (haut / centre / bas + réglage fin), alignement.
 
 ### 7.5 Mot actif (mot en cours de prononciation)
@@ -585,7 +588,7 @@ Options **combinables** :
 
 Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Créer les sous-titres » d'une prise, §3.3 ; « Corriger les mots » ouvre le module Transcription), réglages, liste des sous-titres, réorganisation à la main (V1.1), écoute, export SRT. Les sous-titres sont recalculés à chaque changement de réglage (`sous_titres.py`, testé sans interface) ; seuls les réglages et les sous-titres réorganisés à la main sont enregistrés dans le projet.
 
-**Réglages par défaut** : 24 caractères (espaces comprises) et 5 mots au plus par sous-titre, 2 lignes au plus, coupe de préférence après la ponctuation, durée minimale 0,6 s ; ponctuation affichée, pas de majuscules, hésitations masquées (réglage partagé avec la transcription) ; format « celui de la vidéo » (sinon 9:16), zone de sécurité TikTok, marge maximum 5 %, texte à 4 % de la hauteur de la vidéo.
+**Réglages par défaut** : 24 caractères (espaces comprises) et 5 mots au plus par sous-titre, 2 lignes au plus, coupe de préférence après la ponctuation, durée minimale 0,6 s ; ponctuation affichée, pas de majuscules, hésitations masquées (réglage partagé avec la transcription) ; format « celui de la vidéo » (sinon 9:16), zone de sécurité TikTok, marge maximum 5 %, texte à 4 % de la hauteur de la vidéo. Style du texte d'un nouveau projet (V2, §7.10) : Montserrat Extra-grasse, blanc, contour noir.
 
 **Texte affiché (§7.2)** : sans les hésitations masquées ; une ponctuation transcrite à part rejoint son mot ; ponctuation masquée = retirée autour des mots (gardée à l'intérieur : « l'huile », « anti-rides », « 3.5 ») ; typographie : en français, espace insécable avant « ! ? ; : » (pas dans « 10:30 ») et à l'intérieur des guillemets « », dans les autres langues pas d'espace avant ; jamais d'espace avant « , . … ». « Tout en majuscules » à la fin. Les temps des mots ne changent jamais.
 
@@ -594,7 +597,7 @@ Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Cré
 - Caractères et mots : deux maximums (un mot plus long que la limite de caractères reste seul) ; un mot n'est jamais coupé.
 - Parmi tous les découpages possibles, l'app retient le meilleur (programmation dynamique) : des sous-titres bien remplis et de longueurs proches (l'écart au maximum de caractères compte au carré), qui finissent si possible sur une ponctuation (bonus), en restant de préférence dans la zone de sécurité (petite pénalité pour la marge).
 
-**Écran (§7.3)** : la largeur de chaque ligne est mesurée en pixels par le moteur de dessin (V2, §7.9 ; en V1 par Qt), avec la police Inter SemiBold à la taille du texte (en % de la hauteur de la vidéo, arrondie au pixel).
+**Écran (§7.3)** : la largeur de chaque ligne est mesurée en pixels par le moteur de dessin (V2, §7.9 ; en V1 par Qt), avec la police du style (en V1 : Inter SemiBold) à la taille du texte (en % de la hauteur de la vidéo, arrondie au pixel), ses espaces, et ce que le contour et le fond ajoutent de chaque côté (V2, §7.10).
 - Formats : celui de la vidéo importée (dimensions remises à l'endroit pour une vidéo de téléphone enregistrée « couchée », rotation de 90°), sinon 9:16 (1080 × 1920), 4:5 (1080 × 1350), 3:4 (1080 × 1440), 1:1 (1080 × 1080), 16:9 (1920 × 1080), ou personnalisé (V2).
 - Ordre : une ligne dans la zone de sécurité ; sinon deux lignes équilibrées dans la zone (si 2 lignes permises ; retour à la ligne de préférence après une ponctuation) ; sinon la même chose jusqu'à la marge maximum ; sinon le sous-titre est redécoupé (aucune taille ne change). Un mot seul trop large est rapetissé jusqu'à tenir dans la marge maximum, sans descendre sous 60 % de la taille du texte : il est signalé en orange (liste des sous-titres et aperçu), avec le conseil de le raccourcir s'il ne tient toujours pas.
 - Sous-titres centrés : la zone de sécurité retient le plus large des deux côtés (ex. YouTube Shorts : 10 % des deux côtés). Si elle est plus large que la zone de la marge maximum, c'est la marge maximum qui compte.
@@ -635,7 +638,7 @@ La page Sous-titres devient un **studio** : le bloc « Mots des sous-titres » (
 - Le texte devient des **formes** (le contour exact de chaque lettre) à la taille réelle de la vidéo ; l'aperçu les dessine en plus petit, l'export de la V3 les dessinera à 100 % sur un fond transparent (`image()` : une image transparente à la taille de la vidéo). Un test vérifie que l'aperçu à 100 % et cette image sont identiques au pixel près.
 - Le **découpage** mesure la largeur des lignes avec ce moteur (« ça tient » = « ça tient une fois dessiné »). Police du lot 3 : Inter SemiBold à la taille du texte arrondie au pixel, exactement la mesure de la V1 : le découpage d'un projet de la 1.1.0 ou de la 1.3.0 ne change pas (vérifié par un test).
 - Place des lignes et des mots : `mise_en_page.py` (sans interface, testé seul). Une ligne a exactement la largeur mesurée par le découpage ; un mot commence là où finit la ligne, moins la largeur de ce qui le suit.
-- Apparence du lot 3 : celle de la V1, texte blanc avec une **ombre légère** (noire à 55 %, floutée de 0,4 % de la hauteur, décalée de 0,2 % vers le bas). Ordre de dessin : ombre, remplissage (contour, fond et lueur : lot 4). Un sous-titre dessiné est gardé en mémoire pour chaque taille d'affichage : pendant la lecture, l'aperçu le recopie.
+- Apparence du lot 3 : celle de la V1, texte blanc avec une **ombre légère** (noire à 55 %, floutée de 0,4 % de la hauteur, décalée de 0,2 % vers le bas). Ordre de dessin : ombre, remplissage (contour, fond et lueur : lot 4, §7.10). Un sous-titre dessiné est gardé en mémoire pour chaque taille d'affichage : pendant la lecture, l'aperçu le recopie.
 
 **Aperçu** (`ui/composants/apercu.py`, `ui/pages/sous_titres/apercu.py`) :
 - Fond : la **vidéo** du projet, un **gris** neutre, ou un **damier** (pour juger un texte prévu pour l'overlay transparent). Zoom : **Ajusté** (la vidéo entière, 540 px de haut au plus) ou **100 %** (un pixel de la vidéo par pixel de l'écran ; l'aperçu défile).
@@ -649,7 +652,7 @@ La page Sous-titres devient un **studio** : le bloc « Mots des sous-titres » (
 - **Projet sans vidéo** (prise de voix, audio importé) : onglet Écran, « Vidéo d'aperçu » : « Choisir une vidéo… » (ex. le montage exporté de Premiere Pro), « La voix commence à » (décalage, en secondes), « Son de la vidéo » (sinon la voix de la prise, sous la vidéo muette, recalée sur elle au-delà de 0,15 s d'écart), « Retirer ». Sa résolution, lue par Qt Multimedia, impose le format.
 
 **Réglages en onglets** (`ui/pages/sous_titres/reglages.py`) :
-- **Texte** : taille (en % de la hauteur, avec les pixels à côté), casse, ponctuation ; info : police et apparence (lot 4 : style complet).
+- **Texte** : taille (en % de la hauteur, avec les pixels à côté), casse, ponctuation ; info : police et apparence (lot 4 : tout le style du texte, §7.10).
 - **Position** : Haut, Centre ou Bas (« Haut » : juste sous le haut de la zone de sécurité ; « Bas » : juste au-dessus de son bas ; « Centre » : milieu de l'écran) ; **réglage fin** (glissière, en dixièmes de % de la hauteur, bouton « Revenir à 0 % ») ; **alignement** gauche, centre ou droite ; réglages avancés : **largeur des lignes** (30 à 100 % de la largeur utile). Point fixe du bloc : son haut, son milieu ou son bas (un sous-titre de 2 lignes grandit vers le bas, des deux côtés, ou vers le haut). Le bloc ne dépasse jamais la marge maximum (en haut et en bas : en % de la hauteur) ; la glissière s'arrête à temps pour le plus grand sous-titre possible (« Lignes au plus »).
 - **Découpage** : caractères, mots et lignes au plus, durée minimale, coupure après la ponctuation, hésitations masquées.
 - **Écran** : format (§7.1), zone de sécurité, marge maximum, mesures de l'écran (« Vidéo 1080 × 1920, texte de 77 px (Inter SemiBold) : une ligne tient en 840 px… »), vidéo d'aperçu.
@@ -678,6 +681,62 @@ La page Sous-titres devient un **studio** : le bloc « Mots des sous-titres » (
 - Projet des formats 4 à 6 : « Tout en majuscules », la ponctuation et la taille passent dans le style du texte ; apparence de la V1 ; en bas de la zone de sécurité, centré.
 
 **Autotest** : une petite vidéo de test (AVI « Motion JPEG », écrite par l'app elle-même, `avi.py` et `rendu/video_test.py`) remplace la vidéo de démonstration : le `.exe` doit en recevoir la première image (taille et couleur vérifiées), puis la lire 1,5 s (le temps avance). Captures : studio sur la vidéo, damier et grille, zoom 100 %, chaque onglet, sous-titre en haut à gauche.
+
+### 7.10 Style du texte (V2, lot 4, version 1.5.0)
+
+Onglet **Texte** du studio (`ui/pages/sous_titres/onglet_texte.py`) : tout ce qui vaut pour tous les mots, en groupes repliables (§9.4 octies) ; les réglages rares attendent dans « Réglages avancés », replié dans le groupe ; chaque groupe a son bouton **« Rétablir »** (valeurs de départ des nouveaux projets ; au lot 7, celles du préréglage d'origine). Les réglages d'un effet décoché sont grisés. Choix détaillés : document « UGC Studio - V2 Studio de style et Script », §6.
+
+| Groupe | Réglages | Nouveau projet |
+|---|---|---|
+| Police | recherche, police (fournies d'abord, puis importées et de Windows ; chaque nom écrit dans sa police), graisse (celles de la police), « Importer une police… » | Montserrat Extra-grasse (800) |
+| Taille et casse | taille (% de la hauteur, pixels à côté), casse, ponctuation | 4 % (77 px en 1080 × 1920), comme écrit, ponctuation affichée |
+| Remplissage | couleur ; dégradé de deux couleurs (vertical, horizontal ou en biais), sur chaque ligne | blanc |
+| Contour | case, couleur, épaisseur ; avancé : angles arrondis ou nets | oui, noir, 0,3 % (6 px) |
+| Ombre | case, couleur (son opacité fait la force de l'ombre), flou, décalages horizontal et vertical ; avancé : portée par le texte ou par le fond | non |
+| Lueur | case, couleur, taille, intensité | non |
+| Fond | aucun, derrière chaque mot, derrière chaque ligne ou un seul bloc ; couleur, marges intérieures horizontale et verticale, arrondi ; avancé : bordure (couleur, épaisseur) | aucun |
+| Espaces | interlignage (% de celui de la police), espace entre les lettres, espace entre les mots | 100 %, 0, 0 |
+
+- **Tailles** : affichées en pixels de la vidéo actuelle, rangées en % de sa hauteur (un style garde le même aspect dans tous les formats), à trois décimales comme dans le projet. Un champ n'affiche qu'un arrondi : tant qu'on n'y touche pas, la valeur exacte du projet est gardée (changer une couleur ne change rien d'autre).
+- **Couleurs** (`ui/composants/champ_couleur.py`) : pastille (menu : couleurs proposées, « Autre couleur… », pipette), code « #RRGGBB », opacité (0 à 100 %), bouton **pipette**. Pipette : le prochain clic dans l'aperçu prend la couleur affichée sous le pointeur (vidéo, fond ou sous-titre ; pas les repères) ; Échap ou un clic ailleurs annule ; une info le dit sous l'aperçu ; quand la page est étroite, elle défile jusqu'à l'aperçu. Ces couleurs sont des choix de la vidéo, pas de l'interface : elles ne sont pas dans `theme.py`.
+- **Polices** (`rendu/polices.py`) :
+  - fournies, libres pour la publicité (licence SIL OFL, fichiers de licence à côté des polices) : Montserrat et Poppins (graisses 500 à 900), Anton, Bebas Neue, Inter (400 à 700) ; chargées au démarrage ;
+  - importées (`.ttf`, `.otf`) : copiées dans `%APPDATA%\UGC Studio\polices\` (un projet les garde si le fichier d'origine est déplacé ; même nom mais autre contenu : « nom (2).ttf »), chargées à chaque démarrage ; un fichier qui n'est pas une police lisible est refusé avec un message ;
+  - de Windows : celles que Qt trouve. Une police de Windows ou importée a sa propre licence (info dans le groupe, rubrique « Polices et licences » des conseils) ;
+  - Windows range parfois les graisses d'une police sous des familles à part (« Montserrat ExtraBold ») : le style retient la famille de base et la graisse, l'app retrouve la famille à demander (comme pour Inter, §9.5) ;
+  - **police absente** (autre ordinateur, police désinstallée) : Inter la remplace (à la graisse la plus proche), un message orange le dit dans l'onglet, et le style garde le nom et la graisse de la police : rien n'est perdu pour l'ordinateur où elle existe.
+- **Dessin** (`rendu/moteur.py`), dans cet ordre : ombre, fond (et sa bordure), lueur, contour, remplissage.
+  - Contour : un trait deux fois plus épais, dessiné sous le texte : la moitié visible est **autour** des lettres, qui gardent leur épaisseur.
+  - Fond : rectangles arrondis derrière chaque mot, chaque ligne, ou tout le bloc (de la ligne la plus à gauche à la plus à droite), de la hauteur des lettres (accents et jambages compris) plus la marge verticale. Deux fonds de ligne qui se touchent forment une seule forme (pas de double opacité) : l'interlignage les écarte.
+  - Lueur : la silhouette du texte et de son contour, élargie de la moitié de la taille du halo, puis floutée ; l'intensité règle son opacité.
+  - Ombre « portée par le fond » : celle du fond (sinon : celle des lettres et de leur contour).
+  - Dégradé : sur chaque ligne, de la couleur du texte (en haut, à gauche) à la seconde couleur.
+  - Flous calculés une fois par sous-titre et par taille d'affichage, gardés en mémoire (§7.9).
+- **Débord** : le contour et le fond (marge intérieure et bordure) dépassent du texte. Ils comptent dans la largeur mesurée par le découpage (« ça tient une fois dessiné ») et dans la boîte du sous-titre : c'est la boîte visible qui reste entre les marges maximum, part du bord de la zone de sécurité (alignement à gauche ou à droite) et règle la course du réglage fin. Un mot seul trop large est rapetissé, pas son débord. L'ombre et la lueur, floues et légères, n'en font pas partie.
+- **Espaces** : l'espace entre les lettres s'ajoute après chaque lettre sauf la dernière (une ligne reste centrée sur ses lettres) ; l'espace entre les mots s'ajoute à chaque espace.
+- Un réglage qui change la largeur du texte (police, graisse, taille, espaces, contour, marges du fond) refait le découpage, avec la question de la 1.1.0 s'il défait un ajustement fait à la main (§7.8) ; les autres ne changent que le dessin.
+- **Style de départ** des nouveaux projets : `ressources/style_de_depart.json` (Montserrat Extra-grasse, blanc, contour noir de 0,3 %, sans ombre). Un projet plus ancien (1.1.0 à 1.4.0) garde son apparence et son découpage : Inter SemiBold, blanc, ombre légère, sans contour ni fond (les valeurs par défaut du style).
+- **Forme écrite** du style du texte (projet au format 7, numéro inchangé : un projet de la 1.4.0, à qui manquent les nouveaux groupes, les reçoit avec leurs valeurs par défaut). Choix possibles : `direction` vertical, horizontal ou biais ; `angles` arrondis ou nets ; `portee` texte ou fond ; `mode` du fond aucun, mot, ligne ou bloc.
+
+```json
+"texte": {
+  "police": "Montserrat", "graisse": 800, "taille_pct": 4.0, "casse": "normale", "ponctuation": true,
+  "couleur": {"code": "#FFFFFF", "opacite": 100.0},
+  "degrade": {"actif": false, "couleur": {"code": "#FACC15", "opacite": 100.0}, "direction": "vertical"},
+  "contour": {"actif": true, "couleur": {"code": "#000000", "opacite": 100.0}, "epaisseur_pct": 0.3, "angles": "arrondis"},
+  "ombre": {"active": false, "couleur": {"code": "#000000", "opacite": 55.0}, "flou_pct": 0.4,
+            "decalage_x_pct": 0.0, "decalage_y_pct": 0.2, "portee": "texte"},
+  "lueur": {"active": false, "couleur": {"code": "#F59E0B", "opacite": 100.0}, "taille_pct": 1.0, "intensite_pct": 80.0},
+  "fond": {"mode": "aucun", "couleur": {"code": "#000000", "opacite": 60.0}, "marge_x_pct": 0.8, "marge_y_pct": 0.3,
+           "arrondi_pct": 0.6, "bordure": false, "bordure_couleur": {"code": "#FFFFFF", "opacite": 100.0},
+           "bordure_epaisseur_pct": 0.15},
+  "espaces": {"interligne_pct": 100.0, "lettres_pct": 0.0, "mots_pct": 0.0}
+}
+```
+
+**Conseils** de la page : rubriques « Style du texte » et « Polices et licences ».
+
+**Autotest** : polices fournies chargées à la bonne graisse (Montserrat 700 et 800, Poppins 700 et 800, Anton, Bebas Neue) ; style de départ du projet de démonstration ; onglet Texte avec tous ses groupes ouverts (capture du panneau entier) ; six styles proches de ceux de l'annexe B du document V2, faits avec les seuls réglages de l'onglet (une image à la taille de la vidéo, recadrée sur le sous-titre : contour, fond par mot, dégradé, grand texte en majuscules, bandeau par ligne, lueur) ; pipette (elle prend le gris du fond, pas les repères).
 
 ---
 
@@ -835,6 +894,9 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Aperçu : autour de la vidéo, un fond plus sombre que l'app ; fond neutre gris moyen (un texte blanc ou noir y reste lisible) ; damier de cases de 12 px. Repères : traits de 1 px à l'écran quel que soit le zoom ; zone de sécurité en pointillés mauves (4 px, 4 px), marge maximum en rouge, grille en blanc à 35 %. Couleurs dans `theme.CouleursApercu`.
 - Boutons : icône lecture et pause, **boucle** (icône Lucide « repeat », mauve quand elle est active) ; contour « Retrouver la vidéo… », « Choisir une vidéo… » (icône « film »), « Retirer » ; icône « Revenir à 0 % » du réglage fin.
 - Largeurs : colonne de l'aperçu 400 px, studio sur deux colonnes à partir de 880 px de large, aperçu de 200 à 540 px de haut.
+- **Champ couleur** (lot 4) : sur une ligne, la pastille (carré de la couleur, sur un damier quand elle est transparente ; un clic ouvre le menu), le code, l'opacité et le bouton pipette (icône Lucide « pipette »). Couleurs proposées dans le menu : celles des styles de l'annexe B du document V2.
+- **Onglet Texte** (lot 4) : groupes en sections repliables (Police, Taille et casse, Remplissage ouverts au départ) ; un groupe replié montre un résumé (ex. le code de la couleur du contour et son épaisseur) ; « Réglages avancés » replié dans le groupe ; « Rétablir » en bouton contour (icône « rotate-ccw ») ; « Importer une police… » en bouton contour (icône « type ») ; réglages d'un effet décoché grisés, libellés compris.
+- Pendant la pipette : curseur en croix sur l'aperçu, et une info sous l'aperçu.
 - Les onglets des réglages prennent la hauteur de l'onglet affiché (option `hauteur_selon_l_onglet` des onglets en boutons ; ailleurs, la hauteur reste celle du plus haut) : pas de grand vide sous un onglet court. Une ligne qui ne sert pas disparaît avec son libellé (« Taille » hors format personnalisé), et un message d'état vide ne laisse pas de ligne vide en bas d'un bloc.
 
 ### 9.5 Typographie
@@ -864,7 +926,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 ## 10. Données et sécurité
 
 - Clés API : coffre-fort Windows uniquement (`keyring`). Jamais dans le code, les projets, les logs ni GitHub.
-- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json`, bibliothèque de briefs `briefs.json`, vitesses de parole mesurées `vitesses.json` ; options d'écriture du module Script retenues dans les préférences).
+- Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json`, bibliothèque de briefs `briefs.json`, vitesses de parole mesurées `vitesses.json`, polices importées pour les sous-titres `polices\` ; options d'écriture du module Script retenues dans les préférences).
 - Lecture d'une page produit (module Script) : une seule demande, celle de l'utilisateur, avec les en-têtes d'un navigateur ordinaire ; 5 Mo lus au plus ; aucune clé envoyée au site.
 - Projets : dossier choisi par l'utilisateur (par défaut `Documents\UGC Studio\Projets\`).
 - Journal d'erreurs lisible, accessible depuis Réglages, sans aucune clé API.
@@ -876,7 +938,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Chaque version publiée = une **Release GitHub** avec le `.exe` construit automatiquement (GitHub Actions, machine Windows, PyInstaller).
 - Fabrication automatique à chaque envoi de code : tests, fabrication de `UGC-Studio.exe`, démarrage du `.exe` en mode autotest (vérifications, dont la lecture d'une vidéo de test depuis la 1.4.0, + captures d'écran de chaque module), rapport joint au run.
 - Le numéro de version est dans `ugc_studio/__init__.py`. Quand il change sur la branche `main`, une Release `v<version>` est publiée automatiquement. Les versions `0.x` (étapes de la V1) sont marquées « pré-version ».
-- La police Inter et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer. FFmpeg en ligne de commande sera ajouté avec les exports vidéo (V3).
+- Les polices (Inter pour l'interface ; Montserrat, Poppins, Anton et Bebas Neue pour les sous-titres, avec leurs licences) et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer. FFmpeg en ligne de commande sera ajouté avec les exports vidéo (V3).
 - *(plus tard)* Installateur qui crée l'icône sur le bureau et dans le menu Démarrer.
 
 ---
@@ -910,7 +972,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 en cours (§12.3) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -942,7 +1004,7 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 | 1 | 1.2.0 | **Script (1)** : page Script, lecture de la page produit (app, Shopify, Google, texte collé), fiche comprise, brief, accroches, écriture, relecture, durée estimée, exemples (« Garder comme exemple », 5 scripts fournis), envoi dans Voix, coûts ; modèles de texte reconnus, Gemini 3.1 Pro au catalogue ; projet au format 6 | Fait |
 | 2 | 1.3.0 | **Script (2)** : variantes (3 modes), comparaison, retouche, copie, ★ et « Retenir », bibliothèque de briefs, fenêtre « Mes meilleurs scripts », vitesse mesurée sur les prises (aussi pour Voix), accroches envoyées en variantes de voix, nombres dits à la belge ou à la suisse ; champs de nombre à la hauteur des autres champs | Fait |
 | 3 | 1.4.0 | **Studio (1)** : moteur de dessin commun, aperçu fidèle (vidéo, fond neutre, damier, zoom, boucle), repères, formats dont personnalisé, position verticale et alignement, sous-titre glissé dans l'aperçu, vidéo d'aperçu pour un projet sans vidéo, « Retrouver la vidéo… » ; projet au format 7 (§7.9) | Fait |
-| 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style | |
+| 4 | 1.5.0 | **Studio (2)** : style du texte complet (polices fournies, de Windows et importées ; graisse, casse, couleurs avec opacité, dégradés, pipette, contour, ombre, lueur, fond par mot, par ligne ou en bloc, espaces), découpage mesuré avec le style, style de départ des nouveaux projets (§7.10) | Fait |
 | 5 | 1.6.0 | **Studio (3)** : mots : raccourcis, trois états (à venir, actif, déjà dits) entièrement réglables, fond qui glisse, mots accentués du script, avance de l'allumage | |
 | 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre | |
 | 7 | 2.0.0 | **Studio (5)** : timeline (bords de mot en mot, double-clic), préréglages (fenêtre, vignettes animées, les 6 styles fournis, nouveau, export et import), finitions | |

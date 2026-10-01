@@ -282,6 +282,36 @@ SOUS_TITRES = PageDeConseils(
             ),
         ),
         Rubrique(
+            "Style du texte",
+            (
+                "Un nouveau projet commence en Montserrat Extra-grasse, blanc, avec un contour noir : le style "
+                "le plus lisible sur n'importe quelle vidéo. Un projet plus ancien garde son apparence.",
+                "Chaque groupe de l'onglet Texte (police, remplissage, contour, ombre, lueur, fond, espaces) se "
+                "replie ; ses réglages rares attendent dans « Réglages avancés », et « Rétablir » le remet "
+                "comme au départ.",
+                "Les tailles s'affichent en pixels de ta vidéo et sont gardées en % de sa hauteur : un style "
+                "garde le même aspect en 9:16, en 4:5 ou en 1:1.",
+                "Le contour est dessiné autour des lettres, sans les amincir. Ordre de dessin : ombre, fond, "
+                "lueur, contour, puis le texte.",
+                "La pipette prend une couleur dans l'aperçu, par exemple celle de ton produit ; Échap annule.",
+                "Le contour et le fond comptent dans la largeur d'une ligne : un contour plus épais peut "
+                "refaire le découpage (l'ombre et la lueur, non).",
+            ),
+        ),
+        Rubrique(
+            "Polices et licences",
+            (
+                "Polices fournies avec l'app (Montserrat, Poppins, Anton, Bebas Neue, Inter) : licence SIL "
+                "OFL, libres pour la publicité.",
+                "Une police de Windows ou importée (« Importer une police… », .ttf ou .otf) a sa propre "
+                "licence : vérifie qu'elle autorise un usage commercial avant de l'utiliser dans une pub.",
+                "Une police importée est copiée dans le dossier de l'app : le projet la garde même si le "
+                "fichier d'origine est déplacé.",
+                "Sur un ordinateur où la police manque, Inter la remplace (un message orange le dit) et le "
+                "style garde son nom : rien n'est perdu.",
+            ),
+        ),
+        Rubrique(
             "Aperçu",
             (
                 "L'aperçu dessine les sous-titres avec le même moteur que les futurs exports : ce que tu vois "
@@ -321,8 +351,8 @@ SOUS_TITRES = PageDeConseils(
                 "boutons de l'application (TikTok, Reels…) ne cachent pas. Le texte y reste normalement.",
                 "Une ligne trop large peut déborder jusqu'à la marge maximum, jamais au-delà ; sinon, le "
                 "sous-titre est redécoupé.",
-                "Les largeurs sont mesurées en pixels par le moteur de dessin, avec la police et la taille du "
-                "texte : « ça tient » veut dire « ça tient une fois dessiné ».",
+                "Les largeurs sont mesurées en pixels par le moteur de dessin, avec la police, la taille, les "
+                "espaces, le contour et le fond : « ça tient » veut dire « ça tient une fois dessiné ».",
             ),
         ),
         Rubrique(

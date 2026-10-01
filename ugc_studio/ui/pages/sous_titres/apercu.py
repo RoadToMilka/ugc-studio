@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QBoxLayout, QFrame, QHBoxLayout, QSizePolicy, QVBo
 from ....preferences import Preferences
 from ...composants.apercu import FOND_GRIS, FOND_VIDEO, FONDS, ZOOM_AJUSTE, ZOOMS, ToileApercu, ZoneApercu
 from ...composants.choix import ChoixEnBoutons
-from ...composants.elements import bouton, case_a_cocher, glissiere, libelle
+from ...composants.elements import bouton, case_a_cocher, glissiere, info, libelle
 from ...composants.flux import DispositionFlux
 from ...icones import icone
 from ...theme import Couleurs, Dimensions, Espacements
@@ -38,6 +38,10 @@ class BlocApercu(QFrame):
         self.toile = ToileApercu()
         self.zone = ZoneApercu(self.toile)
         disposition.addWidget(self.zone)
+        self.info_pipette = info("Pipette : clique dans l'aperçu sur la couleur à prendre (Échap : annuler).")
+        self.info_pipette.hide()
+        self.toile.pipette_change.connect(self.info_pipette.setVisible)
+        disposition.addWidget(self.info_pipette)
 
         # Vidéo déplacée ou supprimée (elle n'est pas copiée dans le projet).
         self.ligne_introuvable = QWidget()

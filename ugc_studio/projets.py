@@ -50,6 +50,7 @@ from .nombres import VARIANTES as VARIANTES_NOMBRES
 from .prononciation import Prononciation, depuis_liste
 from .script import joindre_repliques
 from .sous_titres import ReglagesSousTitres
+from .style_sous_titres import style_de_depart
 from .stockage import ecrire_json, lire_json
 from .transcription import Remplacement, Transcription, remplacements_depuis_liste
 
@@ -288,6 +289,7 @@ class GestionnaireProjets:
             raise ErreurProjet(f"Impossible de créer le dossier du projet : {erreur}") from erreur
         maintenant = _maintenant()
         projet = Projet(dossier=dossier, nom=nom, langue=langue, cree_le=maintenant, modifie_le=maintenant)
+        projet.sous_titres.texte = style_de_depart()  # V2, lot 4 : Montserrat ExtraBold, contour noir
         self._activer(projet)
         self.enregistrer()
         journal.info("Projet créé : %s (%s)", nom, dossier)
