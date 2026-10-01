@@ -19,9 +19,10 @@ def _fenetre(qtbot, _chemin=None):
 def test_modules_de_la_barre_laterale(app_configuree, qtbot, tmp_path):
     fenetre = _fenetre(qtbot, tmp_path / "preferences.json")
     libelles = [b.text() for b in fenetre.barre_laterale.boutons()]
-    assert libelles == ["Voix", "Transcription", "Sous-titres", "Réglages"]
+    # V2 : le module Script en tête, c'est la première étape d'une pub.
+    assert libelles == ["Script", "Voix", "Transcription", "Sous-titres", "Réglages"]
     assert all(not b.icon().isNull() for b in fenetre.barre_laterale.boutons())
-    assert fenetre.module_actuel() == "voix"
+    assert fenetre.module_actuel() == "script"
 
 
 def test_clic_sur_un_module(app_configuree, qtbot, tmp_path):
@@ -67,7 +68,7 @@ def test_la_fenetre_se_souvient_du_module(app_configuree, qtbot, tmp_path):
     fenetre.close()
     fenetre2 = _fenetre(qtbot, chemin)
     assert fenetre2.module_actuel() == "sous-titres"
-    assert fenetre2.barre_laterale.boutons()[2].isChecked()
+    assert fenetre2.barre_laterale.boutons()[3].isChecked()
 
 
 def test_balises_affichees_telles_quelles(app_configuree, qtbot):

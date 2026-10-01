@@ -162,6 +162,8 @@ class Dimensions:
     COLONNE_VARIANTE_LARGEUR = 240
     COLONNE_TITRES_VARIANTES_LARGEUR = 104  # « Modèle », « Voix », « Style », « Texte »
     CHAMP_DESCRIPTION_HAUTEUR = 88  # description d'une voix (Voice Design) : environ 3 lignes
+    CHAMP_BRIEF_HAUTEUR = 72  # champ de plusieurs lignes du brief (bénéfices, preuves…) : environ 3 lignes
+    CHAMP_TEXTE_COLLE_HAUTEUR = 160  # texte d'une page produit collé à la main (module Script)
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320

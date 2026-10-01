@@ -92,6 +92,63 @@ def test_noms_de_variantes_de_la_v1_0_0_sans_tiret(gestion, tmp_path):
     assert [p.nom for p in projet.prises] == ["Prise 3 (variante B)", "Mon essai — final"]
 
 
+def test_module_script_enregistre_dans_le_projet(gestion, tmp_path):
+    """Format 6 (V2) : brief, page lue, fiche, accroches et scripts sont gardés dans le projet."""
+    from ugc_studio.ecriture.fiche import FicheProduit
+    from ugc_studio.ecriture.page_produit import PageLue
+    from ugc_studio.ecriture.scripts import Accroche, RepliqueEcrite, nouveau_script
+
+    projet = gestion.creer("Culotte Léa", tmp_path)
+    etat = projet.ecriture
+    etat.adresse = "mademoiselleculotte.com/products/culotte-menstruelle-lea"
+    etat.brief.reseau, etat.brief.duree_s, etat.brief.balises = "meta", 20, True
+    etat.brief.pre_remplir({"produit": "Culotte menstruelle Léa"})
+    etat.page = PageLue("https://x.fr/products/lea", "shopify", "2026-10-01T14:32:00+02:00", "Données…", prix="21,90 €")
+    etat.fiche = FicheProduit(nom="Culotte menstruelle Léa", benefices=["Au sec jusqu'à 12 h"])
+    etat.accroches = [Accroche("Fini les fuites la nuit.", "temoignage", "Parle d'un vrai souci.", cochee=True)]
+    script = nouveau_script(
+        modele="gemini-3.8-flash", reseau="meta", langue="fr-FR", angle="temoignage", duree_visee_s=20,
+        repliques=[RepliqueEcrite(["accroche"], [{"texte": "Fini les fuites "}, {"balise": "laugh"}], "warm", "chaleureux")],
+    )
+    etat.scripts = [script]
+    gestion.enregistrer()
+
+    rouvert = GestionnaireProjets(tmp_path / "recents.json").ouvrir(projet.dossier).ecriture
+    assert rouvert.brief == etat.brief and rouvert.brief.pre_remplis == ["produit"]
+    assert rouvert.adresse == etat.adresse and rouvert.page == etat.page and rouvert.fiche == etat.fiche
+    assert rouvert.accroches == etat.accroches and rouvert.accroches_cochees()[0].texte == "Fini les fuites la nuit."
+    assert rouvert.scripts == [script] and rouvert.script(script.identifiant) == script
+
+
+def test_projet_de_la_v1_1_sans_script(gestion, tmp_path):
+    dossier = tmp_path / "Ancien"
+    dossier.mkdir()
+    (dossier / "projet.json").write_text(json.dumps({"version_format": 5, "nom": "Ancien"}), encoding="utf-8")
+    projet = gestion.ouvrir(dossier)
+    assert projet.ecriture.scripts == [] and projet.ecriture.page is None and projet.ecriture.brief.reseau == "tiktok"
+
+
+def test_dernieres_modifications_d_un_projet_qu_on_quitte(gestion, tmp_path):
+    """Un module enregistre ses dernières modifications au moment où un autre projet s'ouvre : elles vont
+    dans l'ancien projet, pas dans le nouveau."""
+    ancien = gestion.creer("Ancien", tmp_path)
+    nouveau = gestion.creer("Nouveau", tmp_path)
+    ancien.repliques = [RepliqueProjet([{"texte": "Modifié juste avant."}])]
+    gestion.enregistrer(ancien)
+    assert GestionnaireProjets(tmp_path / "autres.json").ouvrir(ancien.dossier).repliques == ancien.repliques
+    assert GestionnaireProjets(tmp_path / "autres.json").ouvrir(nouveau.dossier).repliques == [RepliqueProjet()]
+
+
+def test_changer_la_langue_du_projet(gestion, tmp_path):
+    projet = gestion.creer("Batterie", tmp_path)
+    vus = []
+    gestion.abonner(lambda p: vus.append(p.langue if p else None))
+    gestion.changer_langue("nl-BE")
+    assert projet.langue == "nl-BE" and vus == ["nl-BE"]
+    gestion.changer_langue("xx-XX")  # inconnue : rien ne change
+    assert projet.langue == "nl-BE" and vus == ["nl-BE"]
+
+
 def test_reglages_des_sous_titres_enregistres(gestion, tmp_path):
     projet = gestion.creer("Sous-titres", tmp_path)
     projet.sous_titres.majuscules, projet.sous_titres.lignes_max = True, 1

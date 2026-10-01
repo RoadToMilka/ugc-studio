@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from .chemins import dossier_donnees, fichier_preferences
 from .connexions import Coffre, CoffreWindows, GestionnaireConnexions
 from .couts import JournalCouts
+from .ecriture.exemples import BibliothequeExemples
 from .modeles_charges import ModelesCharges
 from .preferences import Preferences
 from .prix import CataloguePrix
@@ -32,6 +33,7 @@ class Services:
     voix: GestionnaireVoix  # favoris, voix créées, bibliothèque de Google gardée en mémoire (§5.4)
     remplacements: DictionnaireRemplacements  # remplacements après transcription, tous projets (§6.3)
     modeles: ModelesCharges  # modèles chargés dans l'app, et où ils servent (§4.2 bis)
+    exemples: BibliothequeExemples  # « Mes meilleurs scripts » : exemples donnés au modèle (V2, §10.9)
 
 
 def creer_services(coffre: Coffre | None = None) -> Services:
@@ -51,4 +53,5 @@ def creer_services(coffre: Coffre | None = None) -> Services:
         voix=voix,
         remplacements=DictionnaireRemplacements(dossier / "remplacements.json"),
         modeles=ModelesCharges(dossier / "modeles.json", voix, styles),
+        exemples=BibliothequeExemples(dossier / "scripts_exemples.json"),
     )

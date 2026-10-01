@@ -76,16 +76,22 @@ def requete(
     corps_json: Any = None,
     donnees: bytes | None = None,
     delai: float = DELAI_PAR_DEFAUT,
+    taille_max: int | None = None,
 ) -> ReponseHttp:
     """Envoie une requête et renvoie la réponse, y compris quand le serveur répond par une erreur
     (code 400, 403…) : c'est à l'adaptateur de traduire l'erreur pour l'utilisateur.
 
-    Lève ErreurFournisseur(code « reseau ») si le serveur est injoignable.
+    `taille_max` : nombre d'octets lus au plus (ex. une page web : on n'en lit que le début si elle
+    est énorme). Lève ErreurFournisseur(code « reseau ») si le serveur est injoignable.
     """
     demande = _preparer(methode, url, entetes, corps_json, donnees)
     try:
         with urllib.request.urlopen(demande, timeout=delai, context=ssl.create_default_context()) as reponse:
-            return ReponseHttp(reponse.status, reponse.read(), dict(reponse.headers.items()))
+            corps = reponse.read() if taille_max is None else reponse.read(taille_max)
+            entetes_reponse = dict(reponse.headers.items())
+            if reponse.url and reponse.url != url:
+                entetes_reponse["X-Adresse-Finale"] = reponse.url  # après une redirection
+            return ReponseHttp(reponse.status, corps, entetes_reponse)
     except urllib.error.HTTPError as erreur:
         return _reponse_en_erreur(erreur)
     except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as erreur:

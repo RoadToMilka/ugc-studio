@@ -213,6 +213,63 @@ def test_texte_des_dernieres_etapes_seulement():
         lire_resultat_texte({"status": "completed", "steps": []})
 
 
+def test_reponse_structuree_et_lecture_de_page(serveur):
+    """Module Script (V2) : schéma de la réponse (« response_format ») et outil « URL context »."""
+    from ugc_studio.fournisseurs.texte import RequeteTexte
+
+    reponse = _reponse_texte('{"nom": "Culotte Léa"}')
+    reponse["steps"][1:1] = [
+        {"type": "url_context_call", "id": "c1", "arguments": {"urls": ["https://boutique.fr/products/lea"]}},
+        {
+            "type": "url_context_result",
+            "call_id": "c1",
+            "result": [{"url": "https://boutique.fr/products/lea", "status": "success"}],
+        },
+    ]
+    reponse["usage"]["total_tool_use_tokens"] = 5_000
+    serveur.programmer(200, reponse)
+    schema = {"type": "object", "properties": {"nom": {"type": "string"}}, "required": ["nom"]}
+    resultat = AdaptateurGoogle(CLE, url_api=serveur.url).generer_texte(
+        RequeteTexte("gemini-3.8-flash", "Lis https://boutique.fr/products/lea", "Rôle.", "low", schema=schema, lire_adresses=True)
+    )
+    corps = json.loads(serveur.requetes[0]["corps"])
+    assert corps["response_format"] == {"type": "text", "mime_type": "application/json", "schema": schema}
+    assert corps["tools"] == [{"type": "url_context"}]
+    assert json.loads(resultat.texte) == {"nom": "Culotte Léa"}
+    # La page lue est facturée comme du texte envoyé : ses tokens s'ajoutent à l'entrée.
+    assert (resultat.tokens_entree, resultat.tokens_sortie) == (5_090, 38)
+    assert [(a.adresse, a.statut, a.reussie) for a in resultat.adresses_lues] == [
+        ("https://boutique.fr/products/lea", "success", True)
+    ]
+
+
+def test_statuts_des_pages_lues():
+    from ugc_studio.fournisseurs.google import lire_adresses_lues
+
+    donnees = {
+        "steps": [
+            {"type": "url_context_result", "result": [{"url": "https://a.fr", "status": "paywall"}]},
+            {"type": "url_context_result", "is_error": True, "result": [{"url": "https://b.fr"}]},
+            {"type": "model_output", "content": [{"type": "text", "text": "…"}]},
+        ]
+    }
+    assert [(a.adresse, a.statut) for a in lire_adresses_lues(donnees)] == [
+        ("https://a.fr", "paywall"),
+        ("https://b.fr", "error"),
+    ]
+    assert lire_adresses_lues({"steps": []}) == []
+
+
+def test_requete_de_texte_sans_option_inchangee(serveur):
+    """Sans schéma ni lecture de page, la demande reste celle de la v1.1.0 (traductions)."""
+    from ugc_studio.fournisseurs.texte import RequeteTexte
+
+    serveur.programmer(200, _reponse_texte("ok"))
+    AdaptateurGoogle(CLE, url_api=serveur.url).generer_texte(RequeteTexte("gemini-3.8-flash", "x"))
+    corps = json.loads(serveur.requetes[0]["corps"])
+    assert "response_format" not in corps and "tools" not in corps
+
+
 def test_traduction_d_un_style(serveur):
     from ugc_studio.traduction import MODELE_TRADUCTION, traduire_en_anglais
 

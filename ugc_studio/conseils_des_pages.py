@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .conseils import CONSEILS_STYLE, CONSEILS_VOIX
+from .ecriture.regles import LIMITE_DE_LA_RELECTURE, RAPPEL_IA_TIKTOK, REGLES
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,75 @@ _EN_ANGLAIS = Rubrique(
         "L'assistant (crayon à côté du champ) te fait choisir en français et écrit directement la "
         "consigne en anglais.",
         "Le texte du script, lui, reste dans la langue du projet.",
+    ),
+)
+
+SCRIPT = PageDeConseils(
+    "Script",
+    (
+        Rubrique(
+            "Les étapes",
+            (
+                "« Lire la page » : l'app lit la page produit elle-même (gratuit, exact pour une boutique "
+                "Shopify) ; si le site bloque, Google la lit (coût minime) ; sinon, colle le texte du produit.",
+                "Le modèle remplit « Ce que l'app a compris », puis les champs vides du brief, marqués « d'après "
+                "la page » : rien de ce que tu as tapé n'est écrasé, et chaque champ se corrige à la main.",
+                "« Proposer des accroches » : coche celles qui te plaisent, puis « Écrire le script » écrit un "
+                "script par accroche cochée. Sans accroche cochée, le modèle choisit lui-même.",
+                "Chaque script est relu avant d'arriver : l'app vérifie la durée, les mots interdits et les "
+                "mentions obligatoires ; le modèle relit le reste et corrige ce qui est grave.",
+                "« Envoyer dans Voix » remplace les répliques du module Voix par celles du script, avec leurs "
+                "styles, balises et mots accentués, puis ouvre le module Voix.",
+            ),
+        ),
+        Rubrique(
+            "Remplir un brief",
+            (
+                "Aucun champ n'est obligatoire : remplis ce que tu sais, le reste vient de la page produit.",
+                "Rien n'est inventé : sans prix ni chiffre dans le brief ou sur la page, le script n'en donne pas.",
+                "Les avis clients sont rarement lisibles sur la page : colle 2 ou 3 avis dans « Preuves ».",
+                "Ce qui n'est écrit que dans les images de la page (ex. un logo de certification) n'est pas lu : "
+                "ajoute-le au brief si tu veux qu'il serve.",
+                "« Personne qui parle » : son genre change les accords en français (« je suis ravie »). Il est "
+                "pré-rempli d'après la voix du projet.",
+            ),
+        ),
+        Rubrique(
+            "Durée",
+            (
+                "Durée vide : 25 s sur TikTok, 10 s sur Snapchat, 20 s sur Facebook et Instagram.",
+                "L'app compte 2,7 mots par seconde (environ 160 mots par minute), comme le module Voix : chaque "
+                "script affiche sa durée estimée, balises comprises.",
+            ),
+        ),
+        Rubrique(
+            "Balises, styles, accentuations",
+            (
+                "Balises : rires, pauses… seulement celles de l'app. Elles arrivent en badges dans le module Voix.",
+                "Styles de jeu : seulement si l'émotion change. Les répliques de même émotion reprennent "
+                "exactement le même style, en anglais, avec sa traduction.",
+                "Accentuations : un mot au plus par réplique, dit avec plus de force ; les sous-titres gardent "
+                "l'écriture d'origine.",
+            ),
+        ),
+        Rubrique(
+            "Règles publicitaires",
+            (
+                *(regle.francais for regle in REGLES),
+                RAPPEL_IA_TIKTOK,
+                LIMITE_DE_LA_RELECTURE,
+            ),
+        ),
+        Rubrique(
+            "Modèle, coûts et exemples",
+            (
+                "Gemini 3.8 Flash par défaut ; Gemini 3.1 Pro (aperçu) est chargé pour comparer sur tes produits.",
+                "Le coût est estimé avant chaque demande, puis noté dans le suivi des coûts (« script : "
+                "écriture »…) : quelques centimes pour un script complet avec Gemini 3.8 Flash.",
+                "« Garder comme exemple » range un script parmi les exemples donnés au modèle : il s'en inspire "
+                "pour le ton et le rythme, sans le recopier. Au départ, 5 scripts fournis servent d'exemples.",
+            ),
+        ),
     ),
 )
 
@@ -542,6 +612,7 @@ CLE_API = PageDeConseils(
 )
 
 PAGES: dict[str, PageDeConseils] = {
+    "script": SCRIPT,
     "voix": VOIX,
     "transcription": TRANSCRIPTION,
     "sous-titres": SOUS_TITRES,

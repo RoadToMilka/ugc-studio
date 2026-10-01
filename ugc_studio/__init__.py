@@ -1,4 +1,4 @@
-"""UGC Studio : voix off (TTS), transcription (STT) et sous-titres pour les pubs UGC.
+"""UGC Studio : scripts, voix off (TTS), transcription (STT) et sous-titres pour les pubs UGC.
 
 Le numéro de version ci-dessous est la seule source de vérité : il s'affiche dans l'app,
 il est inscrit dans le .exe, et la fabrication automatique publie une Release GitHub
@@ -6,4 +6,4 @@ il est inscrit dans le .exe, et la fabrication automatique publie une Release Gi
 """
 
 NOM_APP = "UGC Studio"
-__version__ = "1.1.0"
+__version__ = "1.2.0"

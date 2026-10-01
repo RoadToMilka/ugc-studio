@@ -65,7 +65,40 @@ def test_modeles_live_jamais_proposes():
 def test_capacites_devinees_pour_un_nouveau_modele():
     assert Capacite.TTS in deviner_capacites("gemini-3.9-flash-tts")
     assert Capacite.STT in deviner_capacites("gemini-4-transcribe")
-    assert deviner_capacites("gemini-3.5-flash") == frozenset()
+
+
+def test_modeles_de_texte_reconnus_d_apres_leur_nom():
+    """V2 : les modèles de texte Gemini 3 et suivants servent au module Script (§2, point 11)."""
+    for identifiant in ("gemini-3.5-flash", "gemini-3.8-flash-lite", "gemini-4-pro-preview"):
+        capacites = deviner_capacites(identifiant)
+        assert {Capacite.TEXTE, Capacite.TEXTE_STRUCTURE, Capacite.TEXTE_PAGES_WEB} <= capacites, identifiant
+    for identifiant in (
+        "gemini-2.5-flash",  # ancienne génération : ne comprend pas le niveau de réflexion envoyé
+        "gemini-3.1-flash-image-preview",
+        "gemini-embedding-001",
+        "gemini-3-pro-image-preview",
+        "gemini-robotics-er-1.5-preview",
+        "gemini-3.5-flash-native-audio",
+        "gemma-3-27b-it",
+        "veo-3.1-generate-preview",
+    ):
+        assert deviner_capacites(identifiant) == frozenset(), identifiant
+
+
+def test_modeles_de_texte_du_catalogue():
+    flash = modele_connu("gemini-3.8-flash")
+    assert {Capacite.TEXTE_STRUCTURE, Capacite.TEXTE_PAGES_WEB} <= flash.capacites
+    assert (flash.tarif(date(2026, 10, 1)).entree, flash.tarif(date(2026, 10, 1)).sortie) == (Decimal("0.75"), Decimal("3.75"))
+    assert flash.tarif(HAUSSE_GOOGLE_2027).sortie == Decimal("7.50")
+    pro = modele_connu("gemini-3.1-pro-preview")
+    assert pro.nom == "Gemini 3.1 Pro (aperçu)"
+    assert (pro.tarif(date(2026, 10, 1)).entree, pro.tarif(date(2026, 10, 1)).sortie) == (Decimal("2.00"), Decimal("12.00"))
+    # Ordre de grandeur annoncé (§10.12) : ≈ 4 à 7 centimes de dollar par script avec 3.8 Flash.
+    tarif = flash.tarif(date(2026, 10, 1))
+    script = (flash.reference.tokens_entree * tarif.entree + flash.reference.tokens_sortie * tarif.sortie) / 1_000_000
+    assert Decimal("0.04") < script < Decimal("0.07")
+    textes = modeles_pour({Capacite.TEXTE, Capacite.TEXTE_STRUCTURE}, {"gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3.8-flash-tts"})
+    assert [c.identifiant for c in textes] == ["gemini-3.8-flash", "gemini-3.1-pro-preview"]
 
 
 def test_croisement_cles_et_taches():

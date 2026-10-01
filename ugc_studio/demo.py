@@ -16,6 +16,13 @@ from .fournisseurs.voix import VoixBibliotheque
 
 from .audio import FREQUENCE_TTS, wav_depuis_pcm
 from .chemins import dossier_projets_defaut
+from .ecriture.brief import Brief
+from .ecriture.controles import controler
+from .ecriture.etat import EtatScript
+from .ecriture.exemples import EXEMPLES_FOURNIS
+from .ecriture.fiche import FicheProduit
+from .ecriture.page_produit import SHOPIFY, PageLue
+from .ecriture.scripts import Accroche, PointRelecture, nouveau_script, repliques_depuis_reponse
 from .projets import DOSSIER_SOURCES, RepliqueProjet
 from .prononciation import Prononciation
 from .script import joindre_repliques
@@ -65,6 +72,93 @@ def transcription_demo() -> Transcription:
         date=datetime.now().astimezone().replace(microsecond=0).isoformat(),
         cout_eur="0.0019",
     )
+
+
+ADRESSE_DEMO = "https://glowzy.example/products/serum-eclat"
+
+
+def ecriture_demo() -> EtatScript:
+    """Module Script (V2) : page lue, brief pré-rempli, 6 accroches (2 cochées) et 2 scripts relus,
+    dont un envoyé dans le module Voix."""
+    maintenant = datetime.now().astimezone().replace(microsecond=0)
+    brief = Brief(
+        prix="",
+        promo="Code GLOW20 : 20 % de remise",
+        appel_action="Clique sur le lien en dessous",
+        mentions="Code GLOW20",
+        balises=True,
+        styles=True,
+    )
+    fiche = FicheProduit(
+        nom="Sérum éclat Glowzy",
+        marque="Glowzy",
+        type_produit="Sérum visage",
+        prix="29,90 €",
+        offre="Livraison offerte dès 25 € ; satisfaite ou remboursée pendant 30 jours",
+        benefices=["Teint plus lumineux dès le matin", "Texture fluide qui ne colle pas", "3 gouttes suffisent"],
+        distinction="Un sérum éclat léger, seul ou sous le maquillage.",
+        problemes=["Teint terne et fatigué"],
+        objections=["Peur que ça colle", "Le prix"],
+        preuves=["4,7/5 sur 1 280 avis"],
+        clientele="Femmes de 25 à 40 ans",
+        noms_a_prononcer=["Glowzy"],
+    )
+    brief.pre_remplir(fiche.valeurs_du_brief())
+    brief.pre_remplir({"genre": "femme"})
+    page = PageLue(
+        ADRESSE_DEMO,
+        SHOPIFY,
+        (maintenant - timedelta(minutes=25)).isoformat(),
+        "Données de la boutique (Shopify, exactes) :\n- Nom : Sérum éclat Glowzy\n- Marque : Glowzy\n- Prix : 29,90 €",
+        nom="Sérum éclat Glowzy",
+        marque="Glowzy",
+        prix="29,90 €",
+        devise="EUR",
+    )
+    accroches = [
+        Accroche("J'ai arrêté le fond de teint la semaine dernière.", "temoignage",
+                 "Surprend : on attend du maquillage, c'est l'inverse.", cochee=True),
+        Accroche("Trois gouttes, et ma sœur m'a demandé ce que j'avais changé.", "temoignage",
+                 "La preuve vient d'une autre personne.", cochee=True),
+        Accroche("POV : ton teint a l'air d'avoir dormi huit heures.", "pov", "Projette dans le résultat."),
+        Accroche("Tu as le teint terne le matin ?", "probleme_solution", "Question directe sur un souci courant.",
+                 "Sur Facebook et Instagram, Meta refuse une question qui suppose une caractéristique de la personne."),
+        Accroche("Le sérum que je mets avant même mon café.", "routine", "Ancre le produit dans un geste du matin."),
+        Accroche("Trois raisons pour lesquelles je ne sors plus sans lui.", "liste", "La liste retient l'attention."),
+    ]
+    glowzy = EXEMPLES_FOURNIS[0]
+    premier, _notes = repliques_depuis_reponse(glowzy.repliques, True, True, False)
+    second, _notes = repliques_depuis_reponse(
+        [
+            {"roles": ["accroche"], "texte": "Trois gouttes, et ma sœur m'a demandé ce que j'avais changé.",
+             "style": "amused and intrigued", "style_fr": "amusée et intriguée"},
+            {"roles": ["solution", "preuve"],
+             "texte": "C'est le sérum éclat Glowzy. Je le mets le matin, ça pénètre direct, ça colle pas, et mon teint a "
+             "l'air reposé. Il a 4,7 sur 5 sur plus de mille avis, donc c'est pas que moi. <chuckle>",
+             "style": "warm and natural, like talking to a friend", "style_fr": "chaleureuse et naturelle, comme à une amie"},
+            {"roles": ["offre", "appel_action"], "texte": "Avec mon code GLOW20, t'as 20 % en moins. Clique sur le lien en dessous.",
+             "style": "upbeat and direct", "style_fr": "enjouée et directe"},
+        ],
+        True, True, False,
+    )
+    scripts = []
+    for repliques, accroche, quand, cout, envoye, points, corrections in (
+        (premier, accroches[0].texte, 24, "0.0161", True,
+         [PointRelecture("produit_3s", "leger", "Le produit n'est nommé qu'à la réplique 2, vers 6 secondes.", "modele")], []),
+        (second, accroches[1].texte, 21, "0.0174", False, [],
+         ["« Résultat garanti dès le premier jour » remplacé par « mon teint a l'air reposé » (promesse invérifiable)."]),
+    ):
+        script = nouveau_script(
+            modele="gemini-3.8-flash", reseau="tiktok", langue="fr-FR", angle="temoignage", duree_visee_s=25,
+            repliques=repliques, tutoiement="tu", accroche_imposee=accroche, balises=True, styles=True,
+            tokens_entree=9_430, tokens_sortie=4_220, cout_eur=cout,
+        )
+        script.date = (maintenant - timedelta(minutes=quand)).isoformat()
+        script.envoye_le = (maintenant - timedelta(minutes=quand - 2)).isoformat() if envoye else ""
+        script.corrections = corrections
+        script.relecture = controler(script, brief) + points
+        scripts.append(script)
+    return EtatScript(brief=brief, adresse=ADRESSE_DEMO, page=page, fiche=fiche, accroches=accroches, scripts=scripts)
 
 
 def son_de_demonstration(secondes: float, frequence: float = 220.0) -> bytes:
@@ -117,6 +211,8 @@ def remplir_donnees_demo(services: Services) -> None:
                 "gemini-3.5-transcribe",
                 "gemini-3.5-transcribe-live",
                 "gemini-3.1-flash-tts-preview",
+                "gemini-3.8-flash",
+                "gemini-3.1-pro-preview",
                 "gemini-3.5-flash",
             ],
         )
@@ -129,6 +225,8 @@ def remplir_donnees_demo(services: Services) -> None:
 
     maintenant = datetime.now().astimezone().replace(microsecond=0)
     appels = [
+        ("gemini-3.8-flash", "script : relecture", 5_120, 1_940, "Sérum Glowzy", timedelta(minutes=20)),
+        ("gemini-3.8-flash", "script : écriture", 4_310, 2_280, "Sérum Glowzy", timedelta(minutes=21)),
         ("gemini-3.8-flash-tts", "voix", 412, 18_950, "Sérum Glowzy", timedelta(minutes=5)),
         ("gemini-3.8-flash-tts", "voix", 398, 17_400, "Sérum Glowzy", timedelta(minutes=12)),
         ("gemini-3.8-flash-lite-tts", "essai de voix", 24, 1_150, None, timedelta(hours=2)),
@@ -154,6 +252,7 @@ def remplir_donnees_demo(services: Services) -> None:
         projet = services.projets.creer("Sérum Glowzy", dossier_projets_defaut())
         projet.repliques = [RepliqueProjet([dict(s) for s in r.script], r.style, r.style_fr) for r in REPLIQUES_DEMO]
         projet.prononciations = [Prononciation("Glowzy", "Glo-zi")]
+        projet.ecriture = ecriture_demo()
         services.projets.enregistrer()
         for duree, voix, note, frequence in ((7.4, "Kore", 4, 220.0), (8.1, "Leda", 0, 262.0)):
             services.projets.ajouter_prise(

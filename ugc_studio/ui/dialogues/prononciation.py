@@ -84,7 +84,17 @@ class TableauPrononciations(QWidget):
 
 
 class DialoguePrononciation(QDialog):
-    def __init__(self, services: Services, tester: Callable[[str], None] | None = None, parent=None):
+    """`mots_proposes` : noms repérés sur une page produit (module Script) ; ceux qui ne sont dans
+    aucun des deux dictionnaires sont ajoutés à celui du projet, prononciation à écrire (une ligne
+    laissée sans prononciation n'est pas enregistrée)."""
+
+    def __init__(
+        self,
+        services: Services,
+        tester: Callable[[str], None] | None = None,
+        parent=None,
+        mots_proposes: list[str] | None = None,
+    ):
         super().__init__(parent)
         self._services = services
         self.setWindowTitle("Dictionnaire de prononciation")
@@ -105,7 +115,15 @@ class DialoguePrononciation(QDialog):
 
         self.onglets = Onglets()
         projet = services.projets.projet
-        self.projet = TableauPrononciations(list(projet.prononciations) if projet else [], tester)
+        entrees = list(projet.prononciations) if projet else []
+        connus = {e.mot.casefold() for e in [*entrees, *services.prononciations.entrees]}
+        nouveaux = []
+        for mot in mots_proposes or []:
+            mot = " ".join(mot.split())
+            if mot and mot.casefold() not in connus:
+                connus.add(mot.casefold())
+                nouveaux.append(Prononciation(mot, ""))
+        self.projet = TableauPrononciations([*entrees, *nouveaux] if projet else entrees, tester)
         self.global_ = TableauPrononciations(list(services.prononciations.entrees), tester)
         for tableau, titre in ((self.projet, "Ce projet"), (self.global_, "Tous les projets")):
             zone, contenu = zone_defilante(largeur_max=None)

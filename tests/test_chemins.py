@@ -19,3 +19,22 @@ def test_ressources_embarquees_presentes():
     assert len(list((ressources / "polices").glob("Inter-*.ttf"))) == 4
     for nom in ("mic", "audio-lines", "captions", "settings", "chevron-down", "check"):
         assert (ressources / "icones" / f"{nom}.svg").is_file(), nom
+
+
+def test_chaque_icone_utilisee_existe():
+    """Chaque nom d'icône écrit dans le code (nom_icone="…", icone("…"), icone_menu("…"), modules de la
+    barre latérale) a son fichier SVG dans les ressources : sinon, le bouton s'afficherait sans icône."""
+    import re
+    from pathlib import Path
+
+    racine = Path(chemins.__file__).parent
+    motifs = (
+        r'nom_icone="([a-z0-9-]+)"',
+        r'\bicone(?:_menu)?\("([a-z0-9-]+)"',
+        r'Module\("[^"]+", "[^"]+", "([a-z0-9-]+)"\)',
+        r'fichier_icone\("([a-z0-9-]+)"',
+    )
+    noms = {nom for fichier in racine.rglob("*.py") for motif in motifs for nom in re.findall(motif, fichier.read_text(encoding="utf-8"))}
+    assert {"scroll-text", "globe", "pen-line", "send"} <= noms
+    manquants = sorted(n for n in noms if not (chemins.dossier_ressources() / "icones" / f"{n}.svg").is_file())
+    assert not manquants, f"Icônes sans fichier : {manquants}"
