@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.13, 01/10/2026 (V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.14, 01/10/2026 (V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -855,7 +855,7 @@ Onglet **Animations** du studio, entre Mots et Position (`ui/pages/sous_titres/o
 ### 8.1 Fichiers de sous-titres
 
 - **SRT** : texte + timecodes (compatible Premiere Pro et la plupart des outils). Respecte le découpage paramétré. Ne contient aucun style. Écrit en UTF-8 **avec BOM** (sans lui, Premiere Pro lit mal les lettres accentuées) et fins de ligne Windows (CRLF) ; temps au format `00:00:01,250` ; blocs séparés par une ligne vide. Nom proposé : celui du projet, dans Documents.
-- *(option)* **ASS** : pour d'autres logiciels ; styles simples uniquement.
+- *(option, pas prévue pour le moment : décision de l'utilisateur du 01/10/2026)* **ASS** : pour d'autres logiciels ; styles simples uniquement.
 
 ### 8.2 Overlay transparent
 
