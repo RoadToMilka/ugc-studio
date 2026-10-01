@@ -130,7 +130,7 @@ def test_reglages_recalculent_et_sont_enregistres(atelier, services):
     atelier.mots_max.setValue(1)
     assert len(atelier.sous_titres) > avant
     assert all(s.dernier_mot - s.premier_mot == 1 for s in atelier.sous_titres)
-    atelier.majuscules.setChecked(True)
+    atelier.casse.setCurrentIndex(atelier.casse.findData("majuscules"))
     assert atelier.sous_titres[0].texte == "FRANCHEMENT,"
     atelier.ponctuation.setChecked(False)
     assert atelier.sous_titres[0].texte == "FRANCHEMENT"
@@ -140,8 +140,8 @@ def test_reglages_recalculent_et_sont_enregistres(atelier, services):
     # Réglages enregistrés dans le projet.
     services.projets.ouvrir(services.projets.projet.dossier)
     reglages = services.projets.projet.sous_titres
-    assert (reglages.mots_max, reglages.majuscules, reglages.ponctuation) == (1, True, False)
-    assert atelier.mots_max.value() == 1 and atelier.majuscules.isChecked()
+    assert (reglages.mots_max, reglages.texte.casse, reglages.texte.ponctuation) == (1, "majuscules", False)
+    assert atelier.mots_max.value() == 1 and atelier.casse.currentData() == "majuscules"
 
 
 def test_mot_trop_large_signale_en_orange(atelier, services):
@@ -219,7 +219,9 @@ def test_clic_sur_un_sous_titre(atelier, services):
     dernier = len(atelier.sous_titres) - 1
     atelier.choisir_sous_titre(dernier)
     assert atelier.tableau.currentRow() == dernier
-    assert atelier.apercu.text() == atelier.sous_titres[dernier].texte
+    # L'aperçu (V2) montre ce sous-titre : la lecture s'est placée à son début.
+    assert atelier.toile.sous_titre is atelier.sous_titres[dernier]
+    assert atelier.lecteur.temps == atelier.sous_titres[dernier].debut
 
 
 # --- V1.1 : réorganiser les sous-titres à la main ---------------------------------------------

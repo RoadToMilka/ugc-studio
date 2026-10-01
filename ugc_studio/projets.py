@@ -24,6 +24,12 @@ accroches et scripts écrits. Un projet d'un format plus ancien s'ouvre sans scr
 ajoute des informations (note, script retenu, séries de variantes, retouches ; nombres dits à la
 belge ou à la suisse dans les réglages de voix) sans changer de format : un projet de la 1.2.0
 s'ouvre tel quel, avec leurs valeurs par défaut.
+
+Format 7 (V2, lot 3) : les **sous-titres** sont rangés en trois parties (cahier des charges §7.9) :
+« style » (texte, position, découpage : ce que contiendra un préréglage), « ecran » (format, zone
+de sécurité, marge maximum) et « apercu » (vidéo choisie seulement pour l'aperçu). Un projet d'un
+format plus ancien s'ouvre avec l'apparence de la V1 (Inter SemiBold, blanc, ombre légère), qui
+garde exactement son découpage, et ses sous-titres en bas de la zone de sécurité, centrés.
 """
 
 from __future__ import annotations
@@ -159,7 +165,7 @@ class Projet:
     sous_titres: ReglagesSousTitres = field(default_factory=ReglagesSousTitres)  # §7
     ecriture: EtatScript = field(default_factory=EtatScript)  # module Script (V2, §3.1)
 
-    VERSION_FORMAT = 6
+    VERSION_FORMAT = 7
 
     @property
     def script(self) -> list[dict]:

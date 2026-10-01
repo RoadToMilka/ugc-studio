@@ -163,11 +163,14 @@ def test_changer_la_langue_du_projet(gestion, tmp_path):
 
 
 def test_reglages_des_sous_titres_enregistres(gestion, tmp_path):
+    from dataclasses import replace
+
     projet = gestion.creer("Sous-titres", tmp_path)
-    projet.sous_titres.majuscules, projet.sous_titres.lignes_max = True, 1
+    projet.sous_titres.texte = replace(projet.sous_titres.texte, casse="majuscules")
+    projet.sous_titres.lignes_max = 1
     gestion.enregistrer()
     rouvert = GestionnaireProjets(tmp_path / "recents.json").ouvrir(projet.dossier)
-    assert rouvert.sous_titres.majuscules and rouvert.sous_titres.lignes_max == 1
+    assert rouvert.sous_titres.texte.casse == "majuscules" and rouvert.sous_titres.lignes_max == 1
 
 
 def test_nouveau_projet_avec_une_replique_vide(gestion, tmp_path):

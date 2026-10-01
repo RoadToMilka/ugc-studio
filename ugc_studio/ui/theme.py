@@ -58,6 +58,21 @@ class CouleursBalises:
         }.get(famille, Couleurs.TEXTE_SECONDAIRE)
 
 
+class CouleursApercu:
+    """Studio des sous-titres (V2, lot 3, §7.7) : fond neutre, damier et repères de l'aperçu.
+
+    Ce sont des couleurs de l'interface. Celles des sous-titres, elles, sont des choix de la vidéo :
+    elles sont dans le style du projet (style_sous_titres.py), pas ici."""
+
+    AUTOUR = "#09090D"  # autour de la vidéo, dans la toile (plus sombre que le fond de l'app)
+    FOND_NEUTRE = "#52525B"  # gris moyen : un texte blanc ou noir y reste lisible
+    DAMIER_CLAIR = "#71717A"  # damier : pour juger un texte prévu pour l'overlay transparent (V3)
+    DAMIER_FONCE = "#3F3F46"
+    ZONE_DE_SECURITE = Couleurs.ACCENT  # pointillés mauves
+    MARGE_MAXIMUM = Couleurs.ERREUR  # trait rouge
+    GRILLE = Couleurs.TEXTE  # traits fins des tiers et du milieu (voir Opacites.GRILLE)
+
+
 class Opacites:
     """Transparences appliquées aux couleurs ci-dessus (0 = invisible, 1 = opaque)."""
 
@@ -74,6 +89,8 @@ class Opacites:
     # Barre de défilement fine des listes (listes déroulantes, tableaux) : légèrement transparente.
     POIGNEE_FINE = 0.35
     POIGNEE_FINE_SURVOL = 0.60
+    GRILLE = 0.35  # grille de l'aperçu des sous-titres
+    REPERES = 0.90  # zone de sécurité et marge maximum de l'aperçu
 
 
 class Espacements:
@@ -179,7 +196,17 @@ class Dimensions:
     ZONE_DEFILANTE_HAUTEUR_SOUHAITEE = 160  # voir ZoneDefilante (ui/composants/defilement.py)
     DIALOGUE_HAUTEUR_MAX = 680  # une fenêtre de dialogue doit tenir sur l'écran d'un portable (768 px)
     EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
-    APERCU_SOUS_TITRE_HAUTEUR = 96  # sous-titre en cours, pendant l'écoute (page Sous-titres)
+    # Studio des sous-titres (V2, lot 3) : aperçu à gauche, réglages à droite ; l'un sous l'autre
+    # quand la page a moins de STUDIO_DEUX_COLONNES_MIN de large (fenêtre étroite).
+    STUDIO_COLONNE_APERCU_LARGEUR = 400
+    STUDIO_DEUX_COLONNES_MIN = 880
+    APERCU_HAUTEUR_MAX = 540  # toile de l'aperçu : une vidéo 9:16 y fait 304 × 540
+    APERCU_HAUTEUR_MIN = 200
+    APERCU_LARGEUR_MIN = 160
+    DAMIER_CASE = 12  # côté d'une case du damier
+    REPERE_EPAISSEUR = 1  # traits des repères (toujours 1 px à l'écran, quel que soit le zoom)
+    REPERE_POINTILLES = (4, 4)  # zone de sécurité : 4 px de trait, 4 px d'espace
+    CHAMP_COTE_LARGEUR = 112  # largeur ou hauteur d'un format personnalisé (« 1080 px »)
     EDITEUR_REPLIQUE_HAUTEUR_MIN = 88  # éditeur d'une réplique (grandit ensuite avec son texte)
     # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
     BADGE_MARGE_HORIZONTALE = 8  # espace intérieur, à gauche et à droite du nom de la balise
@@ -358,20 +385,6 @@ QLabel[role="legende-erreur"] {
 }
 QLabel[vide="true"] {
     color: $texte_secondaire;
-}
-QLabel[role="apercu-sous-titre"] {
-    background: $fond;
-    color: $texte;
-    border: ${bordure}px solid $couleur_bordure;
-    border-radius: ${arrondi_controle}px;
-    padding: ${esp_m}px ${esp_l}px;
-    font-size: ${grand_chiffre}px;
-    font-family: "$famille_forte";
-    font-weight: $graisse_forte;
-    min-height: ${apercu_sous_titre}px;
-}
-QLabel[role="apercu-sous-titre"][signale="true"] {
-    color: $avertissement;
 }
 QLabel[role="etiquette"] {
     color: $texte_secondaire;
@@ -783,7 +796,6 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         # après elle, comme partout ailleurs dans l'app.
         "marge_gauche_menu": Espacements.M + Dimensions.ECART_ICONE_TEXTE - _QT_ESPACE_APRES_ICONE_MENU,
         "case_a_cocher": Dimensions.CASE_A_COCHER,
-        "apercu_sous_titre": Dimensions.APERCU_SOUS_TITRE_HAUTEUR,
         "barre_defilement": Dimensions.BARRE_DEFILEMENT,
         "poignee_min": Dimensions.POIGNEE_DEFILEMENT_MIN,
         "barre_fine": Dimensions.BARRE_DEFILEMENT_FINE,

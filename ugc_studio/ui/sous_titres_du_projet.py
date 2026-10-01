@@ -6,6 +6,10 @@ Pourquoi un seul endroit ? Tous les réglages qui changent les sous-titres (déc
 affiché, écran, hésitations) passent par confirmer_reglage() : la vérification refait le calcul du
 découpage avec le nouveau réglage (une fraction de seconde pour une pub), et aucun ajustement fait
 à la main n'est défait sans ton choix.
+
+V2, lot 3 : la largeur des lignes est mesurée par le moteur de dessin (rendu/moteur.py), le même
+qui dessine l'aperçu ; le format est celui de la vidéo du projet, ou de la vidéo choisie seulement
+pour l'aperçu, sinon celui choisi.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from dataclasses import dataclass
 from PySide6.QtWidgets import QMessageBox, QWidget
 
 from ..projets import Projet
+from ..rendu.moteur import Moteur
 from ..services import Services
 from ..sous_titres import (
     Ajustement,
@@ -25,23 +30,39 @@ from ..sous_titres import (
     ReglagesSousTitres,
     calculer_sous_titres,
     ecran,
+    resolution,
     texte_reglage_qui_defait,
 )
 from ..stt import hesitations, langue_de
 from ..transcription import Transcription, resolution_video
-from .mesure_texte import mesure_sous_titres
 
 
 @dataclass
 class Calcul:
     """Sous-titres calculés, avec l'écran et la mesure du texte qui ont servi (pour vérifier une
-    action faite à la main avec exactement les mêmes règles)."""
+    action faite à la main avec exactement les mêmes règles), et le moteur qui les dessine."""
 
     decoupage: Decoupage
     reglages: ReglagesSousTitres
     ecran: Ecran
     mesure: Mesure
     langue: str
+    moteur: Moteur | None = None
+
+
+def video_du_projet(projet: Projet) -> tuple[int, int] | None:
+    """Résolution de la vidéo transcrite dans le projet (None : pas de vidéo, ex. une prise de voix)."""
+    transcription = projet.transcription
+    if transcription is None or transcription.prise:
+        return None
+    return resolution_video(transcription.infos)
+
+
+def resolution_imposee(projet: Projet, reglages: ReglagesSousTitres | None = None) -> tuple[int, int] | None:
+    """Résolution qu'impose une vidéo (§7.1) : celle du projet, sinon celle choisie seulement pour
+    l'aperçu. None : le format choisi s'applique."""
+    reglages = reglages if reglages is not None else projet.sous_titres
+    return video_du_projet(projet) or reglages.apercu.resolution
 
 
 def ajustements(transcription: Transcription | None) -> list[Ajustement]:
@@ -68,8 +89,10 @@ def calculer(
     reglages = reglages if reglages is not None else projet.sous_titres
     if masquer is None:
         masquer = transcription.masquer_hesitations if transcription is not None else True
-    ecran_video = ecran(reglages, resolution_video(transcription.infos) if transcription is not None else None)
-    mesure = mesure_sous_titres(ecran_video)
+    source = resolution_imposee(projet, reglages)
+    ecran_video = ecran(reglages, source)
+    moteur = Moteur(reglages, *resolution(reglages, source))
+    mesure = moteur.mesure
     langue = langue_de(transcription, projet)
     mots = transcription.mots if transcription is not None and transcription.horodatee else []
     decoupage = calculer_sous_titres(
@@ -83,7 +106,7 @@ def calculer(
         transcription.duree_s if transcription is not None and transcription.duree_s else None,
         ajustements(transcription),
     )
-    return Calcul(decoupage, reglages, ecran_video, mesure, langue)
+    return Calcul(decoupage, reglages, ecran_video, mesure, langue, moteur)
 
 
 def ajustements_defaits_par(

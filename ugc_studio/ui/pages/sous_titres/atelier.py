@@ -1,13 +1,15 @@
-"""Atelier des sous-titres (§7, §3.3, §8.1) : des mots horodatés au fichier SRT.
+"""Atelier des sous-titres (§7, §3.3, §8.1) : des mots horodatés au fichier SRT, dans un studio.
 
 1. Mots : ceux de la transcription du projet (vidéo transcrite dans le module Transcription), ou
    ceux d'une prise de voix : « Créer les sous-titres » transcrit la prise puis cale les mots sur
    son script (orthographe exacte). Les mots se corrigent dans le module Transcription.
-2. Réglages : découpage (caractères, mots, lignes, ponctuation, durée minimale), texte affiché
-   (majuscules, ponctuation, hésitations) et écran (format, zone de sécurité, marge maximum,
-   taille du texte) : les sous-titres sont recalculés à chaque changement.
-3. Sous-titres : la liste, écoutable (le sous-titre en cours s'affiche en grand) ; ceux où un mot
-   a dû être rapetissé sont signalés en orange. Export SRT pour Premiere Pro.
+2. Studio (V2, lot 3) : l'aperçu fidèle à gauche (apercu.py : la vidéo, ou un fond gris ou un
+   damier, et les sous-titres dessinés par le moteur de dessin, le même que l'export de la V3), les
+   réglages à droite (reglages.py : Texte, Position, Découpage, Écran). Les sous-titres sont
+   recalculés à chaque changement ; la position (haut, centre, bas, réglage fin) ne change que
+   l'aperçu, jamais le découpage.
+3. Sous-titres : la liste ; ceux où un mot a dû être rapetissé sont signalés en orange. Export SRT
+   pour Premiere Pro.
 4. Réorganiser à la main (V1.1) : sur le sous-titre choisi, monter son premier mot, descendre son
    dernier mot, le couper, le fusionner avec le suivant, ou revenir au découpage automatique. Les
    réglages du découpage s'appliquent toujours (une action qui ne les respecte pas est refusée,
@@ -16,39 +18,30 @@
 
 from __future__ import annotations
 
-import bisect
 import logging
+from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush
-from PySide6.QtWidgets import (
-    QFileDialog,
-    QGridLayout,
-    QHBoxLayout,
-    QMenu,
-    QMessageBox,
-    QTableWidgetItem,
-    QVBoxLayout,
-)
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
 
 from ....chemins import dossier_documents
 from ....fournisseurs.stt import MODE_VERBATIM
+from ....mise_en_page import limites_du_reglage_fin
 from ....modeles_charges import SOUS_TITRES
 from ....projets import FICHIER_AUDIO, ErreurProjet, Projet, nom_de_dossier
+from ....rendu.moteur import Moteur
 from ....script import texte_brut
 from ....services import Services
 from ....sous_titres import (
     ESPACE_INSECABLE,
-    LIMITES,
-    NOMS_FORMATS,
-    PLATEFORMES,
     MotAffiche,
-    ReglagesSousTitres,
     Reorganisation,
     SousTitre,
     ecrire_srt,
     retablir_automatique,
+    sous_titre_au_temps,
     texte_ajustements_defaits,
 )
 # Les actions à la main, calculées sans interface (même nom que les méthodes de la page qui les appellent).
@@ -64,42 +57,35 @@ from ....stt import (
     transcription_de_prise,
     transcrire_source,
 )
-from ....transcription import Transcription
+from ....style_sous_titres import VideoApercu
+from ....transcription import Transcription, resolution_video
 from ... import taches
+from ...composants.apercu import LecteurApercu
 from ...composants.choix_voix import choisir
+from ...composants.elements import bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
 from ...composants.flux import DispositionFlux
-from ...composants.elements import (
-    bloc,
-    bouton,
-    case_a_cocher,
-    champ_decimal,
-    champ_entier,
-    glissiere,
-    info,
-    libelle,
-    liste_deroulante,
-    minutes_secondes,
-)
-from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
-from ...icones import icone
+from ...extraction import FILTRE_FICHIERS, LecteurInfos
 from ...sous_titres_du_projet import (
     Calcul,
     ajustements,
     calculer as calculer_du_projet,
     confirmer_reglage,
     ranger_ajustements,
+    resolution_imposee,
 )
 from ...theme import Couleurs, Dimensions, Espacements, qcolor
 from ..base import Page
 from ..transcription.atelier import description_source
+from .apercu import BlocApercu, DispositionStudio
+from .reglages import PanneauReglages
 
 journal = logging.getLogger(__name__)
 
 TITRE = "Sous-titres"
-SOUS_TITRE = "Découpage des sous-titres et export SRT, depuis une prise de voix ou une transcription."
+SOUS_TITRE = "Studio des sous-titres : aperçu sur la vidéo, réglages, découpage et export SRT."
 # Le texte d'un sous-titre garde ses 2 lignes (sa vraie mise en page) ; les autres cases tiennent
 # sur une ligne (voir composants/tableau.py).
 COLONNES = (
@@ -110,6 +96,8 @@ COLONNES = (
 )
 COLONNE_TEXTE = 2
 COLONNE_REMARQUE = 3
+DELAI_ENREGISTREMENT_POSITION_MS = 400  # réglage fin : enregistré quand la glissière s'arrête
+FILTRE_VIDEOS = "Vidéos (*.mp4 *.mov *.mkv *.m4v *.webm *.avi)"
 
 
 def temps_lisible(secondes: float) -> str:
@@ -129,6 +117,12 @@ def remarque(sous_titre: SousTitre) -> str:
     return "  ·  ".join(remarques)
 
 
+def a_sa_video(transcription: Transcription | None) -> bool:
+    """Le projet a-t-il sa propre vidéo (transcrite dans le module Transcription) ? Sinon (prise de
+    voix, audio importé), une vidéo peut être choisie seulement pour l'aperçu."""
+    return bool(transcription and not transcription.prise and (transcription.infos or {}).get("video"))
+
+
 class AtelierSousTitres(Page):
     corriger_demande = Signal()  # « Corriger les mots » : ouvrir le module Transcription
 
@@ -141,9 +135,60 @@ class AtelierSousTitres(Page):
         self.sous_titres: list[SousTitre] = []
         self._calcul: Calcul | None = None
         self._debuts: list[float] = []
-        self.lecteur = Lecteur(self)
+        self.lecteur = LecteurApercu(self)
+        self._infos_video = LecteurInfos(self)  # résolution d'une vidéo choisie pour l'aperçu
+        self._infos_video.pretes.connect(self._infos_video_lues)
+        self._enregistrement_position = QTimer(self)
+        self._enregistrement_position.setSingleShot(True)
+        self._enregistrement_position.setInterval(DELAI_ENREGISTREMENT_POSITION_MS)
+        self._enregistrement_position.timeout.connect(self._services.projets.enregistrer)
 
-        # --- Mots des sous-titres ---
+        self.contenu.addWidget(self._bloc_mots())
+
+        # --- Studio : aperçu et réglages ---
+        self.bloc_apercu = BlocApercu(services.preferences)
+        self.toile = self.bloc_apercu.toile
+        self.toile.glissable = True  # le sous-titre se glisse verticalement dans l'aperçu
+        cadre_reglages, d = bloc("Réglages")
+        self.panneau = PanneauReglages()
+        d.addWidget(self.panneau)
+        self.studio = DispositionStudio(self.bloc_apercu, cadre_reglages)
+        self.contenu.addWidget(self.studio)
+        # Raccourcis vers les réglages (tests, autotest).
+        panneau = self.panneau
+        self.caracteres, self.mots_max, self.lignes, self.duree_min = panneau.caracteres, panneau.mots_max, panneau.lignes, panneau.duree_min
+        self.taille, self.casse, self.ponctuation, self.couper_ponctuation = panneau.taille, panneau.casse, panneau.ponctuation, panneau.couper_ponctuation
+        self.format, self.plateforme, self.marge, self.masquer = panneau.format, panneau.plateforme, panneau.marge, panneau.masquer
+        self.infos_ecran = panneau.infos_ecran
+
+        # --- Sous-titres ---
+        self.cadre_sous_titres, d = bloc("Sous-titres")
+        self.resume = libelle("", "legende")
+        d.addWidget(self.resume)
+        self._zone_reorganiser(d)
+        self.tableau = self._tableau()
+        d.addWidget(self.tableau)
+        self._actualiser_reorganisation()  # aucun sous-titre choisi : actions désactivées
+        export = QHBoxLayout()
+        export.setSpacing(Espacements.M)
+        self.bouton_exporter = bouton("Exporter en SRT…", variante="principal", nom_icone="download", action=self.exporter_srt)
+        export.addWidget(self.bouton_exporter)
+        export.addWidget(
+            info("Texte et temps de chaque sous-titre, sans style : pour Premiere Pro et la plupart des logiciels.", "legende"), 1
+        )
+        d.addLayout(export)
+        self.statut_export = libelle("", "secondaire")
+        d.addWidget(self.statut_export)
+        self.contenu.addWidget(self.cadre_sous_titres)
+
+        self._brancher()
+        services.projets.abonner(self._projet_change)
+        services.prix.abonner(self._mettre_a_jour_estimation)
+        self._projet_change(services.projets.projet)
+
+    # --- Construction ------------------------------------------------------------------------
+
+    def _bloc_mots(self):
         cadre, d = bloc("Mots des sous-titres")
         self.texte_source = libelle("", "secondaire")
         d.addWidget(self.texte_source)
@@ -183,125 +228,27 @@ class AtelierSousTitres(Page):
         d.addLayout(estimation)
         self.statut = libelle("", "secondaire")
         d.addWidget(self.statut)
-        self.contenu.addWidget(cadre)
-
-        # --- Réglages ---
-        self.contenu.addWidget(self._bloc_reglages())
-
-        # --- Sous-titres ---
-        self.cadre_sous_titres, d = bloc("Sous-titres")
-        self.resume = libelle("", "legende")
-        d.addWidget(self.resume)
-        lecture = QHBoxLayout()
-        lecture.setSpacing(Espacements.M)
-        self.bouton_lecture = bouton("", variante="icone", action=self.basculer_lecture)
-        lecture.addWidget(self.bouton_lecture)
-        self.position = glissiere()
-        self.position.sliderMoved.connect(self.lecteur.aller_a)
-        lecture.addWidget(self.position, 1)
-        self.temps = libelle("0:00 / 0:00", "legende", retour_a_la_ligne=False)
-        lecture.addWidget(self.temps)
-        d.addLayout(lecture)
-        self.apercu = libelle("", "apercu-sous-titre")
-        self.apercu.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        d.addWidget(self.apercu)
-        self._zone_reorganiser(d)
-        self.tableau = self._tableau()
-        d.addWidget(self.tableau)
-        self._actualiser_reorganisation()  # aucun sous-titre choisi : actions désactivées
-        export = QHBoxLayout()
-        export.setSpacing(Espacements.M)
-        self.bouton_exporter = bouton("Exporter en SRT…", variante="principal", nom_icone="download", action=self.exporter_srt)
-        export.addWidget(self.bouton_exporter)
-        export.addWidget(
-            info("Texte et temps de chaque sous-titre, sans style : pour Premiere Pro et la plupart des logiciels.", "legende"), 1
-        )
-        d.addLayout(export)
-        self.statut_export = libelle("", "secondaire")
-        d.addWidget(self.statut_export)
-        self.contenu.addWidget(self.cadre_sous_titres)
-
-        self.lecteur.etat_change.connect(lambda _chemin, _lecture: self._etat_lecture())
-        self.lecteur.position_change.connect(self._position_lue)
-        services.projets.abonner(self._projet_change)
-        services.prix.abonner(self._mettre_a_jour_estimation)
-        self._projet_change(services.projets.projet)
-
-    def _bloc_reglages(self):
-        cadre, d = bloc("Réglages")
-        colonnes = QHBoxLayout()
-        colonnes.setSpacing(Espacements.XL)
-
-        self.caracteres = champ_entier(*LIMITES["caracteres_max"], info="Nombre maximum de caractères par sous-titre, espaces comprises")
-        self.mots_max = champ_entier(*LIMITES["mots_max"], info="Nombre maximum de mots par sous-titre")
-        self.lignes = champ_entier(*LIMITES["lignes_max"], info="Nombre maximum de lignes (1 ou 2) : jamais dépassé")
-        self.duree_min = champ_decimal(*LIMITES["duree_min_s"], 0.1, 1, " s", "Durée minimale d'affichage d'un sous-titre")
-        colonnes.addLayout(
-            self._grille(
-                "Découpage",
-                (("Caractères au plus", self.caracteres), ("Mots au plus", self.mots_max), ("Lignes au plus", self.lignes), ("Durée minimale", self.duree_min)),
-            ),
-            0,  # colonne de champs de nombre : sa largeur naturelle ; le reste va aux listes de l'écran
-        )
-
-        self.format = liste_deroulante("Format de la vidéo (les tailles sont proportionnelles à sa hauteur)")
-        for identifiant, nom in NOMS_FORMATS.items():
-            self.format.addItem(nom, identifiant)
-        self.plateforme = liste_deroulante("Zone de sécurité : les bords que l'interface de la plateforme recouvre")
-        for plateforme in PLATEFORMES:
-            self.plateforme.addItem(plateforme.nom, plateforme.identifiant)
-            if plateforme.source:
-                self.plateforme.setItemData(self.plateforme.count() - 1, f"Source : {plateforme.source}", Qt.ItemDataRole.ToolTipRole)
-        self.marge = champ_decimal(*LIMITES["marge_max_pct"], 0.5, 1, " %", "Marge maximum de chaque bord : le texte ne la dépasse jamais")
-        self.taille = champ_decimal(*LIMITES["taille_pct"], 0.1, 1, " %", "Taille du texte, en % de la hauteur de la vidéo")
-        colonnes.addLayout(
-            self._grille(
-                "Écran",
-                (("Format", self.format), ("Zone de sécurité", self.plateforme), ("Marge maximum", self.marge), ("Taille du texte", self.taille)),
-            ),
-            1,
-        )
-        d.addLayout(colonnes)
-
-        zone, self.couper_ponctuation = case_a_cocher(
-            "Couper de préférence après la ponctuation", "Une fin de phrase termine alors toujours le sous-titre."
-        )
-        d.addWidget(zone)
-        zone, self.majuscules = case_a_cocher("Tout en majuscules", "Affichage seulement : le texte des mots ne change pas.")
-        d.addWidget(zone)
-        zone, self.ponctuation = case_a_cocher("Afficher la ponctuation")
-        d.addWidget(zone)
-        self.zone_masquer, self.masquer = case_a_cocher(
-            "Masquer les hésitations", "« euh », « hum »… (même réglage que dans le module Transcription)."
-        )
-        d.addWidget(self.zone_masquer)
-        self.infos_ecran = info()
-        d.addWidget(self.infos_ecran)
-
-        for champ in (self.caracteres, self.mots_max, self.lignes, self.duree_min, self.marge, self.taille):
-            champ.valueChanged.connect(lambda _valeur: self._reglage_change())
-        for liste in (self.format, self.plateforme):
-            liste.currentIndexChanged.connect(lambda _index: self._reglage_change())
-        for case in (self.couper_ponctuation, self.majuscules, self.ponctuation):
-            case.toggled.connect(lambda _coche: self._reglage_change())
-        self.masquer.toggled.connect(self._masquer_change)
         return cadre
 
-    @staticmethod
-    def _grille(titre: str, lignes) -> QVBoxLayout:
-        colonne = QVBoxLayout()
-        colonne.setSpacing(Espacements.S)
-        colonne.addWidget(libelle(titre, "intitule"))
-        grille = QGridLayout()
-        grille.setHorizontalSpacing(Espacements.M)
-        grille.setVerticalSpacing(Espacements.S)
-        for rang, (texte, element) in enumerate(lignes):
-            grille.addWidget(libelle(texte, "legende", retour_a_la_ligne=False), rang, 0)
-            grille.addWidget(element, rang, 1, Qt.AlignmentFlag.AlignLeft)
-        grille.setColumnStretch(1, 1)
-        colonne.addLayout(grille)
-        colonne.addStretch(1)
-        return colonne
+    def _brancher(self) -> None:
+        panneau, apercu, lecteur = self.panneau, self.bloc_apercu, self.lecteur
+        panneau.change.connect(self._reglage_change)
+        panneau.position_change.connect(self._position_change)
+        panneau.masquer_change.connect(self._masquer_change)
+        panneau.choisir_video_demande.connect(self.choisir_video_apercu)
+        panneau.retirer_video_demande.connect(self.retirer_video_apercu)
+        panneau.video_apercu_change.connect(self._video_apercu_change)
+        apercu.bouton_lecture.clicked.connect(self.basculer_lecture)
+        apercu.position.sliderMoved.connect(lecteur.aller_a_position)
+        apercu.bouton_boucle.toggled.connect(lambda _coche: self._actualiser_boucle())
+        apercu.bouton_retrouver.clicked.connect(self.retrouver_la_video)
+        self.toile.glissement.connect(panneau.montrer_reglage_fin)
+        self.toile.glissement_fini.connect(self._position_glissee)
+        lecteur.image.connect(self.toile.definir_image)
+        lecteur.temps_change.connect(self._temps_lu)
+        lecteur.position_change.connect(self._position_lue)
+        lecteur.etat_change.connect(apercu.definir_lecture)
+        lecteur.erreur.connect(self._erreur_de_lecture)
 
     def _zone_reorganiser(self, d: QVBoxLayout) -> None:
         """« Réorganiser à la main » : les actions sur le sous-titre choisi dans la liste."""
@@ -356,6 +303,7 @@ class AtelierSousTitres(Page):
         return self._projet.transcription if self._projet else None
 
     def _projet_change(self, projet: Projet | None) -> None:
+        self._enregistrement_position.stop()
         self.lecteur.arreter()
         self._projet = projet
         if projet is None:
@@ -373,6 +321,13 @@ class AtelierSousTitres(Page):
         if self._projet is not None and not self._occupe:
             self.rafraichir()
 
+    def keyPressEvent(self, evenement) -> None:  # noqa: N802
+        """Barre Espace : lecture ou pause (quand aucun bouton ni case n'a la main)."""
+        if evenement.key() == Qt.Key.Key_Space and not evenement.isAutoRepeat():
+            self.basculer_lecture()
+            return
+        super().keyPressEvent(evenement)
+
     def _afficher(self, message: str, role: str, etiquette=None) -> None:
         etiquette = etiquette or self.statut
         etiquette.setText(message)
@@ -383,7 +338,7 @@ class AtelierSousTitres(Page):
     # --- Affichage ---------------------------------------------------------------------------
 
     def rafraichir(self) -> None:
-        """Met toute la page à jour : source des mots, prises, réglages, sous-titres."""
+        """Met toute la page à jour : source des mots, prises, réglages, sous-titres, lecture."""
         # Réglages → Modèles et prix, « Utilisé dans » : le modèle qui transcrit une prise.
         self._services.modeles.choisir(SOUS_TITRES, self._modele() if self._projet else None)
         if self._projet is None:
@@ -399,6 +354,9 @@ class AtelierSousTitres(Page):
         self._remplir_prises()
         self._charger_reglages()
         self.calculer()
+        self._charger_la_lecture()
+        if self.sous_titres and self.lecteur.temps < self.sous_titres[0].debut:
+            self._au_debut()  # avant le premier sous-titre : l'aperçu montre le premier
 
     def _remplir_prises(self) -> None:
         projet, actuel = self._projet, self.prises.currentData()
@@ -428,45 +386,18 @@ class AtelierSousTitres(Page):
                 self.cout_estime.definir_montant(cout)
 
     def _charger_reglages(self) -> None:
-        reglages = self._projet.sous_titres
         transcription = self.transcription
-        elements = (
-            self.caracteres, self.mots_max, self.duree_min, self.marge, self.taille, self.lignes, self.format,
-            self.plateforme, self.couper_ponctuation, self.majuscules, self.ponctuation, self.masquer,
+        self.panneau.charger(
+            self._projet.sous_titres,
+            resolution_imposee(self._projet),
+            transcription.masquer_hesitations if transcription else True,
+            transcription is not None,
+            a_sa_video(transcription),
         )
-        for element in elements:
-            element.blockSignals(True)
-        self.caracteres.setValue(reglages.caracteres_max)
-        self.mots_max.setValue(reglages.mots_max)
-        self.duree_min.setValue(reglages.duree_min_s)
-        self.marge.setValue(reglages.marge_max_pct)
-        self.taille.setValue(reglages.taille_pct)
-        self.lignes.setValue(reglages.lignes_max)
-        choisir(self.format, reglages.format)
-        choisir(self.plateforme, reglages.plateforme)
-        self.couper_ponctuation.setChecked(reglages.couper_sur_ponctuation)
-        self.majuscules.setChecked(reglages.majuscules)
-        self.ponctuation.setChecked(reglages.ponctuation)
-        self.masquer.setChecked(transcription.masquer_hesitations if transcription else True)
-        self.zone_masquer.setEnabled(transcription is not None)
-        for element in elements:
-            element.blockSignals(False)
 
-    def reglages(self) -> ReglagesSousTitres:
+    def reglages(self):
         """Réglages tels que choisis dans la page."""
-        return ReglagesSousTitres(
-            caracteres_max=self.caracteres.value(),
-            mots_max=self.mots_max.value(),
-            lignes_max=self.lignes.value(),
-            couper_sur_ponctuation=self.couper_ponctuation.isChecked(),
-            duree_min_s=round(self.duree_min.value(), 2),
-            majuscules=self.majuscules.isChecked(),
-            ponctuation=self.ponctuation.isChecked(),
-            format=self.format.currentData(),
-            plateforme=self.plateforme.currentData(),
-            marge_max_pct=round(self.marge.value(), 2),
-            taille_pct=round(self.taille.value(), 2),
-        )
+        return self.panneau.reglages(self._projet.sous_titres)
 
     def _reglage_change(self) -> None:
         if self._projet is None:
@@ -478,7 +409,27 @@ class AtelierSousTitres(Page):
             return
         self._projet.sous_titres = reglages
         self._services.projets.enregistrer()
+        self._charger_reglages()  # format personnalisé affiché ou caché, limites du réglage fin…
         self.calculer()
+
+    def _position_change(self) -> None:
+        """Haut, centre ou bas, réglage fin : seul l'aperçu change (jamais le découpage)."""
+        if self._projet is None or self._calcul is None:
+            return
+        reglages = replace(self._projet.sous_titres, position=self.reglages().position)
+        self._projet.sous_titres = reglages
+        self._calcul.reglages = reglages
+        moteur = self._calcul.moteur
+        self._calcul.moteur = Moteur(reglages, moteur.largeur, moteur.hauteur)
+        self._actualiser_limites()
+        self.toile.definir(self._calcul.moteur, self.mots)
+        self._actualiser_toile()
+        self._enregistrement_position.start()
+
+    def _position_glissee(self, decalage: float) -> None:
+        """Sous-titre glissé dans l'aperçu : le réglage fin prend la nouvelle valeur."""
+        self.panneau.montrer_reglage_fin(decalage)
+        self._position_change()
 
     def _masquer_change(self, masquer: bool) -> None:
         transcription = self.transcription
@@ -493,20 +444,24 @@ class AtelierSousTitres(Page):
 
     def calculer(self) -> None:
         """(Re)calcule les sous-titres d'après les mots, les réglages et les sous-titres réorganisés
-        à la main, puis les affiche."""
+        à la main, puis les affiche (liste et aperçu)."""
         calcul = calculer_du_projet(self._services, self._projet)
         self._calcul = calcul
         self.mots, self.sous_titres = calcul.decoupage.mots, calcul.decoupage.sous_titres
         self._debuts = [s.debut for s in self.sous_titres]
         if calcul.decoupage.defaits:
             self._retirer_les_ajustements_defaits(calcul)
-        ecran_video, langue = calcul.ecran, calcul.langue
+        ecran_video, langue, moteur = calcul.ecran, calcul.langue, calcul.moteur
         typographie = " ; typographie française : espace insécable avant « ! ? : ; »" if langue.startswith("fr") else ""
         self.infos_ecran.setText(
-            f"Vidéo {ecran_video.largeur} × {ecran_video.hauteur}, texte de {round(ecran_video.taille_texte)} px (police Inter) : "
+            f"Vidéo {ecran_video.largeur} × {ecran_video.hauteur}, texte de {moteur.taille_px} px (Inter SemiBold) : "
             f"une ligne tient en {round(ecran_video.largeur_securite)} px dans la zone de sécurité, "
             f"{round(ecran_video.largeur_max)} px au plus jusqu'à la marge maximum{typographie}."
         )
+        self.panneau.taille_px.setText(f"{moteur.taille_px} px")
+        self._actualiser_limites()
+        self.toile.definir(moteur, self.mots)
+        self.bloc_apercu.zone.actualiser_taille()
         self._remplir_tableau()
         self.cadre_sous_titres.setVisible(bool(self.sous_titres))
         signales = sum(1 for s in self.sous_titres if s.signale)
@@ -520,9 +475,14 @@ class AtelierSousTitres(Page):
             morceaux.append(f"{signales} signalé{'s' if signales > 1 else ''} en orange (mot rapetissé pour tenir dans l'écran)")
         self.resume.setText("  ·  ".join(morceaux))
         self.bouton_exporter.setEnabled(bool(self.sous_titres))
-        self._montrer(self.tableau.currentRow() if self.tableau.currentRow() >= 0 else 0)
+        self._actualiser_toile()
         self._actualiser_reorganisation()
-        self._etat_lecture()
+        self._actualiser_boucle()
+
+    def _actualiser_limites(self) -> None:
+        moteur = self._calcul.moteur
+        bas, haut = limites_du_reglage_fin(moteur.reglages, moteur.zone, moteur.metriques)
+        self.panneau.definir_limites_reglage_fin(bas, haut)
 
     def _retirer_les_ajustements_defaits(self, calcul: Calcul) -> None:
         """Des mots changés dans le module Transcription (texte, temps, fusion, coupe, suppression,
@@ -564,32 +524,51 @@ class AtelierSousTitres(Page):
                 self.tableau.setItem(rang, colonne, element)
         self.tableau.contenu_change()
 
-    # --- Sous-titre choisi / en cours de lecture ---------------------------------------------
+    # --- Aperçu : sous-titre affiché, sous-titre choisi ----------------------------------------
 
-    def _index_au_temps(self, temps: float) -> int:
-        index = bisect.bisect_right(self._debuts, temps) - 1
-        if 0 <= index < len(self.sous_titres) and temps < self.sous_titres[index].fin:
-            return index
-        return -1
+    def _actualiser_toile(self) -> None:
+        """L'aperçu montre le sous-titre du moment affiché (celui de l'image de la vidéo)."""
+        index = sous_titre_au_temps(self.sous_titres, self.lecteur.temps, self._debuts)
+        self.toile.montrer(self.sous_titres[index] if index >= 0 else None)
 
-    def _montrer(self, index: int) -> None:
-        """Aperçu : le sous-titre, tel qu'il s'affichera (lignes, majuscules…)."""
-        sous_titre = self.sous_titres[index] if 0 <= index < len(self.sous_titres) else None
-        self.apercu.setText(sous_titre.texte if sous_titre else "")
-        self.apercu.setProperty("signale", bool(sous_titre and sous_titre.signale))
-        self.apercu.style().unpolish(self.apercu)
-        self.apercu.style().polish(self.apercu)
+    def _au_debut(self) -> None:
+        """Projet ouvert : l'aperçu montre le premier sous-titre (sans le choisir dans la liste)."""
+        if self.sous_titres and not self.lecteur.en_lecture():
+            self.lecteur.aller_a(self.sous_titres[0].debut)
+
+    def _temps_lu(self, _temps: float) -> None:
+        self._actualiser_toile()
+        if not self.lecteur.en_lecture():
+            return
+        index = sous_titre_au_temps(self.sous_titres, self.lecteur.temps, self._debuts)
+        if index >= 0 and index != self.tableau.currentRow() and not self.bloc_apercu.bouton_boucle.isChecked():
+            self.tableau.selectRow(index)
+            self.tableau.scrollToItem(self.tableau.item(index, 0))
+            self._actualiser_reorganisation()
+
+    def _position_lue(self, position_ms: int, duree_ms: int) -> None:
+        apercu = self.bloc_apercu
+        if not apercu.position.isSliderDown():
+            apercu.position.setRange(0, max(duree_ms, 0))
+            apercu.position.setValue(position_ms)
+        apercu.temps.setText(f"{minutes_secondes(position_ms / 1000)} / {minutes_secondes(duree_ms / 1000)}")
 
     def choisir_sous_titre(self, index: int) -> None:
-        """Clic sur un sous-titre : il est montré ; la lecture s'y place si elle est en cours."""
+        """Clic sur un sous-titre : il est choisi, et l'aperçu (la lecture) se place sur lui."""
         if not 0 <= index < len(self.sous_titres):
             return
         self.tableau.selectRow(index)
-        self._montrer(index)
         self._actualiser_reorganisation()
-        chemin = self._chemin_audio()
-        if chemin is not None and self.lecteur.chemin == str(chemin):
-            self.lecteur.aller_a(round(self.sous_titres[index].debut * 1000))
+        self._actualiser_boucle()
+        self.lecteur.aller_a(self.sous_titres[index].debut)
+        self._actualiser_toile()
+
+    def _actualiser_boucle(self) -> None:
+        index = self._choisi()
+        if self.bloc_apercu.bouton_boucle.isChecked() and index >= 0:
+            self.lecteur.definir_boucle(self.sous_titres[index].debut, self.sous_titres[index].fin)
+        else:
+            self.lecteur.definir_boucle(None)
 
     # --- Lecture -----------------------------------------------------------------------------
 
@@ -599,42 +578,119 @@ class AtelierSousTitres(Page):
             return None
         return self._projet.chemin(transcription.audio)
 
+    def _charger_la_lecture(self) -> None:
+        """Ce que lit l'aperçu : la vidéo transcrite (avec son son) ; sinon la piste son des
+        sous-titres (prise), sous la vidéo choisie pour l'aperçu s'il y en a une. Une vidéo
+        introuvable (déplacée, supprimée) laisse le fond gris et propose de la retrouver."""
+        transcription, reglages = self.transcription, self._projet.sous_titres
+        audio = self._chemin_audio()
+        audio = str(audio) if audio is not None and audio.exists() else ""
+        video, decalage, son_de_la_video, introuvable = "", 0.0, True, ""
+        if a_sa_video(transcription):
+            if Path(transcription.source).is_file():
+                video, audio = transcription.source, ""
+            else:
+                introuvable = transcription.source
+        elif reglages.apercu.chemin:
+            if Path(reglages.apercu.chemin).is_file():
+                video, decalage, son_de_la_video = reglages.apercu.chemin, reglages.apercu.decalage_s, reglages.apercu.son_de_la_video
+            else:
+                introuvable = reglages.apercu.chemin
+        if transcription is None or not transcription.horodatee:
+            video = audio = ""
+        if self.isVisible():  # page cachée : rien n'est ouvert (la lecture se prépare à son affichage)
+            self.lecteur.charger(video, audio, decalage, son_de_la_video)
+        self.bloc_apercu.definir_video_possible(bool(video))
+        self.bloc_apercu.ligne_introuvable.setVisible(bool(introuvable))
+        if introuvable:
+            self.bloc_apercu.message_video.setText(
+                f"Vidéo introuvable : {introuvable}. Elle a peut-être été déplacée ou supprimée "
+                "(elle n'est pas copiée dans le projet) : l'aperçu montre un fond gris."
+            )
+        self._actualiser_toile()
+
     def basculer_lecture(self) -> None:
-        chemin = self._chemin_audio()
-        if chemin is None or not chemin.exists():
-            self._afficher("Piste son introuvable dans le dossier du projet.", "erreur", self.statut_export)
+        if not self.sous_titres:
             return
-        if self.lecteur.chemin == str(chemin):
-            self.lecteur.basculer(chemin)
-            return
-        choisi = self.tableau.currentRow()
-        depart = round(self.sous_titres[choisi].debut * 1000) if 0 <= choisi < len(self.sous_titres) else 0
-        self.lecteur.jouer_depuis(chemin, depart)
+        self.lecteur.basculer()
 
-    def _etat_lecture(self) -> None:
-        chemin = self._chemin_audio()
-        en_lecture = chemin is not None and self.lecteur.en_lecture(chemin)
-        self.bouton_lecture.setIcon(icone("pause" if en_lecture else "play", Couleurs.ACCENT_SURVOL, rempli=True))
-        self.bouton_lecture.setToolTip("Pause" if en_lecture else "Écouter avec les sous-titres")
-
-    def _position_lue(self, position_ms: int, duree_ms: int) -> None:
-        chemin = self._chemin_audio()
-        if chemin is None or self.lecteur.chemin != str(chemin):
-            return
-        if not self.position.isSliderDown():
-            self.position.setRange(0, max(duree_ms, 0))
-            self.position.setValue(position_ms)
-        self.temps.setText(f"{minutes_secondes(position_ms / 1000)} / {minutes_secondes(duree_ms / 1000)}")
-        index = self._index_au_temps(position_ms / 1000)
-        self._montrer(index)
-        if index >= 0 and index != self.tableau.currentRow():
-            self.tableau.selectRow(index)
-            self.tableau.scrollToItem(self.tableau.item(index, 0))
-            self._actualiser_reorganisation()
+    def _erreur_de_lecture(self, message: str) -> None:
+        self._afficher(f"Lecture impossible dans l'aperçu : {message}", "erreur", self.statut_export)
+        self.bloc_apercu.definir_video_possible(False)
 
     def quitter(self) -> None:
-        """La page n'est plus affichée : la lecture s'arrête (et libère le fichier audio)."""
+        """La page n'est plus affichée : la lecture s'arrête (et libère les fichiers)."""
         self.lecteur.arreter()
+
+    # --- Vidéo : retrouvée, ou choisie seulement pour l'aperçu ----------------------------------
+
+    def _demander_video(self, titre: str, proposition: str) -> Path | None:
+        dossier = str(Path(proposition).parent) if proposition else str(dossier_documents())
+        choix, _ = QFileDialog.getOpenFileName(self, titre, dossier, f"{FILTRE_VIDEOS};;{FILTRE_FICHIERS}")
+        return Path(choix) if choix else None
+
+    def retrouver_la_video(self) -> None:
+        """« Retrouver la vidéo… » : la vidéo du projet (ou d'aperçu) a été déplacée."""
+        if self._projet is None:
+            return
+        transcription = self.transcription
+        if a_sa_video(transcription):
+            chemin = self._demander_video("Retrouver la vidéo transcrite", transcription.source)
+            if chemin is None:
+                return
+            transcription.source = str(chemin)
+        else:
+            apercu = self._projet.sous_titres.apercu
+            chemin = self._demander_video("Retrouver la vidéo d'aperçu", apercu.chemin)
+            if chemin is None:
+                return
+            self._projet.sous_titres = replace(self._projet.sous_titres, apercu=replace(apercu, chemin=str(chemin)))
+        self._services.projets.enregistrer()
+        self.rafraichir()
+
+    def choisir_video_apercu(self) -> None:
+        """Projet sans vidéo : une vidéo seulement pour l'aperçu (ex. le montage exporté de Premiere)."""
+        if self._projet is None:
+            return
+        apercu = self._projet.sous_titres.apercu
+        chemin = self._demander_video("Choisir une vidéo pour l'aperçu", apercu.chemin)
+        if chemin is None:
+            return
+        self._definir_video_apercu(VideoApercu(str(chemin), apercu.decalage_s, 0, 0, apercu.son_de_la_video))
+        self._infos_video.lire(chemin)  # sa résolution fixera le format
+
+    def _definir_video_apercu(self, apercu: VideoApercu) -> None:
+        reglages = replace(self._projet.sous_titres, apercu=apercu)
+        if not confirmer_reglage(self.window(), self._services, self._projet, reglages=reglages):
+            return
+        self._projet.sous_titres = reglages
+        self._services.projets.enregistrer()
+        self.rafraichir()
+
+    def _infos_video_lues(self, infos: dict) -> None:
+        """Résolution de la vidéo d'aperçu : elle impose son format (comme la vidéo d'un projet)."""
+        if self._projet is None or not self._projet.sous_titres.apercu.chemin:
+            return
+        resolution_lue = resolution_video(infos)
+        if resolution_lue is None:
+            return
+        apercu = self._projet.sous_titres.apercu
+        self._definir_video_apercu(replace(apercu, largeur=resolution_lue[0], hauteur=resolution_lue[1]))
+
+    def retirer_video_apercu(self) -> None:
+        if self._projet is None:
+            return
+        self._definir_video_apercu(VideoApercu())
+
+    def _video_apercu_change(self) -> None:
+        """Décalage de la voix, ou son de la vidéo : seule la lecture change."""
+        if self._projet is None:
+            return
+        decalage, son = self.panneau.decalage_et_son()
+        apercu = replace(self._projet.sous_titres.apercu, decalage_s=decalage, son_de_la_video=son)
+        self._projet.sous_titres = replace(self._projet.sous_titres, apercu=apercu)
+        self._services.projets.enregistrer()
+        self._charger_la_lecture()
 
     # --- Réorganiser à la main (V1.1) ---------------------------------------------------------
 
@@ -803,7 +859,7 @@ class AtelierSousTitres(Page):
             return
         transcription.masquer_hesitations = actuelle.masquer_hesitations if actuelle else True
         options = Options(self._modele(), projet.langue, MODE_VERBATIM, False, FOURNISSEUR)
-        self.lecteur.arreter()
+        self.lecteur.arreter()  # libère la piste son, qui va être remplacée
         self._occuper(True)
         self._afficher(f"Transcription de « {prise.nom} », puis calage sur son script…", "secondaire")
 
@@ -825,10 +881,12 @@ class AtelierSousTitres(Page):
             self.tableau.clearSelection()
             self._afficher(f"Sous-titres créés depuis « {prise.nom} » : {len(fini.mots)} mots calés sur le script.", "succes")
             self.rafraichir()
+            self._au_debut()
 
         def echec(erreur: Exception) -> None:
             self._occuper(False)
             self._afficher(f"Sous-titres impossibles : {message_erreur(erreur)}", "erreur")
+            self._charger_la_lecture()
 
         taches.lancer(lambda: transcrire_source(adaptateur, wav, options, f"{projet.nom} - {prise.nom}"), fin, echec)
 
@@ -877,3 +935,9 @@ class AtelierSousTitres(Page):
             return
         journal.info("Sous-titres exportés : %s (%d)", chemin, len(self.sous_titres))
         self._afficher(f"Fichier enregistré : {chemin.name} ({len(self.sous_titres)} sous-titres).", "succes", self.statut_export)
+
+    # --- Pour l'autotest ---------------------------------------------------------------------
+
+    def reglages_du_projet(self):
+        """Réglages des sous-titres du projet ouvert."""
+        return self._projet.sous_titres if self._projet is not None else None

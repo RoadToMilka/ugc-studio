@@ -16,7 +16,7 @@ from pathlib import Path
 
 import PySide6
 from PySide6.QtCore import QPoint, Qt, QTimer, qVersion
-from PySide6.QtGui import QFontDatabase, QFontInfo, QIcon, QImageReader, QPainter
+from PySide6.QtGui import QColor, QFontDatabase, QFontInfo, QIcon, QImageReader, QPainter
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidget
 
 from . import __version__
@@ -73,6 +73,8 @@ VERIFICATIONS_OBLIGATOIRES = (
     "reorganisation",
     "module_script",
     "script_lot2",
+    "lecture_video",
+    "studio",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -305,6 +307,43 @@ def _verifier_decodage_audio(dossier: Path, rapport: dict) -> bool:
     return False
 
 
+def _attendre(condition, secondes: float = DELAI_DECODAGE_S) -> bool:
+    fin = time.monotonic() + secondes
+    while not condition() and time.monotonic() < fin:
+        QApplication.processEvents()
+        time.sleep(0.02)
+    return bool(condition())
+
+
+def _verifier_lecture_video(atelier) -> dict:
+    """V2, lot 3 : le .exe lit-il une vidéo, image par image ? La vidéo de démonstration (AVI Motion
+    JPEG, rendu/video_test.py) : première image reçue (taille, couleur du haut), puis 1,5 s de
+    lecture : le temps des sous-titres avance avec les images."""
+    from .rendu.video_test import COULEUR_HAUT
+
+    resultat: dict = {"video": atelier.lecteur.video}
+    if not _attendre(lambda: atelier.toile._image is not None):
+        resultat["erreur"] = "aucune image reçue de la vidéo"
+        resultat["ok"] = False
+        return resultat
+    image = atelier.toile._image.toImage()
+    attendue = QColor(COULEUR_HAUT)
+    couleur = image.pixelColor(image.width() // 2, 4)
+    resultat["taille"] = [image.width(), image.height()]
+    resultat["couleur_haut"] = [couleur.red(), couleur.green(), couleur.blue()]
+    ecart = abs(couleur.red() - attendue.red()) + abs(couleur.green() - attendue.green()) + abs(couleur.blue() - attendue.blue())
+    depart = atelier.lecteur.temps
+    atelier.basculer_lecture()
+    _laisser_afficher(1.5)
+    resultat["en_lecture"] = atelier.lecteur.en_lecture()
+    resultat["temps_avance_s"] = round(atelier.lecteur.temps - depart, 2)
+    if atelier.lecteur.en_lecture():
+        atelier.basculer_lecture()  # pause
+    _laisser_afficher()
+    resultat["ok"] = resultat["taille"] == [540, 960] and ecart < 90 and resultat["temps_avance_s"] > 0.5
+    return resultat
+
+
 def _variantes_remplies(services, atelier, parent, onglet: int) -> DialogueVariantes:
     """Variantes A/B : la B change de voix et de style (valeurs surlignées en mauve)."""
     dialogue = DialogueVariantes(services, atelier.reglages_de_base(), atelier._prononciations(), parent)
@@ -351,6 +390,52 @@ def _variantes_d_accroches(services, atelier, parent) -> DialogueVariantes:
         variante.repliques[0] = RepliqueProjet([dict(s) for s in premiere.script], premiere.style, premiere.style_fr)
         variantes.append(variante)
     return DialogueVariantes(services, variantes[0], atelier._prononciations(), parent, atelier._nombres(), variantes)
+
+
+def _studio(atelier, capturer, rapport: dict) -> bool:
+    """V2, lot 3 : le studio des sous-titres. Fond damier et grille, zoom 100 %, chaque onglet des
+    réglages, sous-titre en haut et aligné à gauche ; puis tout revient comme avant (la suite de
+    l'autotest réorganise les sous-titres de démonstration)."""
+    from .style_sous_titres import BAS, CENTRE, GAUCHE, HAUT
+    from .ui.composants.apercu import FOND_DAMIER, FOND_VIDEO, ZOOM_AJUSTE, ZOOM_REEL
+
+    bloc, panneau, toile = atelier.bloc_apercu, atelier.panneau, atelier.toile
+    rapport["studio_deux_colonnes"] = atelier.studio.deux_colonnes
+    etat = {
+        # Deux colonnes dans une fenêtre large, l'une sous l'autre dans une fenêtre étroite (écran de la fabrication).
+        "colonnes_selon_la_largeur": atelier.studio.deux_colonnes
+        == (atelier.studio.width() >= Dimensions.STUDIO_DEUX_COLONNES_MIN),
+        "sous_titre_affiche": toile.sous_titre is not None,
+        "taille_video": list(toile.taille_video()),
+        "video_en_fond": toile.montre_la_video(),
+    }
+    bloc.fond.bouton(FOND_DAMIER).click()
+    bloc.repere_grille.setChecked(True)
+    capturer(atelier.window(), "studio-damier-grille")
+    bloc.zoom.bouton(ZOOM_REEL).click()
+    capturer(atelier.window(), "studio-100")
+    etat["zoom_100"] = (toile.width(), toile.height()) == tuple(round(c / toile.devicePixelRatioF()) for c in toile.taille_video())
+    bloc.zoom.bouton(ZOOM_AJUSTE).click()
+    bloc.repere_grille.setChecked(False)
+    bloc.fond.bouton(FOND_VIDEO).click()
+    for index in range(panneau.onglets.count()):
+        panneau.onglets.setCurrentIndex(index)
+        capturer(atelier.window(), f"studio-onglet-{index + 1}")
+    panneau.onglets.setCurrentIndex(1)  # Position
+    panneau.verticale.bouton(HAUT).click()
+    panneau.alignement.bouton(GAUCHE).click()
+    rect, video = toile.rect_du_sous_titre(), toile.rect_video()
+    etat["en_haut"] = rect is not None and rect.top() < video.center().y()
+    etat["a_gauche"] = rect is not None and rect.left() < video.center().x() - rect.width() / 4
+    capturer(atelier.window(), "studio-haut-gauche")
+    panneau.alignement.bouton(CENTRE).click()
+    panneau.verticale.bouton(BAS).click()
+    panneau.onglets.setCurrentIndex(0)
+    etat["retour_au_depart"] = (
+        atelier.reglages_du_projet().position.verticale == BAS and atelier.reglages_du_projet().position.alignement == CENTRE
+    )
+    rapport["studio"] = etat
+    return all(etat.values())
 
 
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
@@ -510,13 +595,18 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 barre.setValue(0)
             verifs["decodage_audio"] = _verifier_decodage_audio(dossier, rapport)
 
-            # Page Sous-titres (étape 8) : découpage mesuré avec la vraie police, un sous-titre
-            # choisi (aperçu), une capture par hauteur d'écran.
+            # Page Sous-titres (étape 8, studio de la V2) : la vidéo de démonstration est lue, puis un
+            # sous-titre choisi (aperçu), une capture par hauteur d'écran.
             sous_titres = fenetre.page("sous-titres").atelier
             fenetre.afficher_module("sous-titres")
+            rapport["lecture_video"] = _verifier_lecture_video(sous_titres)
+            verifs["lecture_video"] = rapport["lecture_video"]["ok"]
             sous_titres.choisir_sous_titre(2)
+            _attendre(lambda: sous_titres.toile._image is not None)
+            capturer(fenetre, "studio-video")
             rapport["sous_titres_demo"] = [s.texte for s in sous_titres.sous_titres]
             verifs["sous_titres"] = bool(sous_titres.sous_titres)
+            verifs["studio"] = _studio(sous_titres, capturer, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()
