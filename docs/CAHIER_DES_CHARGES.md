@@ -1,6 +1,6 @@
-# UGC Studio — Cahier des charges
+# UGC Studio : cahier des charges
 
-> Version du document : 3.5, 01/10/2026 (V1.1 en cours : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; lot 4, fondu, listes déroulantes intégrées, bibliothèque de voix plus rapide, tableaux ; lot 5, modèles chargés et colonne « Utilisé dans » ; voir §12.2)
+> Version du document : 3.6, 01/10/2026 (V1.1 terminée, version 1.1.0 : lot 1, textes et titres, balises en français, pastilles centrées, pleine largeur ; lot 2, styles de boutons, onglets en boutons, infos avec une ampoule ; lot 3, bouton et fenêtres « Conseils » ; lot 4, fondu, listes déroulantes intégrées, bibliothèque de voix plus rapide, tableaux ; lot 5, modèles chargés et colonne « Utilisé dans » ; lot 6, sous-titres réorganisés à la main ; voir §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -43,18 +43,18 @@ Le `.exe` n'est pas signé : au premier lancement, Windows affiche « Windows a 
 
 ### 3.1 Modules
 
-1. **Voix (TTS)** — script, voix, styles, balises, génération, historique des prises.
-2. **Transcription (STT)** — import vidéo/audio, extraction du son, transcription mot par mot, correction.
-3. **Studio sous-titres** — découpage, style, mot actif, aperçu, export.
-4. **Réglages** — connexions API, catalogue des modèles et prix, taux de change, suivi des coûts, préférences.
-5. *(V2)* **Script** — aide à l'écriture de scripts UGC avec un modèle de texte (Claude, GPT, Gemini…).
+1. **Voix (TTS)** : script, voix, styles, balises, génération, historique des prises.
+2. **Transcription (STT)** : import vidéo/audio, extraction du son, transcription mot par mot, correction.
+3. **Studio sous-titres** : découpage, style, mot actif, aperçu, export.
+4. **Réglages** : connexions API, catalogue des modèles et prix, taux de change, suivi des coûts, préférences.
+5. *(V2)* **Script** : aide à l'écriture de scripts UGC avec un modèle de texte (Claude, GPT, Gemini…).
 
 ### 3.2 Notion de Projet
 
 Un **Projet** = un dossier qui regroupe tout : script, prises audio, vidéo source (référence), transcription, style de sous-titres, réglages d'export. Rouvrir un projet restaure l'état complet.
 
-- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription et dictionnaire de remplacements du projet, réglages des sous-titres), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite, ou de la prise dont on a créé les sous-titres).
-- Format du fichier : version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
+- Contenu du dossier : `projet.json` (nom, langue, réglages de voix, répliques du script avec leur style, dictionnaire de prononciation du projet, liste des prises et séries de variantes, transcription avec ses sous-titres réorganisés à la main, dictionnaire de remplacements du projet, réglages des sous-titres), `prises\prise-001.wav`, `prise-002.wav`… et `sources\audio.wav` (piste son de la source transcrite, ou de la prise dont on a créé les sous-titres).
+- Format du fichier : version 5 depuis la V1.1 (sous-titres réorganisés à la main, §7.8 ; un projet plus ancien s'ouvre sans ajustement). Version 4 depuis l'étape 8 (réglages des sous-titres ; un projet plus ancien s'ouvre avec les réglages par défaut). Version 3 depuis l'étape 7 (transcription). Version 2 depuis l'étape 4 (script en répliques) ; un projet de l'étape 3 (un seul script, un seul style) est converti à l'ouverture en une seule réplique.
 - Enregistrement **automatique** (moins d'une seconde après chaque modification, et à la fermeture de l'app).
 - Menu **Projet** en cliquant sur le nom du projet dans le bandeau : nouveau projet, ouvrir un projet, projets récents (10 retenus), ouvrir le dossier du projet.
 - Au démarrage, le dernier projet utilisé est rouvert automatiquement.
@@ -100,7 +100,7 @@ Ajouter un fournisseur = écrire un nouvel adaptateur ; le reste de l'app ne cha
 
 Un modèle absent du tableau mais accessible avec une clé est reconnu d'après son nom (`…-tts` → voix, `…transcribe…` → transcription) : il apparaît dans « Modèles et prix » avec des prix à renseigner.
 
-**V1 : adaptateur Google uniquement.** Fournisseurs prévus ensuite : OpenAI, ElevenLabs, Anthropic (texte uniquement — pas de TTS/STT chez Anthropic).
+**V1 : adaptateur Google uniquement.** Fournisseurs prévus ensuite : OpenAI, ElevenLabs, Anthropic (texte uniquement : pas de TTS/STT chez Anthropic).
 
 ---
 
@@ -178,7 +178,7 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 ### 5.1 Modèles V1
 
-- `gemini-3.8-flash-tts` (par défaut — qualité et jeu d'acteur maximum)
+- `gemini-3.8-flash-tts` (par défaut : qualité et jeu d'acteur maximum)
 - `gemini-3.8-flash-lite-tts` (rapide, moins cher)
 
 ### 5.2 Éditeur de script
@@ -211,7 +211,7 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 ### 5.3 Découpage en répliques
 
-- Le script peut être découpé en **répliques** (blocs). Chaque réplique a son propre champ **style** (optionnel) — utile quand l'émotion change en cours de pub (ex. hook énergique → témoignage calme).
+- Le script peut être découpé en **répliques** (blocs). Chaque réplique a son propre champ **style** (optionnel), utile quand l'émotion change en cours de pub (ex. hook énergique → témoignage calme).
 - Le style de réplique est envoyé dans `speech_metadata.style`.
 - Toutes les répliques partent **dans la même requête** (une entrée de texte par réplique, chacune avec son style) : une seule prise. Si le total dépasse les limites du modèle (§5.6 bis), les répliques sont réparties sur plusieurs requêtes, puis les audios sont recollés.
 - Interface : les répliques s'affichent l'une sous l'autre (« Réplique 1 », « Réplique 2 »…), chacune avec son champ style et son éditeur à badges, qui grandit avec le texte. Bouton « Ajouter une réplique » ; menu ⋯ de chaque réplique : **Découper ici** (la fin de la réplique, après le curseur, devient une nouvelle réplique avec le même style), Monter, Descendre, Supprimer. La palette de balises et « Accentuer » agissent sur la dernière réplique utilisée.
@@ -219,7 +219,7 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 
 ### 5.4 Choix de la voix
 
-- **Voix de base** (30 voix Google) avec leur caractère (Puck — Upbeat, Kore — Firm, Leda — Youthful…).
+- **Voix de base** (30 voix Google) avec leur caractère (Puck · Upbeat, Kore · Firm, Leda · Youthful…).
 - **Bibliothèque étendue** interrogée via l'API (`voices.list`) avec **filtres** : langue, accent, genre, hauteur (grave/moyenne/aiguë), persona, contexte d'usage, recherche texte.
   - Requête : `GET /v1beta/voices?page_size=1000&type=prebuilt` (pages suivantes avec `page_token`). La bibliothèque (plus de 2 000 voix) est gardée une semaine dans son propre fichier, `bibliotheque_voix.json` ; bouton « Actualiser ». Favoris, noms, traductions et voix créées sont dans `voix.json`, un petit fichier (jusqu'à la 1.0.3, la bibliothèque y était aussi, et chaque ★ réécrivait tout ; elle est déplacée automatiquement à la première ouverture).
   - Les filtres agissent dans l'app ; au départ, la langue du projet est choisie. Le nombre exact de voix trouvées est affiché (« 81 voix (sur 2 089) »). **20 voix affichées**, puis « Afficher 20 voix de plus » (avec le nombre restant), autant de fois que voulu ; changer un filtre revient aux 20 premières. La recherche attend une courte pause dans la frappe (0,3 s).
@@ -230,12 +230,12 @@ Format imposé : `0.0000 €` (4 décimales minimum)
 - Choisir une voix créée choisit aussi le modèle avec lequel elle a été créée.
 - *(V4)* Voice Replication (clonage à partir de 30 s, **uniquement avec l'accord de la personne**).
 
-### 5.4 bis Voice Design — créer ses voix (V1)
+### 5.4 bis Voice Design : créer ses voix (V1)
 
 Création de voix personnalisées **dans l'app** (API `POST /v1beta/voices`, `type: "prompted"`), sans passer par Google AI Studio.
 
 - Champs : nom, langue, genre, modèle (Flash TTS ou Flash-Lite TTS), **description**.
-- **Assistant de description structurée** : champs guidés (âge, genre, timbre, texture de voix, accent régional, persona / rôle) assemblés automatiquement en 1–2 phrases, modifiables ensuite en texte libre. Ex. : « Jeune femme d'environ 25 ans, française, voix légèrement voilée, spontanée et complice, comme si elle parlait à une amie face caméra. »
+- **Assistant de description structurée** : champs guidés (âge, genre, timbre, texture de voix, accent régional, persona / rôle) assemblés automatiquement en 1 ou 2 phrases, modifiables ensuite en texte libre. Ex. : « Jeune femme d'environ 25 ans, française, voix légèrement voilée, spontanée et complice, comme si elle parlait à une amie face caméra. »
 - Google renvoie un **extrait audio** → écoute immédiate → garder ou ajuster la description et recommencer.
 - Gestion : liste, réécoute (`voices.get` renvoie l'extrait), renommage, suppression, **date d'expiration** affichée (conservation 1 an), compteur **x / 200 voix**.
 - Les voix créées dans Google AI Studio (même projet) apparaissent aussi dans l'app.
@@ -259,10 +259,10 @@ Création de voix personnalisées **dans l'app** (API `POST /v1beta/voices`, `ty
 ### 5.5 Bibliothèque de styles personnalisés
 
 Un **style** enregistré contient :
-- nom, catégorie (UGC témoignage, unboxing, placement influenceur, hook, pub classique… — catégories libres, créables par l'utilisateur) ;
+- nom, catégorie (UGC témoignage, unboxing, placement influenceur, hook, pub classique… ; catégories libres, créables par l'utilisateur) ;
 - fournisseur + modèle ;
 - voix ;
-- consigne de style (courte — voir conseils ci-dessous) ;
+- consigne de style (courte : voir conseils ci-dessous) ;
 - balises par défaut éventuelles ;
 - langue.
 
@@ -306,7 +306,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 - Chaque génération = une **prise** conservée dans le projet (horodatée, avec voix/style/coût utilisés).
 - Comparer, renommer, noter (★), supprimer les prises.
 - Export audio : **WAV 24 kHz mono** (sortie native) ; option MP3 (encodeur LAME, 192 kb/s).
-- Appel technique (Gemini 3.8 TTS) : API **Interactions** (`POST /v1beta/interactions`) — texte dans `input` (avec l'annotation `speech_metadata.style` quand un style est donné), voix dans `generation_config.speech_config`. Réponse : WAV 24 kHz mono en base64, et nombres de tokens (`usage`) pour le coût.
+- Appel technique (Gemini 3.8 TTS) : API **Interactions** (`POST /v1beta/interactions`) : texte dans `input` (avec l'annotation `speech_metadata.style` quand un style est donné), voix dans `generation_config.speech_config`. Réponse : WAV 24 kHz mono en base64, et nombres de tokens (`usage`) pour le coût.
 - En cas de surcharge passagère de Google (erreur 5xx), un nouvel essai est fait automatiquement après 3 s.
 - **Variantes** (tests A/B de pubs) : générer plusieurs versions d'un même script en un seul lancement.
   - **Mode « mêmes réglages »** : N générations identiques ; le modèle varie naturellement l'interprétation → on garde la meilleure prise.
@@ -321,7 +321,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
     - « Mêmes réglages » : de 2 à 6 variantes (lettres A à F) ;
     - « Réglages par variante » : colonne « Réglages de base » (ceux de l'atelier), puis une colonne par variante (2 au départ, A et B, identiques à la base). Lignes : modèle, voix, puis pour chaque réplique son style et son texte (sous chaque texte : menu « Balise » par famille et « Accentuer »). Choisir une voix créée choisit aussi son modèle, comme dans l'atelier. Icônes « Dupliquer la variante » et « Supprimer » (au moins 2 variantes) en tête de colonne, « Ajouter » à droite.
     - En bas : coût total estimé (prix de chaque modèle, dictionnaire de prononciation compris) et « Générer les N variantes ».
-  - Génération : les variantes partent **l'une après l'autre** (pour rester sous les limites de débit de Google). Chacune devient une prise « Prise N — variante B », marquée de sa série (`serie`, `variante` dans `projet.json`). Bouton « Arrêter » pendant la série : elle s'arrête après la variante en cours. Si une variante échoue, la série s'arrête ; les variantes déjà prêtes sont gardées.
+  - Génération : les variantes partent **l'une après l'autre** (pour rester sous les limites de débit de Google). Chacune devient une prise « Prise N (variante B) », marquée de sa série (`serie`, `variante` dans `projet.json`). Bouton « Arrêter » pendant la série : elle s'arrête après la variante en cours. Si une variante échoue, la série s'arrête ; les variantes déjà prêtes sont gardées.
   - **Écoute comparative** : fenêtre « Comparer les variantes » ouverte à la fin de la série (au moins 2 variantes prêtes), et depuis le menu ⋯ d'une prise de la série.
     - « Lecture enchaînée » : A, puis B, puis C… (0,6 s de silence entre deux).
     - Bascule : clic sur une lettre, ou touches A à F (ou 1 à 6). La variante choisie reprend **au même moment du texte** : même proportion de sa durée, puisque les variantes n'ont pas exactement la même durée. Chaque variante a son propre lecteur, chargé à l'ouverture : la bascule est immédiate. Espace : lecture ou pause.
@@ -353,17 +353,17 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 
 ### 6.1 Modèle V1
 
-`gemini-3.5-transcribe` avec **horodatage mot par mot activé** (limite : 30 min par requête — largement suffisant pour des pubs).
+`gemini-3.5-transcribe` avec **horodatage mot par mot activé** (limite : 30 min par requête, largement suffisant pour des pubs).
 
 ### 6.2 Entrée
 
 - Glisser-déposer ou bouton : vidéo (MP4, MOV, MKV…) ou audio (WAV, MP3, M4A…).
 - Extraction automatique de la piste son (décodage par FFmpeg, à travers Qt Multimedia).
-- Lecture des infos de la source (résolution, fps exacts, débit, codec, couleurs/HDR, durée) — réutilisées pour l'export.
+- Lecture des infos de la source (résolution, fps exacts, débit, codec, couleurs/HDR, durée), réutilisées pour l'export.
 
 ### 6.3 Options
 
-**Incompatibilités officielles de l'API (doc Google, sept. 2026) — elles dictent la conception :**
+**Incompatibilités officielles de l'API (doc Google, sept. 2026), qui dictent la conception :**
 - l'horodatage par mot (`timestamp_granularities: ["word"]`) ne fonctionne qu'en mode **verbatim** ;
 - il est **incompatible avec le vocabulaire personnalisé** (`custom_vocabulary`) ;
 - le mode **smart** est incompatible avec l'horodatage et avec la séparation des voix ;
@@ -374,7 +374,7 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 - **Langue** : détection auto ou langue forcée (`language_codes`, recommandé pour les vidéos courtes).
 - **Séparation des voix** (jusqu'à 8 personnes, fiable jusqu'à 2 ; au-delà expérimental) : chaque mot reçoit un locuteur (`spk_1`, `spk_2`…). Utile pour une pub à deux personnes : style de sous-titre différent par personne (V2).
 - **Dictionnaire de remplacements** (local, gratuit) : « sérum anti rides » → « Sérum Anti-Rides® », appliqué automatiquement après chaque transcription. Dictionnaires globaux ou par projet.
-- **Correction manuelle** de n'importe quel mot dans l'éditeur (§6.4) — solution principale pour les erreurs ponctuelles.
+- **Correction manuelle** de n'importe quel mot dans l'éditeur (§6.4) : solution principale pour les erreurs ponctuelles.
 - Pas de vocabulaire personnalisé côté API en V1 (incompatible avec l'horodatage par mot) : non retenu, le dictionnaire + la correction manuelle suffisent.
 - **Masquer les hésitations dans les sous-titres** (remplace le mode smart) : l'app retire elle-même « euh », « hum »… de l'affichage en conservant les temps des autres mots. Liste de mots modifiable par langue. L'audio n'est pas modifié.
 - Le **mode smart** reste disponible uniquement pour une transcription texte sans timing (copier un script depuis une vidéo concurrente, par ex.).
@@ -489,7 +489,7 @@ Options **combinables** :
 
 ### 7.8 Mise en œuvre (étape 8)
 
-Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Créer les sous-titres » d'une prise, §3.3 ; « Corriger les mots » ouvre le module Transcription), réglages, liste des sous-titres, écoute, export SRT. Les sous-titres sont recalculés à chaque changement de réglage (`sous_titres.py`, testé sans interface) ; seuls les réglages sont enregistrés dans le projet.
+Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Créer les sous-titres » d'une prise, §3.3 ; « Corriger les mots » ouvre le module Transcription), réglages, liste des sous-titres, réorganisation à la main (V1.1), écoute, export SRT. Les sous-titres sont recalculés à chaque changement de réglage (`sous_titres.py`, testé sans interface) ; seuls les réglages et les sous-titres réorganisés à la main sont enregistrés dans le projet.
 
 **Réglages par défaut** : 24 caractères (espaces comprises) et 5 mots au plus par sous-titre, 2 lignes au plus, coupe de préférence après la ponctuation, durée minimale 0,6 s ; ponctuation affichée, pas de majuscules, hésitations masquées (réglage partagé avec la transcription) ; format « celui de la vidéo » (sinon 9:16), zone de sécurité TikTok, marge maximum 5 %, texte à 4 % de la hauteur de la vidéo.
 
@@ -513,11 +513,23 @@ Page **Sous-titres** : mots des sous-titres (transcription du projet, ou « Cré
 | Instagram, Facebook (Reels, Stories) | 6 % | 6 % | 14 % | 35 % | Guide des publicités Meta |
 | YouTube Shorts | 0 % | 10 % | 10 % | 25 % | Google Ads, emplacement Shorts |
 | Snapchat | 3,7 % (40 px) | 3,7 % | 10,4 % | 19,3 % | Valeurs courantes, non confirmées par Snapchat |
-| Aucune | — | — | — | — | Marge maximum seulement |
+| Aucune | 0 % | 0 % | 0 % | 0 % | Marge maximum seulement |
 
 Seuls les côtés servent en V1 (largeur des lignes) ; le haut et le bas serviront à placer les sous-titres (V2).
 
 **Temps** : un sous-titre va du début de son premier mot à la fin du dernier ; s'il dure moins que la durée minimale, il est prolongé jusqu'au sous-titre suivant au plus (et jusqu'à la fin de l'audio pour le dernier), puis avancé jusqu'au précédent au plus ; un trou de 0,3 s au plus entre deux sous-titres est comblé (pas de clignotement).
+
+**Réorganiser à la main (V1.1)** : sous l'aperçu, « Réorganiser à la main » agit sur le sous-titre choisi dans la liste (boutons désactivés tant qu'aucun n'est choisi ; les infobulles citent les vrais mots).
+- Actions : « Monter le premier mot » (au sous-titre précédent), « Descendre le dernier mot » (au suivant), « Couper » (menu « Couper avant « mot » » : le mot choisi commence le nouveau sous-titre), « Fusionner avec le suivant », « Rétablir » (le découpage automatique de ce sous-titre, ou de tous). Monter ou descendre le seul mot d'un sous-titre le fait disparaître. Le résultat se voit tout de suite (liste et aperçu), avec un message d'une ligne (ex. « « a » passe à la fin du sous-titre 3. »).
+- **Le temps des mots ne change jamais** : un sous-titre va du début de son premier mot à la fin de son dernier, avec la durée minimale et le comblement des petits trous, comme les autres.
+- **Mêmes règles que le découpage automatique** : caractères et mots au plus (un mot seul peut les dépasser), lignes au plus et place à l'écran jusqu'à la marge maximum, fin de phrase (si « Couper de préférence après la ponctuation » est cochée), changement de personne, silence de plus de 0,8 s. Une action qui ne les respecte pas est **refusée** (rien ne change) avec la raison et le réglage à changer, ex. « Impossible : le sous-titre 5 ferait 26 caractères, et « Caractères au plus » est réglé sur 24. » ; « Impossible : le sous-titre 1 aurait 4 mots, et « Mots au plus » est réglé sur 3. » ; « … ne tiendrait pas sur une ligne dans l'écran, et « Lignes au plus » est réglé sur 1 » ; « … serait trop large pour l'écran, même jusqu'à la marge maximum (réglages « Taille du texte » et « Marge maximum ») ».
+- Remarque **« Ajusté à la main »** dans la liste (après « Mot rapetissé… » s'il y a lieu) ; le résumé compte les sous-titres ajustés.
+- Enregistrement : chaque sous-titre ajusté est rangé dans la transcription (`ajustements_sous_titres`) sous la forme [début, fin] : du début de son premier mot à la fin de son dernier. Ses mots sont ceux dont le **milieu** tombe dans ce moment ; un mot n'appartient qu'à un ajustement. Si deux mots voisins se recouvrent dans le temps, la borne passe à mi-chemin entre leurs milieux ; deux mots au même moment ne peuvent pas être séparés (action refusée : « corrige d'abord leur moment »). Pourquoi le temps plutôt que la place des mots : l'ajustement suit ainsi les mots corrigés dans le module Transcription (fusion, coupe, suppression) et les réglages du texte affiché.
+- Calcul : les sous-titres ajustés gardent leurs mots ; les mots entre eux sont découpés automatiquement (même programmation dynamique). Un ajustement qui ne respecte plus les règles est défait : ses mots reviennent au découpage automatique.
+- **Réglage qui défait un ajustement** : tous les réglages des sous-titres (y compris « Masquer les hésitations », ici et dans le module Transcription) passent par `ui/sous_titres_du_projet.py` : avant d'appliquer un réglage, le découpage est recalculé avec lui. S'il défait des ajustements, la question est posée en les nommant, ex. « Ce réglage défait ton ajustement du sous-titre 4 (« Mais ce Sérum Glowzy a ») : 22 caractères, pour 20 au plus. » (une ligne par sous-titre s'il y en a plusieurs). « Garder le réglage actuel » (choix par défaut) : rien ne change, le champ reprend sa valeur. « Appliquer et défaire cet ajustement » : le réglage change et ces sous-titres reviennent au découpage automatique.
+- **Mots corrigés dans le module Transcription** (texte, temps, fusion, coupe, suppression, remplacements, liste des hésitations) : jamais bloqués. Un ajustement devenu impossible est défait, et la page Sous-titres le dit (message orange) : « Des mots ont changé dans le module Transcription : ton ajustement du sous-titre 4 (« … ») ne tient plus (26 caractères, pour 24 au plus). Il revient au découpage automatique. »
+- Une nouvelle transcription (autre source, autre prise, ou nouvelle transcription de la même source) efface les ajustements ; les confirmations déjà demandées le précisent quand il y en a.
+- L'export SRT reprend exactement la liste affichée.
 
 **Liste et écoute** : numéro, temps, texte (lignes comprises), remarque ; les sous-titres signalés sont en orange. Pendant l'écoute, le sous-titre en cours est surligné et affiché en grand (aperçu simple ; l'aperçu fidèle sur la vidéo arrive en V2). Clic sur un sous-titre : il est montré, et la lecture s'y place si elle est en cours (sinon « ▶ » part de lui). Changer de module arrête la lecture de la page quittée (et libère la piste son).
 
@@ -709,7 +721,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 
 ## 12. Découpage en versions
 
-### V1 — Socle utilisable
+### V1 : socle utilisable
 - Réglages : connexions API (Google), test de clé, catalogue de prix, taux de change, suivi et historique des coûts, affichage `0.00`+`71`.
 - Architecture d'adaptateurs + tableau de capacités (adaptateur Google seul).
 - Voix : éditeur avec badges de balises, dictionnaire de prononciation, variantes, **Voice Design** (création de voix + conseils Google), assistant de style avec conseils Google, répliques et styles, voix de base + bibliothèque filtrable, bibliothèque de styles personnalisés, génération, prises, export WAV/MP3.
@@ -736,7 +748,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). Suite : V1.1 (retouches de l'interface, §12.2), puis V2, Studio de style.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). Suite : V2, Studio de style.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -749,22 +761,22 @@ Demandes de l'utilisateur du 30/09/2026, réécrites et validées dans le docume
 | 3 | 1.0.3 | Bouton « Conseils » et fenêtres de conseils (modules et fenêtres), en français |
 | 4 | 1.0.4 | Fondu en haut et en bas, listes déroulantes intégrées au champ, bibliothèque de voix plus rapide, tableaux quand la fenêtre rétrécit |
 | 5 | 1.0.5 | Modèles chargés, fenêtre « Choisir les modèles », colonne « Utilisé dans » |
-| 6 | 1.1.0 | Réorganisation des sous-titres à la main |
+| 6 | 1.1.0 | Réorganisation des sous-titres à la main (monter, descendre, couper, fusionner, rétablir), mêmes règles que le découpage automatique, question avant un réglage qui défait un ajustement ; format de projet 5 |
 
 Coins arrondis de la fenêtre : non pour le moment (Windows 10 dessine des coins carrés ; les arrondir demanderait de redessiner toute la barre de titre, avec un vrai risque de bugs).
 
-### V2 — Studio de style
+### V2 : Studio de style
 - Style du texte complet (§7.4), mot actif (§7.5), préréglages de style (§7.6).
 - Aperçu vidéo fidèle avec zones de sécurité et timeline (§7.7).
 - Formats vidéo (§7.1).
 - Module Script (aide à l'écriture avec un modèle de texte).
 
-### V3 — Exports vidéo
+### V3 : exports vidéo
 - Overlay transparent MOV ProRes 4444 (§8.2).
 - Vidéo finale incrustée, choix débit / conteneur / codec, HDR (§8.3, §8.4).
 - Résumé avant export (§8.5).
 
-### V4 — Voix avancées et fournisseurs
+### V4 : voix avancées et fournisseurs
 - Voice Replication (avec consentement), multi-voix.
 - Adaptateurs OpenAI, ElevenLabs, Anthropic.
 - Installateur Windows.
@@ -775,7 +787,7 @@ Coins arrondis de la fenêtre : non pour le moment (Windows 10 dessine des coins
 
 - Liste définitive des **catégories de pub** et de leur ton (l'utilisateur les créera dans la bibliothèque de styles ; quelques exemples fournis par défaut).
 - Disponibilité de voix avec un vrai **accent flamand** (à vérifier ; sinon création avec Voice Design).
-- Syntaxe exacte des API au moment du code (la doc évolue vite — toujours vérifier la doc officielle avant d'écrire un adaptateur). Les prix de Gemini 3.5 Transcribe sont connus depuis la v1.9 (§4.2).
+- Syntaxe exacte des API au moment du code (la doc évolue vite : toujours vérifier la doc officielle avant d'écrire un adaptateur). Les prix de Gemini 3.5 Transcribe sont connus depuis la v1.9 (§4.2).
 - **Zones de sécurité** par plateforme : documentées au §7.8 (TikTok, Meta et YouTube d'après leurs guides ; Snapchat à confirmer). À revoir avec la position verticale des sous-titres (V2) : la zone de TikTok s'élargit à droite sous le milieu de l'écran.
 - **Durée de conservation des voix créées** (Voice Design) : la documentation officielle « Voice Design » indique 1 an et 200 voix par projet ; le guide « Get_Started_Voices » indique 7 jours. L'app affiche la date renvoyée par Google (`expire_time`).
 

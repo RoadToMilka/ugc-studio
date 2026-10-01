@@ -196,6 +196,22 @@ SOUS_TITRES = PageDeConseils(
             ),
         ),
         Rubrique(
+            "Réorganiser à la main",
+            (
+                "Choisis un sous-titre dans la liste, puis « Monter le premier mot », « Descendre le dernier "
+                "mot », « Couper » (choisis le mot qui commence le nouveau sous-titre) ou « Fusionner avec le "
+                "suivant ».",
+                "Le moment des mots ne change jamais : un sous-titre va toujours du début de son premier mot à "
+                "la fin de son dernier.",
+                "Les réglages du découpage valent aussi à la main : une action qui ne les respecte pas est "
+                "refusée, avec la raison et le réglage à changer.",
+                "Un sous-titre ajusté est marqué « Ajusté à la main ». Il garde ses mots quand tu changes un "
+                "réglage : le reste est redécoupé autour de lui. Si un réglage ne le permet plus, l'app te "
+                "demande d'abord.",
+                "« Rétablir » remet ce sous-titre, ou tous, au découpage automatique.",
+            ),
+        ),
+        Rubrique(
             "Export",
             (
                 "« Exporter en SRT… » : le texte et le moment de chaque sous-titre, sans style. Premiere Pro "

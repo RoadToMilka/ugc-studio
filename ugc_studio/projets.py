@@ -15,6 +15,9 @@ Format 3 (étape 7) : la **transcription** (source importée, piste son extraite
 
 Format 4 (étape 8) : les **réglages des sous-titres** (découpage, texte affiché, écran, §7).
 Un projet d'un format plus ancien s'ouvre avec les réglages par défaut.
+
+Format 5 (V1.1) : les **sous-titres réorganisés à la main**, rangés dans la transcription
+(`ajustements_sous_titres`). Un projet d'un format plus ancien s'ouvre sans ajustement.
 """
 
 from __future__ import annotations
@@ -139,7 +142,7 @@ class Projet:
     remplacements: list[Remplacement] = field(default_factory=list)  # dictionnaire du projet (§6.3)
     sous_titres: ReglagesSousTitres = field(default_factory=ReglagesSousTitres)  # §7
 
-    VERSION_FORMAT = 4
+    VERSION_FORMAT = 5
 
     @property
     def script(self) -> list[dict]:
