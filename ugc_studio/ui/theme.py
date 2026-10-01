@@ -171,6 +171,7 @@ class Dimensions:
     COLONNE_SCRIPT_COMPARE_LARGEUR = 296
     DIALOGUE_SCRIPTS_HAUTEUR = 660  # variantes de script et comparaison : plus de lignes visibles d'un coup
     CHAMP_SCRIPT_COLLE_HAUTEUR = 120  # « Ajouter un script qui a marché » : environ 5 lignes
+    COLONNE_FORMULAIRE_LARGEUR = 220  # formulaire sur deux colonnes de même largeur (fenêtre étroite)
     CHAMP_NOMBRE_LARGEUR = 96  # champs de prix, de taux…
     ETIQUETTE_HAUTEUR = 20  # petites étiquettes grises (ex. capacités d'un modèle)
     TABLEAU_HAUTEUR_MIN = 320

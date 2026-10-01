@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QPlainTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLayout, QPlainTextEdit, QVBoxLayout
 
 from ...ecriture.affichage import titre_de_retouche
 from ...ecriture.brief import DUREE_MAX, DUREE_MIN, Brief
@@ -55,9 +55,11 @@ class DialogueRetouche(QDialog):
         self._page = page
         self._mots_par_seconde = mots_par_seconde
         self.setWindowTitle("Retoucher le script")
-        self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
 
         disposition = QVBoxLayout(self)
+        # Jamais plus petite que son contenu : avec une simple largeur minimale (setMinimumWidth), Qt
+        # ne protège plus la hauteur, et les champs se chevauchent sur un petit écran.
+        disposition.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle(titre_de_retouche(script), "titre-bloc"))
@@ -127,6 +129,7 @@ class DialogueRetouche(QDialog):
         self.bouton_retoucher = bouton("Retoucher", variante="principal", nom_icone="wand-sparkles", action=self.accept)
         bas.addWidget(self.bouton_retoucher)
         disposition.addLayout(bas)
+        self.resize(Dimensions.DIALOGUE_LARGEUR, 0)  # hauteur : celle du contenu
         self._actualiser()
 
     def ajouter_suggestion(self, texte: str, variation: float) -> None:

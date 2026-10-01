@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
+    QLayout,
     QLineEdit,
     QMenu,
     QMessageBox,
@@ -230,9 +231,11 @@ class DialogueAjoutExemple(QDialog):
         super().__init__(parent)
         self.exemple: ExempleScript | None = None
         self.setWindowTitle("Ajouter un script qui a marché")
-        self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
 
         disposition = QVBoxLayout(self)
+        # La fenêtre ne devient jamais plus petite que son contenu (sinon les champs se chevauchent
+        # sur un petit écran) ; voir la même règle dans retouche.py.
+        disposition.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Ajouter un script qui a marché", "titre-bloc"))
@@ -282,8 +285,9 @@ class DialogueAjoutExemple(QDialog):
         ):
             for colonne, (titre, element) in enumerate(paire):
                 formulaire.addLayout(_avec_titre(titre, element), rang, colonne)
-        formulaire.setColumnStretch(0, 1)
-        formulaire.setColumnStretch(1, 1)
+        for colonne in (0, 1):  # deux colonnes de même largeur
+            formulaire.setColumnStretch(colonne, 1)
+            formulaire.setColumnMinimumWidth(colonne, Dimensions.COLONNE_FORMULAIRE_LARGEUR)
         disposition.addLayout(formulaire)
         disposition.addStretch(1)
 
@@ -294,6 +298,7 @@ class DialogueAjoutExemple(QDialog):
         self.bouton_ajouter = bouton("Ajouter", variante="principal", nom_icone="plus", action=self.valider)
         boutons.addWidget(self.bouton_ajouter)
         disposition.addLayout(boutons)
+        self.resize(Dimensions.DIALOGUE_LARGEUR, 0)  # hauteur : celle du contenu
         self._actualiser()
 
     def _actualiser(self) -> None:
