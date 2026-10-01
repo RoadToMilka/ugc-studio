@@ -9,6 +9,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout
 
 from ..script import depuis_texte
+from .composants.barre_avancement import BarreAvancement
 from .composants.editeur_script import EditeurScript
 from .composants.elements import bloc, bouton, champ_decimal, champ_entier, info, libelle, liste_deroulante, pastille
 from .composants.montant_label import MontantLabel
@@ -120,5 +121,10 @@ class GalerieComposants(QFrame):
         texte = EditeurScript()
         texte.definir_segments(depuis_texte("Salut ! <laugh> J'ai testé <short pause> ce sérum pendant deux semaines… <sigh>"))
         d.addWidget(texte)
+        # Barre d'avancement d'un export (V3).
+        d.addWidget(libelle("Images du calque : 412 sur 930", "secondaire"))
+        avancement = BarreAvancement()
+        avancement.definir(412 / 930)
+        d.addWidget(avancement)
         d.addStretch(1)
         grille.addWidget(cadre, 1, 1)

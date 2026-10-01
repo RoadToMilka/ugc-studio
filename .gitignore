@@ -10,3 +10,8 @@ rapport/
 # Sécurité : aucun fichier de clés ou de configuration locale
 .env
 *.key
+
+# FFmpeg (V3) : placé par outils/preparer_ffmpeg.py pendant la fabrication, jamais envoyé sur GitHub
+ugc_studio/ressources/ffmpeg/ffmpeg.exe
+ugc_studio/ressources/ffmpeg/ffmpeg
+outils/cache/

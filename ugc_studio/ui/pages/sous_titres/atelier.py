@@ -8,8 +8,7 @@
    réglages à droite (reglages.py : Texte, Position, Découpage, Écran). Les sous-titres sont
    recalculés à chaque changement ; la position (haut, centre, bas, réglage fin) ne change que
    l'aperçu, jamais le découpage.
-3. Sous-titres : la liste ; ceux où un mot a dû être rapetissé sont signalés en orange. Export SRT
-   pour Premiere Pro.
+3. Sous-titres : la liste ; ceux où un mot a dû être rapetissé sont signalés en orange.
 4. Réorganiser à la main (V1.1) : sur le sous-titre choisi, monter son premier mot, descendre son
    dernier mot, le couper, le fusionner avec le suivant, ou revenir au découpage automatique. Les
    réglages du découpage s'appliquent toujours (une action qui ne les respecte pas est refusée,
@@ -22,6 +21,9 @@
    (« (modifié) » quand son style s'en écarte) ; en choisir un l'applique (avec la question de la
    1.1.0 s'il défait un ajustement), « Enregistrer… » en crée un, le menu ⋯ met à jour, revient au
    préréglage ou ouvre la fenêtre « Préréglages de sous-titres ».
+7. Exporter (V3) : le calque transparent (MOV, ProRes 4444) à poser sur le montage dans Premiere
+   Pro, dessiné par le moteur de l'aperçu (fenêtre d'export : réglages, résumé, avancement), et le
+   fichier SRT.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QInputDialog, QMenu, QMe
 
 from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
+from ....exports.plan import SousTitresAExporter
 from ....fournisseurs.stt import MODE_VERBATIM
 from ....mise_en_page import limites_du_reglage_fin
 from ....modeles_charges import SOUS_TITRES
@@ -82,6 +85,7 @@ from ...composants.frise import FriseSousTitres
 from ...composants.montant_label import MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues.export import DialogueExportCalque
 from ...dialogues.prereglages import DialoguePrereglages
 from ...extraction import FILTRE_FICHIERS, LecteurInfos
 from ...sous_titres_du_projet import (
@@ -185,18 +189,11 @@ class AtelierSousTitres(Page):
         self.tableau = self._tableau()
         d.addWidget(self.tableau)
         self._actualiser_reorganisation()  # aucun sous-titre choisi : actions désactivées
-        export = QHBoxLayout()
-        export.setSpacing(Espacements.M)
-        self.bouton_exporter = bouton("Exporter en SRT…", variante="principal", nom_icone="download", action=self.exporter_srt)
-        export.addWidget(self.bouton_exporter)
-        export.addWidget(
-            info("Texte et temps de chaque sous-titre, sans style : pour Premiere Pro et la plupart des logiciels.", "legende"), 1
-        )
-        d.addLayout(export)
-        self.statut_export = libelle("", "secondaire")
-        self.statut_export.hide()
-        d.addWidget(self.statut_export)
+        self.statut_lecture = libelle("", "secondaire")  # lecture impossible dans l'aperçu
+        self.statut_lecture.hide()
+        d.addWidget(self.statut_lecture)
         self.contenu.addWidget(self.cadre_sous_titres)
+        self.contenu.addWidget(self._bloc_export())
 
         self._brancher()
         services.prereglages.abonner(self._actualiser_prereglage)  # renommé, supprimé, mis à jour…
@@ -265,6 +262,30 @@ class AtelierSousTitres(Page):
         self.statut_frise.hide()
         d.addWidget(self.statut_frise)
         return self.cadre_frise
+
+    def _bloc_export(self):
+        """Exporter (V3) : le calque transparent pour Premiere Pro, et le fichier SRT. Chaque export
+        vidéo passe par sa fenêtre (réglages, résumé avant export, avancement)."""
+        self.cadre_export, d = bloc("Exporter")
+        d.addWidget(
+            info(
+                "Calque transparent : les sous-titres seuls, sur un fond transparent, à poser au-dessus de ton "
+                "montage dans Premiere Pro. Fichier SRT : le texte et le moment de chaque sous-titre, sans style.",
+                "legende",
+            )
+        )
+        boutons = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la fenêtre est étroite
+        self.bouton_calque = bouton("Calque transparent…", nom_icone="film", action=self.exporter_calque)
+        self.bouton_calque.setToolTip("MOV, ProRes 4444 avec transparence, à la taille et aux images de ta vidéo")
+        boutons.addWidget(self.bouton_calque)
+        self.bouton_exporter = bouton("Fichier SRT…", variante="contour", nom_icone="download", action=self.exporter_srt)
+        self.bouton_exporter.setToolTip("Texte et temps de chaque sous-titre, sans style : pour Premiere Pro et la plupart des logiciels")
+        boutons.addWidget(self.bouton_exporter)
+        d.addLayout(boutons)
+        self.statut_export = libelle("", "secondaire")
+        self.statut_export.hide()
+        d.addWidget(self.statut_export)
+        return self.cadre_export
 
     def _brancher(self) -> None:
         panneau, apercu, lecteur = self.panneau, self.bloc_apercu, self.lecteur
@@ -361,6 +382,7 @@ class AtelierSousTitres(Page):
         self.titre.setText(f"{TITRE} / {projet.nom}")
         self._afficher("", "secondaire")
         self._afficher("", "secondaire", self.statut_export)
+        self._afficher("", "secondaire", self.statut_lecture)
         self._statut_reorganisation("")
         self.rafraichir()
 
@@ -542,6 +564,7 @@ class AtelierSousTitres(Page):
         self.frise.toile.definir_choisi(self._choisi())
         self.cadre_frise.setVisible(bool(self.sous_titres))
         self.cadre_sous_titres.setVisible(bool(self.sous_titres))
+        self.cadre_export.setVisible(bool(self.sous_titres))
         signales = sum(1 for s in self.sous_titres if s.signale)
         ajustes = sum(1 for s in self.sous_titres if s.ajuste)
         morceaux = [f"{len(self.sous_titres)} sous-titres", f"{len(self.mots)} mots"]
@@ -553,6 +576,7 @@ class AtelierSousTitres(Page):
             morceaux.append(f"{signales} signalé{'s' if signales > 1 else ''} en orange (mot rapetissé pour tenir dans l'écran)")
         self.resume.setText("  ·  ".join(morceaux))
         self.bouton_exporter.setEnabled(bool(self.sous_titres))
+        self.bouton_calque.setEnabled(bool(self.sous_titres))
         self._actualiser_toile()
         self._actualiser_reorganisation()
         self._actualiser_boucle()
@@ -705,7 +729,7 @@ class AtelierSousTitres(Page):
         self.lecteur.basculer()
 
     def _erreur_de_lecture(self, message: str) -> None:
-        self._afficher(f"Lecture impossible dans l'aperçu : {message}", "erreur", self.statut_export)
+        self._afficher(f"Lecture impossible dans l'aperçu : {message}", "erreur", self.statut_lecture)
         self.bloc_apercu.definir_video_possible(False)
 
     def quitter(self) -> None:
@@ -1162,6 +1186,42 @@ class AtelierSousTitres(Page):
             return
         journal.info("Sous-titres exportés : %s (%d)", chemin, len(self.sous_titres))
         self._afficher(f"Fichier enregistré : {chemin.name} ({len(self.sous_titres)} sous-titres).", "succes", self.statut_export)
+
+    # --- Exports vidéo (V3) ------------------------------------------------------------------
+
+    def _nom_du_style(self) -> str:
+        """Le préréglage du projet, tel que la liste « Préréglage » le montre (« Karaoké (modifié) »)."""
+        reglages = self._projet.sous_titres
+        origine = self._services.prereglages.prereglage(reglages.prereglage)
+        if origine is None:
+            return reglages.prereglage_nom or ""
+        return f"{origine.nom} (modifié)" if modifie(reglages, origine) else origine.nom
+
+    def contenu_a_exporter(self) -> SousTitresAExporter | None:
+        """Les sous-titres tels que l'aperçu les montre : mêmes réglages, même taille de vidéo."""
+        if self._projet is None or self._calcul is None or not self.sous_titres:
+            return None
+        moteur = self._calcul.moteur
+        return SousTitresAExporter(
+            self._calcul.reglages, moteur.largeur, moteur.hauteur, list(self.sous_titres), list(self.mots), self._nom_du_style()
+        )
+
+    def dialogue_calque(self) -> DialogueExportCalque | None:
+        """La fenêtre d'export du calque, prête à s'ouvrir (None : rien à exporter)."""
+        contenu = self.contenu_a_exporter()
+        if contenu is None:
+            return None
+        if self.lecteur.en_lecture():
+            self.lecteur.basculer()  # pause : l'aperçu ne tourne pas pendant l'export
+        return DialogueExportCalque(self._services, self._projet, contenu, self.window())
+
+    def exporter_calque(self) -> None:
+        dialogue = self.dialogue_calque()
+        if dialogue is None:
+            return
+        dialogue.exec()
+        if dialogue.fichier is not None:
+            self._afficher(f"Calque enregistré : {dialogue.fichier.name}.", "succes", self.statut_export)
 
     # --- Pour l'autotest ---------------------------------------------------------------------
 

@@ -124,8 +124,15 @@ def qcouleur(couleur: Couleur, opaque: bool = False) -> QColor:
     return resultat
 
 
-def _image_vide(largeur: int, hauteur: int) -> QImage:
-    image = QImage(max(1, largeur), max(1, hauteur), QImage.Format.Format_ARGB32_Premultiplied)
+# Finesse du dessin (V3, lot 1) : 8 bits par couleur pour l'aperçu (le format de l'écran), 16 bits
+# pour les exports. En 16 bits, une ombre ou une lueur très transparente garde des nuances douces :
+# convertie ensuite en transparence « droite » (non prémultipliée) puis en 10 bits pour le ProRes,
+# elle ne fait pas d'« escaliers ». À 8 bits près, les deux dessins sont identiques.
+FORMATS_DU_DESSIN = {8: QImage.Format.Format_ARGB32_Premultiplied, 16: QImage.Format.Format_RGBA64_Premultiplied}
+
+
+def _image_vide(largeur: int, hauteur: int, format_image: QImage.Format = QImage.Format.Format_ARGB32_Premultiplied) -> QImage:
+    image = QImage(max(1, largeur), max(1, hauteur), format_image)
     image.fill(Qt.GlobalColor.transparent)
     return image
 
@@ -169,7 +176,7 @@ def _assembler(couches: list[tuple[QImage, int, int, float, QTransform]]) -> tup
     for image, x, y, _opacite, transformation in couches:
         boite = boite.united(transformation.mapRect(QRectF(x, y, image.width(), image.height())))
     gauche, haut = math.floor(boite.left()) - 1, math.floor(boite.top()) - 1
-    resultat = _image_vide(math.ceil(boite.right()) + 1 - gauche, math.ceil(boite.bottom()) + 1 - haut)
+    resultat = _image_vide(math.ceil(boite.right()) + 1 - gauche, math.ceil(boite.bottom()) + 1 - haut, couches[0][0].format())
     peintre = QPainter(resultat)
     peintre.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     for image, x, y, opacite, transformation in couches:
@@ -289,11 +296,13 @@ class _MotDessine:
 
 class Moteur:
     """Moteur de dessin pour une vidéo de `largeur` × `hauteur` pixels et des réglages donnés.
-    Un nouveau moteur est créé à chaque changement de réglage (ses mémoires repartent de zéro)."""
+    Un nouveau moteur est créé à chaque changement de réglage (ses mémoires repartent de zéro).
+    `profondeur` : 8 bits par couleur (aperçu) ou 16 bits (exports, V3)."""
 
-    def __init__(self, reglages: ReglagesSousTitres, largeur: int, hauteur: int):
+    def __init__(self, reglages: ReglagesSousTitres, largeur: int, hauteur: int, profondeur: int = 8):
         self.reglages = reglages
         self.largeur, self.hauteur = largeur, hauteur
+        self.format_image = FORMATS_DU_DESSIN[profondeur]
         style = reglages.texte
         self.zone = cadre(reglages, largeur, hauteur)
         self.taille_px = max(1, round(hauteur * style.taille_pct / 100))
@@ -344,6 +353,10 @@ class Moteur:
     def px(self, pourcentage: float) -> float:
         """% de la hauteur de la vidéo → pixels de la vidéo."""
         return self.hauteur * pourcentage / 100
+
+    def _vide(self, largeur: int, hauteur: int) -> QImage:
+        """Image transparente, à la finesse du moteur (8 ou 16 bits par couleur)."""
+        return _image_vide(largeur, hauteur, self.format_image)
 
     # --- Mise en page --------------------------------------------------------------------------
 
@@ -647,13 +660,13 @@ class Moteur:
             peintre.drawImage(QPointF(0, 0), calque)
             peintre.end()
 
-        dessous = _image_vide(largeur, hauteur)
-        image = _image_vide(largeur, hauteur) if fond_actif is not None else dessous
+        dessous = self._vide(largeur, hauteur)
+        image = self._vide(largeur, hauteur) if fond_actif is not None else dessous
 
         # 1. Ombre : celle des lettres (et de leur contour) des mots visibles, ou celle des fonds ;
         #    un état à moitié transparent a une ombre à moitié transparente.
         if ombre_visible:
-            calque = _image_vide(largeur, hauteur)
+            calque = self._vide(largeur, hauteur)
             peintre = peintre_sur(calque, (dx, dy))
             couleur = qcouleur(ombre.couleur, opaque=True)
             if par_le_fond and forme_fond is not None:
@@ -692,7 +705,7 @@ class Moteur:
                 continue
             aspect = self.apparences[nom]
             direct = aspect.opacite >= 1  # opaque : dessiné directement, sans calque intermédiaire
-            calque = image if direct else _image_vide(largeur, hauteur)
+            calque = image if direct else self._vide(largeur, hauteur)
             if nom in halos:
                 traceur = QPainterPathStroker()
                 traceur.setWidth(halos[nom])
@@ -700,7 +713,7 @@ class Moteur:
                 traceur.setCapStyle(Qt.PenCapStyle.RoundCap)
                 elargie = QPainterPath(silhouettes[nom])
                 elargie.addPath(traceur.createStroke(silhouettes[nom]))
-                lumiere = _image_vide(largeur, hauteur)
+                lumiere = self._vide(largeur, hauteur)
                 peintre = peintre_sur(lumiere)
                 peintre.fillPath(elargie, qcouleur(aspect.lueur.couleur, opaque=True))
                 peintre.end()
@@ -1001,7 +1014,7 @@ class Moteur:
     def image(self, sous_titre: SousTitre | None, mots: list[MotAffiche], temps: float | None = None) -> QImage:
         """Image transparente à la taille de la vidéo, avec ce sous-titre à ce moment (aucun : image
         vide). C'est l'image que l'export de la V3 assemblera, une par image du film."""
-        image = _image_vide(self.largeur, self.hauteur)
+        image = self._vide(self.largeur, self.hauteur)
         if sous_titre is not None:
             peintre = QPainter(image)
             self.dessiner(peintre, QPointF(0, 0), 1.0, sous_titre, mots, temps=temps)

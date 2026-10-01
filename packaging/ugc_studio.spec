@@ -2,7 +2,8 @@
 """Recette de fabrication du .exe avec PyInstaller.
 
 Elle est utilisée par la fabrication automatique (GitHub Actions) : rien à lancer à la main.
-Résultat : un seul fichier « UGC-Studio.exe » qui contient Python, Qt, la police Inter et les icônes.
+Résultat : un seul fichier « UGC-Studio.exe » qui contient Python, Qt, les polices, les icônes et
+FFmpeg (exports vidéo, V3).
 """
 
 import sys
@@ -24,6 +25,13 @@ from PyInstaller.utils.win32.versioninfo import (  # noqa: E402
 from ugc_studio import NOM_APP, __version__  # noqa: E402
 
 NOM_EXE = "UGC-Studio"
+
+# FFmpeg (V3, exports vidéo) : placé dans les ressources par outils/preparer_ffmpeg.py (version 9.0.2
+# de gyan.dev, empreinte vérifiée), puis emporté dans le .exe avec elles. Sans lui, pas d'export :
+# la fabrication s'arrête plutôt que de produire un .exe incomplet.
+FFMPEG = RACINE / "ugc_studio" / "ressources" / "ffmpeg" / "ffmpeg.exe"
+if not FFMPEG.is_file():
+    raise SystemExit(f"FFmpeg absent ({FFMPEG}) : lancer d'abord outils/preparer_ffmpeg.py.")
 
 
 def _version_windows(texte):
