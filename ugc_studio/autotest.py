@@ -404,6 +404,7 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     from .ui.pages.sous_titres.reglages import ONGLET_POSITION
 
     bloc, panneau, toile = atelier.bloc_apercu, atelier.panneau, atelier.toile
+    depart = atelier.reglages_du_projet()
     rapport["studio_deux_colonnes"] = atelier.studio.deux_colonnes
     largeur, limite = atelier.studio.width(), atelier.studio.largeur_deux_colonnes()
     rapport["studio_largeur_deux_colonnes"] = limite
@@ -441,12 +442,23 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     capturer(atelier.window(), "studio-haut-gauche")
     panneau.alignement.bouton(CENTRE).click()
     panneau.verticale.bouton(BAS).click()
-    panneau.onglets.setCurrentIndex(0)
-    etat["retour_au_depart"] = (
+    etat["changements_appliques"] = (
         atelier.reglages_du_projet().position.verticale == BAS and atelier.reglages_du_projet().position.alignement == CENTRE
     )
+    panneau.onglets.setCurrentIndex(0)
+    _remettre_les_reglages(atelier, depart)
+    etat["retour_au_depart"] = atelier.reglages_du_projet() == depart
     rapport["studio"] = etat
     return all(etat.values())
+
+
+def _remettre_les_reglages(atelier, reglages) -> None:
+    """Fin d'une étape : les réglages des sous-titres du projet de démonstration redeviennent ceux du
+    début, exactement (la suite de l'autotest en dépend)."""
+    atelier._projet.sous_titres = reglages
+    atelier._services.projets.enregistrer()
+    atelier.rafraichir()
+    _laisser_afficher()
 
 
 def _styles_proposes() -> dict:
@@ -523,6 +535,7 @@ def _style_texte(atelier, capturer, capturer_image, rapport: dict) -> bool:
     """V2, lot 4 : le style du texte. Polices fournies à la bonne graisse, style de départ du projet
     de démonstration, onglet « Texte » avec tous ses groupes ouverts, six styles (une image à la
     taille de la vidéo, recadrée sur le sous-titre), pipette ; puis le style de départ revient."""
+    from .prereglages import appliquer as appliquer_le_prereglage
     from .rendu.moteur import police_du_texte
     from .rendu.polices import POLICES_FOURNIES, familles
     from .style_sous_titres import StyleTexte, style_de_depart
@@ -542,7 +555,9 @@ def _style_texte(atelier, capturer, capturer_image, rapport: dict) -> bool:
     rapport["polices_sous_titres"] = rendus
     etat["polices_fournies"] = familles()[: len(POLICES_FOURNIES)] == list(POLICES_FOURNIES) and all(justes)
     depart = atelier.reglages_du_projet().texte
-    etat["style_de_depart"] = depart == style_de_depart()
+    # Lot 7 : un nouveau projet prend le préréglage marqué ★ (sinon le style de départ du lot 4).
+    defaut = atelier._services.prereglages.defaut()
+    etat["style_de_depart"] = depart == (appliquer_le_prereglage(atelier.reglages_du_projet(), defaut).texte if defaut else style_de_depart())
 
     # 2. Onglet « Texte », tous les groupes ouverts (le panneau entier, même la partie à faire défiler).
     panneau.onglets.setCurrentIndex(0)
@@ -679,6 +694,99 @@ def _animations(atelier, capturer, capturer_image, rapport: dict) -> bool:
     panneau.onglets.setCurrentIndex(0)
     etat["retour_au_depart"] = atelier.reglages_du_projet().animations == depart
     rapport["animations"] = etat
+    return all(etat.values())
+
+
+def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> bool:
+    """V2, lot 7 : la frise et les préréglages.
+
+    - Frise : un bloc par sous-titre ; un clic sur un bloc le choisit aussi dans la liste ; le bord
+      commun de deux sous-titres glissé d'un mot (capture pendant le glissement), le mot passe de
+      l'un à l'autre ; puis le découpage automatique est rétabli.
+    - Préréglages : le projet de démonstration part de celui marqué ★, sans « (modifié) » ; les 6
+      fournis appliqués l'un après l'autre (une image à la taille de la vidéo, recadrée sur le
+      sous-titre, pendant « Sérum ») ; un réglage changé affiche « (modifié) » ; la fenêtre
+      « Préréglages de sous-titres » et ses vignettes (les 6 cartes visibles sans faire défiler,
+      chaque nom écrit en entier) ; puis tout revient comme au début."""
+    from .prereglages import modifie
+    from .ui.dialogues.prereglages import DialoguePrereglages
+
+    services, panneau, toile, lecteur = atelier._services, atelier.panneau, atelier.toile, atelier.lecteur
+    frise = atelier.frise.toile
+    bibliotheque = services.prereglages
+    depart = atelier.reglages_du_projet()
+    defaut = bibliotheque.defaut()
+    etat: dict = {
+        "projet_avec_le_prereglage_par_defaut": defaut is not None
+        and depart.prereglage == defaut.identifiant
+        and not modifie(depart, defaut)
+        and panneau.prereglage.currentText() == defaut.nom,
+    }
+
+    # 1. Frise.
+    atelier.defilement.ensureWidgetVisible(atelier.cadre_frise)
+    etat["un_bloc_par_sous_titre"] = len(frise._sous_titres) == len(atelier.sous_titres) > 2
+    frise.sous_titre_clique.emit(2, atelier.sous_titres[2].debut)
+    etat["clic_choisit_dans_la_liste"] = atelier.tableau.currentRow() == 2 and frise._choisi == 2
+    capturer(atelier.cadre_frise, "frise")
+    glisse = None
+    for index in frise.bords_communs():
+        mot = atelier.sous_titres[index + 1].premier_mot + 1  # le premier mot du suivant monte
+        if mot < atelier.sous_titres[index + 1].dernier_mot and not atelier._verifier_la_limite(index, mot):
+            glisse = (index, mot)
+            break
+    if glisse is not None:
+        index, mot = glisse
+        frise.commencer_glissement(index)
+        frise.viser(mot)
+        capturer(atelier.cadre_frise, "frise-glissement")
+        frise.finir_glissement()
+        _laisser_afficher()
+        etat["bord_glisse"] = atelier.sous_titres[index].dernier_mot == mot and atelier.sous_titres[index].ajuste
+        rapport["frise_message"] = atelier.statut_frise.text()
+        atelier.retablir(tous=True)
+    else:
+        etat["bord_glisse"] = False
+    etat["decoupage_automatique_retabli"] = not any(s.ajuste for s in atelier.sous_titres)
+
+    # 2. Les 6 préréglages fournis, appliqués depuis la liste « Préréglage ».
+    serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), 0)
+    appliques = []
+    for numero, prereglage in enumerate([p for p in bibliotheque.prereglages if p.fourni], 1):
+        panneau.prereglage_choisi.emit(prereglage.identifiant)
+        _laisser_afficher()
+        lecteur.aller_a(atelier.mots[serum].debut + 0.25)
+        atelier._actualiser_toile()
+        reglages = atelier.reglages_du_projet()
+        appliques.append(reglages.prereglage == prereglage.identifiant and not modifie(reglages, prereglage))
+        nom = prereglage.identifiant.removeprefix("fourni-")
+        capturer_image(_image_du_sous_titre(toile), f"prereglage-{numero}-{nom}")
+    rapport["prereglages_appliques"] = appliques
+    etat["prereglages_appliques"] = len(appliques) == 6 and all(appliques)
+    panneau.caracteres.setValue(panneau.caracteres.value() + 1)
+    _laisser_afficher()
+    etat["modifie_affiche"] = panneau.prereglage.currentText().endswith("(modifié)")
+    atelier.defilement.ensureWidgetVisible(panneau.prereglage)  # la ligne « Préréglage » sur la capture
+    _laisser_afficher()
+    capturer(atelier.window(), "studio-prereglage-modifie")
+
+    # 3. La fenêtre des préréglages, ses vignettes au milieu de « sérum ».
+    fenetre = DialoguePrereglages(services, atelier.window(), atelier.reglages_du_projet().prereglage)
+    fenetre.show()
+    _laisser_afficher()
+    fenetre.montrer_temps(1.0)
+    capturer(fenetre, "dialogue-prereglages")
+    problemes = _debordements(fenetre, "fenêtre préréglages")
+    rapport["prereglages_debordements"] = problemes
+    etat["fenetre_prereglages"] = len(fenetre.cartes) == len(bibliotheque.prereglages) == 6 and not problemes
+    # Les 6 fournis visibles d'un coup (2 rangées de 3), chaque nom écrit en entier, ★ compris.
+    etat["six_cartes_sans_defiler"] = fenetre.zone.verticalScrollBar().maximum() == 0
+    etat["noms_entiers"] = not any(carte.nom.est_abrege() for carte in fenetre.cartes)
+    fenetre.reject()
+
+    _remettre_les_reglages(atelier, depart)
+    etat["retour_au_depart"] = atelier.reglages_du_projet() == depart and panneau.prereglage.currentText() == defaut.nom
+    rapport["frise_et_prereglages"] = etat
     return all(etat.values())
 
 
@@ -862,6 +970,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["style_texte"] = _style_texte(sous_titres, capturer, capturer_image, rapport)
             verifs["mots_du_studio"] = _mots_du_studio(sous_titres, capturer, capturer_image, rapport)
             verifs["animations"] = _animations(sous_titres, capturer, capturer_image, rapport)
+            verifs["frise_et_prereglages"] = _frise_et_prereglages(sous_titres, capturer, capturer_image, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()

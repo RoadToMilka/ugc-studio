@@ -265,7 +265,8 @@ SOUS_TITRES = PageDeConseils(
                 "Pour une prise du module Voix, « Créer les sous-titres » la transcrit, puis cale le texte "
                 "sur son script : l'orthographe du script est gardée (noms de marque, pas de MAJUSCULES "
                 "d'accentuation).",
-                "« Corriger les mots » ouvre le module Transcription.",
+                "« Corriger les mots » ouvre le module Transcription ; un double-clic sur un sous-titre de la "
+                "frise l'ouvre directement sur son premier mot.",
             ),
         ),
         Rubrique(
@@ -284,11 +285,11 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Style du texte",
             (
-                "Un nouveau projet commence en Montserrat Extra-grasse, blanc, avec un contour noir : le style "
-                "le plus lisible sur n'importe quelle vidéo. Un projet plus ancien garde son apparence.",
+                "Un nouveau projet prend le préréglage marqué ★ (au départ « Blanc contour noir » : Montserrat "
+                "Extra-grasse, blanc, contour noir, le mot dit en jaune). Un projet plus ancien garde son apparence.",
                 "Chaque groupe de l'onglet Texte (police, remplissage, contour, ombre, lueur, fond, espaces) se "
                 "replie ; ses réglages rares attendent dans « Réglages avancés », et « Rétablir » le remet "
-                "comme au départ.",
+                "comme dans le préréglage du projet (sinon comme au départ).",
                 "Les tailles s'affichent en pixels de ta vidéo et sont gardées en % de sa hauteur : un style "
                 "garde le même aspect en 9:16, en 4:5 ou en 1:1.",
                 "Le contour est dessiné autour des lettres, sans les amincir. Ordre de dessin : ombre, fond, "
@@ -343,6 +344,34 @@ SOUS_TITRES = PageDeConseils(
                 "fichier d'origine est déplacé.",
                 "Sur un ordinateur où la police manque, Inter la remplace (un message orange le dit) et le "
                 "style garde son nom : rien n'est perdu.",
+            ),
+        ),
+        Rubrique(
+            "Préréglages",
+            (
+                "Un préréglage garde tout le style : onglets Texte, Mots, Animations, Position et Découpage. "
+                "Ni le format ni la zone de sécurité : ils dépendent de la vidéo et de la plateforme.",
+                "Choisis-en un dans la liste « Préréglage » pour l'appliquer. Dès que tu changes un réglage, "
+                "la liste affiche « (modifié) » : ton projet garde sa propre copie du style.",
+                "« Enregistrer… » crée un préréglage avec le style du projet. Menu ⋯ : « Mettre à jour » le "
+                "préréglage avec tes changements, ou « Revenir » à lui.",
+                "Six styles sont fournis (Blanc contour noir, Surligneur, Karaoké, Mot par mot, Bandeau, "
+                "Atténué) : modifie-les ou supprime-les, « Rétablir les préréglages fournis » les remet.",
+                "Si un préréglage change le découpage et défait un sous-titre réorganisé à la main, l'app te "
+                "demande d'abord, comme pour un réglage.",
+            ),
+        ),
+        Rubrique(
+            "Frise",
+            (
+                "Sous l'aperçu, la frise montre toute la pub : un bloc par sous-titre (numéroté), un petit "
+                "trait par mot (son texte au survol), et le trait mauve du moment lu.",
+                "Un clic y place la lecture ; un clic sur un bloc le choisit, comme dans la liste en dessous.",
+                "Glisse le bord commun de deux sous-titres : il saute de mot en mot, et les mots qui vont "
+                "changer de sous-titre se colorent. Au relâchement, ils passent de l'un à l'autre, avec les "
+                "règles de « Monter le premier mot » et « Descendre le dernier mot » (en rouge : la raison du "
+                "refus s'affiche). Le moment des mots, lui, ne change jamais.",
+                "Ctrl + molette : zoom ; molette : défilement de la frise agrandie. Échap annule un glissement.",
             ),
         ),
         Rubrique(
@@ -795,6 +824,41 @@ BIBLIOTHEQUE_BRIEFS = PageDeConseils(
     ),
 )
 
+PREREGLAGES = PageDeConseils(
+    "Préréglages de sous-titres",
+    (
+        Rubrique(
+            "Les vignettes",
+            (
+                "Chaque vignette rejoue un exemple de sous-titre avec le préréglage, dessiné par le même moteur "
+                "que l'aperçu : mot actif, animations, police et couleurs compris.",
+                "★ marque le préréglage des nouveaux projets ; « style du projet » : celui du projet ouvert.",
+            ),
+        ),
+        Rubrique(
+            "Créer et modifier",
+            (
+                "« Nouveau » part du style de départ ; « Dupliquer » (menu ⋯) part d'un préréglage existant.",
+                "Pour modifier un préréglage : « Appliquer », règle le style dans le studio, puis « Mettre à "
+                "jour ce préréglage » (menu ⋯ à côté de la liste « Préréglage »).",
+                "Un projet garde sa propre copie du style : modifier ou supprimer un préréglage ne change pas "
+                "les projets déjà faits.",
+            ),
+        ),
+        Rubrique(
+            "Partager",
+            (
+                "« Exporter… » (menu ⋯) écrit un petit fichier .json, lisible : une copie de sécurité, ou un "
+                "style à passer sur un autre ordinateur, où « Importer… » l'ajoute à la liste.",
+                "Si une police du préréglage manque sur cet ordinateur, Inter la remplace et le préréglage "
+                "garde son nom : installe ou importe la police pour la retrouver.",
+                "Les polices fournies avec l'app (Montserrat, Poppins, Anton, Bebas Neue, Inter) s'affichent "
+                "pareil partout.",
+            ),
+        ),
+    ),
+)
+
 MEILLEURS_SCRIPTS = PageDeConseils(
     "Mes meilleurs scripts",
     (
@@ -872,4 +936,5 @@ PAGES: dict[str, PageDeConseils] = {
     "comparaison-scripts": COMPARAISON_SCRIPTS,
     "bibliotheque-briefs": BIBLIOTHEQUE_BRIEFS,
     "meilleurs-scripts": MEILLEURS_SCRIPTS,
+    "prereglages": PREREGLAGES,
 }

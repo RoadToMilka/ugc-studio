@@ -3,7 +3,7 @@ qui vaut pour tous les mots.
 
 Groupes (chacun se replie ; ses réglages rares attendent dans « Réglages avancés ») : Police, Taille
 et casse, Remplissage, Contour, Ombre, Lueur, Fond, Espaces. Chaque groupe a son bouton « Rétablir »
-(les valeurs de départ des nouveaux projets). Les réglages d'un effet décoché (contour, ombre…) sont
+(les valeurs du préréglage d'origine du projet, sinon celles de départ des nouveaux projets). Les réglages d'un effet décoché (contour, ombre…) sont
 grisés : on voit ce qu'il y a à régler, sans le confondre avec ce qui est actif.
 
 Les tailles sont montrées en pixels de la vidéo actuelle (« Contour : 6 px ») et rangées en % de sa
@@ -103,6 +103,7 @@ class OngletTexte(QWidget):
         super().__init__(parent)
         self._hauteur = HAUTEUR_PAR_DEFAUT
         self._style = StyleTexte()
+        self._reference: StyleTexte | None = None  # ce que « Rétablir » remet (None : le style de départ)
         self._chargement = False
         self._liste_des_polices: tuple | None = None  # ce que montre la liste (pour ne la refaire qu'au besoin)
         disposition = QVBoxLayout(self)
@@ -139,7 +140,7 @@ class OngletTexte(QWidget):
     def _bouton_retablir(self, contenu: QVBoxLayout, action) -> None:
         ligne = QHBoxLayout()
         retablir = bouton("Rétablir", variante="contour", nom_icone="rotate-ccw", action=action)
-        retablir.setToolTip("Revenir aux valeurs de départ des nouveaux projets")
+        retablir.setToolTip("Revenir aux valeurs du préréglage d'origine (sinon à celles de départ)")
         ligne.addWidget(retablir)
         ligne.addStretch(1)
         contenu.addLayout(ligne)
@@ -505,9 +506,15 @@ class OngletTexte(QWidget):
             espaces=Espaces(self.interligne.valeur(), self.lettres.valeur(), self.mots.valeur()),
         )
 
+    def definir_reference(self, style: StyleTexte | None) -> None:
+        """Ce que « Rétablir » remet : le style du texte du préréglage d'origine du projet (lot 7) ;
+        None : celui de départ des nouveaux projets."""
+        self._reference = style
+
     def _retablir(self, **groupes) -> None:
-        """« Rétablir » : ce groupe reprend les valeurs de départ des nouveaux projets."""
-        depart, actuel = style_de_depart(), self.style(self._style)
+        """« Rétablir » : ce groupe reprend les valeurs du préréglage d'origine (sinon de départ)."""
+        depart = self._reference if self._reference is not None else style_de_depart()
+        actuel = self.style(self._style)
         changements = {}
         if groupes.get("police"):
             changements.update(police=depart.police, graisse=depart.graisse)

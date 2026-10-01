@@ -154,9 +154,12 @@ class ReglagesSousTitres:
       « Animations ») et position (onglet « Position »).
     - Écran (§7.1, §7.3) : format, zone de sécurité de la plateforme, marge maximum.
     - Vidéo choisie seulement pour l'aperçu (projet sans vidéo).
+    - Préréglage d'origine (lot 7) : celui dont le style vient, pour afficher « (modifié) » quand le
+      style du projet s'en écarte. Le projet garde sa propre copie du style.
 
-    Dans projet.json (format 7), ils sont rangés en trois parties : « style » (texte, mots, animations,
-    position, découpage : le contenu d'un préréglage, lot 7), « ecran » et « apercu » (voir en_dict)."""
+    Dans projet.json (format 7), ils sont rangés en quatre parties : « style » (texte, mots,
+    animations, position, découpage : le contenu d'un préréglage, lot 7), « ecran », « apercu » et
+    « prereglage » (voir en_dict)."""
 
     caracteres_max: int = 24  # par sous-titre, espaces comprises
     mots_max: int = 5
@@ -173,6 +176,8 @@ class ReglagesSousTitres:
     plateforme: str = PLATEFORME_PAR_DEFAUT
     marge_max_pct: float = 5.0  # de chaque bord : le texte ne la dépasse jamais
     apercu: VideoApercu = VideoApercu()
+    prereglage: str = ""  # identifiant du préréglage d'origine ("" : aucun)
+    prereglage_nom: str = ""  # son nom quand il a été appliqué (il peut avoir été renommé ou supprimé depuis)
 
     def en_dict(self) -> dict:
         """Forme écrite documentée (format 7 des projets, §7.9 du cahier des charges)."""
@@ -192,6 +197,7 @@ class ReglagesSousTitres:
                 "marge_max_pct": self.marge_max_pct,
             },
             "apercu": en_dict(self.apercu),
+            "prereglage": {"identifiant": self.prereglage, "nom": self.prereglage_nom},
         }
 
     @classmethod
@@ -220,6 +226,10 @@ class ReglagesSousTitres:
             reglages.animations = lire(Animations, style.get("animations"))
             reglages.position = lire(Position, style.get("position"))
             reglages.apercu = lire(VideoApercu, brut.get("apercu"))
+            origine = brut.get("prereglage")
+            if isinstance(origine, dict):
+                reglages.prereglage = str(origine.get("identifiant") or "")
+                reglages.prereglage_nom = str(origine.get("nom") or "")
         else:
             # Formats 4 à 6 : « Tout en majuscules », ponctuation et taille passent dans le style du texte.
             reglages = _lire_plats(reglages, brut)
@@ -1059,6 +1069,26 @@ def fusionner_avec_le_suivant(
     suivant = decoupage.sous_titres[index + 1]
     groupes = [(actuel.premier_mot, suivant.dernier_mot, "le sous-titre fusionné")]
     return _reorganiser(decoupage, range(index, index + 2), groupes, reglages, ecran, mesure, index)
+
+
+def deplacer_la_limite(
+    decoupage: Decoupage, index: int, mot: int, reglages: ReglagesSousTitres, ecran: Ecran, mesure: Mesure
+) -> Reorganisation:
+    """Frise (V2, lot 7) : la limite entre les sous-titres `index` et `index + 1` passe avant `mot`
+    (indice dans les mots affichés), qui commence alors le second. Comme « Monter le premier mot »
+    ou « Descendre le dernier mot » répétés : mêmes règles, mêmes refus."""
+    actuel = _sous_titre(decoupage, index)
+    if index + 1 >= len(decoupage.sous_titres):
+        raise ValueError("Le dernier sous-titre n'a pas de sous-titre après lui.")
+    suivant = decoupage.sous_titres[index + 1]
+    if not actuel.premier_mot < mot < suivant.dernier_mot:
+        raise ValueError("Chaque sous-titre doit garder au moins un mot.")
+    groupes = [
+        (actuel.premier_mot, mot, f"le sous-titre {index + 1}"),
+        (mot, suivant.dernier_mot, f"le sous-titre {index + 2}"),
+    ]
+    choisi = index + 1 if mot < suivant.premier_mot else index  # celui qui reçoit des mots
+    return _reorganiser(decoupage, range(index, index + 2), groupes, reglages, ecran, mesure, choisi)
 
 
 def retablir_automatique(decoupage: Decoupage, index: int | None = None) -> Reorganisation:

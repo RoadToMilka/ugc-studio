@@ -270,6 +270,9 @@ class GestionnaireProjets:
         self._fichier_recents = fichier_recents or dossier_donnees() / "projets_recents.json"
         self.projet: Projet | None = None
         self._abonnes: list[Callable[[Projet | None], None]] = []
+        # Style des sous-titres d'un nouveau projet (lot 7 : celui du préréglage ★, branché par les
+        # services) ; sans lui, le style de départ du lot 4.
+        self.style_des_nouveaux: Callable[[ReglagesSousTitres], ReglagesSousTitres] | None = None
 
     # --- Projet ouvert -----------------------------------------------------------------------
 
@@ -289,7 +292,10 @@ class GestionnaireProjets:
             raise ErreurProjet(f"Impossible de créer le dossier du projet : {erreur}") from erreur
         maintenant = _maintenant()
         projet = Projet(dossier=dossier, nom=nom, langue=langue, cree_le=maintenant, modifie_le=maintenant)
-        projet.sous_titres.texte = style_de_depart()  # V2, lot 4 : Montserrat ExtraBold, contour noir
+        if self.style_des_nouveaux is not None:
+            projet.sous_titres = self.style_des_nouveaux(projet.sous_titres)
+        else:
+            projet.sous_titres.texte = style_de_depart()  # V2, lot 4 : Montserrat ExtraBold, contour noir
         self._activer(projet)
         self.enregistrer()
         journal.info("Projet créé : %s (%s)", nom, dossier)
