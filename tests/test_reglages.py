@@ -170,6 +170,10 @@ def test_nom_du_modele_sur_une_seule_ligne(app_configuree, qtbot, services):
     qtbot.addWidget(page)
     page.resize(960, 600)
     page.show()
+    # Onglet « Modèles et prix » affiché : un onglet caché n'est jamais mis en page (ses textes
+    # gardent la taille par défaut d'un élément de Qt, 640 × 480 px).
+    page.onglets.setCurrentIndex(1)
+    qtbot.waitUntil(page.modeles.isVisible, timeout=2000)
     (nom,) = [e for e in page.modeles.findChildren(EtiquetteAbregee) if e.text() == "Gemini 3.8 Flash TTS"]
     assert not nom.wordWrap() and nom.height() < 2 * nom.fontMetrics().lineSpacing()  # une seule ligne
     assert "gemini-3.8-flash-tts" in nom.toolTip()  # identifiant technique au survol
