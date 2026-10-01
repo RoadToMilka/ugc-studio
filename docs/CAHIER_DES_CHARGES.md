@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.16, 02/10/2026 (V3 en préparation, §12 ; V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.17, 02/10/2026 (V3 validée, 3 lots, §12 ; V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -466,7 +466,7 @@ Les styles et les descriptions de voix (§5.4 bis) sont toujours **envoyés en a
 Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 
 - **Langue** : détection auto ou langue forcée (`language_codes`, recommandé pour les vidéos courtes).
-- **Séparation des voix** (jusqu'à 8 personnes, fiable jusqu'à 2 ; au-delà expérimental) : chaque mot reçoit un locuteur (`spk_1`, `spk_2`…). Utile pour une pub à deux personnes : style de sous-titre différent par personne (V2).
+- **Séparation des voix** (jusqu'à 8 personnes, fiable jusqu'à 2 ; au-delà expérimental) : chaque mot reçoit un locuteur (`spk_1`, `spk_2`…). (Un style de sous-titres différent par personne était prévu : écarté le 02/10/2026, §12.3.)
 - **Dictionnaire de remplacements** (local, gratuit) : « sérum anti rides » → « Sérum Anti-Rides® », appliqué automatiquement après chaque transcription. Dictionnaires globaux ou par projet.
 - **Correction manuelle** de n'importe quel mot dans l'éditeur (§6.4) : solution principale pour les erreurs ponctuelles.
 - Pas de vocabulaire personnalisé côté API en V1 (incompatible avec l'horodatage par mot) : non retenu, le dictionnaire + la correction manuelle suffisent.
@@ -852,6 +852,8 @@ Onglet **Animations** du studio, entre Mots et Position (`ui/pages/sous_titres/o
 
 ## 8. Exports
 
+Dossier d'un export (décision du 02/10/2026) : au choix, celui de la vidéo source, celui du projet ou un autre dossier ; le choix est retenu. Plan détaillé de la V3 : document « UGC Studio - V3 Exports vidéo » (projet ECOM BUILDR).
+
 ### 8.1 Fichiers de sous-titres
 
 - **SRT** : texte + timecodes (compatible Premiere Pro et la plupart des outils). Respecte le découpage paramétré. Ne contient aucun style. Écrit en UTF-8 **avec BOM** (sans lui, Premiere Pro lit mal les lettres accentuées) et fins de ligne Windows (CRLF) ; temps au format `00:00:01,250` ; blocs séparés par une ligne vide. Nom proposé : celui du projet, dans Documents.
@@ -880,7 +882,7 @@ La vidéo importée est réencodée avec les sous-titres (une recompression est 
 
 - Combinaisons impossibles grisées ; « fond transparent » force MOV + ProRes 4444.
 - **Audio copié sans recompression.**
-- **Couleurs préservées** : détection du HDR / 10 bits (vidéos iPhone) et conservation des métadonnées de couleur.
+- **Couleurs préservées** : détection du HDR / 10 bits (vidéos iPhone) et conservation des métadonnées de couleur. Le HDR suit la vidéo source ; sans vidéo source (calque transparent), SDR par défaut (décision du 02/10/2026).
 
 ### 8.4 Fréquence d'images
 
@@ -1122,16 +1124,18 @@ Demande de l'utilisateur du 01/10/2026, réécrite et validée dans le document 
 | 6 | 1.7.0 | **Studio (4)** : animations du mot actif, retour à « déjà dit », apparition et disparition du sous-titre ; sommet compté dans la place (§7.12) | Fait |
 | 7 | 2.0.0 | **Studio (5)** : frise (bords de mot en mot, double-clic, zoom), préréglages (liste du studio et « (modifié) », fenêtre, vignettes animées, les 6 styles fournis, ★ des nouveaux projets, nouveau, export et import), finitions (§7.13) | Fait |
 
-Style par personne (pubs à deux voix) : reporté à la V3. Vidéo qui contient une prise (caler les mots transcrits sur le script) : à décider plus tard (02/10/2026).
+Style par personne (pubs à deux voix) : écarté le 02/10/2026 (inutile pour des vidéos UGC ou marketing ; ne plus le proposer). Vidéo qui contient une prise (caler les mots transcrits sur le script) : à décider plus tard (02/10/2026).
 
 ### V3 : exports vidéo
+Plan validé le 02/10/2026 : document « UGC Studio - V3 Exports vidéo » (projet ECOM BUILDR), 3 lots, de la version 2.1.0 à la 3.0.0 (calque transparent, vidéo avec sous-titres, HDR).
+
 Priorité de l'utilisateur (02/10/2026) : exporter la vidéo et les sous-titres d'une vidéo ou d'un audio **terminés**, importés dans l'app. L'assemblage de la voix et de la vidéo reste dans Premiere Pro pour le moment : une vidéo sans son y est montée avec la voix, puis réimportée dans l'app, qui refait ses sous-titres à partir d'elle.
 - FFmpeg en ligne de commande, version GPL (x264, x265), intégré au `.exe` (§2).
 - Overlay transparent MOV ProRes 4444 (§8.2).
 - Vidéo finale incrustée, choix débit / conteneur / codec, HDR (§8.3, §8.4).
 - Résumé avant export (§8.5).
-- Style par personne (pubs à deux voix), reporté de la V2 (§12.3).
-- Pas prévus pour le moment : assemblage de la voix et d'une vidéo dans l'app (Premiere Pro s'en charge) ; export ASS (§8.1). À décider plus tard : vidéo qui contient une prise (§12.3).
+- Encodage par le processeur (x264, x265).
+- Pas prévus pour le moment : assemblage de la voix et d'une vidéo dans l'app (Premiere Pro s'en charge) ; export ASS (§8.1) ; encodage par la carte graphique (reporté : la GTX 970 de l'utilisateur n'a plus de pilote assez récent pour FFmpeg 9, et n'encode pas en 10 bits). À décider plus tard : vidéo qui contient une prise (§12.3). Écarté : style par personne (§12.3).
 
 ### V4 : voix avancées et fournisseurs
 - Voice Replication (avec consentement), multi-voix.
