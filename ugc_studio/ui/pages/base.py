@@ -45,6 +45,7 @@ class Page(QWidget):
         zone, self.contenu = zone_defilante(
             largeur_max, (Espacements.XXL, Espacements.XL, Espacements.XXL, Espacements.XXL)
         )
+        self.defilement = zone  # pour amener un élément à l'écran (ensureWidgetVisible)
         disposition.addWidget(zone)
         entete = entete_de_page(titre, sous_titre, conseils)
         self.titre, self.sous_titre, self.bouton_conseils = entete.titre, entete.sous_titre, entete.conseils

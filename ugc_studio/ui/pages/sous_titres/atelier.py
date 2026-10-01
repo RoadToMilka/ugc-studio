@@ -32,6 +32,7 @@ from ....mise_en_page import limites_du_reglage_fin
 from ....modeles_charges import SOUS_TITRES
 from ....projets import FICHIER_AUDIO, ErreurProjet, Projet, nom_de_dossier
 from ....rendu.moteur import Moteur
+from ....rendu.polices import NOMS_GRAISSES, police_remplacee
 from ....script import texte_brut
 from ....services import Services
 from ....sous_titres import (
@@ -40,6 +41,7 @@ from ....sous_titres import (
     Reorganisation,
     SousTitre,
     ecrire_srt,
+    resolution,
     retablir_automatique,
     sous_titre_au_temps,
     texte_ajustements_defaits,
@@ -152,7 +154,8 @@ class AtelierSousTitres(Page):
         # Raccourcis vers les réglages (tests, autotest).
         panneau = self.panneau
         self.caracteres, self.mots_max, self.lignes, self.duree_min = panneau.caracteres, panneau.mots_max, panneau.lignes, panneau.duree_min
-        self.taille, self.casse, self.ponctuation, self.couper_ponctuation = panneau.taille, panneau.casse, panneau.ponctuation, panneau.couper_ponctuation
+        self.taille, self.casse, self.ponctuation = panneau.texte.taille.champ, panneau.texte.casse, panneau.texte.ponctuation
+        self.couper_ponctuation = panneau.couper_ponctuation
         self.format, self.plateforme, self.marge, self.masquer = panneau.format, panneau.plateforme, panneau.marge, panneau.masquer
         self.infos_ecran = panneau.infos_ecran
 
@@ -235,6 +238,7 @@ class AtelierSousTitres(Page):
         panneau.choisir_video_demande.connect(self.choisir_video_apercu)
         panneau.retirer_video_demande.connect(self.retirer_video_apercu)
         panneau.video_apercu_change.connect(self._video_apercu_change)
+        panneau.texte.pipette_demandee.connect(self.prendre_une_couleur)
         apercu.bouton_lecture.clicked.connect(self.basculer_lecture)
         apercu.position.sliderMoved.connect(lecteur.aller_a_position)
         apercu.bouton_boucle.toggled.connect(lambda _coche: self._actualiser_boucle())
@@ -318,6 +322,13 @@ class AtelierSousTitres(Page):
         if self._projet is not None and not self._occupe:
             self.rafraichir()
 
+    def prendre_une_couleur(self, champ) -> None:
+        """Pipette d'un champ couleur (§7.4) : l'aperçu attend un clic. Quand la page est étroite (aperçu
+        au-dessus des réglages), elle défile jusqu'à l'aperçu."""
+        self.toile.commencer_pipette(champ.couleur_prise)
+        if not self.studio.deux_colonnes:
+            self.defilement.ensureWidgetVisible(self.bloc_apercu.zone)
+
     def keyPressEvent(self, evenement) -> None:  # noqa: N802
         """Barre Espace : lecture ou pause (quand aucun bouton ni case n'a la main)."""
         if evenement.key() == Qt.Key.Key_Space and not evenement.isAutoRepeat():
@@ -385,13 +396,16 @@ class AtelierSousTitres(Page):
                 self.cout_estime.definir_montant(cout)
 
     def _charger_reglages(self) -> None:
-        transcription = self.transcription
+        transcription, reglages = self.transcription, self._projet.sous_titres
+        imposee = resolution_imposee(self._projet)
         self.panneau.charger(
-            self._projet.sous_titres,
-            resolution_imposee(self._projet),
+            reglages,
+            imposee,
             transcription.masquer_hesitations if transcription else True,
             transcription is not None,
             a_sa_video(transcription),
+            resolution(reglages, imposee)[1],
+            police_remplacee(reglages.texte),
         )
 
     def reglages(self):
@@ -452,12 +466,15 @@ class AtelierSousTitres(Page):
             self._retirer_les_ajustements_defaits(calcul)
         ecran_video, langue, moteur = calcul.ecran, calcul.langue, calcul.moteur
         typographie = " ; typographie française : espace insécable avant « ! ? : ; »" if langue.startswith("fr") else ""
+        style = calcul.reglages.texte
+        police_utilisee = "Inter" if moteur.police_remplacee else style.police
         self.infos_ecran.setText(
-            f"Vidéo {ecran_video.largeur} × {ecran_video.hauteur}, texte de {moteur.taille_px} px (Inter SemiBold) : "
+            f"Vidéo {ecran_video.largeur} × {ecran_video.hauteur}, texte de {moteur.taille_px} px ({police_utilisee} "
+            f"{NOMS_GRAISSES.get(style.graisse, style.graisse)}) : "
             f"une ligne tient en {round(ecran_video.largeur_securite)} px dans la zone de sécurité, "
             f"{round(ecran_video.largeur_max)} px au plus jusqu'à la marge maximum{typographie}."
         )
-        self.panneau.taille_px.setText(f"{moteur.taille_px} px")
+        self.panneau.texte.taille_px.setText(f"{moteur.taille_px} px")
         self._actualiser_limites()
         self.toile.definir(moteur, self.mots)
         self.bloc_apercu.zone.actualiser_taille()

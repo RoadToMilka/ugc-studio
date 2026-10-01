@@ -52,7 +52,9 @@ from .style_sous_titres import (
 )
 from .transcription import PONCTUATION, Mot, mots_affiches
 
-Mesure = Callable[[str], float]  # largeur d'un texte, en pixels, à la taille normale du texte
+# Largeur d'une ligne, en pixels, à la taille normale du texte. Elle peut porter un attribut
+# « debord » : ce que le contour et le fond ajoutent de chaque côté (compris dans la largeur).
+Mesure = Callable[[str], float]
 
 # --- Formats de vidéo (§7.1) -------------------------------------------------------------------
 
@@ -511,7 +513,9 @@ def disposer(groupe: list[MotAffiche], lignes_max: int, ecran: Ecran, mesure: Me
                 return _Disposition(meilleure[1], dans_la_marge)
     if len(textes) == 1:
         largeur = mesure(textes[0])
-        echelle = ecran.largeur_max / largeur if largeur > 0 else 1.0
+        # Le débord (contour, fond : V2, lot 4) ne rapetisse pas avec le mot : seul le texte est réduit.
+        debord = 2 * getattr(mesure, "debord", 0.0)
+        echelle = (ecran.largeur_max - debord) / (largeur - debord) if largeur > debord else 1.0
         return _Disposition((textes[0],), True, max(TAILLE_REDUITE_MIN, echelle), echelle < TAILLE_REDUITE_MIN)
     return None
 
@@ -888,6 +892,8 @@ def calculer_sous_titres(
         if texte not in largeurs:
             largeurs[texte] = mesure(texte)
         return largeurs[texte]
+
+    mesure_memorisee.debord = getattr(mesure, "debord", 0.0)  # contour et fond (voir disposer)
 
     sous_titres, defaits = decouper_avec_ajustements(affiches, ajustements, reglages, ecran_video, mesure_memorisee)
     caler_les_temps(sous_titres, reglages.duree_min_s, duree_totale)

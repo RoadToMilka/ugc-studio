@@ -65,9 +65,16 @@ def familles_par_graisse() -> dict[int, str]:
     return {graisse: famille_pour_graisse(graisse) for graisse in _POIDS_QT}
 
 
+def poids_qt(graisse: int) -> QFont.Weight:
+    """Graisse (100 à 900) → graisse de Qt (arrondie à la centaine)."""
+    if graisse in _POIDS_QT:
+        return _POIDS_QT[graisse]
+    return QFont.Weight(int(min(max(round(graisse / 100) * 100, 100), 900)))
+
+
 def police(taille: int = Typo.COURANT, graisse: int = Typo.GRAISSE_NORMALE) -> QFont:
     """Police Inter à la taille (en pixels) et à la graisse demandées."""
     resultat = QFont(famille_pour_graisse(graisse))
     resultat.setPixelSize(taille)
-    resultat.setWeight(_POIDS_QT.get(graisse, QFont.Weight.Normal))
+    resultat.setWeight(poids_qt(graisse))
     return resultat

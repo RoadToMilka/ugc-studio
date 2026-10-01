@@ -11,13 +11,13 @@ Le studio : l'aperçu à gauche et les réglages à droite ; l'un sous l'autre q
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QEvent, QSize
 from PySide6.QtWidgets import QBoxLayout, QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
 
 from ....preferences import Preferences
 from ...composants.apercu import FOND_GRIS, FOND_VIDEO, FONDS, ZOOM_AJUSTE, ZOOMS, ToileApercu, ZoneApercu
 from ...composants.choix import ChoixEnBoutons
-from ...composants.elements import bouton, case_a_cocher, glissiere, libelle
+from ...composants.elements import bouton, case_a_cocher, glissiere, info, libelle
 from ...composants.flux import DispositionFlux
 from ...icones import icone
 from ...theme import Couleurs, Dimensions, Espacements
@@ -38,6 +38,10 @@ class BlocApercu(QFrame):
         self.toile = ToileApercu()
         self.zone = ZoneApercu(self.toile)
         disposition.addWidget(self.zone)
+        self.info_pipette = info("Pipette : clique dans l'aperçu sur la couleur à prendre (Échap : annuler).")
+        self.info_pipette.hide()
+        self.toile.pipette_change.connect(self.info_pipette.setVisible)
+        disposition.addWidget(self.info_pipette)
 
         # Vidéo déplacée ou supprimée (elle n'est pas copiée dans le projet).
         self.ligne_introuvable = QWidget()
@@ -169,7 +173,8 @@ class BlocApercu(QFrame):
 
 class DispositionStudio(QWidget):
     """L'aperçu à gauche (largeur fixe) et les réglages à droite ; l'un sous l'autre quand la page a
-    moins de STUDIO_DEUX_COLONNES_MIN pixels de large."""
+    moins de STUDIO_DEUX_COLONNES_MIN pixels de large, ou moins que ce que demandent les deux colonnes
+    (un onglet des réglages peut demander plus de place : voir largeur_deux_colonnes)."""
 
     def __init__(self, apercu: QWidget, reglages: QWidget, parent: QWidget | None = None):
         super().__init__(parent)
@@ -186,19 +191,40 @@ class DispositionStudio(QWidget):
     def deux_colonnes(self) -> bool:
         return bool(self._deux_colonnes)
 
+    def largeur_deux_colonnes(self) -> int:
+        """Largeur qu'il faut pour deux colonnes : la colonne de l'aperçu, l'espace entre les deux, et
+        le minimum des réglages (il dépend de l'onglet affiché et des groupes ouverts). Sans cette
+        vérification, des réglages plus larges que leur colonne garderaient le studio sur deux colonnes
+        trop larges pour la page : son bord droit serait coupé."""
+        besoin = self._apercu.sizeHint().width() + self._disposition.spacing() + self._reglages.minimumSizeHint().width()
+        return max(Dimensions.STUDIO_DEUX_COLONNES_MIN, besoin)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        """Largeur minimale : celle d'une seule colonne. Sans cela, sur deux colonnes, le studio ne
+        pourrait pas devenir plus étroit que ses deux colonnes : il n'y aurait jamais assez peu de place
+        pour passer sur une colonne, et le bord droit de la page serait coupé."""
+        largeur = max(self._apercu.minimumSizeHint().width(), self._reglages.minimumSizeHint().width())
+        return QSize(largeur, super().minimumSizeHint().height())
+
     def resizeEvent(self, evenement) -> None:  # noqa: N802
         self._adapter(evenement.size().width())
         super().resizeEvent(evenement)
 
+    def event(self, evenement) -> bool:
+        if evenement.type() == QEvent.Type.LayoutRequest:
+            self._adapter(self.width())  # les réglages demandent une autre place (onglet, groupe ouvert)
+        return super().event(evenement)
+
     def _adapter(self, largeur: int) -> None:
+        limite = self.largeur_deux_colonnes()
         if self._deux_colonnes:
-            deux = largeur >= Dimensions.STUDIO_DEUX_COLONNES_MIN
+            deux = largeur >= limite
         else:
             # Pour repasser sur deux colonnes, il faut un peu plus de place : sans cette marge, la barre de
             # défilement de la page (qui apparaît ou disparaît selon la disposition) ferait changer la
             # disposition en boucle autour de la limite.
             marge = 0 if self._deux_colonnes is None else Dimensions.BARRE_DEFILEMENT + Espacements.S
-            deux = largeur >= Dimensions.STUDIO_DEUX_COLONNES_MIN + marge
+            deux = largeur >= limite + marge
         if deux == self._deux_colonnes:
             return
         self._deux_colonnes = deux

@@ -15,6 +15,9 @@ Règles (§7.3, §7.4) :
   temps pour le plus grand sous-titre possible (« Lignes au plus »).
 - Alignement : centre (chaque ligne centrée sur le milieu de l'écran), gauche (les lignes partent
   du bord gauche de la zone de sécurité, jamais de la marge) ou droite.
+- Débord (lot 4) : le contour et le fond (marge intérieure, bordure) dépassent du texte. Le bloc
+  placé à l'écran est la boîte visible, débord compris : c'est elle qui reste dans les marges et
+  part du bord de la zone de sécurité. L'ombre et la lueur, floues et légères, n'en font pas partie.
 """
 
 from __future__ import annotations
@@ -32,6 +35,8 @@ class Metriques:
     ascendante: float  # de la ligne de base au haut des lettres les plus hautes (accents compris)
     descendante: float  # de la ligne de base au bas des jambages (p, g, j…)
     interligne: float  # d'une ligne de base à la suivante
+    debord_x: float = 0.0  # contour ou fond qui dépasse du texte, à gauche et à droite
+    debord_y: float = 0.0  # en haut et en bas
 
 
 @dataclass(frozen=True)
@@ -65,8 +70,9 @@ class Bloc:
 
 
 def hauteur_du_bloc(lignes: int, metriques: Metriques, echelle: float = 1.0) -> float:
-    """Du haut des lettres de la première ligne au bas des jambages de la dernière."""
-    return ((max(lignes, 1) - 1) * metriques.interligne + metriques.ascendante + metriques.descendante) * echelle
+    """Du haut des lettres de la première ligne au bas des jambages de la dernière, débord compris."""
+    texte = ((max(lignes, 1) - 1) * metriques.interligne + metriques.ascendante + metriques.descendante) * echelle
+    return texte + 2 * metriques.debord_y
 
 
 def ancre(reglages: ReglagesSousTitres, zone: Cadre) -> float:
@@ -105,11 +111,12 @@ def limites_du_reglage_fin(reglages: ReglagesSousTitres, zone: Cadre, metriques:
     return bas / zone.hauteur * 100, haut / zone.hauteur * 100
 
 
-def x_de_la_ligne(zone: Cadre, largeur: float) -> float:
+def x_de_la_ligne(zone: Cadre, largeur: float, debord: float = 0.0) -> float:
+    """Début du texte d'une ligne de `largeur` pixels (sans son débord)."""
     if zone.alignement == GAUCHE:
-        return zone.x_depart
+        return zone.x_depart + debord
     if zone.alignement == DROITE:
-        return zone.x_depart - largeur
+        return zone.x_depart - debord - largeur
     return zone.x_depart - largeur / 2
 
 
@@ -141,9 +148,9 @@ def placer(
     metriques: Metriques,
     mesure: Mesure,
 ) -> Bloc:
-    """Place les lignes et les mots d'un sous-titre (en pixels de la vidéo). Un mot commence là où
-    finit la ligne, moins la largeur de ce qui le suit : ainsi, la ligne a exactement la largeur
-    mesurée par le découpage."""
+    """Place les lignes et les mots d'un sous-titre (en pixels de la vidéo). `mesure` : largeur du
+    texte seul (sans débord). Un mot commence là où finit la ligne, moins la largeur de ce qui le
+    suit : ainsi, la ligne a exactement la largeur mesurée par le découpage (débord en plus)."""
     echelle = sous_titre.echelle
     textes = [m.texte for m in mots[sous_titre.premier_mot : sous_titre.dernier_mot]]
     lignes = list(sous_titre.lignes) or [""]
@@ -155,8 +162,8 @@ def placer(
     haut = haut_du_bloc(reglages, zone, hauteur)
     lignes_placees, mots_places = [], []
     for numero, (texte, groupe, largeur) in enumerate(zip(lignes, groupes, largeurs, strict=True)):
-        x = x_de_la_ligne(zone, largeur)
-        base = haut + (metriques.ascendante + numero * metriques.interligne) * echelle
+        x = x_de_la_ligne(zone, largeur, metriques.debord_x)
+        base = haut + metriques.debord_y + (metriques.ascendante + numero * metriques.interligne) * echelle
         lignes_placees.append(LignePlacee(texte, x, base, largeur))
         for rang, index in enumerate(groupe):
             suite = " ".join(textes[i] for i in groupe[rang:])
@@ -169,6 +176,6 @@ def placer(
                     numero,
                 )
             )
-    gauche = min((ligne.x for ligne in lignes_placees), default=0.0)
-    droite = max((ligne.x + ligne.largeur for ligne in lignes_placees), default=0.0)
+    gauche = min((ligne.x for ligne in lignes_placees), default=0.0) - metriques.debord_x
+    droite = max((ligne.x + ligne.largeur for ligne in lignes_placees), default=0.0) + metriques.debord_x
     return Bloc(tuple(lignes_placees), tuple(mots_places), gauche, haut, droite - gauche, hauteur, echelle)

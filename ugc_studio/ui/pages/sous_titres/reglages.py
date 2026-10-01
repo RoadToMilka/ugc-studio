@@ -1,6 +1,7 @@
 """Réglages du studio des sous-titres (V2, lot 3 ; cahier des charges §7.9) : quatre onglets.
 
-- Texte : taille, casse, ponctuation (police, couleurs, contour et fond : lot 4).
+- Texte (onglet_texte.py) : police, graisse, taille, casse, ponctuation, remplissage, contour,
+  ombre, lueur, fond, espaces (lot 4).
 - Position : haut, centre ou bas, réglage fin, alignement ; avancé : largeur maximale des lignes.
 - Découpage : caractères, mots et lignes au plus, durée minimale, coupure sur la ponctuation,
   hésitations masquées.
@@ -15,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from ....sous_titres import (
     COTE_MAX,
@@ -29,7 +30,7 @@ from ....sous_titres import (
     ReglagesSousTitres,
     cote_pair,
 )
-from ....style_sous_titres import ALIGNEMENTS, CASSES, POSITIONS, Position, StyleTexte, VideoApercu
+from ....style_sous_titres import ALIGNEMENTS, POSITIONS, Position, VideoApercu
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
 from ...composants.elements import (
@@ -46,32 +47,11 @@ from ...composants.elements import (
 from ...composants.onglets import Onglets
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements
+from .onglet_texte import OngletTexte
+from .reglages_communs import grille, nombre_lisible
 
 ONGLET_TEXTE, ONGLET_POSITION, ONGLET_DECOUPAGE, ONGLET_ECRAN = range(4)
 PAS_REGLAGE_FIN = 10  # la glissière du réglage fin compte en dixièmes de % de la hauteur
-
-
-def nombre_lisible(valeur: float, decimales: int = 1) -> str:
-    """2.5 → « 2,5 » ; 3.0 → « 3 »."""
-    texte = f"{valeur:.{decimales}f}".rstrip("0").rstrip(".")
-    return texte.replace(".", ",").replace("-", "−") or "0"
-
-
-def grille(lignes, etirees: tuple[int, ...] = ()) -> QGridLayout:
-    """Libellés à gauche, champs à droite, à leur largeur naturelle (sauf les lignes `etirees`, qui
-    prennent toute la largeur de la colonne : une glissière, par exemple)."""
-    disposition = QGridLayout()
-    disposition.setHorizontalSpacing(Espacements.M)
-    disposition.setVerticalSpacing(Espacements.S)
-    for rang, (texte, element) in enumerate(lignes):
-        disposition.addWidget(libelle(texte, "legende", retour_a_la_ligne=False), rang, 0)
-        alignement = Qt.AlignmentFlag(0) if rang in etirees else Qt.AlignmentFlag.AlignLeft
-        if isinstance(element, QWidget):
-            disposition.addWidget(element, rang, 1, alignement)
-        else:
-            disposition.addLayout(element, rang, 1, alignement)
-    disposition.setColumnStretch(1, 1)
-    return disposition
 
 
 class PanneauReglages(QWidget):
@@ -88,7 +68,9 @@ class PanneauReglages(QWidget):
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
         self.onglets = Onglets(hauteur_selon_l_onglet=True)
-        self.onglets.addTab(self._onglet_texte(), "Texte")
+        self.texte = OngletTexte()
+        self.texte.change.connect(self.change.emit)
+        self.onglets.addTab(self.texte, "Texte")
         self.onglets.addTab(self._onglet_position(), "Position")
         self.onglets.addTab(self._onglet_decoupage(), "Découpage")
         self.onglets.addTab(self._onglet_ecran(), "Écran")
@@ -102,27 +84,6 @@ class PanneauReglages(QWidget):
         page, contenu = conteneur_vertical(Espacements.M)
         contenu.setContentsMargins(0, Espacements.L, 0, 0)
         return page, contenu
-
-    def _onglet_texte(self) -> QWidget:
-        page, contenu = self._onglet()
-        self.taille = champ_decimal(*LIMITES["taille_pct"], 0.1, 1, " %", "Taille du texte, en % de la hauteur de la vidéo")
-        self.taille_px = libelle("", "legende", retour_a_la_ligne=False)
-        ligne_taille = QHBoxLayout()
-        ligne_taille.setSpacing(Espacements.S)
-        ligne_taille.addWidget(self.taille)
-        ligne_taille.addWidget(self.taille_px)
-        self.casse = liste_deroulante("Affichage seulement : le texte des mots ne change pas")
-        for code, nom in CASSES.items():
-            self.casse.addItem(nom, code)
-        contenu.addLayout(grille((("Taille du texte", ligne_taille), ("Casse", self.casse))))
-        zone, self.ponctuation = case_a_cocher("Afficher la ponctuation")
-        contenu.addWidget(zone)
-        contenu.addWidget(info("Police Inter SemiBold, texte blanc avec une ombre légère : la même apparence qu'en V1."))
-        contenu.addStretch(1)
-        self.taille.valueChanged.connect(lambda _valeur: self.change.emit())
-        self.casse.currentIndexChanged.connect(lambda _index: self.change.emit())
-        self.ponctuation.toggled.connect(lambda _coche: self.change.emit())
-        return page
 
     def _onglet_position(self) -> QWidget:
         page, contenu = self._onglet()
@@ -317,20 +278,23 @@ class PanneauReglages(QWidget):
         masquer: bool,
         transcription: bool,
         video_du_projet: bool,
+        hauteur_video: int,
+        police_remplacee: bool = False,
     ) -> None:
         """Montre les réglages du projet. `resolution_imposee` : une vidéo impose son format ;
-        `video_du_projet` : le projet a sa propre vidéo (pas de vidéo d'aperçu à choisir)."""
+        `video_du_projet` : le projet a sa propre vidéo (pas de vidéo d'aperçu à choisir) ;
+        `hauteur_video` : pour montrer les tailles du style en pixels de la vidéo."""
+        self.texte.charger(
+            reglages.texte, hauteur_video, max(1, round(hauteur_video * reglages.texte.taille_pct / 100)), police_remplacee
+        )
         elements = (
-            self.taille, self.casse, self.ponctuation, self.verticale, self.reglage_fin, self.alignement,
+            self.verticale, self.reglage_fin, self.alignement,
             self.largeur_lignes, self.caracteres, self.mots_max, self.lignes, self.duree_min, self.couper_ponctuation,
             self.masquer, self.format, self.largeur_perso, self.hauteur_perso, self.plateforme, self.marge,
             self.decalage_video, self.son_video,
         )
         for element in elements:
             element.blockSignals(True)
-        self.taille.setValue(reglages.texte.taille_pct)
-        choisir(self.casse, reglages.texte.casse)
-        self.ponctuation.setChecked(reglages.texte.ponctuation)
         self.verticale.definir(reglages.position.verticale)
         self.alignement.definir(reglages.position.alignement)
         self.largeur_lignes.setValue(reglages.position.largeur_lignes_pct)
@@ -405,15 +369,7 @@ class PanneauReglages(QWidget):
             lignes_max=self.lignes.value(),
             couper_sur_ponctuation=self.couper_ponctuation.isChecked(),
             duree_min_s=round(self.duree_min.value(), 2),
-            texte=StyleTexte(
-                police=base.texte.police,
-                graisse=base.texte.graisse,
-                taille_pct=round(self.taille.value(), 2),
-                casse=self.casse.currentData(),
-                ponctuation=self.ponctuation.isChecked(),
-                couleur=base.texte.couleur,
-                ombre=base.texte.ombre,
-            ),
+            texte=self.texte.style(base.texte),
             position=Position(
                 self.verticale.valeur(),
                 round(self.reglage_fin.value() / PAS_REGLAGE_FIN, 2),

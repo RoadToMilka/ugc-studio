@@ -15,9 +15,9 @@ Au premier lancement, Windows affiche « Windows a protégé votre ordinateur »
 | `ugc_studio/ui/theme.py` | **Toutes** les couleurs, tailles et espacements de l'interface (§9) |
 | `ugc_studio/ecriture/` | Le module Script, sans interface : lecture de la page produit, brief, consignes du modèle, relecture, exemples, variantes, retouche, bibliothèque de briefs |
 | `ugc_studio/sous_titres.py`, `style_sous_titres.py`, `mise_en_page.py` | Les sous-titres, sans interface : découpage, style (forme écrite des projets et des préréglages), place des lignes et des mots |
-| `ugc_studio/rendu/` | Le moteur de dessin des sous-titres, commun à l'aperçu et aux futurs exports vidéo |
+| `ugc_studio/rendu/` | Le moteur de dessin des sous-titres, commun à l'aperçu et aux futurs exports vidéo, et les polices des sous-titres (fournies, importées, de Windows) |
 | `ugc_studio/ui/` | L'interface : fenêtre principale, pages, composants réutilisables |
-| `ugc_studio/ressources/` | Police Inter, icônes (Lucide) et icône de l'app, embarquées dans le `.exe` |
+| `ugc_studio/ressources/` | Polices (Inter pour l'interface ; Montserrat, Poppins, Anton et Bebas Neue pour les sous-titres, licence SIL OFL), style de départ des sous-titres, icônes (Lucide) et icône de l'app, embarqués dans le `.exe` |
 | `tests/` | Tests automatiques, lancés à chaque envoi de code |
 | `packaging/ugc_studio.spec` | Recette de fabrication du `.exe` (PyInstaller) |
 | `.github/workflows/fabrication.yml` | Fabrication automatique sur une machine Windows de GitHub |

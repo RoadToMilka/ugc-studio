@@ -3,7 +3,8 @@
 - ToileApercu : la vidéo (l'image que le lecteur affiche), ou un fond gris, ou un damier ; par-dessus,
   les sous-titres dessinés par le moteur de dessin (rendu/moteur.py, le même que l'export de la V3),
   puis les repères : zone de sécurité de la plateforme (pointillés mauves), marge maximum (trait
-  rouge), grille (tiers et milieu de l'écran). On peut y glisser le sous-titre verticalement.
+  rouge), grille (tiers et milieu de l'écran). On peut y glisser le sous-titre verticalement, et y
+  prendre une couleur avec la pipette (V2, lot 4).
 - ZoneApercu : la toile entière dans la place disponible (« Ajusté »), ou à 100 % (un pixel de la
   vidéo par pixel de l'écran, la zone défile) pour juger la netteté.
 - LecteurApercu : lit la vidéo (Qt Multimedia : chaque image arrive dans un « puits vidéo »,
@@ -18,9 +19,9 @@ import logging
 import os
 import time
 
-from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QBrush, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import QFrame, QScrollArea, QSizePolicy, QWidget
+from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QBrush, QImage, QPainter, QPen, QPixmap
+from PySide6.QtWidgets import QApplication, QFrame, QScrollArea, QSizePolicy, QWidget
 
 from ...mise_en_page import limites_du_reglage_fin
 from ...rendu.moteur import Moteur
@@ -43,6 +44,7 @@ class ToileApercu(QWidget):
 
     glissement = Signal(float)  # pendant qu'on glisse le sous-titre : réglage fin visé (% de la hauteur)
     glissement_fini = Signal(float)  # au relâchement
+    pipette_change = Signal(bool)  # pipette en attente d'un clic (True), ou finie (False)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -56,6 +58,7 @@ class ToileApercu(QWidget):
         self.glissable = False
         # Pendant un glissement : (y du pointeur au départ, réglage fin de départ, réglage fin visé).
         self._glisse: tuple[float, float, float] | None = None
+        self._pipette = None  # pipette en cours : la fonction qui recevra la couleur prise
         self._damier: QPixmap | None = None
         self.setMouseTracking(True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -128,6 +131,10 @@ class ToileApercu(QWidget):
 
     def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
         peintre = QPainter(self)
+        self._peindre(peintre)
+        peintre.end()
+
+    def _peindre(self, peintre: QPainter, reperes: bool = True) -> None:
         peintre.fillRect(self.rect(), qcolor(CouleursApercu.AUTOUR))
         cible = self.rect_video()
         self._dessiner_fond(peintre, cible)
@@ -138,8 +145,8 @@ class ToileApercu(QWidget):
                 decale = (self._glisse[2] - self._moteur.reglages.position.decalage_pct) / 100 * cible.height()
                 origine = QPointF(origine.x(), origine.y() + decale)
             self._moteur.dessiner(peintre, origine, echelle, self._sous_titre, self._mots, self.devicePixelRatioF())
-        self._dessiner_reperes(peintre, cible)
-        peintre.end()
+        if reperes:
+            self._dessiner_reperes(peintre, cible)
 
     def _motif_damier(self) -> QPixmap:
         if self._damier is None:
@@ -213,6 +220,10 @@ class ToileApercu(QWidget):
         return limites_du_reglage_fin(moteur.reglages, moteur.zone, moteur.metriques)
 
     def mousePressEvent(self, evenement) -> None:  # noqa: N802
+        if self._pipette is not None:
+            self._prendre_la_couleur(evenement)
+            evenement.accept()
+            return
         rect = self.rect_du_sous_titre()
         if (
             self.glissable
@@ -236,9 +247,10 @@ class ToileApercu(QWidget):
             self.update()
             self.glissement.emit(vise)
             return
-        rect = self.rect_du_sous_titre()
-        dessus = self.glissable and rect is not None and rect.contains(evenement.position())
-        self.setCursor(Qt.CursorShape.SizeVerCursor if dessus else Qt.CursorShape.ArrowCursor)
+        if self._pipette is None:
+            rect = self.rect_du_sous_titre()
+            dessus = self.glissable and rect is not None and rect.contains(evenement.position())
+            self.setCursor(Qt.CursorShape.SizeVerCursor if dessus else Qt.CursorShape.ArrowCursor)
         super().mouseMoveEvent(evenement)
 
     def mouseReleaseEvent(self, evenement) -> None:  # noqa: N802
@@ -249,6 +261,64 @@ class ToileApercu(QWidget):
             self.update()
             return
         super().mouseReleaseEvent(evenement)
+
+    # --- Pipette : prendre une couleur dans l'aperçu (§7.4) -------------------------------------
+
+    @property
+    def pipette_active(self) -> bool:
+        return self._pipette is not None
+
+    def commencer_pipette(self, quand_prise) -> None:
+        """Le prochain clic dans l'aperçu prend la couleur affichée sous le pointeur (la vidéo, le fond
+        ou le sous-titre ; pas les repères) et la passe à quand_prise(rouge, vert, bleu). Échap, ou un
+        clic ailleurs dans la fenêtre, annule."""
+        self.finir_pipette()
+        self._pipette = quand_prise
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        # Échap et les clics ailleurs arrivent à d'autres éléments : la toile les regarde passer le temps
+        # de la pipette (filtre d'évènements posé sur toute l'app, retiré à la fin).
+        QApplication.instance().installEventFilter(self)
+        self.pipette_change.emit(True)
+
+    def finir_pipette(self) -> None:
+        if self._pipette is None:
+            return
+        self._pipette = None
+        QApplication.instance().removeEventFilter(self)
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.pipette_change.emit(False)
+
+    def eventFilter(self, objet, evenement) -> bool:  # noqa: N802 — nom imposé par Qt
+        if self._pipette is not None:
+            if evenement.type() == QEvent.Type.KeyPress and evenement.key() == Qt.Key.Key_Escape:
+                self.finir_pipette()
+                return True  # Échap ne fait rien d'autre (ne ferme pas une fenêtre, par exemple)
+            if evenement.type() == QEvent.Type.MouseButtonPress and isinstance(objet, QWidget) and objet is not self:
+                self.finir_pipette()  # clic ailleurs : la pipette s'arrête, le clic fait ce qu'il fait d'habitude
+        return super().eventFilter(objet, evenement)
+
+    def couleur_affichee(self, point: QPointF) -> tuple[int, int, int]:
+        """Couleur affichée sous ce point de la toile, repères exclus (la toile est redessinée sans eux
+        dans une image, à la résolution de l'écran)."""
+        ratio = self.devicePixelRatioF()
+        image = QImage(max(1, round(self.width() * ratio)), max(1, round(self.height() * ratio)), QImage.Format.Format_RGB32)
+        image.setDevicePixelRatio(ratio)
+        peintre = QPainter(image)
+        self._peindre(peintre, reperes=False)
+        peintre.end()
+        x = min(max(int(point.x() * ratio), 0), image.width() - 1)
+        y = min(max(int(point.y() * ratio), 0), image.height() - 1)
+        couleur = image.pixelColor(x, y)
+        return couleur.red(), couleur.green(), couleur.blue()
+
+    def _prendre_la_couleur(self, evenement) -> None:
+        quand_prise = self._pipette
+        point = evenement.position()
+        prise = evenement.button() == Qt.MouseButton.LeftButton and self.rect_video().contains(point)
+        couleur = self.couleur_affichee(point) if prise else None
+        self.finir_pipette()  # un clic à côté de la vidéo (ou du bouton droit) annule
+        if couleur is not None:
+            quand_prise(*couleur)
 
 
 class ZoneApercu(QScrollArea):

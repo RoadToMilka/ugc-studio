@@ -1,0 +1,13 @@
+{
+  "description": "Style des sous-titres des nouveaux projets (UGC Studio, V2, lot 4) : Montserrat ExtraBold, texte blanc, contour noir. Tailles en % de la hauteur de la vidéo ; couleurs « #RRGGBB » avec leur opacité (0 à 100 %). Les projets plus anciens gardent leur apparence.",
+  "texte": {
+    "police": "Montserrat",
+    "graisse": 800,
+    "taille_pct": 4.0,
+    "casse": "normale",
+    "ponctuation": true,
+    "couleur": {"code": "#FFFFFF", "opacite": 100},
+    "contour": {"actif": true, "couleur": {"code": "#000000", "opacite": 100}, "epaisseur_pct": 0.3, "angles": "arrondis"},
+    "ombre": {"active": false}
+  }
+}

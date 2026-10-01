@@ -66,6 +66,7 @@ def configurer_application(app) -> dict:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QIcon
 
+    from .rendu.polices import charger_polices_importees
     from .ui import theme
     from .ui.icones import icones_feuille_de_style
     from .ui.polices import charger_polices, familles_par_graisse, police
@@ -78,11 +79,17 @@ def configurer_application(app) -> dict:
         indications.setColorScheme(Qt.ColorScheme.Dark)
     traduction = installer_traduction_qt(app)
     familles = charger_polices()
+    importees = charger_polices_importees()  # polices importées pour les sous-titres (§7.4)
     app.setFont(police())
     app.setPalette(theme.palette())
     app.setStyleSheet(theme.feuille_de_style(icones_feuille_de_style(), familles_par_graisse()))
     app.setWindowIcon(QIcon(str(dossier_ressources() / "app.png")))
-    return {"polices": familles, "familles_par_graisse": familles_par_graisse(), "traduction_fr": traduction}
+    return {
+        "polices": familles,
+        "polices_importees": importees,
+        "familles_par_graisse": familles_par_graisse(),
+        "traduction_fr": traduction,
+    }
 
 
 def main(arguments: list[str] | None = None) -> int:
