@@ -219,6 +219,44 @@ def test_studio_avec_ses_onglets(atelier, services, tmp_path):
     assert atelier.studio.deux_colonnes
 
 
+def test_onglets_a_la_hauteur_de_l_onglet_affiche(app_configuree, qtbot):
+    """Studio : un onglet court ne garde pas la hauteur du plus long (pas de grand vide dessous)."""
+    from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+    from ugc_studio.ui.composants.onglets import Onglets
+
+    def page(lignes: int) -> QWidget:
+        widget = QWidget()
+        disposition = QVBoxLayout(widget)
+        for numero in range(lignes):
+            disposition.addWidget(QLabel(f"Ligne {numero}"))
+        return widget
+
+    ajustes, fixes = Onglets(hauteur_selon_l_onglet=True), Onglets()
+    for onglets in (ajustes, fixes):
+        qtbot.addWidget(onglets)
+        onglets.addTab(page(1), "Court")
+        onglets.addTab(page(12), "Long")
+    court = ajustes.sizeHint().height()
+    ajustes.setCurrentIndex(1)
+    assert ajustes.sizeHint().height() > court
+    ajustes.setCurrentIndex(0)
+    assert ajustes.sizeHint().height() == court
+    hauteur_fixe = fixes.sizeHint().height()
+    fixes.setCurrentIndex(1)
+    assert fixes.sizeHint().height() == hauteur_fixe  # sans l'option : celle du plus long, comme avant
+
+
+def test_messages_d_etat_caches_quand_ils_sont_vides(atelier, services, tmp_path):
+    _video(services, tmp_path)
+    atelier.rafraichir()
+    assert atelier.statut.isHidden() and atelier.statut_export.isHidden()
+    atelier._afficher("Un message", "succes")
+    assert not atelier.statut.isHidden()
+    atelier._afficher("", "secondaire")
+    assert atelier.statut.isHidden()
+
+
 def test_format_suivi_de_la_video(atelier, services, tmp_path):
     _video(services, tmp_path)
     atelier.rafraichir()
@@ -233,13 +271,15 @@ def test_format_personnalise_sans_video(atelier, services):
     _prise_sans_video(services)
     atelier.rafraichir()
     assert atelier.format.isEnabled() and atelier.format.currentData() == "9:16"
-    assert atelier.panneau.zone_perso.isHidden()
+    libelle_taille = atelier.panneau.grille_ecran.itemAtPosition(1, 0).widget()
+    assert libelle_taille.text() == "Taille"
+    assert atelier.panneau.zone_perso.isHidden() and libelle_taille.isHidden()  # pas de libellé seul
     atelier.panneau.largeur_perso.setValue(1201)
     atelier.panneau.hauteur_perso.setValue(1500)
     atelier.format.setCurrentIndex(atelier.format.findData("personnalise"))
     reglages = services.projets.projet.sous_titres
     assert (reglages.format, reglages.largeur_perso, reglages.hauteur_perso) == ("personnalise", 1202, 1500)
-    assert not atelier.panneau.zone_perso.isHidden()
+    assert not atelier.panneau.zone_perso.isHidden() and not libelle_taille.isHidden()
     assert atelier.toile.taille_video() == (1202, 1500)
     assert "Vidéo 1202 × 1500" in atelier.infos_ecran.text()
 

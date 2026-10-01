@@ -87,7 +87,7 @@ class PanneauReglages(QWidget):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
-        self.onglets = Onglets()
+        self.onglets = Onglets(hauteur_selon_l_onglet=True)
         self.onglets.addTab(self._onglet_texte(), "Texte")
         self.onglets.addTab(self._onglet_position(), "Position")
         self.onglets.addTab(self._onglet_decoupage(), "Découpage")
@@ -300,8 +300,13 @@ class PanneauReglages(QWidget):
     # --- Format --------------------------------------------------------------------------------
 
     def _format_change(self) -> None:
-        self.zone_perso.setVisible(self.format.currentData() == FORMAT_PERSONNALISE)
+        self._montrer_taille_perso(self.format.currentData() == FORMAT_PERSONNALISE)
         self.change.emit()
+
+    def _montrer_taille_perso(self, visible: bool) -> None:
+        """La ligne « Taille » (libellé et champs) : seulement pour le format personnalisé."""
+        self.zone_perso.setVisible(visible)
+        self.grille_ecran.itemAtPosition(1, 0).widget().setVisible(visible)
 
     # --- Lecture et écriture des réglages --------------------------------------------------------
 
@@ -345,7 +350,7 @@ class PanneauReglages(QWidget):
         choisir(self.format, FORMAT_AUTO if resolution_imposee else (FORMAT_PAR_DEFAUT if reglages.format == FORMAT_AUTO else reglages.format))
         self.largeur_perso.setValue(reglages.largeur_perso)
         self.hauteur_perso.setValue(reglages.hauteur_perso)
-        self.zone_perso.setVisible(resolution_imposee is None and reglages.format == FORMAT_PERSONNALISE)
+        self._montrer_taille_perso(resolution_imposee is None and reglages.format == FORMAT_PERSONNALISE)
         choisir(self.plateforme, reglages.plateforme)
         self.marge.setValue(reglages.marge_max_pct)
         self._apercu = reglages.apercu

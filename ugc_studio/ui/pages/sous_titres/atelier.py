@@ -173,6 +173,7 @@ class AtelierSousTitres(Page):
         )
         d.addLayout(export)
         self.statut_export = libelle("", "secondaire")
+        self.statut_export.hide()
         d.addWidget(self.statut_export)
         self.contenu.addWidget(self.cadre_sous_titres)
 
@@ -222,6 +223,7 @@ class AtelierSousTitres(Page):
         estimation.addStretch(1)
         d.addLayout(estimation)
         self.statut = libelle("", "secondaire")
+        self.statut.hide()
         d.addWidget(self.statut)
         return cadre
 
@@ -306,7 +308,7 @@ class AtelierSousTitres(Page):
             return
         self.titre.setText(f"{TITRE} / {projet.nom}")
         self._afficher("", "secondaire")
-        self.statut_export.clear()
+        self._afficher("", "secondaire", self.statut_export)
         self._statut_reorganisation("")
         self.rafraichir()
 
@@ -324,8 +326,10 @@ class AtelierSousTitres(Page):
         super().keyPressEvent(evenement)
 
     def _afficher(self, message: str, role: str, etiquette=None) -> None:
+        """Message d'état sous un bloc ; sans message, la ligne disparaît (pas de vide en bas du bloc)."""
         etiquette = etiquette or self.statut
         etiquette.setText(message)
+        etiquette.setVisible(bool(message))
         etiquette.setProperty("role", role)
         etiquette.style().unpolish(etiquette)
         etiquette.style().polish(etiquette)
@@ -691,7 +695,6 @@ class AtelierSousTitres(Page):
 
     def _statut_reorganisation(self, message: str, role: str = "secondaire") -> None:
         self._afficher(message, role, self.statut_ajustements)
-        self.statut_ajustements.setVisible(bool(message))
 
     def _choisi(self) -> int:
         """Indice du sous-titre choisi dans la liste (-1 : aucun)."""

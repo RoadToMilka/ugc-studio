@@ -835,6 +835,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Aperçu : autour de la vidéo, un fond plus sombre que l'app ; fond neutre gris moyen (un texte blanc ou noir y reste lisible) ; damier de cases de 12 px. Repères : traits de 1 px à l'écran quel que soit le zoom ; zone de sécurité en pointillés mauves (4 px, 4 px), marge maximum en rouge, grille en blanc à 35 %. Couleurs dans `theme.CouleursApercu`.
 - Boutons : icône lecture et pause, **boucle** (icône Lucide « repeat », mauve quand elle est active) ; contour « Retrouver la vidéo… », « Choisir une vidéo… » (icône « film »), « Retirer » ; icône « Revenir à 0 % » du réglage fin.
 - Largeurs : colonne de l'aperçu 400 px, studio sur deux colonnes à partir de 880 px de large, aperçu de 200 à 540 px de haut.
+- Les onglets des réglages prennent la hauteur de l'onglet affiché (option `hauteur_selon_l_onglet` des onglets en boutons ; ailleurs, la hauteur reste celle du plus haut) : pas de grand vide sous un onglet court. Une ligne qui ne sert pas disparaît avec son libellé (« Taille » hors format personnalisé), et un message d'état vide ne laisse pas de ligne vide en bas d'un bloc.
 
 ### 9.5 Typographie
 

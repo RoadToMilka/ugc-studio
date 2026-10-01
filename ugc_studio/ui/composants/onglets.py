@@ -8,11 +8,15 @@ Pourquoi pas les onglets standard de Qt (QTabWidget) ? Ils soulignaient l'onglet
 mauve qui effaçait la ligne de séparation au-dessus de lui, et ils se règlent mal dans la feuille
 de style. Ce composant garde les fonctions de QTabWidget dont l'app se sert : addTab,
 setCurrentIndex, currentIndex, currentChanged, count, widget, tabText, setTabEnabled.
+
+Hauteur : comme chez Qt, le contenu prend la hauteur de l'onglet le plus haut (les boutons ne
+bougent pas d'un onglet à l'autre). Avec hauteur_selon_l_onglet, il prend celle de l'onglet affiché :
+pas de grand vide sous un onglet court quand un autre est très long (studio des sous-titres).
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from ..theme import Espacements
@@ -20,10 +24,35 @@ from .bouton import Bouton
 from .elements import separateur
 
 
+class PileAjustee(QStackedWidget):
+    """Pile de pages dont la taille demandée est celle de la page affichée (QStackedWidget prend celle
+    de la plus grande)."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.currentChanged.connect(lambda _index: self.updateGeometry())  # nouvelle hauteur à placer
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        page = self.currentWidget()
+        return page.sizeHint() if page is not None else super().sizeHint()
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        page = self.currentWidget()
+        return page.minimumSizeHint() if page is not None else super().minimumSizeHint()
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        page = self.currentWidget()
+        return page.hasHeightForWidth() if page is not None else False
+
+    def heightForWidth(self, largeur: int) -> int:  # noqa: N802
+        page = self.currentWidget()
+        return page.heightForWidth(largeur) if page is not None else -1
+
+
 class Onglets(QWidget):
     currentChanged = Signal(int)  # même nom que chez QTabWidget
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, hauteur_selon_l_onglet: bool = False):
         super().__init__(parent)
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
@@ -35,7 +64,7 @@ class Onglets(QWidget):
         self._rangee.setSpacing(Espacements.S)
         self._rangee.addStretch(1)
         disposition.addLayout(self._rangee)
-        self._pile = QStackedWidget()
+        self._pile = PileAjustee() if hauteur_selon_l_onglet else QStackedWidget()
         disposition.addWidget(self._pile, 1)
         self._boutons: list[Bouton] = []
         self._groupe = QButtonGroup(self)
