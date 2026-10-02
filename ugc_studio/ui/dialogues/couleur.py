@@ -8,12 +8,12 @@ faite de Qt, sur fond gris, avec ses propres boutons.
 from __future__ import annotations
 
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QColorDialog, QDialog, QHBoxLayout, QWidget
+from PySide6.QtWidgets import QAbstractSpinBox, QColorDialog, QDialog, QHBoxLayout, QLineEdit, QWidget
 
 from ..composants.bouton import activer_avec_entree
 from ..composants.elements import bouton, libelle
 from ..composants.fenetre import fenetre_en_bloc
-from ..theme import Espacements
+from ..theme import Espacements, Hauteurs
 
 TITRE = "Autre couleur"
 
@@ -27,6 +27,14 @@ class _Selecteur(QColorDialog):
         super().__init__(couleur)
         self.setOptions(QColorDialog.ColorDialogOption.NoButtons | QColorDialog.ColorDialogOption.DontUseNativeDialog)
         self.layout().setContentsMargins(0, 0, 0, 0)  # les marges sont celles du bloc
+        # Ses champs comme ceux de l'app : 32 px de haut, sans les petites flèches (on tape la valeur,
+        # ou ↑ ↓ au clavier), comme champ_entier().
+        for champ in self.findChildren(QAbstractSpinBox):
+            champ.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+            champ.setFixedHeight(Hauteurs.CONTROLE)
+        for champ in self.findChildren(QLineEdit):
+            if not isinstance(champ.parentWidget(), QAbstractSpinBox):  # le code HTML (#f59e0b)
+                champ.setFixedHeight(Hauteurs.CONTROLE)
 
     def keyPressEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
         evenement.ignore()  # la touche remonte à la fenêtre « Autre couleur »
