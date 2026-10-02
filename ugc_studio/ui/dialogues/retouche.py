@@ -20,7 +20,7 @@ from ...estimation import MOTS_PAR_SECONDE
 from ...fournisseurs.capacites import modele_connu
 from ...services import Services
 from ..composants.choix_voix import choisir
-from ..composants.elements import bouton, champ_entier, info, libelle, liste_deroulante
+from ..composants.elements import avec_aide, bouton, champ_entier, libelle, liste_deroulante
 from ..composants.montant_label import MontantLabel
 from ..theme import Dimensions, Espacements
 
@@ -62,11 +62,10 @@ class DialogueRetouche(QDialog):
         disposition.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle(titre_de_retouche(script), "titre-bloc"))
-        disposition.addWidget(
-            info(
+        disposition.addLayout(
+            avec_aide(
+                libelle(titre_de_retouche(script), "titre-bloc", retour_a_la_ligne=False),
                 "Ta consigne donne un nouveau script, relu avant d'arriver ; celui-ci reste tel quel.",
-                "secondaire",
             )
         )
         disposition.addWidget(libelle(f"Accroche : « {script.accroche()} »", "legende"))

@@ -17,7 +17,7 @@ from pathlib import Path
 import PySide6
 from PySide6.QtCore import QPoint, QPointF, QRect, Qt, QTimer, qVersion
 from PySide6.QtGui import QColor, QFontDatabase, QFontInfo, QIcon, QImage, QImageReader, QPainter
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QToolTip, QWidget
 
 from . import __version__
 from .chemins import fichier_journal
@@ -26,6 +26,7 @@ from .demo import SCRIPT_DEMO
 from .projets import RepliqueProjet
 from .script import normaliser
 from .ui.composants.conseils import DialogueConseils
+from .ui.composants.elements import BoutonInfo, Info
 from .ui.composants.tableau import Tableau
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
@@ -1543,6 +1544,22 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 if image.save(str(chemin)):
                     rapport["captures"].append(chemin.name)
 
+            def capturer_avec_bulle(nom: str) -> None:
+                """Capture de la fenêtre avec la bulle d'une icône « i » ouverte : la bulle est une
+                petite fenêtre à part, posée ici par-dessus, à sa place."""
+                nonlocal attendues
+                attendues += 1
+                _laisser_afficher()
+                image = fenetre.grab()
+                peintre = QPainter(image)
+                for bulle in QApplication.topLevelWidgets():
+                    if bulle.inherits("QTipLabel") and bulle.isVisible():
+                        peintre.drawPixmap(fenetre.mapFromGlobal(bulle.mapToGlobal(QPoint(0, 0))), bulle.grab())
+                peintre.end()
+                chemin = dossier / f"{nom}.png"
+                if image.save(str(chemin)):
+                    rapport["captures"].append(chemin.name)
+
             def capturer_image(image, nom: str) -> None:
                 """Image faite par l'app (ex. un sous-titre à la taille de la vidéo)."""
                 nonlocal attendues
@@ -1587,6 +1604,34 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 rapport["liste_ouverte"]["choix_actuel_visible"] and ecart == Dimensions.ECART_LISTE and rapport["liste_ouverte"]["coins_arrondis"]
             )
             atelier.voix.hidePopup()
+
+            # V3.1, lot 3 : les phrases d'aide encore écrites dans chaque module (seulement les
+            # indispensables), les icônes « i » ; une bulle ouverte ; un bouton occupé (cercle).
+            aides = {}
+            for identifiant in fenetre.identifiants_modules():
+                fenetre.afficher_module(identifiant)
+                page = fenetre.page_affichee()
+                aides[identifiant] = {
+                    "phrases_visibles": [
+                        i.text() for i in page.findChildren(Info) if i.isVisible() and i.ampoule.isVisible() and i.text()
+                    ],
+                    "icones_i_visibles": sum(1 for b in page.findChildren(BoutonInfo) if b.isVisible()),
+                }
+            fenetre.afficher_module("sous-titres")
+            frise = fenetre.page("sous-titres").atelier.cadre_frise
+            frise.aide.montrer()
+            bulle = _attendre(lambda: QToolTip.isVisible(), 2.0)
+            capturer_avec_bulle(f"bulle-{frise.titre.text().lower()}")
+            QToolTip.hideText()
+            fenetre.afficher_module("script")
+            produit = fenetre.page("script").atelier.produit
+            produit.bouton_lire.definir_occupe(True)
+            capturer(produit.cadre, "bouton-occupe")
+            occupe = produit.bouton_lire.est_occupe() and produit.bouton_lire.isEnabled()
+            produit.bouton_lire.definir_occupe(False)
+            rapport["aides_v31"] = {"modules": aides, "bulle_visible": bulle, "bouton_occupe": occupe}
+            verifs["aides_v31"] = bulle and occupe and all(len(a["phrases_visibles"]) <= 2 for a in aides.values())
+            fenetre.afficher_module("voix")
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
             # V2, lot 2 : nombres dits (projet en français) et durée estimée avec la vitesse mesurée.

@@ -18,7 +18,7 @@ from ...connexions import Connexion, ErreurConnexion, GestionnaireConnexions, ne
 from ...fournisseurs import ADAPTATEURS, FOURNISSEURS_PREVUS, creer_adaptateur
 from ...fournisseurs.base import Adaptateur, ResultatTest
 from .. import taches
-from ..composants.bouton import activer_avec_entree
+from ..composants.bouton import activer_avec_entree, montrer_occupe
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, libelle, liste_deroulante
 from ..icones import icone
@@ -143,7 +143,10 @@ class DialogueCle(QDialog):
         self.statut.show()
 
     def _occupe(self, occupe: bool) -> None:
-        for element in (self.fournisseur, self.nom, self.cle, self.bouton_valider, self.bouton_sans_test):
+        """Pendant le test : le cercle tourne dans « Tester et enregistrer » (V3.1), qui garde son
+        aspect ; les champs sont grisés."""
+        montrer_occupe(self.bouton_valider, occupe)
+        for element in (self.fournisseur, self.nom, self.cle, self.bouton_sans_test):
             element.setEnabled(not occupe)
 
     # --- Test puis enregistrement ------------------------------------------------------------

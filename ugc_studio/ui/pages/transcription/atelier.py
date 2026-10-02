@@ -60,6 +60,7 @@ from ....transcription import (
     supprimer,
 )
 from ... import taches
+from ...composants.bouton import BoutonOccupe
 from ...composants.choix_voix import choisir, propose
 from ...composants.editeur_transcription import EditeurTranscription, nom_de_personne
 from ...composants.elements import (
@@ -136,7 +137,8 @@ class ZoneDepot(QFrame):
         )
         ligne = QHBoxLayout()
         ligne.addStretch(1)
-        ligne.addWidget(bouton("Choisir un fichier…", nom_icone="folder-open", action=choisir_fichier))
+        self.bouton_choisir = bouton("Choisir un fichier…", nom_icone="folder-open", action=choisir_fichier)
+        ligne.addWidget(self.bouton_choisir)
         ligne.addStretch(1)
         disposition.addLayout(ligne)
 
@@ -158,6 +160,7 @@ class AtelierTranscription(Page):
         self._source_en_cours: Path | None = None
         self._infos_en_attente: dict = {}
         self._occupe = False
+        self._bouton_occupe = BoutonOccupe()  # le bouton où tourne le cercle pendant le travail (V3.1)
         self.lecteur = Lecteur(self)
         self.extracteur = ExtracteurAudio(self)
         self.extracteur.progression.connect(self._progression_extraction)
@@ -413,7 +416,7 @@ class AtelierTranscription(Page):
                 self.texte_smart.setPlainText(transcription.texte)
             self.resume.setText(self._resume(transcription))
             self._mot_choisi_change()
-        self.bouton_transcrire.setEnabled(a_source and not self._occupe)
+        self.bouton_transcrire.setEnabled(a_source and (not self._occupe or self._bouton_occupe.est(self.bouton_transcrire)))
         self._etat_lecture()
         self._mettre_a_jour_estimation()
 
@@ -489,7 +492,9 @@ class AtelierTranscription(Page):
         self.lecteur.arreter()
         self._source_en_cours = chemin
         self._infos_en_attente = {}
-        self._occuper(True)
+        # Le cercle tourne dans le bouton d'import affiché (« Choisir un fichier… » ou « Changer de
+        # source… »), aussi quand le fichier a été glissé dans la page.
+        self._occuper(True, self.bouton_changer if self.bouton_changer.isVisible() else self.zone_depot.bouton_choisir)
         self._afficher(f"Extraction de la piste son de « {chemin.name} »…", "secondaire")
         self.extracteur.extraire(chemin)
         self.infos.lire(chemin)
@@ -560,11 +565,19 @@ class AtelierTranscription(Page):
             self._services.projets.enregistrer()
             self.rafraichir()
 
-    def _occuper(self, occupe: bool) -> None:
+    def _occuper(self, occupe: bool, bouton=None) -> None:
+        """Pendant l'extraction de la piste son ou la transcription : le cercle tourne dans `bouton`
+        (celui qui a lancé le travail), qui garde son aspect ; les autres sont grisés (V3.1)."""
         self._occupe = occupe
-        self.bouton_transcrire.setEnabled(not occupe and bool(self.transcription and self.transcription.audio))
-        self.bouton_changer.setEnabled(not occupe)
-        self.zone_depot.setEnabled(not occupe)
+        if occupe:
+            self._bouton_occupe.occuper(bouton)
+        else:
+            self._bouton_occupe.liberer()
+        actif = self._bouton_occupe.est
+        a_source = bool(self.transcription and self.transcription.audio)
+        self.bouton_transcrire.setEnabled((not occupe and a_source) or actif(self.bouton_transcrire))
+        self.bouton_changer.setEnabled(not occupe or actif(self.bouton_changer))
+        self.zone_depot.setEnabled(not occupe or actif(self.zone_depot.bouton_choisir))
 
     # --- Transcrire --------------------------------------------------------------------------
 
@@ -594,7 +607,7 @@ class AtelierTranscription(Page):
         options = self.options()
         wav = chemin.read_bytes()
         self.lecteur.arreter()
-        self._occuper(True)
+        self._occuper(True, self.bouton_transcrire)
         self._afficher("Transcription en cours… (envoi de l'audio à Google, puis transcription)", "secondaire")
 
         def fin(resultat) -> None:

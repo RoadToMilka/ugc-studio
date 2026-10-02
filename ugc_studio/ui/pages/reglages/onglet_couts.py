@@ -11,7 +11,7 @@ from ....couts import AppelApi, filtrer, totaux
 from ....fournisseurs.capacites import modele_connu
 from ....montants import nombre_lisible
 from ....services import Services
-from ...composants.elements import ChampNomme, bloc, info, libelle, liste_deroulante
+from ...composants.elements import BoutonInfo, ChampNomme, bloc, libelle, ligne_avec_aide, liste_deroulante
 from ...composants.montant_label import ROLE_MONTANT, DelegueMontant, MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...theme import Dimensions, Espacements, Typo
@@ -86,7 +86,13 @@ class OngletCouts(QWidget):
         ligne.setSpacing(Espacements.L)
         colonne = QVBoxLayout()
         colonne.setSpacing(0)
-        colonne.addWidget(libelle("Total de la période", "legende", retour_a_la_ligne=False))
+        # V3.1 : ce que compte ce total, au survol de l'icône « i ».
+        colonne.addLayout(
+            ligne_avec_aide(
+                libelle("Total de la période", "legende", retour_a_la_ligne=False),
+                BoutonInfo("L'app compte ce qu'elle a consommé ; elle ne connaît pas le solde de ton compte Google."),
+            )
+        )
         self.total = MontantLabel(0, Typo.GRAND_CHIFFRE)
         colonne.addWidget(self.total)
         ligne.addLayout(colonne)
@@ -111,13 +117,6 @@ class OngletCouts(QWidget):
         )
         d.addWidget(self.vide)
         disposition.addWidget(cadre, 1)
-
-        disposition.addWidget(
-            info(
-                "L'app compte ce qu'elle a consommé ; elle ne connaît pas le solde de ton compte Google.",
-                "legende",
-            )
-        )
 
         self._remplir_listes()
         services.couts.abonner(lambda _appel: self._apres_nouvel_appel())

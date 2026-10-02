@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QHBoxLayout, QVBoxLayout
 from ...voice_design import ACCENTS, AGES, GENRES, PERSONAS, TEXTURES, TIMBRES, assembler_description, code_genre
 from ..composants.bouton import activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, champs_en_colonnes, info, libelle, liste_deroulante
+from ..composants.elements import bouton, champs_en_colonnes, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 AUCUN = "Aucun choix"
@@ -35,12 +35,14 @@ class DialogueAssistantVoix(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Assistant de description", "assistant-description"))
-        disposition.addWidget(
-            info(
-                "Décris les traits permanents de la voix : l'app écrit 1 à 2 phrases en anglais, comme Google "
-                "le conseille. L'émotion se règle ensuite avec les styles des répliques.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Assistant de description",
+                "assistant-description",
+                aide=(
+                    "Décris les traits permanents de la voix : l'app écrit 1 à 2 phrases en anglais, comme Google "
+                    "le conseille. L'émotion se règle ensuite avec les styles des répliques."
+                ),
             )
         )
 

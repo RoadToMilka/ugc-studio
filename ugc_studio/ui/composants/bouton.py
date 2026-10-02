@@ -19,6 +19,11 @@ prend l'état « sélectionné » : contour mauve et fond mauve très léger, co
 barre latérale. Variante à part : « projet » (V3.1 : le projet ouvert, en haut de la barre latérale ;
 contour gris comme « contour », le nom à gauche, abrégé par « … » s'il est long, la flèche au bord
 droit, comme une liste déroulante).
+
+Pendant un travail (lire une page, générer une voix, tester une clé…), le bouton cliqué devient
+« occupé » (V3.1, definir_occupe) : un cercle tourne à la place de son icône et de son texte. Il
+garde sa taille et ses couleurs (il n'est pas grisé) et ne se reclique pas. Jusqu'à la 3.0.0, le
+bouton était seulement grisé, et un message apparaissait ailleurs (parfois rien du tout).
 """
 
 from __future__ import annotations
@@ -26,14 +31,14 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRectF, QSize, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRectF, QSize, Qt, QVariantAnimation
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QAbstractButton, QMenu, QSizePolicy, QWidget
 from shiboken6 import isValid
 
 from ..icones import icone
 from ..polices import police
-from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
+from ..theme import Arrondis, Couleurs, Dimensions, Durees, Espacements, Hauteurs, Opacites, Typo, qcolor
 
 VARIANTES = ("normal", "principal", "contour", "icone", "projet")
 _TOUCHES_ENTREE = (Qt.Key.Key_Return, Qt.Key.Key_Enter)
@@ -154,6 +159,9 @@ class Bouton(QAbstractButton):
         self._menu: QMenu | None = None
         self._attenue = False
         self._focus_clavier = False
+        self._occupe = False
+        self._angle = 0.0  # position du cercle qui tourne (degrés)
+        self._rotation: QVariantAnimation | None = None
         self.setText(texte)
         cote = Dimensions.ICONE if self._variante == "icone" else Dimensions.ICONE_PETITE
         self.setIconSize(QSize(cote, cote))
@@ -186,6 +194,42 @@ class Bouton(QAbstractButton):
 
     def est_attenue(self) -> bool:
         return self._attenue
+
+    # --- Occupé : un cercle qui tourne pendant le travail (V3.1) ------------------------------
+
+    def definir_occupe(self, occupe: bool) -> None:
+        """Pendant un travail lancé par ce bouton : un cercle tourne à la place de son icône et de
+        son texte. Le bouton garde sa taille et ses couleurs, et ne se reclique pas."""
+        if occupe == self._occupe:
+            return
+        self._occupe = occupe
+        if occupe:
+            if self._rotation is None:
+                self._rotation = QVariantAnimation(self)
+                self._rotation.setStartValue(0.0)
+                self._rotation.setEndValue(360.0)
+                self._rotation.setDuration(Durees.ROUE_TOUR_MS)
+                self._rotation.setLoopCount(-1)  # sans fin, jusqu'à la fin du travail
+                self._rotation.valueChanged.connect(self._tourner)
+            self._rotation.start()
+            self.setCursor(Qt.CursorShape.BusyCursor)
+        else:
+            if self._rotation is not None:
+                self._rotation.stop()
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setDown(False)
+        self.update()
+
+    def est_occupe(self) -> bool:
+        return self._occupe
+
+    def _tourner(self, angle) -> None:
+        self._angle = float(angle)
+        self.update()
+
+    def hitButton(self, position) -> bool:  # noqa: N802 — nom imposé par Qt
+        # Occupé : les clics ne le déclenchent pas (ni ne le font paraître enfoncé).
+        return not self._occupe and super().hitButton(position)
 
     # --- Menu (comme QPushButton.setMenu) ----------------------------------------------------
 
@@ -226,6 +270,10 @@ class Bouton(QAbstractButton):
     def sizeHint(self) -> QSize:
         if self._variante == "icone":
             return QSize(Hauteurs.PETIT_BOUTON, Hauteurs.PETIT_BOUTON)
+        if not self.text() and self._variante != "projet":
+            # Icône seule dans une rangée de boutons (ex. le ↺ de « Réorganiser à la main », V3.1) :
+            # un carré à la hauteur des autres boutons, l'icône au milieu.
+            return QSize(Hauteurs.CONTROLE, Hauteurs.CONTROLE)
         mesures = QFontMetricsF(self._police())
         largeur = math.ceil(largeur_icone_et_texte(mesures, self.text(), self._cote_icone()))
         if self._variante == "projet":
@@ -254,6 +302,9 @@ class Bouton(QAbstractButton):
         super().focusOutEvent(evenement)
 
     def keyPressEvent(self, evenement) -> None:
+        if self._occupe:  # occupé : ni Entrée, ni Espace
+            evenement.accept()
+            return
         # Bouton sélectionné au clavier : la touche Entrée le déclenche lui (et non le bouton
         # « par défaut » de la fenêtre, voir activer_avec_entree).
         if evenement.key() in _TOUCHES_ENTREE and not evenement.isAutoRepeat():
@@ -355,6 +406,10 @@ class Bouton(QAbstractButton):
             peintre.drawRoundedRect(cadre, Arrondis.CONTROLE, Arrondis.CONTROLE)
 
         zone = QRectF(self.rect())
+        if self._occupe:
+            self._dessiner_roue(peintre, zone, qcolor(apparence.texte))
+            peintre.end()
+            return
         if self._variante == "projet":
             self._dessiner_projet(peintre, zone.adjusted(Espacements.M, 0, -Espacements.M, 0), apparence)
             peintre.end()
@@ -372,6 +427,22 @@ class Bouton(QAbstractButton):
             icone_a_droite=self._icone_a_droite,
         )
         peintre.end()
+
+    def _dessiner_roue(self, peintre: QPainter, zone: QRectF, couleur: QColor) -> None:
+        """Le cercle qui tourne, au milieu du bouton : un cercle discret, et un quart de cercle qui
+        en fait le tour (un tour en Durees.ROUE_TOUR_MS)."""
+        cote = Dimensions.ROUE - Dimensions.ROUE_TRAIT  # le trait déborde de moitié de chaque côté
+        cercle = QRectF(zone.center().x() - cote / 2, zone.center().y() - cote / 2, cote, cote)
+        piste = QColor(couleur)
+        piste.setAlphaF(Opacites.PISTE_ROUE)
+        peintre.setBrush(Qt.BrushStyle.NoBrush)
+        peintre.setPen(QPen(piste, Dimensions.ROUE_TRAIT))
+        peintre.drawEllipse(cercle)
+        trait = QPen(couleur, Dimensions.ROUE_TRAIT)
+        trait.setCapStyle(Qt.PenCapStyle.RoundCap)
+        peintre.setPen(trait)
+        # Qt compte les angles en seizièmes de degré, dans le sens inverse des aiguilles d'une montre.
+        peintre.drawArc(cercle, round(-self._angle * 16), 90 * 16)
 
     def _dessiner_projet(self, peintre: QPainter, zone: QRectF, apparence: _Apparence) -> None:
         """Style « projet » : le nom à gauche (abrégé par « … »), la flèche au bord droit."""
@@ -397,7 +468,8 @@ class _EntreeDeclenche(QObject):
 
     def eventFilter(self, _objet, evenement) -> bool:  # noqa: N802 — nom imposé par Qt
         if evenement.type() == QEvent.Type.KeyPress and evenement.key() in _TOUCHES_ENTREE:
-            if self._bouton.isEnabled() and self._bouton.isVisible():
+            occupe = isinstance(self._bouton, Bouton) and self._bouton.est_occupe()
+            if self._bouton.isEnabled() and self._bouton.isVisible() and not occupe:
                 self._bouton.click()
             return True
         return False
@@ -412,3 +484,35 @@ def activer_avec_entree(bouton: QAbstractButton, fenetre: QWidget) -> None:
     déclenche (voir Bouton.keyPressEvent).
     """
     fenetre.installEventFilter(_EntreeDeclenche(bouton, fenetre))
+
+
+def montrer_occupe(bouton: QAbstractButton | None, occupe: bool) -> None:
+    """Lance (ou arrête) le cercle qui tourne dans `bouton` pendant un travail (voir
+    Bouton.definir_occupe). Sans effet pour None, un bouton qui n'est pas un Bouton de l'app, ou un
+    bouton détruit entre-temps (ex. la carte d'une voix, recréée pendant l'actualisation)."""
+    if isinstance(bouton, Bouton) and isValid(bouton):
+        bouton.definir_occupe(occupe)
+
+
+class BoutonOccupe:
+    """Le bouton qui montre le cercle qui tourne pendant le travail en cours d'une page (un seul à
+    la fois) : `occuper(bouton)` le lance dans ce bouton (et l'arrête dans le précédent), `liberer()`
+    l'arrête. `bouton` : le bouton occupé, ou None. Les pages s'en servent pour garder ce bouton
+    cliquable d'aspect (non grisé) pendant qu'elles grisent les autres."""
+
+    def __init__(self):
+        self.bouton: QAbstractButton | None = None
+
+    def occuper(self, bouton: QAbstractButton | None) -> None:
+        if bouton is not self.bouton:
+            self.liberer()
+        self.bouton = bouton
+        montrer_occupe(bouton, True)
+
+    def liberer(self) -> None:
+        montrer_occupe(self.bouton, False)
+        self.bouton = None
+
+    def est(self, element) -> bool:
+        """Vrai si `element` est le bouton occupé (à ne pas griser)."""
+        return element is not None and element is self.bouton

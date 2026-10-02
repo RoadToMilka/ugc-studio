@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QVBo
 from ...chemins import dossier_projets_defaut
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES, ErreurProjet, GestionnaireProjets, Projet
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import bouton, info, libelle, liste_deroulante
+from ..composants.elements import avec_aide, bouton, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 
@@ -25,9 +25,12 @@ class DialogueNouveauProjet(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Nouveau projet", "titre-bloc"))
-        disposition.addWidget(
-            info("Un projet regroupe le script, les prises audio et les réglages d'une pub.", "secondaire")
+        # Ce qu'est un projet : au survol de l'icône « i » après le titre (V3.1).
+        disposition.addLayout(
+            avec_aide(
+                libelle("Nouveau projet", "titre-bloc", retour_a_la_ligne=False),
+                "Un projet regroupe le script, les prises audio et les réglages d'une pub.",
+            )
         )
 
         disposition.addWidget(libelle("Nom du projet", "legende"))

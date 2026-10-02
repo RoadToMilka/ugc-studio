@@ -12,7 +12,7 @@ from ....fournisseurs import creer_adaptateur, nom_fournisseur
 from ....fournisseurs.base import ResultatTest
 from ....services import Services
 from ... import taches
-from ...composants.elements import bloc, bouton, info, libelle, pastille, vider_disposition
+from ...composants.elements import bloc, bouton, libelle, pastille, vider_disposition
 from ...dialogues.cle_api import DialogueCle
 from ...icones import icone, icone_menu
 from ...theme import Couleurs, Dimensions, Espacements
@@ -67,7 +67,8 @@ class LigneConnexion(QFrame):
         disposition.addLayout(textes, 1)
 
         self.bouton_tester = bouton("Tester", nom_icone="refresh-cw", action=lambda: onglet.tester(connexion.identifiant))
-        self.bouton_tester.setEnabled(not test_en_cours)
+        # Pendant le test, le cercle tourne dans « Tester » (V3.1) : il ne se reclique pas.
+        self.bouton_tester.definir_occupe(test_en_cours)
         disposition.addWidget(self.bouton_tester)
 
         plus = bouton("", variante="icone")
@@ -100,13 +101,12 @@ class OngletConnexions(QWidget):
 
         contenu = contenu_d_onglet(self)  # la page Réglages défile : pas de zone à part (V3.1)
 
-        cadre, self._liste = bloc("Clés API")
-        self._liste.addWidget(
-            info(
+        cadre, self._liste = bloc(
+            "Clés API",
+            aide=(
                 "Tes clés sont rangées dans le coffre-fort de Windows (Gestionnaire d'identification). "
-                "L'app ne les réaffiche jamais en entier.",
-                "secondaire",
-            )
+                "L'app ne les réaffiche jamais en entier."
+            ),
         )
         self._lignes = QVBoxLayout()
         self._lignes.setSpacing(0)

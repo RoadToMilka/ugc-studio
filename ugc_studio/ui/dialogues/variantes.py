@@ -52,7 +52,7 @@ from ...variantes import (
 from ..composants.choix_voix import choisir, remplir_modeles_voix, remplir_voix
 from ..composants.editeur_script import EditeurScript
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import ChampNomme, bouton, info, libelle, liste_deroulante, vider_disposition
+from ..composants.elements import BoutonInfo, ChampNomme, bouton, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
 from ..composants.defilement import ZoneDefilante
@@ -115,12 +115,14 @@ class DialogueVariantes(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Variantes A/B", "variantes"))
-        disposition.addWidget(
-            info(
-                "Génère plusieurs versions du même script en un seul lancement, puis compare-les à "
-                "l'écoute. Chaque variante devient une prise.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Variantes A/B",
+                "variantes",
+                aide=(
+                    "Génère plusieurs versions du même script en un seul lancement, puis compare-les à "
+                    "l'écoute. Chaque variante devient une prise."
+                ),
             )
         )
         self.onglets = Onglets()
@@ -155,19 +157,22 @@ class DialogueVariantes(QDialog):
         disposition = QVBoxLayout(onglet)
         disposition.setContentsMargins(0, Espacements.L, 0, 0)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(
-            info(
-                "Le modèle interprète le texte un peu différemment à chaque génération : génère "
-                "plusieurs prises avec exactement les mêmes réglages, écoute-les, puis garde la meilleure.",
-                "secondaire",
-            )
-        )
         self.nombre = liste_deroulante()
         for nombre in range(VARIANTES_MIN, VARIANTES_MAX + 1):
             self.nombre.addItem(f"{nombre} variantes ({LETTRES[0]} à {LETTRES[nombre - 1]})", nombre)
         choisir(self.nombre, VARIANTES_PAR_DEFAUT)
         self.nombre.currentIndexChanged.connect(lambda _index: self._actualiser())
-        disposition.addWidget(ChampNomme("Nombre de variantes", self.nombre))  # sous son nom (V3.1)
+        # Sous son nom, avec l'explication de l'onglet au survol de l'icône « i » (V3.1).
+        disposition.addWidget(
+            ChampNomme(
+                "Nombre de variantes",
+                self.nombre,
+                aide=(
+                    "Le modèle interprète le texte un peu différemment à chaque génération : génère plusieurs "
+                    "prises avec exactement les mêmes réglages, écoute-les, puis garde la meilleure."
+                ),
+            )
+        )
         disposition.addWidget(libelle(f"Réglages utilisés : {self._resume_base()}.", "legende"))
         disposition.addStretch(1)
         return onglet
@@ -186,14 +191,6 @@ class DialogueVariantes(QDialog):
         disposition = QVBoxLayout(onglet)
         disposition.setContentsMargins(0, Espacements.L, 0, 0)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(
-            info(
-                "Chaque colonne est une variante. Tout part des réglages de base : change seulement ce "
-                "que tu veux comparer (voix, style, modèle, texte d'une réplique…). Les valeurs "
-                "modifiées sont surlignées en mauve.",
-                "secondaire",
-            )
-        )
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
         self.bouton_ajouter = bouton(
@@ -201,6 +198,16 @@ class DialogueVariantes(QDialog):
         )
         self.bouton_ajouter.setToolTip("Nouvelle variante, identique aux réglages de base (6 au maximum)")
         actions.addWidget(self.bouton_ajouter)
+        # Le mode d'emploi du tableau, au survol de l'icône « i » (V3.1).
+        actions.addWidget(
+            BoutonInfo(
+                "Chaque colonne est une variante. Tout part des réglages de base : change seulement ce que tu "
+                "veux comparer (voix, style, modèle, texte d'une réplique…). Les valeurs modifiées sont "
+                "surlignées en mauve."
+            ),
+            0,
+            Qt.AlignmentFlag.AlignVCenter,
+        )
         actions.addStretch(1)
         disposition.addLayout(actions)
         # Le tableau peut être plus large que la fenêtre (jusqu'à 6 variantes) : il défile.
@@ -328,7 +335,7 @@ class DialogueVariantes(QDialog):
         balise.setMenu(menu)
         outils.addWidget(balise)
         accent = bouton("Accentuer", variante="contour", nom_icone="case-upper", action=editeur.basculer_accent)
-        accent.setToolTip("Met le mot sélectionné en valeur (MAJUSCULES pour la voix)")
+        accent.setToolTip("Met le mot sélectionné en valeur (en majuscules pour la voix)")
         outils.addWidget(accent)
         outils.addStretch(1)
         disposition.addLayout(outils)

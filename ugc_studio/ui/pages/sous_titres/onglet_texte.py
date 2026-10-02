@@ -41,7 +41,7 @@ from ....style_sous_titres import (
 from ...composants.champ_couleur import ChampCouleur
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
-from ...composants.elements import bouton, case_a_cocher, champ_decimal, info, libelle, liste_deroulante
+from ...composants.elements import bouton, case_a_cocher, champ_decimal, libelle, liste_deroulante
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements, Typo
 from .reglages_communs import grille, nombre_lisible
@@ -170,7 +170,14 @@ class OngletTexte(QWidget):
         self.police.activated.connect(lambda _index: self._police_choisie())
         self.graisse = liste_deroulante("Graisse : les épaisseurs que propose la police")
         self.graisse.activated.connect(self._signaler)
-        contenu.addLayout(grille((("Rechercher", self.recherche_police), ("Police", self.police), ("Graisse", self.graisse))))
+        # V3.1 : la licence des polices au survol de l'icône « i » après « Police ».
+        aide_police = (
+            "Polices fournies : libres pour la publicité (licence SIL OFL). Une police de Windows ou importée a "
+            "sa propre licence : vérifie qu'elle autorise un usage commercial."
+        )
+        contenu.addLayout(
+            grille((("Rechercher", self.recherche_police), ("Police", self.police, aide_police), ("Graisse", self.graisse)))
+        )
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.bouton_importer = bouton("Importer une police…", variante="contour", nom_icone="type", action=self.importer_police)
@@ -180,12 +187,6 @@ class OngletTexte(QWidget):
         self.statut_police = libelle("", "legende-erreur")
         self.statut_police.hide()
         contenu.addWidget(self.statut_police)
-        contenu.addWidget(
-            info(
-                "Polices fournies : libres pour la publicité (licence SIL OFL). Une police de Windows ou importée a "
-                "sa propre licence : vérifie qu'elle autorise un usage commercial."
-            )
-        )
         self._bouton_retablir(contenu, lambda: self._retablir(police=True))
 
     def _groupe_taille(self, contenu: QVBoxLayout) -> None:

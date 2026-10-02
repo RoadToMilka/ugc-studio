@@ -23,7 +23,6 @@ from ..composants.elements import (
     bouton,
     conteneur_vertical,
     glissiere,
-    info,
     libelle,
     minutes_secondes,
     vider_disposition,
@@ -108,13 +107,15 @@ class DialogueComparaison(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre(f"Comparer les variantes de la série {serie}", "comparaison"))
-        disposition.addWidget(
-            info(
-                "« Lecture enchaînée » joue A, puis B, puis C… Pendant l'écoute, clique sur une lettre "
-                "(ou tape A, B, C…) pour passer à cette variante au même moment du texte. Espace : "
-                "lecture ou pause.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                f"Comparer les variantes de la série {serie}",
+                "comparaison",
+                aide=(
+                    "« Lecture enchaînée » joue A, puis B, puis C… Pendant l'écoute, clique sur une lettre "
+                    "(ou tape A, B, C…) pour passer à cette variante au même moment du texte. Espace : "
+                    "lecture ou pause."
+                ),
             )
         )
         self.commun = libelle("", "legende")

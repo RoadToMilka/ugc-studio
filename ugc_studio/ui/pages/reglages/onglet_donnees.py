@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QHBoxLayout, QWidget
 from .... import NOM_APP, __version__
 from ....chemins import dossier_donnees, dossier_journal, dossier_ressources
 from ....exports.ffmpeg import DOSSIER_FFMPEG, VERSION_INTEGREE
-from ...composants.elements import bloc, bouton, info, libelle
+from ...composants.elements import bloc, bouton, libelle
 from ...ouvrir import ouvrir_dossier, ouvrir_fichier, ouvrir_journal
 from ...theme import Espacements
 from ...composants.onglets import contenu_d_onglet
@@ -24,13 +24,9 @@ class OngletDonnees(QWidget):
         contenu = contenu_d_onglet(self)  # la page Réglages défile : pas de zone à part (V3.1)
 
         # Journal d'erreurs
-        cadre, d = bloc("Journal d'erreurs")
-        d.addWidget(
-            info(
-                "Si quelque chose ne fonctionne pas, ce fichier indique ce qui s'est passé. "
-                "Il ne contient jamais tes clés API.",
-                "secondaire",
-            )
+        cadre, d = bloc(
+            "Journal d'erreurs",
+            aide="Si quelque chose ne fonctionne pas, ce fichier indique ce qui s'est passé. Il ne contient jamais tes clés API.",
         )
         boutons = QHBoxLayout()
         boutons.setSpacing(Espacements.S)
@@ -48,13 +44,7 @@ class OngletDonnees(QWidget):
         contenu.addWidget(cadre)
 
         # Dossier de données
-        cadre, d = bloc("Dossier de données")
-        d.addWidget(
-            info(
-                "Connexions (sans les clés), prix, historique des coûts, préférences de l'app.",
-                "secondaire",
-            )
-        )
+        cadre, d = bloc("Dossier de données", aide="Connexions (sans les clés), prix, historique des coûts, préférences de l'app.")
         self.chemin_donnees = libelle(str(dossier_donnees()), "legende", selectionnable=True)
         d.addWidget(self.chemin_donnees)
         boutons = QHBoxLayout()

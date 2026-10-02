@@ -37,7 +37,7 @@ from ...services import Services
 from ..composants.choix_voix import choisir
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import ZoneDefilante
-from ..composants.elements import ChampNomme, bouton, champ_entier, info, libelle, liste_deroulante, vider_disposition
+from ..composants.elements import BoutonInfo, ChampNomme, bouton, champ_entier, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
 from ..theme import Dimensions, Espacements, Hauteurs
@@ -109,12 +109,14 @@ class DialogueVariantesScript(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Variantes de script", "variantes-script"))
-        disposition.addWidget(
-            info(
-                "Écris plusieurs scripts du même produit en un seul lancement, puis compare-les (« Comparer… »). "
-                "Chaque script est relu avant d'arriver.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Variantes de script",
+                "variantes-script",
+                aide=(
+                    "Écris plusieurs scripts du même produit en un seul lancement, puis compare-les "
+                    "(« Comparer… »). Chaque script est relu avant d'arriver."
+                ),
             )
         )
         self.onglets = Onglets()
@@ -159,13 +161,13 @@ class DialogueVariantesScript(QDialog):
                 "le corps reste identique. Idéal pour tester des accroches, ensuite envoyées en variantes dans "
                 "le module Voix."
             )
-        disposition.addWidget(info(explication, "secondaire"))
         nombre = liste_deroulante()
         for valeur in range(VARIANTES_MIN, VARIANTES_MAX + 1):
             nombre.addItem(f"{valeur} variantes ({LETTRES[0]} à {LETTRES[valeur - 1]})", valeur)
         choisir(nombre, VARIANTES_PAR_DEFAUT)
         nombre.currentIndexChanged.connect(lambda _index: self._actualiser())
-        disposition.addWidget(ChampNomme("Nombre de variantes", nombre))  # sous son nom (V3.1)
+        # Sous son nom, avec l'explication de l'onglet au survol de l'icône « i » (V3.1).
+        disposition.addWidget(ChampNomme("Nombre de variantes", nombre, aide=explication))
         if mode == MEMES:
             self.nombre_memes = nombre
         else:
@@ -181,18 +183,20 @@ class DialogueVariantesScript(QDialog):
         disposition = QVBoxLayout(onglet)
         disposition.setContentsMargins(0, Espacements.L, 0, 0)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(
-            info(
-                "Chaque colonne est une variante. Tout part du brief : change seulement ce que tu veux comparer "
-                "(angle, accroche, durée…). Les valeurs modifiées sont surlignées en mauve.",
-                "secondaire",
-            )
-        )
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
         self.bouton_ajouter = bouton("Ajouter une variante", variante="contour", nom_icone="plus", action=self.ajouter_variante)
         self.bouton_ajouter.setToolTip("Nouvelle variante, identique au brief (6 au maximum)")
         actions.addWidget(self.bouton_ajouter)
+        # Le mode d'emploi du tableau, au survol de l'icône « i » (V3.1).
+        actions.addWidget(
+            BoutonInfo(
+                "Chaque colonne est une variante. Tout part du brief : change seulement ce que tu veux comparer "
+                "(angle, accroche, durée…). Les valeurs modifiées sont surlignées en mauve."
+            ),
+            0,
+            Qt.AlignmentFlag.AlignVCenter,
+        )
         actions.addStretch(1)
         disposition.addLayout(actions)
         # Le tableau peut être plus large que la fenêtre (jusqu'à 6 variantes) : il défile.

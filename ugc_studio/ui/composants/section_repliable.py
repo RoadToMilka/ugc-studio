@@ -18,7 +18,7 @@ from ..icones import icone
 from ..polices import police
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Typo, qcolor
 from .bouton import dessiner_icone_et_texte, largeur_icone_et_texte
-from .elements import libelle
+from .elements import BoutonInfo, libelle, ligne_avec_aide
 
 
 class TitreSection(QAbstractButton):
@@ -77,11 +77,12 @@ class TitreSection(QAbstractButton):
 
 
 class SectionRepliable(QWidget):
-    """`contenu` : la disposition verticale où placer les éléments de la section."""
+    """`contenu` : la disposition verticale où placer les éléments de la section. `aide` : explication
+    de la section, dans une icône « i » juste après le titre (V3.1), dans `self.aide`."""
 
     basculee = Signal(bool)  # ouverte ?
 
-    def __init__(self, titre: str, ouverte: bool = False, parent=None):
+    def __init__(self, titre: str, ouverte: bool = False, parent=None, aide: str | None = None):
         super().__init__(parent)
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
@@ -89,7 +90,8 @@ class SectionRepliable(QWidget):
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.titre = TitreSection(titre)
-        ligne.addWidget(self.titre)
+        self.aide = BoutonInfo(aide) if aide else None
+        ligne.addLayout(ligne_avec_aide(self.titre, self.aide, fin=False))
         self.resume = libelle("", "legende", retour_a_la_ligne=False)
         ligne.addWidget(self.resume)
         ligne.addStretch(1)

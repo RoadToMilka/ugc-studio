@@ -45,7 +45,8 @@ from ...composants.choix_voix import (
     selectionner_voix,
 )
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import ChampNomme, bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
+from ...composants.bouton import montrer_occupe
+from ...composants.elements import ChampNomme, bloc, bouton, intitule, libelle, liste_deroulante, minutes_secondes
 from ...composants.lecteur import Lecteur
 from ...composants.lecteur_flux import LecteurFlux
 from ...composants.montant_label import MontantLabel
@@ -148,13 +149,12 @@ class AtelierVoix(Page):
         self.contenu.addWidget(cadre)
 
         # --- Script : répliques, outils, palette de balises ---
-        cadre, d = bloc("Script")
-        d.addWidget(
-            info(
+        cadre, d = bloc(
+            "Script",
+            aide=(
                 "Découpe en répliques quand l'émotion change (ex. hook énergique, puis témoignage calme) : "
-                "chaque réplique a son propre style. Tout part dans la même génération.",
-                "legende",
-            )
+                "chaque réplique a son propre style. Tout part dans la même génération."
+            ),
         )
         self.repliques = ListeRepliques(services)
         self.repliques.modifiee.connect(self._script_modifie)
@@ -167,7 +167,7 @@ class AtelierVoix(Page):
         )
         accent = bouton("Accentuer", variante="contour", nom_icone="case-upper", action=self.accentuer)
         accent.setToolTip(
-            "Met le mot sélectionné en valeur : le modèle appuie sur les mots en MAJUSCULES. "
+            "Met le mot sélectionné en valeur : écrit en majuscules pour la voix, il est dit avec plus de force. "
             "Les sous-titres gardent l'écriture d'origine."
         )
         outils.addWidget(accent)
@@ -177,9 +177,9 @@ class AtelierVoix(Page):
         outils.addStretch(1)
         d.addLayout(outils)
         d.addSpacing(Espacements.S)
-        # « Balises » est un sous-titre du bloc (comme « Découpage » dans Sous-titres), l'aide en dessous.
-        d.addWidget(libelle("Balises", "intitule"))
-        d.addWidget(info("Clique dans le texte, puis sur une balise pour l'insérer.", "legende"))
+        # « Balises » est un sous-titre du bloc (comme « Découpage » dans Sous-titres), le mode
+        # d'emploi au survol de son icône « i » (V3.1).
+        d.addWidget(intitule("Balises", "Clique dans le texte, puis sur une balise pour l'insérer."))
         self.palette = PaletteBalises()
         self.palette.balise_choisie.connect(lambda nom: self.editeur.inserer_balise(nom))
         d.addWidget(self.palette)
@@ -480,7 +480,9 @@ class AtelierVoix(Page):
     # --- Génération --------------------------------------------------------------------------
 
     def _occupe(self, occupe: bool, message: str = "") -> None:
-        self.bouton_generer.setEnabled(not occupe)
+        """Pendant une génération : le cercle tourne dans « Générer l'audio » (V3.1), qui garde son
+        aspect ; « Variantes… » et « Écouter » sont grisés."""
+        montrer_occupe(self.bouton_generer, occupe)
         self.bouton_variantes.setEnabled(not occupe)
         self.bouton_extrait.setEnabled(not occupe)
         self._afficher(message, "secondaire")
@@ -636,7 +638,6 @@ class AtelierVoix(Page):
         self._occupe(True)
         self.bouton_variantes.hide()
         self.bouton_arreter.show()
-        self.bouton_arreter.setEnabled(True)
         self._variante_suivante()
 
     def _variante_suivante(self) -> None:
@@ -668,12 +669,14 @@ class AtelierVoix(Page):
         """La série s'arrête après la variante en cours (celles déjà prêtes sont gardées)."""
         if self._serie is not None:
             self._serie.arretee = True
-            self.bouton_arreter.setEnabled(False)
+            # Le cercle tourne aussi dans « Arrêter », le temps que la variante en cours se termine.
+            montrer_occupe(self.bouton_arreter, True)
             self._afficher("Arrêt après la variante en cours…", "secondaire")
 
     def _serie_finie(self) -> None:
         serie, self._serie = self._serie, None
         self._occupe(False)
+        montrer_occupe(self.bouton_arreter, False)
         self.bouton_arreter.hide()
         self.bouton_variantes.show()
         self._mettre_a_jour_estimation()
@@ -705,17 +708,20 @@ class AtelierVoix(Page):
         self.prises.rafraichir()
 
     def _occupe_ecoute(self, occupe: bool) -> None:
-        self.bouton_extrait.setEnabled(not occupe)
+        # Pendant une écoute lancée ailleurs (▶ du dictionnaire), « Écouter » est grisé ; lancée par
+        # lui, le cercle y tourne (sans le griser).
+        self.bouton_extrait.setEnabled(not occupe or self.bouton_extrait.est_occupe())
 
     def ecouter_extrait(self) -> None:
         """▶ : un extrait de la voix choisie (préparé une fois, puis gardé en cache)."""
         langue = self._projet.langue if self._projet else "fr-FR"
-        self.ecoute.ecouter(self.voix.currentData(), self.modele.currentData(), langue)
+        self.ecoute.ecouter(self.voix.currentData(), self.modele.currentData(), langue, self.bouton_extrait)
 
-    def tester_prononciation(self, texte: str) -> None:
-        """▶ du dictionnaire : la voix choisie dit la prononciation (gardée en cache)."""
+    def tester_prononciation(self, texte: str, bouton=None) -> None:
+        """▶ du dictionnaire : la voix choisie dit la prononciation (gardée en cache) ; le cercle
+        tourne dans ce ▶ pendant la préparation."""
         modele, voix = self.modele.currentData(), self.voix.currentData()
         self.ecoute.dire(
             texte, voix, modele, "essai de prononciation", fichier_prononciation(voix, modele, texte),
-            f"Prononciation de « {texte} »…",
+            f"Prononciation de « {texte} »…", bouton,
         )

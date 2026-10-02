@@ -23,6 +23,7 @@ from ...traduction import MODELE_TRADUCTION, traduire_en_anglais
 from .. import taches
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..theme import Dimensions, Espacements
+from .bouton import montrer_occupe
 from .elements import bouton, libelle, vider_disposition
 
 
@@ -184,12 +185,12 @@ class ChampConsigne(QWidget):
         except Exception as erreur:  # noqa: BLE001 — message clair affiché sous le champ
             self._afficher_message(message_erreur(erreur), "erreur")
             return
-        self.bouton_traduire.setEnabled(False)
+        montrer_occupe(self.bouton_traduire, True)  # le cercle tourne dans 文A (V3.1)
         self._afficher_message("Traduction en cours…", "legende")
         projet = self._services.projets.projet
 
         def fin(resultat) -> None:
-            self.bouton_traduire.setEnabled(True)
+            montrer_occupe(self.bouton_traduire, False)
             self.message.hide()
             self._services.couts.enregistrer(
                 FOURNISSEUR,
@@ -202,7 +203,7 @@ class ChampConsigne(QWidget):
             self.definir(resultat.texte, texte)
 
         def echec(erreur: Exception) -> None:
-            self.bouton_traduire.setEnabled(True)
+            montrer_occupe(self.bouton_traduire, False)
             self._afficher_message(f"Traduction impossible : {message_erreur(erreur)}", "erreur")
 
         taches.lancer(lambda: traduire_en_anglais(adaptateur, texte), fin, echec)

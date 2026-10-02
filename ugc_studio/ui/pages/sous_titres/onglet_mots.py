@@ -53,6 +53,9 @@ EXPLICATIONS = {
     "dits": "Les mots déjà dits.",
     ACCENTUES: "Les mots mis en valeur dans le script d'une prise (bouton « Accentuer » du module Voix).",
 }
+# V3.1 : les quatre états expliqués au survol de l'icône « i » après « État » (une ligne chacun),
+# au lieu d'une phrase sous les boutons qui changeait avec l'état choisi.
+AIDE_ETATS = "\n".join(f"{ETATS[code]} : {EXPLICATIONS[code][0].lower()}{EXPLICATIONS[code][1:]}" for code in ETATS)
 
 
 class GrilleEtat:
@@ -125,10 +128,8 @@ class OngletMots(QWidget):
         self.etat.change.connect(self._etat_choisi)
         haut = GrilleDeReglages()
         haut.ajouter("Raccourci", self.raccourci)
-        haut.ajouter("État", self.etat)
+        haut.ajouter("État", self.etat, aide=AIDE_ETATS)
         disposition.addLayout(haut)
-        self.explication = info()
-        disposition.addWidget(self.explication)
 
         # Mots accentués (état facultatif).
         self.zone_accentues = QWidget()
@@ -174,11 +175,12 @@ class OngletMots(QWidget):
         self.avance.setSingleStep(10)
         self.avance.valueChanged.connect(self._avance_changee)
         avance = GrilleDeReglages()
-        avance.ajouter("Avance de l'allumage", self.avance)
-        avances.contenu.addLayout(avance)
-        avances.contenu.addWidget(
-            info("Si les mots s'allument un peu tard ou un peu tôt à ton goût. Le moment des mots, lui, ne change pas.")
+        avance.ajouter(
+            "Avance de l'allumage",
+            self.avance,
+            aide="Si les mots s'allument un peu tard ou un peu tôt à ton goût. Le moment des mots, lui, ne change pas.",
         )
+        avances.contenu.addLayout(avance)
         self.section_avancee = avances
         disposition.addWidget(avances)
         disposition.addStretch(1)
@@ -373,13 +375,14 @@ class OngletMots(QWidget):
             self.souligne_epaisseur, self.souligne_distance, self.decalage,
         ):
             champ.definir_hauteur(self._hauteur)
+        # Pourquoi l'état ne change rien : une info ; le nombre de mots accentués : une donnée (V3.1).
         if accentues_du_script is None:
             self.info_accentues.setText("Ces sous-titres ne viennent pas d'une prise du module Voix : aucun mot accentué.")
         elif accentues_du_script == 0:
             self.info_accentues.setText("Aucun mot accentué dans le script de la prise (bouton « Accentuer » du module Voix).")
         else:
             pluriel = "s" if accentues_du_script > 1 else ""
-            self.info_accentues.setText(f"{accentues_du_script} mot{pluriel} accentué{pluriel} dans le script de la prise.")
+            self.info_accentues.afficher_etat(f"{accentues_du_script} mot{pluriel} accentué{pluriel} dans le script de la prise.")
         self._afficher_etat()
 
     def mots(self) -> Mots:
@@ -392,7 +395,6 @@ class OngletMots(QWidget):
         self._chargement = True
         mots, texte, etat = self._mots, self._texte, self._etat()
         self.etat.definir(self._nom)
-        self.explication.setText(EXPLICATIONS.get(self._nom, ""))
         raccourci = raccourci_de(mots)
         if raccourci is None:
             if self.raccourci.findData(PERSONNALISE) < 0:

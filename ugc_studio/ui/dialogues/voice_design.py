@@ -19,10 +19,11 @@ from ...projets import LANGUE_PAR_DEFAUT, LANGUES
 from ...services import Services
 from ...voix_locales import GENRES, MAX_VOIX_CREEES, date_lisible
 from .. import taches
+from ..composants.bouton import montrer_occupe
 from ..composants.champ_style import ChampDescription
 from ..composants.choix_voix import propose
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import TOUTE_LA_RANGEE, bouton, champs_en_colonnes, conteneur_vertical, info, libelle, liste_deroulante
+from ..composants.elements import TOUTE_LA_RANGEE, bouton, champs_en_colonnes, conteneur_vertical, libelle, liste_deroulante
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
 from ..theme import Dimensions, Espacements
@@ -44,7 +45,8 @@ class LigneVersion(QFrame):
         textes.addWidget(libelle(f"Version {numero} : {voix.nom}", "intitule", retour_a_la_ligne=False))
         textes.addWidget(libelle(f"Gardée par Google jusqu'au {expiration}" if expiration else voix.identifiant, "legende"))
         disposition.addLayout(textes, 1)
-        ecouter = bouton("", variante="icone", nom_icone="play", action=lambda: dialogue.ecouter(voix))
+        ecouter = bouton("", variante="icone", nom_icone="play")
+        ecouter.clicked.connect(lambda: dialogue.ecouter(voix, ecouter))  # le cercle y tourne (V3.1)
         ecouter.setToolTip("Réécouter l'extrait")
         disposition.addWidget(ecouter, 0, Qt.AlignmentFlag.AlignVCenter)
         self.bouton_supprimer = bouton(
@@ -78,12 +80,14 @@ class DialogueVoiceDesign(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Créer une voix (Voice Design)", "creer-une-voix"))
-        disposition.addWidget(
-            info(
-                "Décris la voix : Google en crée une nouvelle et te fait écouter un extrait. Chaque création donne "
-                "une version un peu différente : crée-en plusieurs si besoin, puis garde ta préférée.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Créer une voix (Voice Design)",
+                "creer-une-voix",
+                aide=(
+                    "Décris la voix : Google en crée une nouvelle et te fait écouter un extrait. Chaque création "
+                    "donne une version un peu différente : crée-en plusieurs si besoin, puis garde ta préférée."
+                ),
             )
         )
 
@@ -180,11 +184,11 @@ class DialogueVoiceDesign(QDialog):
             self.genre.currentData() or "",
         )
         description_fr = self.description.consigne_fr()
-        self.bouton_creer.setEnabled(False)
+        montrer_occupe(self.bouton_creer, True)  # le cercle tourne dans le bouton (V3.1)
         self._afficher("Création de la voix chez Google… (quelques secondes)")
 
         def fin(resultat) -> None:
-            self.bouton_creer.setEnabled(True)
+            montrer_occupe(self.bouton_creer, False)
             self.bouton_creer.setText("Créer une autre version")
             voix = resultat.voix
             projet = self._services.projets.projet
@@ -207,13 +211,13 @@ class DialogueVoiceDesign(QDialog):
                 self._ecoute.garder_et_jouer(voix.identifiant, voix.extrait_wav)
 
         def echec(erreur: Exception) -> None:
-            self.bouton_creer.setEnabled(True)
+            montrer_occupe(self.bouton_creer, False)
             self._afficher(f"Voix non créée : {message_erreur(erreur)}", "erreur")
 
         taches.lancer(lambda: adaptateur.creer_voix(requete), fin, echec)
 
-    def ecouter(self, voix: VoixBibliotheque) -> None:
-        self._ecoute.ecouter(voix.identifiant, voix.modele or self.modele.currentData(), voix.langue or "fr-FR")
+    def ecouter(self, voix: VoixBibliotheque, bouton_ecoute=None) -> None:
+        self._ecoute.ecouter(voix.identifiant, voix.modele or self.modele.currentData(), voix.langue or "fr-FR", bouton_ecoute)
 
     def utiliser(self, voix: VoixBibliotheque) -> None:
         self.voix_creee = voix
@@ -226,7 +230,7 @@ class DialogueVoiceDesign(QDialog):
         except Exception as erreur:  # noqa: BLE001 — message clair affiché
             self._afficher(message_erreur(erreur), "erreur")
             return
-        ligne.bouton_supprimer.setEnabled(False)
+        montrer_occupe(ligne.bouton_supprimer, True)  # le cercle tourne dans « Supprimer » (V3.1)
         identifiant = ligne.voix.identifiant
 
         def fin(_resultat) -> None:
@@ -238,7 +242,7 @@ class DialogueVoiceDesign(QDialog):
             self._afficher("Version supprimée.")
 
         def echec(erreur: Exception) -> None:
-            ligne.bouton_supprimer.setEnabled(True)
+            montrer_occupe(ligne.bouton_supprimer, False)
             self._afficher(f"Version non supprimée : {message_erreur(erreur)}", "erreur")
 
         taches.lancer(lambda: adaptateur.supprimer_voix(identifiant), fin, echec)

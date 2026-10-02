@@ -18,7 +18,6 @@ from ..composants.elements import (
     bouton,
     case_a_cocher,
     conteneur_vertical,
-    info,
     libelle,
     vider_disposition,
 )
@@ -73,12 +72,14 @@ class DialogueBibliothequeBriefs(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Bibliothèque de briefs", "bibliotheque-briefs"))
-        disposition.addWidget(
-            info(
-                "Tes briefs enregistrés (bouton « Enregistrer » du bloc Brief). « Charger » remplace le brief du "
-                "projet ouvert ; tes options d'écriture ne changent pas.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Bibliothèque de briefs",
+                "bibliotheque-briefs",
+                aide=(
+                    "Tes briefs enregistrés (bouton « Enregistrer » du bloc Brief). « Charger » remplace le brief "
+                    "du projet ouvert ; tes options d'écriture ne changent pas."
+                ),
             )
         )
         zone, contenu = zone_defilante(largeur_max=None)

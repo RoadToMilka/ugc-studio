@@ -54,7 +54,8 @@ from ....projets import Projet
 from ....services import Services
 from ....vitesses import Vitesse
 from ... import taches
-from ...composants.elements import bloc, bouton, libelle
+from ...composants.bouton import Bouton, BoutonOccupe, montrer_occupe
+from ...composants.elements import BoutonInfo, bloc, bouton, libelle, ligne_avec_aide
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
@@ -67,7 +68,7 @@ from ...dialogues.variantes_script import DialogueVariantesScript
 from ...extraits import EcouteVoix, fichier_prononciation
 from ...theme import Espacements, Typo
 from ..base import Page
-from .formulaire import FormulaireBrief
+from .formulaire import AIDE_BRIEF, FormulaireBrief
 from .produit import BlocProduit, etat_de_la_page
 from .resultats import ListeAccroches, ListeScripts
 
@@ -108,6 +109,7 @@ class AtelierScript(Page):
         self._services = services
         self._projet: Projet | None = None
         self._occupe = False
+        self._bouton_occupe = BoutonOccupe()  # le bouton où tourne le cercle pendant le travail (V3.1)
         self._travaux: list[Travail] = []  # scripts qui restent à écrire
         self._ecrits = 0
         self._serie_en_cours = ""  # mode de la série en cours d'écriture (message de fin)
@@ -135,8 +137,8 @@ class AtelierScript(Page):
         cadre, d = bloc()
         entete = QHBoxLayout()
         entete.setSpacing(Espacements.S)
-        entete.addWidget(libelle("Brief", "titre-bloc", retour_a_la_ligne=False))
-        entete.addStretch(1)
+        # « Brief », et ce qu'il faut y mettre au survol de l'icône « i » (V3.1).
+        entete.addLayout(ligne_avec_aide(libelle("Brief", "titre-bloc", retour_a_la_ligne=False), BoutonInfo(AIDE_BRIEF)), 1)
         self.bouton_charger_brief = bouton("Charger un brief", variante="contour", nom_icone="folder-open", action=self.charger_brief)
         self.bouton_charger_brief.setToolTip("Reprendre un brief enregistré (d'un autre projet, par exemple)")
         entete.addWidget(self.bouton_charger_brief)
@@ -369,9 +371,16 @@ class AtelierScript(Page):
 
     # --- Tâches de fond -------------------------------------------------------------------------
 
-    def _occuper(self, occupe: bool, message: str = "") -> None:
+    def _occuper(self, occupe: bool, message: str = "", bouton: Bouton | None = None) -> None:
+        """Pendant un travail : le cercle tourne dans `bouton` (celui qui l'a lancé), qui garde son
+        aspect ; les autres actions sont grisées. Le message dit où en est le travail."""
         self._occupe = occupe
-        self.produit.occupe(occupe)
+        if occupe:
+            self._bouton_occupe.occuper(bouton)
+        else:
+            self._bouton_occupe.liberer()
+        actif = self._bouton_occupe.est
+        self.produit.occupe(occupe, self._bouton_occupe.bouton)
         for element in (
             self.bouton_accroches,
             self.bouton_ecrire,
@@ -379,9 +388,9 @@ class AtelierScript(Page):
             self.bouton_charger_brief,
             self.bouton_comparer,
         ):
-            element.setEnabled(not occupe)
+            element.setEnabled(not occupe or actif(element))
         for carte in self.scripts.cartes():
-            carte.bouton_retoucher.setEnabled(not occupe)
+            carte.bouton_retoucher.setEnabled(not occupe or actif(carte.bouton_retoucher))
         if message or not occupe:
             self._afficher(message, "secondaire")
 
@@ -483,7 +492,7 @@ class AtelierScript(Page):
                 self._afficher(f"Lecture impossible : {message_erreur(erreur)}", "erreur")
 
         self._cout_tache = Decimal(0)
-        self._occuper(True, "Lecture de la page…")
+        self._occuper(True, "Lecture de la page…", self.produit.bouton_lire)
         taches.lancer_avec_progres(travail, fin, echec, self._nouvelles(projet))
 
     def analyser_texte(self, texte: str) -> None:
@@ -507,7 +516,7 @@ class AtelierScript(Page):
             self._afficher(f"Analyse impossible : {message_erreur(erreur)}", "erreur")
 
         self._cout_tache = Decimal(0)
-        self._occuper(True, "Analyse du texte collé…")
+        self._occuper(True, "Analyse du texte collé…", self.produit.bouton_analyser)
         taches.lancer_avec_progres(
             lambda signaler: analyser_page(adaptateur, brief.modele, page, brief.langue, signaler),
             fin,
@@ -537,14 +546,15 @@ class AtelierScript(Page):
         dialogue = DialoguePrononciation(self._services, self.tester_prononciation, self.window(), mots_proposes=noms)
         dialogue.exec()
 
-    def tester_prononciation(self, texte: str) -> None:
-        """▶ du dictionnaire : la voix du projet dit la prononciation (gardée en cache)."""
+    def tester_prononciation(self, texte: str, bouton=None) -> None:
+        """▶ du dictionnaire : la voix du projet dit la prononciation (gardée en cache) ; le cercle
+        tourne dans ce ▶ pendant la préparation."""
         if self._projet is None:
             return
         modele, voix = self._projet.voix.modele, self._projet.voix.voix
         self.ecoute.dire(
             texte, voix, modele, "essai de prononciation", fichier_prononciation(voix, modele, texte),
-            f"Prononciation de « {texte} »…",
+            f"Prononciation de « {texte} »…", bouton,
         )
 
     # --- Bibliothèque de briefs et exemples ------------------------------------------------------
@@ -647,7 +657,7 @@ class AtelierScript(Page):
             self._afficher(f"Accroches impossibles : {message_erreur(erreur)}", "erreur")
 
         self._cout_tache = Decimal(0)
-        self._occuper(True, "Le modèle cherche des accroches…")
+        self._occuper(True, "Le modèle cherche des accroches…", self.bouton_accroches)
         taches.lancer_avec_progres(
             lambda signaler: proposer_accroches(adaptateur, brief, page, exemples, signaler),
             fin,
@@ -714,10 +724,11 @@ class AtelierScript(Page):
         exemples = self._exemples(brief)
 
         def fin(accroches) -> None:
-            self._occuper(False)
-            if self._projet is not projet:
-                return
             travaux = [Travail(copie(brief), a.texte, serie, LETTRES[rang], MEMES) for rang, a in enumerate(accroches)]
+            if self._projet is not projet or not travaux:
+                self._occuper(False)
+                return
+            # Le cercle continue de tourner dans « Écrire le script » : l'écriture enchaîne.
             self._lancer(travaux, MEMES, cout_commun=self._cout_tache)
 
         def echec(erreur: Exception) -> None:
@@ -725,7 +736,7 @@ class AtelierScript(Page):
             self._afficher(f"Variantes impossibles : {message_erreur(erreur)}", "erreur")
 
         self._cout_tache = Decimal(0)
-        self._occuper(True, f"Le modèle cherche {nombre} accroches différentes…")
+        self._occuper(True, f"Le modèle cherche {nombre} accroches différentes…", self.bouton_ecrire)
         taches.lancer_avec_progres(
             lambda signaler: proposer_accroches(adaptateur, brief, page, exemples, signaler, nombre, une_par_angle=True),
             fin,
@@ -745,7 +756,8 @@ class AtelierScript(Page):
 
     def arreter(self) -> None:
         self._arret_demande = True
-        self.bouton_arreter.setEnabled(False)
+        # Le cercle tourne aussi dans « Arrêter », le temps que le script en cours se termine.
+        montrer_occupe(self.bouton_arreter, True)
         self._afficher("Arrêt demandé : le script en cours se termine.", "secondaire")
 
     def _ecrire_suivant(self) -> None:
@@ -784,7 +796,7 @@ class AtelierScript(Page):
                     projet.ecriture.ajouter(script)
                 self._afficher_scripts()
                 self._enregistrer()
-            self._occuper(False)
+            # Le script suivant, ou la fin (qui arrête le cercle) : sans pause entre deux scripts.
             self._ecrire_suivant()
 
         def echec(erreur: Exception) -> None:
@@ -799,15 +811,15 @@ class AtelierScript(Page):
             message = f"Script {self._ecrits + 1} sur {total}…"
         else:
             message = "Écriture du script…"
-        self._occuper(True, message)
+        self._occuper(True, message, self.bouton_ecrire)
         # « Arrêter » prend la place de « Variantes… » (désactivé pendant l'écriture) : la ligne de
         # boutons tient ainsi dans une fenêtre de 960 px.
         self.bouton_variantes.setVisible(total <= 1)
         self.bouton_arreter.setVisible(total > 1)
-        self.bouton_arreter.setEnabled(True)
         taches.lancer_avec_progres(ecrire, fin, echec, self._nouvelles(projet))
 
     def _fin_ecriture(self, garder_message: bool = False) -> None:
+        montrer_occupe(self.bouton_arreter, False)
         self.bouton_arreter.hide()
         self.bouton_variantes.show()
         self._occuper(False)
@@ -909,7 +921,8 @@ class AtelierScript(Page):
             self._afficher(f"Retouche impossible : {message_erreur(erreur)}", "erreur")
 
         self._cout_tache = Decimal(0)
-        self._occuper(True, "Retouche du script…")
+        carte = self.scripts.carte(script)
+        self._occuper(True, "Retouche du script…", carte.bouton_retoucher if carte is not None else None)
         taches.lancer_avec_progres(
             lambda signaler: retoucher_script(adaptateur, brief, page, script, consigne, signaler, mots_par_seconde),
             fin,

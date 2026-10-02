@@ -36,7 +36,6 @@ from ..composants.elements import (
     bouton,
     champs_en_colonnes,
     conteneur_vertical,
-    info,
     libelle,
     liste_deroulante,
     separateur,
@@ -254,11 +253,10 @@ class DialogueBibliothequeStyles(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Bibliothèque de styles", "bibliotheque-styles"))
         explication = "Tes styles enregistrés, rangés par catégorie."
         if cible:
             explication += f" « Appliquer » met le style sur la {cible} et choisit sa voix et son modèle."
-        disposition.addWidget(info(explication, "secondaire"))
+        disposition.addLayout(entete_de_fenetre("Bibliothèque de styles", "bibliotheque-styles", aide=explication))
 
         zone, contenu = zone_defilante(largeur_max=None)
         self._liste_widget, self._liste = conteneur_vertical(Espacements.XS)

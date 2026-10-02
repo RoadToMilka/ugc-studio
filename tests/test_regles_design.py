@@ -118,7 +118,7 @@ CASE_TEXTE_MAX = 48  # caractères
 def test_textes_des_cases_a_cocher_courts():
     """Le texte d'une case à cocher ne passe jamais à la ligne : une longue phrase impose sa largeur
     à toute la page, qui déborde à droite quand la fenêtre est étroite (960 px). Les explications
-    vont dans la légende de elements.case_a_cocher(), qui, elle, passe à la ligne."""
+    vont dans l'icône « i » de elements.case_a_cocher() (V3.1), lue au survol."""
     ecarts = [
         f"{fichier.relative_to(RACINE)}:{noeud.lineno} « {noeud.args[0].value} »"
         for fichier in _fichiers()
@@ -130,7 +130,7 @@ def test_textes_des_cases_a_cocher_courts():
         and isinstance(noeud.args[0].value, str)
         and len(noeud.args[0].value) > CASE_TEXTE_MAX
     ]
-    assert not ecarts, "Texte de case à cocher trop long (mettre l'explication en légende) :\n" + "\n".join(ecarts)
+    assert not ecarts, "Texte de case à cocher trop long (mettre l'explication dans l'icône « i ») :\n" + "\n".join(ecarts)
 
 
 # Constantes qui contiennent un tiret long pour une bonne raison : la ponctuation reconnue dans une
@@ -234,3 +234,50 @@ def test_les_phrases_d_aide_sont_des_infos():
             ):
                 ecarts.append(f"{fichier.relative_to(RACINE)}:{noeud.lineno} « {texte[:60]} »")
     assert not ecarts, "Phrase d'aide à écrire avec info() (ampoule devant) :\n" + "\n".join(ecarts)
+
+
+# V3.1 (annexe du document de la version) : une phrase d'aide ne reste écrite à l'écran que si elle
+# est indispensable pour savoir quoi faire à ce moment ; les autres explications passent dans une
+# icône « i » (BoutonInfo, paramètre `aide=`), lue au survol. Nombre d'info() permis par fichier :
+# écrire une phrase de plus à l'écran est une décision, pas un réflexe.
+INFOS_VISIBLES_PERMISES = {
+    "ui/composants/elements.py": 1,  # la fonction info() elle-même
+    "ui/galerie.py": 1,  # la galerie des composants
+    "ui/pages/transcription/atelier.py": 2,  # quoi déposer ; cliquer sur un mot pour le corriger
+    "ui/pages/script/formulaire.py": 1,  # passer la langue du projet ? (une question)
+    "ui/pages/script/produit.py": 2,  # état de la page lue (une donnée) ; noms à faire prononcer
+    "ui/pages/script/resultats.py": 2,  # cocher les accroches ; étiquette « IA » de TikTok
+    "ui/pages/voix/sans_projet.py": 1,  # sans projet, la page est vide
+    "ui/pages/sous_titres/apercu.py": 1,  # pendant la pipette
+    "ui/pages/sous_titres/atelier.py": 1,  # pourquoi « Vidéo avec sous-titres » est grisé
+    "ui/pages/sous_titres/onglet_mots.py": 1,  # pourquoi l'état « Accentués » ne change rien
+    "ui/pages/sous_titres/reglages.py": 1,  # le format suit la vidéo
+    "ui/pages/reglages/onglet_modeles.py": 1,  # taux de départ à vérifier (ou la date du taux)
+    "ui/dialogues/choix_modeles.py": 1,  # aucune clé testée : quoi faire
+    "ui/dialogues/cle_api.py": 1,  # où créer sa clé
+    "ui/dialogues/meilleurs_scripts.py": 1,  # une réplique par paragraphe
+    "ui/dialogues/prononciation.py": 1,  # comment remplir le tableau
+    "ui/dialogues/remplacements.py": 1,  # comment remplir le tableau
+    "ui/dialogues/comparer_scripts.py": 1,  # choisir 2 ou 3 scripts
+}
+
+
+def test_phrases_d_aide_ecrites_seulement_si_indispensables():
+    compte: dict[str, int] = {}
+    for fichier in _fichiers():
+        for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8"))):
+            journal = (
+                isinstance(noeud, ast.Call)
+                and isinstance(noeud.func, ast.Attribute)
+                and isinstance(noeud.func.value, ast.Name)
+                and noeud.func.value.id in ("journal", "logging")
+            )
+            if isinstance(noeud, ast.Call) and _nom_appel(noeud) in ("info", "Info") and not journal:
+                nom = fichier.relative_to(RACINE).as_posix()
+                compte[nom] = compte.get(nom, 0) + 1
+    ecarts = [
+        f"{nom} : {nombre} info() (permis : {INFOS_VISIBLES_PERMISES.get(nom, 0)})"
+        for nom, nombre in sorted(compte.items())
+        if nombre > INFOS_VISIBLES_PERMISES.get(nom, 0)
+    ]
+    assert not ecarts, "Phrase d'aide écrite à l'écran : la mettre dans une icône « i » (aide=…) :\n" + "\n".join(ecarts)

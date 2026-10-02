@@ -21,6 +21,7 @@ from ..fournisseurs.voix import RequeteVoix
 from ..generation import noter_cout, preparer_texte
 from ..services import Services
 from . import taches
+from .composants.bouton import montrer_occupe
 from .composants.lecteur import Lecteur
 from .connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 
@@ -44,7 +45,8 @@ def fichier_prononciation(voix: str, modele: str, texte: str) -> Path:
 
 class EcouteVoix:
     """`afficher(message, rôle)` : où écrire l'avancement ou l'erreur ; `occupe(vrai/faux)` : pour
-    désactiver les boutons pendant la préparation."""
+    désactiver les boutons pendant la préparation. Le `bouton` passé à ecouter() ou dire() (celui
+    qui a été cliqué) montre un cercle qui tourne pendant la préparation (V3.1)."""
 
     def __init__(
         self,
@@ -57,6 +59,7 @@ class EcouteVoix:
         self._lecteur = lecteur
         self._afficher = afficher
         self._occupe = occupe or (lambda _occupe: None)
+        self._en_cours = False  # une préparation en cours (les boutons de la page sont grisés)
 
     def garder_et_jouer(self, voix: str, extrait_wav: bytes) -> None:
         """Extrait reçu de Google (ex. à la création d'une voix) : gardé en cache, puis joué."""
@@ -69,38 +72,51 @@ class EcouteVoix:
         projet = self._services.projets.projet
         return projet.nom if projet is not None else None
 
-    def ecouter(self, voix: str, modele: str, langue: str) -> None:
+    def _occuper(self, occupe: bool, bouton) -> None:
+        # Le cercle démarre avant que les autres boutons soient grisés : le bouton cliqué ne l'est pas.
+        if occupe:
+            montrer_occupe(bouton, True)
+            if not self._en_cours:
+                self._en_cours = True
+                self._occupe(True)
+        else:
+            if self._en_cours:  # rien à rendre si rien n'avait commencé (ex. extrait déjà en cache)
+                self._en_cours = False
+                self._occupe(False)
+            montrer_occupe(bouton, False)
+
+    def ecouter(self, voix: str, modele: str, langue: str, bouton=None) -> None:
         """▶ d'une voix : extrait de Google s'il existe, sinon phrase d'exemple (en cache)."""
         for fichier in (fichier_extrait_google(voix), fichier_extrait_genere(voix, modele, langue)):
             if fichier.exists():
                 self._lecteur.basculer(fichier)
                 return
         if voix_de_base(voix) is not None:
-            self._phrase_exemple(voix, modele, langue)
+            self._phrase_exemple(voix, modele, langue, bouton)
             return
         try:
             adaptateur = adaptateur_par_defaut(self._services)
         except Exception as erreur:  # noqa: BLE001 — message clair affiché
             self._afficher(message_erreur(erreur), "erreur")
             return
-        self._occupe(True)
+        self._occuper(True, bouton)
         self._afficher(f"Préparation de l'extrait de {self._services.voix.nom(voix)}…", "secondaire")
 
         def fin(detail) -> None:
-            self._occupe(False)
             if detail.extrait_wav:
+                self._occuper(False, bouton)
                 self._afficher("", "secondaire")
                 self.garder_et_jouer(voix, detail.extrait_wav)
             else:
-                self._phrase_exemple(voix, modele, langue)
+                self._phrase_exemple(voix, modele, langue, bouton)  # le cercle continue de tourner
 
         def echec(_erreur: Exception) -> None:
-            self._occupe(False)
-            self._phrase_exemple(voix, modele, langue)  # pas d'extrait chez Google : on en génère un
+            # Pas d'extrait chez Google : on en génère un (le cercle continue de tourner).
+            self._phrase_exemple(voix, modele, langue, bouton)
 
         taches.lancer(lambda: adaptateur.obtenir_voix(voix), fin, echec)
 
-    def _phrase_exemple(self, voix: str, modele: str, langue: str) -> None:
+    def _phrase_exemple(self, voix: str, modele: str, langue: str, bouton=None) -> None:
         self.dire(
             phrase_extrait(langue),
             voix,
@@ -108,24 +124,27 @@ class EcouteVoix:
             "essai de voix",
             fichier_extrait_genere(voix, modele, langue),
             f"Préparation de l'extrait de {self._services.voix.nom(voix)}…",
+            bouton,
         )
 
-    def dire(self, texte: str, voix: str, modele: str, operation: str, fichier: Path, message: str) -> None:
+    def dire(self, texte: str, voix: str, modele: str, operation: str, fichier: Path, message: str, bouton=None) -> None:
         """Fait dire une courte phrase par une voix (une seule fois : l'audio est gardé en cache)."""
         if fichier.exists():
+            self._occuper(False, bouton)
             self._lecteur.basculer(fichier)
             return
         try:
             adaptateur = adaptateur_par_defaut(self._services)
         except Exception as erreur:  # noqa: BLE001 — message clair affiché
+            self._occuper(False, bouton)
             self._afficher(message_erreur(erreur), "erreur")
             return
         commande = replace(preparer_texte(FOURNISSEUR, modele, voix, texte, operation), projet=self._projet())
-        self._occupe(True)
+        self._occuper(True, bouton)
         self._afficher(message, "secondaire")
 
         def fin(resultat) -> None:
-            self._occupe(False)
+            self._occuper(False, bouton)
             self._afficher("", "secondaire")
             noter_cout(self._services, commande, resultat)
             fichier.parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +152,7 @@ class EcouteVoix:
             self._lecteur.basculer(fichier)
 
         def echec(erreur: Exception) -> None:
-            self._occupe(False)
+            self._occuper(False, bouton)
             self._afficher(message_erreur(erreur), "erreur")
 
         requete = RequeteVoix(commande.modele, commande.voix, commande.repliques)

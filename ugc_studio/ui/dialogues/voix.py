@@ -45,12 +45,14 @@ from ...voix_locales import (
     voix_de_base_en_bibliotheque,
 )
 from .. import taches
+from ..composants.bouton import montrer_occupe
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
+    BoutonInfo,
     bouton,
     conteneur_vertical,
-    info,
     libelle,
+    ligne_avec_aide,
     liste_deroulante,
     vider_disposition,
 )
@@ -124,7 +126,8 @@ class LigneVoix(QFrame):
             textes.addWidget(libelle(f"Traduction : {traduction}", "legende"))
         disposition.addLayout(textes, 1)
 
-        ecouter = bouton("", variante="icone", nom_icone="play", action=lambda: dialogue.ecouter(voix))
+        ecouter = bouton("", variante="icone", nom_icone="play")
+        ecouter.clicked.connect(lambda: dialogue.ecouter(voix, ecouter))  # le cercle y tourne (V3.1)
         ecouter.setToolTip("Écouter un extrait de cette voix")
         disposition.addWidget(ecouter, 0, Qt.AlignmentFlag.AlignVCenter)
         self.bouton_choisir = bouton("Choisir", action=lambda: dialogue.choisir(voix))
@@ -225,9 +228,10 @@ class DialogueBibliothequeVoix(QDialog):
         self.favoris_seulement = QCheckBox("Favoris seulement")
         self.favoris_seulement.toggled.connect(self._filtrer)
         ligne.addWidget(self.favoris_seulement)
-        ligne.addWidget(
-            bouton("Actualiser", variante="contour", nom_icone="refresh-cw", action=lambda: self._charger_bibliotheque(True))
+        self.bouton_actualiser_google = bouton(
+            "Actualiser", variante="contour", nom_icone="refresh-cw", action=lambda: self._charger_bibliotheque(True)
         )
+        ligne.addWidget(self.bouton_actualiser_google)
         disposition.addLayout(ligne)
 
         # Six filtres sur deux lignes de trois : sur une seule ligne, chaque liste serait trop
@@ -280,14 +284,17 @@ class DialogueBibliothequeVoix(QDialog):
         textes = QVBoxLayout()
         textes.setSpacing(0)
         self.compteur = libelle("", "intitule", retour_a_la_ligne=False)
-        textes.addWidget(self.compteur)
-        textes.addWidget(
-            info("Voix créées avec Voice Design, ici ou dans Google AI Studio (même projet Google).", "legende")
+        # D'où viennent ces voix : au survol de l'icône « i » après le compteur (V3.1).
+        textes.addLayout(
+            ligne_avec_aide(
+                self.compteur, BoutonInfo("Voix créées avec Voice Design, ici ou dans Google AI Studio (même projet Google).")
+            )
         )
         ligne.addLayout(textes, 1)
-        ligne.addWidget(
-            bouton("Actualiser", variante="contour", nom_icone="refresh-cw", action=lambda: self._charger_voix_creees(True))
+        self.bouton_actualiser_creees = bouton(
+            "Actualiser", variante="contour", nom_icone="refresh-cw", action=lambda: self._charger_voix_creees(True)
         )
+        ligne.addWidget(self.bouton_actualiser_creees)
         ligne.addWidget(bouton("Créer une voix", variante="principal", nom_icone="plus", action=self.creer_voix))
         disposition.addLayout(ligne)
         zone, contenu = zone_defilante(largeur_max=None)
@@ -315,12 +322,16 @@ class DialogueBibliothequeVoix(QDialog):
             self._remplir_filtres()
             return
         self._afficher("Chargement de la bibliothèque de Google…")
+        # Le cercle tourne dans « Actualiser » pendant le chargement (V3.1) : il ne se reclique pas.
+        montrer_occupe(self.bouton_actualiser_google, True)
 
         def fin(voix: list[VoixBibliotheque]) -> None:
+            montrer_occupe(self.bouton_actualiser_google, False)
             self._afficher(f"Bibliothèque à jour : {len(voix)} voix.")
             self.services.voix.definir_bibliotheque(voix)  # met aussi la liste à jour (voir _voix_changees)
 
         def echec(erreur: Exception) -> None:
+            montrer_occupe(self.bouton_actualiser_google, False)
             self._afficher(f"Bibliothèque non chargée : {message_erreur(erreur)}", "erreur")
             self._remplir_filtres()
 
@@ -336,10 +347,14 @@ class DialogueBibliothequeVoix(QDialog):
             self._remplir_voix_creees()
             return
 
+        montrer_occupe(self.bouton_actualiser_creees, True)
+
         def fin(voix: list[VoixBibliotheque]) -> None:
+            montrer_occupe(self.bouton_actualiser_creees, False)
             self.services.voix.definir_voix_creees(voix)
 
         def echec(erreur: Exception) -> None:
+            montrer_occupe(self.bouton_actualiser_creees, False)
             self._afficher(f"Liste de tes voix non mise à jour : {message_erreur(erreur)}", "erreur")
             self._remplir_voix_creees()
 
@@ -465,9 +480,10 @@ class DialogueBibliothequeVoix(QDialog):
             if autre.voix.identifiant == ligne.voix.identifiant:
                 autre.afficher_favori(favori)
 
-    def ecouter(self, voix: VoixBibliotheque) -> None:
+    def ecouter(self, voix: VoixBibliotheque, bouton_ecoute=None) -> None:
+        """▶ d'une voix ; le cercle tourne dans ce ▶ pendant la préparation de l'extrait."""
         modele = voix.modele if voix.creee and voix.modele else self._modele
-        self._ecoute.ecouter(voix.identifiant, modele, voix.langue or self._langue)
+        self._ecoute.ecouter(voix.identifiant, modele, voix.langue or self._langue, bouton_ecoute)
 
     def choisir(self, voix: VoixBibliotheque) -> None:
         self.voix_choisie = voix

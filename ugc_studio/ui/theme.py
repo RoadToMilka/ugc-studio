@@ -91,6 +91,13 @@ class Opacites:
     POIGNEE_FINE_SURVOL = 0.60
     GRILLE = 0.35  # grille de l'aperçu des sous-titres
     REPERES = 0.90  # zone de sécurité et marge maximum de l'aperçu
+    PISTE_ROUE = 0.25  # cercle complet, discret, sous l'arc qui tourne dans un bouton occupé (V3.1)
+
+
+class Durees:
+    """Durées des animations de l'interface (millisecondes)."""
+
+    ROUE_TOUR_MS = 900  # un tour du cercle qui tourne dans un bouton pendant un travail (V3.1)
 
 
 class Espacements:
@@ -163,6 +170,15 @@ class Dimensions:
     ICONE_PETITE = 16  # icônes des boutons avec texte et des menus, flèches, coches
     # Espace entre une icône et son texte : le même partout (barre latérale, boutons, menus…).
     ECART_ICONE_TEXTE = Espacements.M
+    # Bouton occupé (V3.1) : un cercle qui tourne à la place de l'icône et du texte, de la taille des
+    # icônes des boutons, d'un trait de 2 px.
+    ROUE = ICONE_PETITE
+    ROUE_TRAIT = 2
+    # Icône « i » (V3.1) juste après le texte qu'elle explique (4 px après), à la hauteur du texte
+    # courant ; sa bulle, lue au survol, passe à la ligne tous les 60 caractères environ.
+    ICONE_INFO = 14
+    ECART_INFO = Espacements.XS
+    BULLE_CARACTERES = 60
     # Espace autour des blocs d'une page et entre eux (V3.1) : le même partout, entre la barre
     # latérale et les blocs, en haut, en bas, et entre deux blocs, l'un sous l'autre comme côte à côte.
     # À droite, la barre de défilement prend place dans cet espace (voir zone_defilante).
