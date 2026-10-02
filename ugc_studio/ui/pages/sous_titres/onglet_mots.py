@@ -397,6 +397,7 @@ class OngletMots(QWidget):
         if self._chargement or valeur == self._mots.avance_ms:
             return
         self._mots = replace(self._mots, avance_ms=valeur)
+        self._actualiser_marques()  # nom en mauve et ↺ de « Réglages avancés », tout de suite
         self.change.emit()
 
     # --- Lecture et écriture -------------------------------------------------------------------
