@@ -34,7 +34,9 @@ class CorrecteurDeMots(QWidget):
         disposition.setSpacing(Espacements.M)
         self.editeur = EditeurTranscription()
         self.editeur.mot_clique.connect(self.mot_clique.emit)
-        disposition.addWidget(self.editeur)
+        # S'il y a de la place en plus (la fenêtre « Corriger les mots »), c'est le texte qui la prend :
+        # le panneau du mot choisi reste groupé dessous.
+        disposition.addWidget(self.editeur, 1)
         self.panneau = self._panneau()
         disposition.addWidget(self.panneau)
         self._mots: list[Mot] = []
