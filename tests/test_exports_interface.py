@@ -537,6 +537,15 @@ def test_png_de_16_bits_relu_par_ffmpeg(app_configuree, tmp_path, record_propert
     assert image.format() == QImage.Format.Format_RGBA64
     png = png_de(image)
     record_property("png_16_bits", json.dumps(_morceaux_png(png)))
+    # Diagnostic : ce que FFmpeg dit des images de Qt (format, rapport des points, couleurs), en 8 et 16 bits.
+    import subprocess
+
+    calque8 = CalqueDeLaVideo(reglages, LARGEUR, HAUTEUR, contenu.sous_titres, contenu.mots, False)
+    for nom, donnees in (("16_bits", png), ("8_bits", png_de(calque8.image(calque8.cle(temps), temps))), ("vide_8_bits", png_de(calque8.image(None, 0.0)))):
+        infos = subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "info", "-f", "png_pipe", "-i", "pipe:0", "-vf", "showinfo", "-f", "null", "-"],
+                               input=donnees, capture_output=True, timeout=60).stderr.decode("utf-8", "replace")
+        record_property(f"showinfo_{nom}", " | ".join(ligne.strip()[-260:] for ligne in infos.splitlines() if "showinfo" in ligne and ("fmt:" in ligne or "color" in ligne)))
+        record_property(f"morceaux_{nom}", json.dumps(_morceaux_png(donnees)["morceaux"][:4]))
     assert (png[24], png[25]) == (16, 6)  # 16 bits, RGBA
     attendu = _pixels(image)
 

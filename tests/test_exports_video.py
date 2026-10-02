@@ -702,6 +702,65 @@ def test_export_dolby_vision_reel(tmp_path):
         assert abs(_yuv10(plan.en_cours, 20, 48, 128) - 721) <= 4  # sous-titres au blanc de référence
 
 
+def _png8(largeur: int, hauteur: int, carre, phys: bool) -> bytes:
+    """Un PNG RGBA de 8 bits : transparent, avec un carré blanc opaque ; avec ou sans le morceau
+    « pHYs » (densité des points) qu'écrit Qt."""
+    vide, blanc = bytes(4), bytes((255, 255, 255, 255))
+    lignes = [b"\0" + b"".join(blanc if carre and carre[0] <= x < carre[2] and carre[1] <= y < carre[3] else vide
+                                for x in range(largeur)) for y in range(hauteur)]
+
+    def morceau(nom: bytes, donnees: bytes) -> bytes:
+        return struct.pack(">I", len(donnees)) + nom + donnees + struct.pack(">I", zlib.crc32(nom + donnees))
+
+    morceaux = morceau(b"IHDR", struct.pack(">IIBBBBB", largeur, hauteur, 8, 6, 0, 0, 0))
+    if phys:
+        morceaux += morceau(b"pHYs", struct.pack(">IIB", 3780, 3780, 1))
+    return b"\x89PNG\r\n\x1a\n" + morceaux + morceau(b"IDAT", zlib.compress(b"".join(lignes))) + morceau(b"IEND", b"")
+
+
+@avec_ffmpeg
+def test_calques_de_toutes_les_formes(tmp_path, record_property):
+    """Diagnostic (lot 3) : un carré blanc au milieu du calque, des images 5 à 24, sur une vidéo SDR
+    BT.709 ; le calque fait d'un PNG par image ou de trois, avec ou sans « pHYs » (comme ceux de Qt),
+    converti par zscale (l'app) ou par scale. Le carré doit être dans la vidéo exportée (Y = 235)."""
+    import json
+
+    largeur, hauteur = 96, 64
+    source_chemin = tmp_path / "source.mp4"
+    _ffmpeg("-f", "lavfi", "-i", f"testsrc2=size={largeur}x{hauteur}:rate=30000/1001", "-t", "1",
+            "-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source_chemin))
+    source = _source_reelle(source_chemin)
+    images = source.analyse.images
+    resultats = {}
+    for phys in (False, True):
+        for forme in ("une par image", "trois"):
+            for conversion in ("zscale", "scale"):
+                plan = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / f"{phys}-{forme}-{conversion}.mp4")
+                calque = tmp_path / "calque.mov"
+                ecriture = EcritureMovPng(calque, largeur, hauteur, images.base_de_temps.denominator)
+                for n, moment in enumerate(images.moments):
+                    duree = (images.moments[n + 1] - moment) if n + 1 < len(images.moments) else images.duree_derniere
+                    if forme == "une par image" or n in (0, 5, 25):
+                        ecriture.ajouter(_png8(largeur, hauteur, (20, 20, 60, 50) if 5 <= n < 25 else None, phys), duree)
+                    else:
+                        ecriture.prolonger(duree)
+                ecriture.fermer()
+                for passage in range(1, plan.passages + 1):
+                    commande = commande_video(FFMPEG, plan, calque, passage, tmp_path / "passages")
+                    if conversion == "scale":
+                        graphe = commande[commande.index("-filter_complex") + 1]
+                        commande[commande.index("-filter_complex") + 1] = graphe.replace(
+                            "zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited", "scale=out_color_matrix=bt709:out_range=tv")
+                    resultat = executer(commande, 300)
+                    assert resultat.returncode == 0, resultat.stderr
+                brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(plan.en_cours),
+                                 "-vf", "select=eq(n\\,15)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-"], 60, binaire=True).stdout
+                resultats[f"pHYs {phys}, {forme}, {conversion}"] = brut[35 * largeur + 40]
+    record_property("carre_blanc", json.dumps(resultats, ensure_ascii=False))
+    assert all(abs(valeur - 235) <= 4 for valeur in resultats.values()), resultats
+
+
 def test_rien_d_inutile_dans_les_commandes(tmp_path):
     """Aucune commande n'utilise le shell : la liste d'arguments va telle quelle à FFmpeg (un nom de
     fichier avec des espaces ou des guillemets ne pose pas de problème)."""
