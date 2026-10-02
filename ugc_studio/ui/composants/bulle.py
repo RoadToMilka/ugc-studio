@@ -35,6 +35,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from shiboken6 import isValid
+
 from ..theme import Arrondis, Couleurs, Dimensions, Durees, Espacements, qcolor
 
 PROPRIETE_MAISON = "bulle_maison"  # un élément qui montre lui-même sa bulle : le filtre le laisse faire
@@ -165,10 +167,15 @@ class Bulle(QWidget):
 _bulle: Bulle | None = None
 
 
+def _bulle_existante() -> Bulle | None:
+    """La bulle, si elle existe encore (une fenêtre peut être détruite par Qt, ex. entre deux tests)."""
+    return _bulle if _bulle is not None and isValid(_bulle) else None
+
+
 def bulle() -> Bulle:
     """La bulle de l'app (créée au premier besoin)."""
     global _bulle
-    if _bulle is None:
+    if _bulle_existante() is None:
         _bulle = Bulle()
     return _bulle
 
@@ -182,17 +189,19 @@ def montrer_bulle(
 
 def cacher_bulle(auteur: QWidget | None = None) -> None:
     """Ferme la bulle (seulement celle de `auteur`, s'il est donné)."""
-    if _bulle is not None:
-        _bulle.cacher(auteur)
+    existante = _bulle_existante()
+    if existante is not None:
+        existante.cacher(auteur)
 
 
 def bulle_visible() -> bool:
-    return _bulle is not None and _bulle.isVisible()
+    existante = _bulle_existante()
+    return existante is not None and existante.isVisible()
 
 
 def texte_de_la_bulle() -> str:
     """Le texte affiché dans la bulle (vide si elle est fermée)."""
-    return _bulle.texte() if bulle_visible() else ""
+    return bulle().texte() if bulle_visible() else ""
 
 
 # --- Le filtre de l'app : la bulle à la place de celle de Qt ------------------------------------
@@ -252,15 +261,16 @@ def filtrer_pour_les_bulles(objet: QObject, evenement: QEvent) -> bool:
         texte, zone = trouve
         montrer_bulle(texte, evenement.globalPos(), objet, zone)
         return True
-    if _bulle is None or not _bulle.isVisible():
+    ouverte = _bulle_existante()
+    if ouverte is None or not ouverte.isVisible():
         return False
     if type_ in _FERMENT_LA_BULLE:
         if type_ != QEvent.Type.KeyPress or evenement.key() not in _TOUCHES_SANS_EFFET:
-            _bulle.cacher()
-    elif objet is _bulle.auteur and isinstance(objet, QWidget):
+            ouverte.cacher()
+    elif objet is ouverte.auteur and isinstance(objet, QWidget):
         if type_ in (QEvent.Type.Leave, QEvent.Type.Hide, QEvent.Type.WindowDeactivate):
-            _bulle.cacher()
-        elif type_ == QEvent.Type.MouseMove and _bulle.zone is not None:
-            if not _bulle.zone.contains(evenement.position().toPoint()):
-                _bulle.cacher()
+            ouverte.cacher()
+        elif type_ == QEvent.Type.MouseMove and ouverte.zone is not None:
+            if not ouverte.zone.contains(evenement.position().toPoint()):
+                ouverte.cacher()
     return False
