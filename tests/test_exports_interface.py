@@ -507,11 +507,9 @@ def test_export_hdr_depuis_la_fenetre(app_configuree, qtbot, services, projet_hd
     assert (couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("yuv420p10le", "bt2020nc", "bt2020", "arib-std-b67")
     assert sortie.son.codec == "aac"
     numero = 18  # 0,60 s, pendant « sérum »
-    commande = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", "", "-vf", f"select=eq(n\\,{numero}),format=yuv420p10le",
+    commande = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", "", "-vf", f"select=eq(n\\,{numero}),format=rgb24",
                 "-frames:v", "1", "-f", "rawvideo", "-"]
     avant = executer([*commande[:6], str(projet_hdr.transcription.source), *commande[7:]], 60, binaire=True).stdout
     apres = executer([*commande[:6], str(plan.sortie), *commande[7:]], 60, binaire=True).stdout
-    luminances = LARGEUR * HAUTEUR * 2  # le plan Y : 2 octets par pixel
-    paires = zip(struct.iter_unpack("<H", avant[:luminances]), struct.iter_unpack("<H", apres[:luminances]), strict=True)
-    ecarts = sorted(abs(a[0] - b[0]) for a, b in paires)
-    assert ecarts[-1] > 300 and ecarts[len(ecarts) // 2] < 24  # des sous-titres, et le reste de l'image intact (sur 1 023)
+    ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
+    assert ecarts[-1] > 100 and ecarts[len(ecarts) // 2] < 6  # des sous-titres, et le reste de l'image intact

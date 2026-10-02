@@ -7,7 +7,7 @@ Une vidéo d'iPhone en HDR contient trois choses :
 3. dans le MP4, une boîte « dvvC » qui annonce le profil (8), la compatibilité (4 : HLG) et le niveau.
 
 Ici : FFmpeg fabrique l'image HLG (1), avec un délimiteur au début de chaque image (option « aud » de
-x265) ; une même RPU est ajoutée à la fin de chacune (2) ; FFmpeg range le tout dans un MP4 ; puis la
+x265) et sans images B ; une même RPU est ajoutée à la fin de chacune (2) ; FFmpeg range le tout dans un MP4 ; puis la
 boîte « dvvC » est ajoutée dans la description de la vidéo (3). Rien ne dépend de l'export testé.
 
 La RPU vient d'une vidéo d'iPhone : fichier assets/tests/profile84.bin du projet dovi_tool
@@ -81,7 +81,9 @@ def fabriquer_video_dolby_vision(executer, ffmpeg: Path, chemin: Path, taille: s
         *commun, "-f", "lavfi", "-i", f"testsrc2=size={taille}:rate={frequence.numerator}/{frequence.denominator}", "-t", str(duree_s),
         "-vf", "zscale=rin=limited:pin=bt709:tin=bt709:min=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,"
                "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv",
-        "-c:v", "libx265", "-x265-params", "log-level=error:aud=1", "-f", "hevc", str(base),
+        # Sans images B (« bframes=0 ») : un flux H.265 brut ne dit pas l'ordre d'affichage des images ;
+        # sans elles, il est celui du flux, et le MP4 a les bons moments.
+        "-c:v", "libx265", "-x265-params", "log-level=error:aud=1:bframes=0", "-f", "hevc", str(base),
     ], 120)
     assert resultat.returncode == 0, resultat.stderr
     donnees = base.read_bytes()
