@@ -1,5 +1,5 @@
-"""V3.1, lot 2 : noms des champs au-dessus des champs, réglages du studio côte à côte, cases à cocher
-à la taille du texte."""
+"""V3.1, lot 2 : noms des champs au-dessus des champs, réglages du studio sous leur nom (un par ligne
+depuis la V3.2 ; côte à côte jusqu'à la 3.1.3), cases à cocher à la taille du texte."""
 
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QLabel, QLineEdit, QStyle, QStyleOptionButton, QVBoxLayout, QWidget
@@ -51,22 +51,21 @@ def test_le_nom_au_dessus_du_champ(app_configuree, qtbot):
     assert not champ.isEnabled() and not nomme.nom.isEnabled()
 
 
-def test_reglages_cote_a_cote_qui_passent_a_la_ligne(app_configuree, qtbot):
-    """Studio : des réglages à leur largeur, côte à côte ; à la ligne quand la place manque ; une
-    glissière (ou une case qui ouvre un effet) prend une rangée à elle seule ; un réglage caché ne
-    laisse ni place ni espace."""
+def test_reglages_un_par_ligne(app_configuree, qtbot):
+    """Studio (V3.2) : un réglage par ligne, même quand la place permettrait de les mettre côte à côte
+    (la couleur d'un effet, puis son épaisseur dessous…) ; chaque champ garde sa largeur, alignés à
+    gauche ; 12 px entre deux réglages ; un réglage caché ne laisse ni place ni espace."""
     champs = [champ_entier(0, 100, " px") for _ in range(3)]
     reglages = grille((("Flou", champs[0]), ("Décalage horizontal", champs[1]), ("Décalage vertical", champs[2])))
     assert isinstance(reglages, GrilleDeReglages) and list(reglages.champs) == ["Flou", "Décalage horizontal", "Décalage vertical"]
     fenetre = _montrer(qtbot, reglages, 700)
-    hauts = {champ.mapTo(fenetre, QPoint(0, 0)).y() for champ in champs}
-    assert len(hauts) == 1  # une seule rangée
-    premier, second = (reglages.champs[nom] for nom in ("Flou", "Décalage horizontal"))
-    assert second.x() - (premier.x() + premier.width()) == Espacements.L
-    fenetre.resize(Dimensions.CHAMP_NOMBRE_LARGEUR + Espacements.L, 400)  # place pour un seul réglage
-    qtbot.waitUntil(lambda: len({champ.mapTo(fenetre, QPoint(0, 0)).y() for champ in champs}) == 3, timeout=2000)
+    hauts = [champ.mapTo(fenetre, QPoint(0, 0)).y() for champ in champs]
+    assert hauts == sorted(hauts) and len(set(hauts)) == 3  # trois lignes, dans l'ordre
+    assert len({champ.mapTo(fenetre, QPoint(0, 0)).x() for champ in champs}) == 1  # alignés à gauche
+    assert all(champ.width() == champs[0].width() < 700 for champ in champs)  # pas étirés
+    premier = reglages.champs["Flou"]
     haut_1, haut_2 = (reglages.champs[nom].y() for nom in ("Flou", "Décalage horizontal"))
-    assert haut_2 - (haut_1 + premier.height()) == Espacements.M  # 12 px entre deux rangées
+    assert haut_2 - (haut_1 + premier.height()) == Espacements.M  # 12 px entre deux réglages
     reglages.champs["Décalage horizontal"].hide()
     qtbot.waitUntil(lambda: reglages.champs["Décalage vertical"].y() == haut_2, timeout=2000)
 

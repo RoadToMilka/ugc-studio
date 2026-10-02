@@ -91,8 +91,17 @@ def test_trois_colonnes_en_grande_fenetre(page, qtbot):
 
     atelier = page.atelier
     studio = atelier.studio
-    page.resize(1800, 1500)  # assez haute pour tout voir : les colonnes prennent la hauteur qui reste
+    page.resize(1800, 1500)
     qtbot.waitUntil(lambda: studio.mode == GRANDE, timeout=3000)
+    # Assez haute pour tout voir (V3.2) : la page visible a la place de la bande du haut, des colonnes
+    # avec une vidéo de 640 px, et de la frise ; les colonnes prennent la hauteur qui reste.
+    bande = max(atelier.cadre_source.height(), atelier.cadre_export.height())
+    besoin = (
+        bande + atelier.bloc_apercu.hauteur_pour_video(Dimensions.APERCU_HAUTEUR_GRANDE)
+        + atelier.cadre_frise.height() + 2 * Dimensions.ESPACE_BLOCS + Dimensions.ESPACE_BLOCS
+    )
+    page.resize(1800, page.height() + besoin - studio.hauteur_visible())
+    qtbot.waitUntil(lambda: studio.hauteur_visible() == besoin and studio.mode == GRANDE, timeout=3000)
     colonnes = (atelier.bloc_apercu, atelier.cadre_apparence, atelier.cadre_sous_titres)
     qtbot.waitUntil(lambda: len({colonne.height() for colonne in colonnes}) == 1, timeout=3000)
     positions = [_position(colonne, studio) for colonne in colonnes]
@@ -108,10 +117,10 @@ def test_trois_colonnes_en_grande_fenetre(page, qtbot):
     assert atelier.tableau.minimumHeight() == Dimensions.STUDIO_TABLEAU_HAUTEUR_MIN
     assert colonnes[0].height() >= Dimensions.STUDIO_COLONNES_HAUTEUR_MIN
     # Tout se voit sans faire défiler la page ; l'aperçu prend la hauteur de sa colonne, à la taille
-    # de la vidéo (plus de 540 px de haut).
+    # de la vidéo (640 px de haut au moins, V3.2).
     qtbot.waitUntil(lambda: atelier.defilement.verticalScrollBar().maximum() == 0, timeout=3000)
     qtbot.waitUntil(lambda: _a_la_taille_de_la_video(atelier), timeout=3000)
-    assert atelier.bloc_apercu.zone.height() > Dimensions.APERCU_HAUTEUR_MAX
+    assert atelier.bloc_apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE
 
 
 def test_l_apparence_defile_seule(page, qtbot):
@@ -131,24 +140,31 @@ def test_l_apparence_defile_seule(page, qtbot):
     assert atelier.defilement.verticalScrollBar().value() == page_avant
 
 
-def test_fenetre_pas_assez_haute_la_bande_du_haut_part_en_haut(page, qtbot):
-    """Grande fenêtre pas assez haute pour tout montrer avec des colonnes confortables : les colonnes
-    et la frise remplissent la fenêtre, et la page défile juste de la hauteur de la bande du haut."""
+def test_fenetre_pas_assez_haute_la_video_garde_640_px(page, qtbot):
+    """V3.2 : grande fenêtre pas assez haute pour tout montrer d'un coup (comme en plein écran sur un
+    écran de 1080 px) : la vidéo de l'aperçu garde 640 px de haut, son bloc se voit en entier dans la
+    page visible, et la frise passe sous les colonnes (la page défile jusqu'à elle). Jusqu'à la 3.1.3,
+    les colonnes et la frise remplissaient la fenêtre, et la vidéo n'avait que la place qui restait."""
     from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
     from ugc_studio.ui.theme import Dimensions
 
     atelier = page.atelier
     studio = atelier.studio
-    page.resize(1800, 1050)
+    page.resize(1800, 1300)
     qtbot.waitUntil(lambda: studio.mode == GRANDE, timeout=3000)
-    hauteur = studio.hauteur_des_colonnes(studio.width())
-    assert hauteur is not None and hauteur >= Dimensions.STUDIO_COLONNES_HAUTEUR_MIN
-    page_barre = atelier.defilement.verticalScrollBar()
-
-    def bande() -> int:
-        return _position(atelier.bloc_apercu, studio).y() - _position(atelier.cadre_source, studio).y()
-
-    qtbot.waitUntil(lambda: page_barre.maximum() > 0 and abs(page_barre.maximum() - bande()) <= 2, timeout=3000)
+    apercu = atelier.bloc_apercu
+    voulue = apercu.hauteur_pour_video(Dimensions.APERCU_HAUTEUR_GRANDE)
+    # Une page visible un peu plus haute que le bloc de l'aperçu avec sa vidéo de 640 px, mais trop
+    # basse pour la frise en plus.
+    cible = voulue + (atelier.cadre_frise.height() + Dimensions.ESPACE_BLOCS) // 2
+    page.resize(1800, page.height() + cible - studio.hauteur_visible())
+    qtbot.waitUntil(lambda: studio.hauteur_visible() == cible and studio.mode == GRANDE, timeout=3000)
+    assert studio.hauteur_des_colonnes(studio.width()) == voulue
+    qtbot.waitUntil(lambda: apercu.height() == voulue and _a_la_taille_de_la_video(atelier), timeout=3000)
+    assert abs(apercu.zone.height() - Dimensions.APERCU_HAUTEUR_GRANDE) <= 1
+    frise = atelier.cadre_frise
+    assert _position(frise, studio).y() >= _position(apercu, studio).y() + apercu.height()
+    assert atelier.defilement.verticalScrollBar().maximum() > 0
 
 
 def test_fenetre_trop_basse_pas_de_trois_colonnes(page, qtbot):
@@ -189,3 +205,96 @@ def test_une_colonne_qui_ne_defile_pas_suit_son_contenu(page, qtbot):
     atelier.panneau.section_decoupage.ouvrir()
     qtbot.waitUntil(lambda: colonne.height() > avant, timeout=3000)
     qtbot.waitUntil(lambda: colonne.height() >= colonne.widget().heightForWidth(colonne.width()), timeout=3000)
+
+
+# --- V3.2, lot 4 : commandes de l'aperçu, coins arrondis, préréglages, un réglage par ligne -----------
+
+
+def test_commandes_de_l_apercu_sous_leur_nom(page, qtbot):
+    """« Fond » et « Zoom » au-dessus de leurs boutons, comme le nom d'un champ (8 px visibles) ;
+    « Repères » au-dessus de ses cases. En grande fenêtre, « Fond » et « Zoom » côte à côte, et les
+    trois repères sur une ligne (le bloc est assez large pour eux)."""
+    from ugc_studio.ui.composants.elements import ChampNomme
+    from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
+    from ugc_studio.ui.theme import Espacements
+
+    atelier = page.atelier
+    apercu = atelier.bloc_apercu
+    for champ, choix in ((apercu.champ_fond, apercu.fond), (apercu.champ_zoom, apercu.zoom)):
+        assert isinstance(champ, ChampNomme) and champ.isAncestorOf(choix)
+        assert _position(champ.nom, apercu).y() < _position(choix, apercu).y()
+        assert _position(champ.nom, apercu).x() == _position(choix, apercu).x()  # alignés à gauche
+    cases = (apercu.repere_zone, apercu.repere_marge, apercu.repere_grille)
+    nom = apercu.nom_reperes
+    assert nom.text() == "Repères" and all(_position(nom, apercu).y() + nom.height() <= _position(c, apercu).y() for c in cases)
+    page.resize(1800, 1050)
+    qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
+    qtbot.waitUntil(lambda: _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y(), timeout=3000)
+    fond, zoom = apercu.champ_fond, apercu.champ_zoom
+    assert _position(zoom, apercu).x() - (_position(fond, apercu).x() + fond.width()) == Espacements.L
+    assert len({_position(case, apercu).y() for case in cases}) == 1  # les repères sur une ligne
+
+
+def test_coins_arrondis_de_l_apercu_a_l_ecran_seulement(page, qtbot):
+    """Coins arrondis de 8 px à l'écran : le coin de la zone a la couleur du bloc ; la toile, elle,
+    reste entière (la pipette et les exports ne voient pas les coins)."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QImage
+
+    from ugc_studio.ui.composants.apercu import FOND_GRIS
+    from ugc_studio.ui.theme import Arrondis, Couleurs, CouleursApercu
+
+    atelier = page.atelier
+    zone, toile = atelier.bloc_apercu.zone, atelier.toile
+    atelier.bloc_apercu.fond.definir(FOND_GRIS)
+    toile.definir_fond(FOND_GRIS)
+    toile.definir_reperes(False, False, False)
+    qtbot.waitUntil(lambda: zone.coins.geometry() == zone.viewport().geometry(), timeout=2000)
+    image = zone.grab().toImage()
+    echelle = image.width() / zone.width()
+
+    def couleur(x: float, y: float) -> str:
+        return image.pixelColor(round(x * echelle), round(y * echelle)).name().upper()
+
+    assert couleur(0, 0) == Couleurs.SURFACE.upper()  # le coin : le fond du bloc
+    assert couleur(Arrondis.APERCU, Arrondis.APERCU) == CouleursApercu.FOND_NEUTRE.upper()  # dans l'arrondi : la vidéo
+    assert couleur(zone.width() - 1, zone.height() - 1) == Couleurs.SURFACE.upper()
+    entiere = QImage(toile.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    toile.render(entiere, QPoint(0, 0))
+    assert entiere.pixelColor(0, 0).name().upper() == CouleursApercu.FOND_NEUTRE.upper()
+
+
+def test_bibliotheque_et_enregistrer_en_icones(page, qtbot):
+    """Préréglage : la liste, puis la bibliothèque (son propre bouton : elle n'est plus dans le menu
+    ⋯), « Enregistrer » en icône seule, et le menu ⋯."""
+    from ugc_studio.ui.theme import Hauteurs
+
+    panneau = page.atelier.panneau
+    boutons = (panneau.bouton_bibliotheque, panneau.bouton_enregistrer_prereglage, panneau.bouton_plus_prereglage)
+    gauches = [_position(element, panneau).x() for element in (panneau.prereglage, *boutons)]
+    assert gauches == sorted(gauches)
+    for element in boutons[:2]:
+        assert element.text() == "" and (element.width(), element.height()) == (Hauteurs.CONTROLE, Hauteurs.CONTROLE)
+        assert element.toolTip()
+    # La page ouvrirait une fenêtre (qui attend une réponse) : le test s'en tient aux demandes.
+    panneau.gerer_prereglages_demande.disconnect()
+    panneau.enregistrer_prereglage_demande.disconnect()
+    demandes = []
+    panneau.gerer_prereglages_demande.connect(lambda: demandes.append("bibliotheque"))
+    panneau.enregistrer_prereglage_demande.connect(lambda: demandes.append("enregistrer"))
+    panneau.bouton_bibliotheque.click()
+    panneau.bouton_enregistrer_prereglage.click()
+    assert demandes == ["bibliotheque", "enregistrer"]
+    textes = [action.text() for action in panneau.bouton_plus_prereglage.menu().actions()]
+    assert not any("Gérer" in texte for texte in textes)
+
+
+def test_un_reglage_par_ligne_dans_les_effets(page, qtbot):
+    """Contour : la couleur, puis l'épaisseur dessous (côte à côte jusqu'à la 3.1.3) ; de même pour
+    les autres effets."""
+    texte = page.atelier.panneau.texte
+    texte.sections["Contour"].ouvrir()
+    texte.contour.setChecked(True)
+    couleur, epaisseur = texte.contour_couleur, texte.contour_epaisseur.champ
+    qtbot.waitUntil(lambda: _position(epaisseur, texte).y() > _position(couleur, texte).y() + couleur.height(), timeout=3000)
+    assert _position(epaisseur, texte).x() == _position(couleur, texte).x()  # alignés à gauche

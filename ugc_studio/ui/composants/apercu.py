@@ -20,13 +20,13 @@ import os
 import time
 
 from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QBrush, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QBrush, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QFrame, QScrollArea, QSizePolicy, QWidget
 
 from ...mise_en_page import limites_du_reglage_fin
 from ...rendu.moteur import Moteur
 from ...sous_titres import FORMAT_PAR_DEFAUT, FORMATS, MotAffiche, SousTitre
-from ..theme import CouleursApercu, Dimensions, Opacites, qcolor
+from ..theme import Arrondis, Couleurs, CouleursApercu, Dimensions, Opacites, qcolor
 from .lecteur import VARIABLE_SANS_AUDIO
 
 journal = logging.getLogger(__name__)
@@ -337,14 +337,38 @@ class ToileApercu(QWidget):
             quand_prise(*couleur)
 
 
+class _CoinsArrondis(QWidget):
+    """Coins arrondis de 8 px de l'aperçu (V3.2), posés par-dessus la toile, à l'écran seulement : ni
+    dans les exports (dessinés par le moteur, rendu/moteur.py), ni dans l'image de la toile elle-même
+    (la pipette et les tests la lisent telle quelle). Les coins sont peints de la couleur du bloc
+    autour, avec un bord lissé (sans marches) ; les clics passent au travers, jusqu'à la toile."""
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        cadre = QRectF(self.rect())
+        rayon = Arrondis.APERCU
+        coins, arrondi = QPainterPath(), QPainterPath()
+        coins.addRect(cadre)
+        arrondi.addRoundedRect(cadre, rayon, rayon)
+        peintre = QPainter(self)
+        peintre.setRenderHint(QPainter.RenderHint.Antialiasing)
+        peintre.fillPath(coins.subtracted(arrondi), qcolor(Couleurs.SURFACE))
+        peintre.end()
+
+
 class ZoneApercu(QScrollArea):
     """La toile dans la page. V3.1 (lot 5) : la zone a exactement la taille de la vidéo affichée, sans
     bandes sombres autour ; le bloc qui la contient la choisit (taille_pour, puis setFixedSize). À
     100 %, la toile prend la taille réelle de la vidéo et la zone défile. Jusqu'à la 3.0.4, la zone
-    prenait toute la largeur de sa colonne, et la vidéo s'y centrait entre deux bandes sombres."""
+    prenait toute la largeur de sa colonne, et la vidéo s'y centrait entre deux bandes sombres.
+    V3.2 : coins arrondis de 8 px (voir _CoinsArrondis)."""
 
     def __init__(self, toile: ToileApercu, parent: QWidget | None = None):
         super().__init__(parent)
+        self.coins = _CoinsArrondis(self)  # par-dessus la partie qui montre la toile (V3.2)
         self.toile = toile
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -352,6 +376,18 @@ class ZoneApercu(QScrollArea):
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.setFixedSize(self.taille_pour(Dimensions.APERCU_HAUTEUR_MAX, Dimensions.APERCU_HAUTEUR_MAX))
         self.definir_zoom(ZOOM_AJUSTE)
+        self._placer_les_coins()
+
+    def _placer_les_coins(self) -> None:
+        """Les coins arrondis suivent la partie qui montre la toile (plus petite à 100 %, quand les
+        barres de défilement apparaissent)."""
+        self.coins.setGeometry(self.viewport().geometry())
+        self.coins.raise_()
+
+    def viewportEvent(self, evenement) -> bool:  # noqa: N802 — nom imposé par Qt
+        if evenement.type() == QEvent.Type.Resize:
+            self._placer_les_coins()
+        return super().viewportEvent(evenement)
 
     def taille_pour(self, largeur: int, hauteur: int) -> QSize:
         """Taille de la vidéo entière dans largeur × hauteur (« Ajusté ») : la place est remplie dans
