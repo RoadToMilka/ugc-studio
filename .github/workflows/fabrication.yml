@@ -118,9 +118,11 @@ jobs:
       # à nouveau), jusqu'à l'apparition de leur fenêtre : si la machine prêtée ralentit pendant la
       # mesure, les trois en pâtissent de la même façon (mesurés l'un après l'autre, le dernier pouvait
       # paraître 3 s plus lent, lot 3). Le premier tour ne compte pas (l'antivirus de Windows examine
-      # chaque .exe à son premier lancement) ; ensuite, la médiane de 5 lancements, et leur détail. Les
-      # écarts d'une fabrication à l'autre viennent de la machine prêtée : seule la comparaison sur une
-      # même fabrication compte.
+      # chaque .exe à son premier lancement). Ensuite, pour chacun, le plus rapide de 5 lancements : la
+      # machine prêtée ne fait qu'ajouter du temps (d'un lancement à l'autre, de 4 à 11 s pour un même
+      # .exe, lot 3), le plus rapide est donc le plus proche du temps propre à l'app ; puis les
+      # médianes et le détail. Les écarts d'une fabrication à l'autre viennent de la machine prêtée :
+      # seule la comparaison sur une même fabrication compte.
       - name: Mesurer le démarrage (2.0.0, 2.2.0 et cette version)
         timeout-minutes: 10
         continue-on-error: true
@@ -151,6 +153,9 @@ jobs:
             $triees = @($valeurs | Sort-Object)
             return $triees[[int][Math]::Floor($triees.Count / 2)]
           }
+          function LePlusRapide($valeurs) {
+            return (@($valeurs) | Measure-Object -Minimum).Minimum
+          }
           $exes = [ordered]@{ "2.0.0" = "ancien/UGC-Studio.exe"; "2.2.0" = "precedente/UGC-Studio.exe"; "cette version" = "dist/UGC-Studio.exe" }
           $mesures = @{}
           foreach ($nom in $exes.Keys) { $mesures[$nom] = @() }
@@ -160,10 +165,12 @@ jobs:
               if ($tour -gt 1) { $mesures[$nom] += $secondes }
             }
           }
-          $ancien = Mediane $mesures["2.0.0"]
-          $precedente = Mediane $mesures["2.2.0"]
-          $nouveau = Mediane $mesures["cette version"]
-          $lignes = @("Démarrage jusqu'à la fenêtre (médiane de 5 lancements, les trois .exe à tour de rôle) : 2.0.0 = {0:N2} s ; 2.2.0 = {1:N2} s ; cette version = {2:N2} s ; écart avec la 2.0.0 = {3:N2} s" -f $ancien, $precedente, $nouveau, ($nouveau - $ancien))
+          $ancien = LePlusRapide $mesures["2.0.0"]
+          $precedente = LePlusRapide $mesures["2.2.0"]
+          $nouveau = LePlusRapide $mesures["cette version"]
+          $resume = "Démarrage jusqu'à la fenêtre, le plus rapide de 5 lancements (les trois .exe à tour de rôle) : 2.0.0 = {0:N2} s ; 2.2.0 = {1:N2} s ; cette version = {2:N2} s ; écart avec la 2.0.0 = {3:N2} s" -f $ancien, $precedente, $nouveau, ($nouveau - $ancien)
+          $medianes = "Médianes : 2.0.0 = {0:N2} s ; 2.2.0 = {1:N2} s ; cette version = {2:N2} s" -f (Mediane $mesures["2.0.0"]), (Mediane $mesures["2.2.0"]), (Mediane $mesures["cette version"])
+          $lignes = @($resume, $medianes)
           foreach ($nom in $exes.Keys) { $lignes += "  {0} : {1}" -f $nom, (($mesures[$nom] | ForEach-Object { "{0:N2}" -f $_ }) -join " ; ") }
           $lignes | Tee-Object -FilePath rapport/demarrage.txt
 
