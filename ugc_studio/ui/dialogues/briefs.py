@@ -7,7 +7,7 @@ case est cochée, reprend aussi la page produit lue et sa fiche. Menu ⋯ : reno
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QInputDialog, QMenu, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout
 
 from ...ecriture.affichage import date_lisible
 from ...ecriture.briefs import BriefEnregistre
@@ -21,6 +21,7 @@ from ..composants.elements import (
     libelle,
     vider_disposition,
 )
+from ..composants.menu import Menu
 from ..icones import icone_menu
 from ..theme import Couleurs, Dimensions, Espacements
 
@@ -48,7 +49,7 @@ class LigneBrief(QFrame):
         disposition.addWidget(self.bouton_charger, 0, Qt.AlignmentFlag.AlignVCenter)
         plus = bouton("", variante="icone", nom_icone="ellipsis")
         plus.setToolTip("Plus d'actions")
-        menu = QMenu(plus)
+        menu = Menu(plus)
         menu.addAction(icone_menu("pencil"), "Renommer…").triggered.connect(lambda: dialogue.renommer(enregistre))
         menu.addSeparator()
         menu.addAction(icone_menu("trash", Couleurs.ERREUR), "Supprimer…").triggered.connect(

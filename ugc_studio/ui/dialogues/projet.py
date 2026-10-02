@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QVBo
 from ...chemins import dossier_projets_defaut
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES, ErreurProjet, GestionnaireProjets, Projet
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import ChampNomme, avec_aide, bouton, libelle, liste_deroulante
+from ..composants.elements import ChampNomme, afficher_message, avec_aide, bouton, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 
@@ -75,7 +75,6 @@ class DialogueNouveauProjet(QDialog):
         try:
             self.projet_cree = self._projets.creer(self.nom.text(), self._emplacement, self.langue.currentData())
         except ErreurProjet as erreur:
-            self.statut.setText(str(erreur))
-            self.statut.show()
+            afficher_message(self.statut, str(erreur), "erreur")  # effacé après 8 s (V3.2)
             return
         self.accept()

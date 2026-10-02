@@ -48,6 +48,7 @@ from ...composants.editeur_script import EditeurScript
 from ...composants.bouton import montrer_occupe
 from ...composants.elements import (
     ChampNomme,
+    afficher_message,
     bloc,
     bouton,
     intitule,
@@ -497,10 +498,8 @@ class AtelierVoix(Page):
         self._afficher(message, "secondaire")
 
     def _afficher(self, message: str, role: str) -> None:
-        self.statut.setText(message)
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        # Vert, rouge ou orange : effacé après 8 s (V3.2) ; la ligne garde sa place.
+        afficher_message(self.statut, message, role, cacher_vide=False)
 
     def generer(self) -> None:
         if self._projet is None:

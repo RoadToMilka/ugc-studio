@@ -55,7 +55,16 @@ from ....services import Services
 from ....vitesses import Vitesse
 from ... import taches
 from ...composants.bouton import Bouton, BoutonOccupe, montrer_occupe
-from ...composants.elements import BoutonInfo, bloc, bouton, libelle, ligne_avec_aide, marge_haute_titre, titre_avec
+from ...composants.elements import (
+    BoutonInfo,
+    afficher_message,
+    bloc,
+    bouton,
+    libelle,
+    ligne_avec_aide,
+    marge_haute_titre,
+    titre_avec,
+)
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
@@ -399,11 +408,7 @@ class AtelierScript(Page):
             self._afficher(message, "secondaire")
 
     def _afficher(self, message: str, role: str) -> None:
-        self.statut.setText(message)
-        self.statut.setVisible(bool(message))
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        afficher_message(self.statut, message, role)  # vert, rouge ou orange : effacé après 8 s (V3.2)
 
     def _adaptateur(self):
         """Adaptateur de la clé par défaut, ou None (message affiché) si aucune clé n'est enregistrée."""

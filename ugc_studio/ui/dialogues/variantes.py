@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLineEdit,
-    QMenu,
     QVBoxLayout,
     QWidget,
 )
@@ -53,6 +52,7 @@ from ..composants.choix_voix import choisir, remplir_modeles_voix, remplir_voix
 from ..composants.editeur_script import EditeurScript
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import BoutonInfo, ChampNomme, bouton, libelle, liste_deroulante, vider_disposition
+from ..composants.menu import Menu
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
 from ..composants.defilement import ZoneDefilante
@@ -324,7 +324,7 @@ class DialogueVariantes(QDialog):
         outils.setSpacing(Espacements.XS)
         balise = bouton("Balise", variante="contour", nom_icone="plus")
         balise.setToolTip("Insérer une balise (rire, pause…) à l'endroit du curseur")
-        menu = QMenu(balise)
+        menu = Menu(balise)
         for famille in FAMILLES:
             sous_menu = menu.addMenu(famille.nom)
             sous_menu.setToolTipsVisible(True)  # le vrai nom de la balise au survol

@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLayout,
     QLineEdit,
-    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QVBoxLayout,
@@ -43,6 +42,7 @@ from ..composants.elements import (
     separateur,
     vider_disposition,
 )
+from ..composants.menu import Menu
 from ..icones import icone_menu
 from ..theme import Couleurs, Dimensions, Espacements
 
@@ -113,7 +113,7 @@ class LigneExemple(QFrame):
         disposition.addLayout(textes, 1)
         plus = bouton("", variante="icone", nom_icone="ellipsis")
         plus.setToolTip("Plus d'actions")
-        menu = QMenu(plus)
+        menu = Menu(plus)
         menu.addAction(icone_menu("trash", Couleurs.ERREUR), "Retirer des exemples…").triggered.connect(
             lambda: dialogue.retirer(exemple)
         )

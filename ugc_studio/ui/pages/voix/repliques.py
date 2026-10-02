@@ -8,7 +8,7 @@ Toutes les répliques partent ensemble dans la même génération.
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QMenu, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QMessageBox, QVBoxLayout, QWidget
 
 from ....projets import RepliqueProjet
 from ....script import couper, est_vide
@@ -16,6 +16,7 @@ from ....services import Services
 from ...composants.champ_style import ChampStyle
 from ...composants.editeur_script import EditeurScript
 from ...composants.elements import bouton, libelle, separateur
+from ...composants.menu import Menu
 from ...icones import icone_menu
 from ...theme import Couleurs, Espacements
 
@@ -40,7 +41,7 @@ class CarteReplique(QFrame):
         entete.addStretch(1)
         self.bouton_plus = bouton("", variante="icone", nom_icone="ellipsis")
         self.bouton_plus.setToolTip("Découper, déplacer ou supprimer la réplique")
-        self.menu = QMenu(self.bouton_plus)
+        self.menu = Menu(self.bouton_plus)
         self.action_decouper = self.menu.addAction(icone_menu("scissors"), "Découper ici (au curseur)")
         self.action_decouper.triggered.connect(lambda: self.action.emit("decouper", self))
         self.action_monter = self.menu.addAction(icone_menu("arrow-up"), "Monter")

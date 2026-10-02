@@ -21,9 +21,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget, QToolTip
+from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableWidget
 
 from ..theme import Dimensions, Espacements, Hauteurs
+from .bulle import PROPRIETE_MAISON, cacher_bulle, montrer_bulle
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,7 @@ class Tableau(QTableWidget):
                 titre.setToolTip(colonne.aide)
         self.verticalHeader().hide()
         self.verticalHeader().setDefaultSectionSize(hauteur_ligne)
+        self.setProperty(PROPRIETE_MAISON, True)  # la bulle d'une case : son texte complet s'il est abrégé
         self.setShowGrid(False)
         self.setWordWrap(False)  # une seule ligne par case (règle 1)
         self.setTextElideMode(Qt.TextElideMode.ElideRight)
@@ -170,13 +172,13 @@ class Tableau(QTableWidget):
         """Au survol d'une case abrégée par « … » : son texte complet (et son infobulle, s'il y en a)."""
         index = self.indexAt(evenement.pos())
         if not index.isValid():
-            QToolTip.hideText()
+            cacher_bulle()
             return
         texte = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
         infobulle = str(index.data(Qt.ItemDataRole.ToolTipRole) or "")
         if texte and self.sizeHintForIndex(index).width() > self.columnWidth(index.column()):
             infobulle = f"{texte}\n{infobulle}" if infobulle else texte
         if infobulle:
-            QToolTip.showText(evenement.globalPos(), infobulle, self.viewport())
+            montrer_bulle(infobulle, evenement.globalPos(), self.viewport(), self.visualRect(index))
         else:
-            QToolTip.hideText()
+            cacher_bulle()

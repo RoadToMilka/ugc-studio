@@ -21,9 +21,10 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, QSize, Qt
 from PySide6.QtGui import QPainter, QPen
-from PySide6.QtWidgets import QComboBox, QListView, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QToolTip, QWidget
+from PySide6.QtWidgets import QComboBox, QListView, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QWidget
 
 from ..theme import LISTES_INTEGREES, Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, qcolor
+from .bulle import PROPRIETE_MAISON, cacher_bulle, montrer_bulle
 from .defilement import Fondus
 
 SEPARATEUR = "separator"  # marque des séparations posées par QComboBox.insertSeparator()
@@ -86,9 +87,9 @@ class DelegueChoix(QStyledItemDelegate):
         if self.texte_abrege(vue, option, index):
             infobulle = index.data(Qt.ItemDataRole.DisplayRole)
         if infobulle:
-            QToolTip.showText(evenement.globalPos(), str(infobulle), vue)
+            montrer_bulle(str(infobulle), evenement.globalPos(), vue.viewport(), vue.visualRect(index))
         else:
-            QToolTip.hideText()
+            cacher_bulle()
         return True
 
 
@@ -100,6 +101,7 @@ class VueChoix(QListView):
         self.setTextElideMode(Qt.TextElideMode.ElideRight)  # « Kore · Ferme · fémi… »
         self.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         self.fondus = Fondus(self, Couleurs.SURFACE_ELEVEE)  # fond de la liste (feuille de style)
+        self.setProperty(PROPRIETE_MAISON, True)  # la bulle d'un choix : son texte complet s'il est abrégé
 
 
 class _EcartDuChamp(QObject):

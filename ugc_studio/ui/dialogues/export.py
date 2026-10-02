@@ -88,7 +88,15 @@ from ..composants.barre_avancement import BarreAvancement
 from ..composants.choix import ChoixEnBoutons
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
-from ..composants.elements import ChampNomme, bouton, case_a_cocher, champ_decimal, libelle, libelle_abrege
+from ..composants.elements import (
+    ChampNomme,
+    afficher_message,
+    bouton,
+    case_a_cocher,
+    champ_decimal,
+    libelle,
+    libelle_abrege,
+)
 from ..composants.tableau import Colonne, Tableau
 from ..ouvrir import montrer_dans_l_explorateur, ouvrir_fichier
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, qcolor
@@ -115,12 +123,6 @@ COLONNES_RESUME = (
     Colonne("Export", texte=True, etiree=True),
 )
 RESTE_APRES_S = 1.0  # le temps restant s'affiche après une seconde (avant, l'estimation serait fausse)
-
-
-def _changer_de_role(etiquette, role: str) -> None:
-    etiquette.setProperty("role", role)
-    etiquette.style().unpolish(etiquette)
-    etiquette.style().polish(etiquette)
 
 
 class DialogueExport(QDialog):
@@ -565,9 +567,7 @@ class DialogueExport(QDialog):
         self._actualiser()
 
     def _statut(self, message: str, role: str) -> None:
-        self.statut.setText(message)
-        _changer_de_role(self.statut, role)
-        self.statut.show()
+        afficher_message(self.statut, message, role)  # vert ou rouge : effacé après 8 s (V3.2)
 
     def arreter(self) -> None:
         if self._export is not None:

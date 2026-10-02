@@ -17,7 +17,7 @@ from pathlib import Path
 import PySide6
 from PySide6.QtCore import QPoint, QPointF, QRect, Qt, QTimer, qVersion
 from PySide6.QtGui import QColor, QFontDatabase, QFontInfo, QIcon, QImage, QImageReader, QPainter
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QToolTip, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidget
 
 from . import __version__
 from .chemins import fichier_journal
@@ -25,8 +25,11 @@ from .conseils_des_pages import PAGES
 from .demo import SCRIPT_DEMO
 from .projets import RepliqueProjet
 from .script import normaliser
+from .ui.composants.bulle import bulle as la_bulle
+from .ui.composants.bulle import bulle_visible, cacher_bulle
 from .ui.composants.conseils import DialogueConseils
 from .ui.composants.elements import BoutonInfo, Info
+from .ui.composants.menu import position_du_menu
 from .ui.composants.tableau import Tableau
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
@@ -49,7 +52,7 @@ from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
-from .ui.theme import Dimensions, Espacements, Hauteurs, Typo
+from .ui.theme import Couleurs, Dimensions, Espacements, Hauteurs, Typo
 
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
 DELAI_MAX_MS = 240_000  # sécurité : l'autotest ne peut pas bloquer la fabrication (exports vidéo compris)
@@ -1886,17 +1889,17 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 if image.save(str(chemin)):
                     rapport["captures"].append(chemin.name)
 
-            def capturer_avec_bulle(nom: str) -> None:
-                """Capture de la fenêtre avec la bulle d'une icône « i » ouverte : la bulle est une
-                petite fenêtre à part, posée ici par-dessus, à sa place."""
+            def capturer_par_dessus(nom: str, *petites_fenetres) -> None:
+                """Capture de la fenêtre avec une bulle ou un menu ouvert : ce sont de petites fenêtres
+                à part, posées ici par-dessus, à leur place (coins arrondis compris)."""
                 nonlocal attendues
                 attendues += 1
                 _laisser_afficher()
                 image = fenetre.grab()
                 peintre = QPainter(image)
-                for bulle in QApplication.topLevelWidgets():
-                    if bulle.inherits("QTipLabel") and bulle.isVisible():
-                        peintre.drawPixmap(fenetre.mapFromGlobal(bulle.mapToGlobal(QPoint(0, 0))), bulle.grab())
+                for petite in petites_fenetres:
+                    if petite.isVisible():
+                        peintre.drawPixmap(fenetre.mapFromGlobal(petite.mapToGlobal(QPoint(0, 0))), petite.grab())
                 peintre.end()
                 chemin = dossier / f"{nom}.png"
                 if image.save(str(chemin)):
@@ -1965,9 +1968,24 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             page_sous_titres.defilement.ensureWidgetVisible(frise.aide)  # l'icône à l'écran, et sa bulle avec
             _laisser_afficher()
             frise.aide.montrer()
-            bulle = _attendre(lambda: QToolTip.isVisible(), 2.0)
-            capturer_avec_bulle(f"bulle-{frise.titre.text().lower()}")
-            QToolTip.hideText()
+            bulle = _attendre(bulle_visible, 2.0)
+            # V3.2, lot 2 : la bulle de l'app, coins arrondis (transparents autour), fond des blocs,
+            # 16 px autour du texte.
+            image_bulle = la_bulle().grab().toImage()
+            echelle = image_bulle.width() / max(1, la_bulle().width())
+            milieu = QPoint(round(Espacements.XS * echelle), image_bulle.height() // 2)
+            rapport["bulle_v32"] = {
+                "marges": [la_bulle().etiquette.x(), la_bulle().etiquette.y()],
+                "coin_transparent": image_bulle.pixelColor(0, 0).alpha() == 0,
+                "fond": image_bulle.pixelColor(milieu).name(),
+            }
+            verifs["bulle_v32"] = (
+                rapport["bulle_v32"]["marges"] == [Espacements.L, Espacements.L]
+                and rapport["bulle_v32"]["coin_transparent"]
+                and rapport["bulle_v32"]["fond"].upper() == Couleurs.SURFACE.upper()
+            )
+            capturer_par_dessus(f"bulle-{frise.titre.text().lower()}", la_bulle())
+            cacher_bulle()
             page_sous_titres.defilement.verticalScrollBar().setValue(0)
             fenetre.afficher_module("script")
             produit = fenetre.page("script").atelier.produit
@@ -2109,8 +2127,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 capturer(fenetre, "sous-titres-reorganises")
                 # Menu « Couper » : un choix par mot qui peut commencer le nouveau sous-titre.
                 bouton_couper, menu_couper = sous_titres.bouton_couper, sous_titres.menu_couper
-                menu_couper.popup(bouton_couper.mapToGlobal(QPoint(0, bouton_couper.height())))
-                capturer(menu_couper, "menu-couper")
+                menu_couper.popup(position_du_menu(bouton_couper, menu_couper))
+                capturer_par_dessus("menu-couper", menu_couper)
                 menu_couper.hide()
                 barre.setValue(0)
 
@@ -2131,8 +2149,19 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
 
             # Menu « Projet » (haut de la barre latérale) : icônes et texte, avec le même écart que partout.
             bouton_projet, menu_projet = fenetre.barre_laterale.bouton_projet, fenetre.barre_laterale.menu_projet
-            menu_projet.popup(bouton_projet.mapToGlobal(QPoint(0, bouton_projet.height())))
-            capturer(menu_projet, "menu-projet")
+            menu_projet.popup(position_du_menu(bouton_projet, menu_projet))
+            _laisser_afficher()
+            # V3.2, lot 2 : 8 px sous le bouton, coins arrondis (transparents autour), comme une liste.
+            image_menu = menu_projet.grab().toImage()
+            rapport["menu_v32"] = {
+                "ecart_avec_le_bouton": menu_projet.mapToGlobal(QPoint(0, 0)).y()
+                - bouton_projet.mapToGlobal(QPoint(0, bouton_projet.height())).y(),
+                "coin_transparent": image_menu.pixelColor(0, 0).alpha() == 0,
+            }
+            verifs["menu_v32"] = (
+                rapport["menu_v32"]["ecart_avec_le_bouton"] == Dimensions.ECART_LISTE and rapport["menu_v32"]["coin_transparent"]
+            )
+            capturer_par_dessus("menu-projet", menu_projet)
             menu_projet.hide()
 
             dialogue = reglages.connexions.ajouter()

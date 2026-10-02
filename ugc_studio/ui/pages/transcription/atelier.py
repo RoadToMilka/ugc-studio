@@ -64,6 +64,7 @@ from ...composants.choix_voix import choisir, propose
 from ...composants.correcteur_mots import CorrecteurDeMots
 from ...composants.editeur_transcription import nom_de_personne
 from ...composants.elements import (
+    afficher_message,
     bloc,
     bouton,
     case_a_cocher,
@@ -353,10 +354,8 @@ class AtelierTranscription(Page):
     # --- Affichage ---------------------------------------------------------------------------
 
     def _afficher(self, message: str, role: str) -> None:
-        self.statut.setText(message)
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        # Vert, rouge ou orange : effacé après 8 s (V3.2) ; la ligne garde sa place.
+        afficher_message(self.statut, message, role, cacher_vide=False)
 
     def _hesitations(self) -> set[str]:
         return hesitations(self._services, self.transcription)

@@ -44,7 +44,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush
-from PySide6.QtWidgets import QFileDialog, QInputDialog, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QTableWidgetItem, QVBoxLayout
 
 from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
@@ -106,6 +106,7 @@ from ...composants.bouton import BoutonOccupe, montrer_occupe
 from ...composants.choix_voix import choisir
 from ...composants.defilement import ColonneDefilante
 from ...composants.elements import (
+    afficher_message,
     bloc,
     bouton,
     conteneur_vertical,
@@ -118,6 +119,7 @@ from ...composants.elements import (
 )
 from ...composants.flux import DispositionFlux
 from ...composants.frise import FriseSousTitres
+from ...composants.menu import Menu
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ...dialogues.corriger_mots import DialogueCorrigerMots
@@ -408,7 +410,7 @@ class AtelierSousTitres(Page):
             "Descendre le dernier mot", variante="contour", nom_icone="arrow-down", action=self.descendre_dernier_mot
         )
         self.bouton_couper = bouton("Couper", variante="contour", nom_icone="scissors")
-        self.menu_couper = QMenu(self.bouton_couper)
+        self.menu_couper = Menu(self.bouton_couper)
         self.menu_couper.aboutToShow.connect(self._remplir_menu_couper)  # les mots du sous-titre choisi
         self.bouton_couper.setMenu(self.menu_couper)
         self.bouton_fusionner = bouton(
@@ -417,7 +419,7 @@ class AtelierSousTitres(Page):
         # V3.1 : l'icône seule (la flèche qui revient), le sens au survol ; un clic ouvre le menu.
         self.bouton_retablir = bouton("", variante="contour", nom_icone="rotate-ccw")
         self.bouton_retablir.setToolTip("Revenir au découpage automatique")
-        menu = QMenu(self.bouton_retablir)
+        menu = Menu(self.bouton_retablir)
         self.action_retablir = menu.addAction("Rétablir le découpage automatique de ce sous-titre")
         self.action_retablir.triggered.connect(lambda: self.retablir(tous=False))
         self.action_retablir_tous = menu.addAction("Rétablir le découpage automatique de tous les sous-titres")
@@ -477,13 +479,9 @@ class AtelierSousTitres(Page):
         super().keyPressEvent(evenement)
 
     def _afficher(self, message: str, role: str, etiquette=None) -> None:
-        """Message d'état sous un bloc ; sans message, la ligne disparaît (pas de vide en bas du bloc)."""
-        etiquette = etiquette or self.statut
-        etiquette.setText(message)
-        etiquette.setVisible(bool(message))
-        etiquette.setProperty("role", role)
-        etiquette.style().unpolish(etiquette)
-        etiquette.style().polish(etiquette)
+        """Message d'état sous un bloc ; sans message, la ligne disparaît (pas de vide en bas du bloc).
+        Vert, rouge ou orange : effacé après 8 s (V3.2)."""
+        afficher_message(etiquette or self.statut, message, role)
 
     # --- Affichage ---------------------------------------------------------------------------
 

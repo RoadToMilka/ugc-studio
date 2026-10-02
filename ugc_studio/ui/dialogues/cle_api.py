@@ -20,7 +20,7 @@ from ...fournisseurs.base import Adaptateur, ResultatTest
 from .. import taches
 from ..composants.bouton import activer_avec_entree, montrer_occupe
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, info, libelle, liste_deroulante
+from ..composants.elements import afficher_message, bouton, info, libelle, liste_deroulante
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
 
@@ -136,11 +136,7 @@ class DialogueCle(QDialog):
         self._action_voir.setToolTip("Masquer la clé" if visible else "Afficher la clé")
 
     def _afficher_statut(self, texte: str, role: str) -> None:
-        self.statut.setText(texte)
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
-        self.statut.show()
+        afficher_message(self.statut, texte, role)  # vert ou rouge : effacé après 8 s (V3.2)
 
     def _occupe(self, occupe: bool) -> None:
         """Pendant le test : le cercle tourne dans « Tester et enregistrer » (V3.1), qui garde son

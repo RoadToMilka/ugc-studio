@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLineEdit,
-    QMenu,
     QMessageBox,
     QVBoxLayout,
     QWidget,
@@ -49,6 +48,7 @@ from ..composants.bouton import montrer_occupe
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
     BoutonInfo,
+    afficher_message,
     bouton,
     conteneur_vertical,
     libelle,
@@ -57,6 +57,7 @@ from ..composants.elements import (
     vider_disposition,
 )
 from ..composants.lecteur import Lecteur
+from ..composants.menu import Menu
 from ..composants.onglets import Onglets
 from ..connexion_ia import adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
@@ -136,7 +137,7 @@ class LigneVoix(QFrame):
         if voix.creee:
             plus = bouton("", variante="icone", nom_icone="ellipsis")
             plus.setToolTip("Renommer ou supprimer cette voix")
-            menu = QMenu(plus)
+            menu = Menu(plus)
             menu.addAction(icone_menu("pencil"), "Renommer…").triggered.connect(lambda: dialogue.renommer(voix))
             menu.addSeparator()
             menu.addAction(icone_menu("trash", Couleurs.ERREUR), "Supprimer…").triggered.connect(
@@ -306,10 +307,8 @@ class DialogueBibliothequeVoix(QDialog):
     # --- Chargement --------------------------------------------------------------------------
 
     def _afficher(self, message: str, role: str = "secondaire") -> None:
-        self.statut.setText(message)
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        # Vert ou rouge : effacé après 8 s (V3.2) ; la ligne garde sa place à côté des boutons.
+        afficher_message(self.statut, message, role, cacher_vide=False)
 
     def _charger_bibliotheque(self, forcer: bool) -> None:
         if not forcer and self.services.voix.bibliotheque_a_jour():

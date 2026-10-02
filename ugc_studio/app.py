@@ -69,6 +69,7 @@ def configurer_application(app) -> dict:
 
     from .rendu.polices import charger_polices_importees
     from .ui import theme
+    from .ui.habillage import installer_l_habillage
     from .ui.icones import icones_feuille_de_style
     from .ui.polices import charger_polices, familles_par_graisse, police
 
@@ -87,6 +88,7 @@ def configurer_application(app) -> dict:
     app.setFont(police())
     app.setPalette(theme.palette())
     app.setStyleSheet(theme.feuille_de_style(icones_feuille_de_style(), familles_par_graisse()))
+    installer_l_habillage(app)  # bulles d'aide et menus du clic droit de l'app (V3.2)
     app.setWindowIcon(QIcon(str(dossier_ressources() / "app.png")))
     return {
         "polices": familles,
