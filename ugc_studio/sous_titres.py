@@ -38,11 +38,14 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 
+from .chemins import dossier_ressources
+from .stockage import lire_json
 from .style_sous_titres import (
     CASSE_MAJUSCULES,
     CASSE_MINUSCULES,
     CENTRE,
     DROITE,
+    FICHIER_STYLE_DE_DEPART,
     GAUCHE,
     Animations,
     Mots,
@@ -267,6 +270,33 @@ def _lire_plats(reglages: ReglagesSousTitres, brut: dict) -> ReglagesSousTitres:
             valeur = type(defaut)(min(max(valeur, bas), haut))
         setattr(reglages, champ.name, valeur)
     return reglages
+
+
+# --- Style complet : de départ, et appliqué à un projet ------------------------------------------
+
+
+def style_de_depart_complet() -> dict:
+    """Forme écrite complète (partie « style » d'un projet) du style de départ :
+    ressources/style_de_depart.json. Depuis la V3.1, c'est le style du préréglage fourni « Par
+    défaut », neutre : Poppins Extra-grasse, texte blanc, contour noir, les mots comme le texte, sans
+    animation, au centre 11 % plus bas. Le style d'un nouveau projet quand aucun préréglage n'a la ★,
+    et la référence de « Rétablir » d'un projet sans préréglage."""
+    brut = lire_json(dossier_ressources() / FICHIER_STYLE_DE_DEPART, {})
+    return ReglagesSousTitres.depuis_dict({"style": brut if isinstance(brut, dict) else {}}).en_dict()["style"]
+
+
+def avec_le_style(reglages: ReglagesSousTitres, style: dict) -> ReglagesSousTitres:
+    """Réglages du projet avec ce style (texte, mots, animations, position, découpage) ; l'écran, la
+    vidéo d'aperçu et le préréglage d'origine ne changent pas."""
+    lu = ReglagesSousTitres.depuis_dict({"style": style if isinstance(style, dict) else {}})
+    return replace(
+        reglages,
+        texte=lu.texte,
+        mots=lu.mots,
+        animations=lu.animations,
+        position=lu.position,
+        **{nom: getattr(lu, nom) for nom in _DECOUPAGE},
+    )
 
 
 # --- Écran ----------------------------------------------------------------------------------------

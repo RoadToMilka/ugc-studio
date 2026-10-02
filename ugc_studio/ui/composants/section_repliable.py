@@ -2,8 +2,9 @@
 
 Pour garder un long formulaire lisible (ex. le brief du module Script : « Produit et offre »,
 « Clientèle »…). Fermée, la section peut afficher un court résumé à côté du titre (ex. « 3 champs
-remplis »). Le titre se dessine comme les boutons de l'app (icône et texte centrés en hauteur,
-même écart entre les deux), sans cadre : c'est un titre, pas une action.
+remplis », seulement dans le brief depuis la V3.1). Le titre se dessine comme les boutons de l'app
+(icône et texte centrés en hauteur, même écart entre les deux), sans cadre : c'est un titre, pas une
+action. Juste après lui, une icône « i » (aide) et, dans le studio des sous-titres, le ↺ du groupe.
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QSizePolicy, QVBoxLa
 from ..icones import icone
 from ..polices import police
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Typo, qcolor
-from .bouton import dessiner_icone_et_texte, largeur_icone_et_texte
-from .elements import BoutonInfo, libelle, ligne_avec_aide
+from .bouton import Bouton, dessiner_icone_et_texte, largeur_icone_et_texte
+from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide
 
 
 class TitreSection(QAbstractButton):
@@ -91,7 +92,9 @@ class SectionRepliable(QWidget):
         ligne.setSpacing(Espacements.S)
         self.titre = TitreSection(titre)
         self.aide = BoutonInfo(aide) if aide else None
-        ligne.addLayout(ligne_avec_aide(self.titre, self.aide, fin=False))
+        self._ligne_titre = ligne_avec_aide(self.titre, self.aide, fin=False)
+        ligne.addLayout(self._ligne_titre)
+        self.retablir: Bouton | None = None  # ↺ du groupe (V3.1), voir ajouter_retablir()
         self.resume = libelle("", "legende", retour_a_la_ligne=False)
         ligne.addWidget(self.resume)
         ligne.addStretch(1)
@@ -105,6 +108,20 @@ class SectionRepliable(QWidget):
         self.titre.toggled.connect(self._basculer)
         self.titre.setChecked(ouverte)
         self._basculer(ouverte)
+
+    def ajouter_retablir(self, action, infobulle: str) -> Bouton:
+        """Le ↺ du groupe (V3.1, studio des sous-titres) : une icône seule, juste après le titre
+        (« Police ↺ »), visible seulement quand le groupe s'écarte du préréglage (montrer_retablir) ;
+        un clic remet le groupe comme dans le préréglage, sans ouvrir la section."""
+        self.retablir = bouton("", variante="icone", nom_icone="rotate-ccw", action=action)
+        self.retablir.setToolTip(infobulle)
+        self.retablir.hide()
+        self._ligne_titre.addWidget(self.retablir, 0, Qt.AlignmentFlag.AlignVCenter)
+        return self.retablir
+
+    def montrer_retablir(self, visible: bool) -> None:
+        if self.retablir is not None:
+            self.retablir.setVisible(visible)
 
     def est_ouverte(self) -> bool:
         return self.titre.isChecked()

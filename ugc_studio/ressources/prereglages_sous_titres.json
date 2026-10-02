@@ -1,8 +1,171 @@
 {
-  "description": "Préréglages de sous-titres fournis avec UGC Studio (V2, lot 7) : les 6 styles de l'annexe B du document V2. Modifiables et supprimables dans l'app ; « Rétablir les préréglages fournis » les remet comme ici. Tailles en % de la hauteur de la vidéo (1 % = 19,2 px pour 1920 px de haut) ; couleurs « #RRGGBB » avec leur opacité (0 à 100 %).",
+  "description": "Préréglages de sous-titres fournis avec UGC Studio : « Par défaut » (V3.1 : neutre, Poppins Extra-grasse, texte blanc, contour noir, les mots comme le texte, sans animation ; le préréglage ★ des nouveaux projets) et les 6 styles de l'annexe B du document V2 (V2, lot 7). Modifiables et supprimables dans l'app ; « Rétablir les préréglages fournis » les remet comme ici. Tailles en % de la hauteur de la vidéo (1 % = 19,2 px pour 1920 px de haut) ; couleurs « #RRGGBB » avec leur opacité (0 à 100 %).",
   "type": "prereglages_sous_titres",
   "version_format": 1,
   "prereglages": [
+    {
+      "identifiant": "fourni-par-defaut",
+      "nom": "Par défaut",
+      "fourni": true,
+      "style": {
+        "texte": {
+          "police": "Poppins",
+          "graisse": 800,
+          "taille_pct": 4.0,
+          "casse": "normale",
+          "ponctuation": true,
+          "couleur": {
+            "code": "#FFFFFF",
+            "opacite": 100.0
+          },
+          "degrade": {
+            "actif": false,
+            "couleur": {
+              "code": "#FACC15",
+              "opacite": 100.0
+            },
+            "direction": "vertical"
+          },
+          "contour": {
+            "actif": true,
+            "couleur": {
+              "code": "#000000",
+              "opacite": 100.0
+            },
+            "epaisseur_pct": 0.3,
+            "angles": "arrondis"
+          },
+          "ombre": {
+            "active": false,
+            "couleur": {
+              "code": "#000000",
+              "opacite": 55.0
+            },
+            "flou_pct": 0.4,
+            "decalage_x_pct": 0.0,
+            "decalage_y_pct": 0.2,
+            "portee": "texte"
+          },
+          "lueur": {
+            "active": false,
+            "couleur": {
+              "code": "#F59E0B",
+              "opacite": 100.0
+            },
+            "taille_pct": 1.0,
+            "intensite_pct": 80.0
+          },
+          "fond": {
+            "mode": "aucun",
+            "couleur": {
+              "code": "#000000",
+              "opacite": 60.0
+            },
+            "marge_x_pct": 0.8,
+            "marge_y_pct": 0.3,
+            "arrondi_pct": 0.6,
+            "bordure": false,
+            "bordure_couleur": {
+              "code": "#FFFFFF",
+              "opacite": 100.0
+            },
+            "bordure_epaisseur_pct": 0.15
+          },
+          "espaces": {
+            "interligne_pct": 100.0,
+            "lettres_pct": 0.0,
+            "mots_pct": 0.0
+          }
+        },
+        "mots": {
+          "a_venir": {
+            "visible": true,
+            "opacite_pct": null,
+            "couleur": null,
+            "degrade": null,
+            "contour": null,
+            "lueur": null,
+            "fond": null,
+            "soulignement": null,
+            "taille_pct": null,
+            "decalage_y_pct": null
+          },
+          "actif": {
+            "visible": true,
+            "opacite_pct": null,
+            "couleur": null,
+            "degrade": null,
+            "contour": null,
+            "lueur": null,
+            "fond": null,
+            "soulignement": null,
+            "taille_pct": null,
+            "decalage_y_pct": null
+          },
+          "dits": {
+            "visible": true,
+            "opacite_pct": null,
+            "couleur": null,
+            "degrade": null,
+            "contour": null,
+            "lueur": null,
+            "fond": null,
+            "soulignement": null,
+            "taille_pct": null,
+            "decalage_y_pct": null
+          },
+          "accentues_actifs": false,
+          "accentues": {
+            "visible": true,
+            "opacite_pct": null,
+            "couleur": {
+              "code": "#FFD43B",
+              "opacite": 100.0
+            },
+            "degrade": null,
+            "contour": null,
+            "lueur": null,
+            "fond": null,
+            "soulignement": null,
+            "taille_pct": null,
+            "decalage_y_pct": null
+          },
+          "avance_ms": 0
+        },
+        "animations": {
+          "mot": {
+            "type": "aucune",
+            "duree_ms": 180,
+            "intensite_pct": 100.0,
+            "taille_depart_pct": null,
+            "taille_sommet_pct": null,
+            "taille_arrivee_pct": null,
+            "opacite_depart_pct": null,
+            "decalage_depart_pct": null,
+            "courbe": null
+          },
+          "retour": "instantane",
+          "retour_duree_ms": 150,
+          "apparition": "aucune",
+          "apparition_duree_ms": 200,
+          "disparition": "aucune",
+          "disparition_duree_ms": 200
+        },
+        "position": {
+          "verticale": "centre",
+          "decalage_pct": 11.0,
+          "alignement": "centre",
+          "largeur_lignes_pct": 100.0
+        },
+        "decoupage": {
+          "caracteres_max": 24,
+          "mots_max": 5,
+          "lignes_max": 2,
+          "couper_sur_ponctuation": true,
+          "duree_min_s": 0.6
+        }
+      }
+    },
     {
       "identifiant": "fourni-blanc-contour-noir",
       "nom": "Blanc contour noir",

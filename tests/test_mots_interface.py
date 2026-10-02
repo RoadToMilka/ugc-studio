@@ -189,7 +189,8 @@ def test_onglet_mots_raccourcis_et_comme_le_texte(app_configuree, qtbot):
     onglet.charger(Mots(), texte, 1920)
     assert onglet.raccourci.currentData() == "fixe"
     assert onglet.couleur.couleur() == Couleur(255, 255, 255)  # comme le texte
-    assert onglet.grilles[1].marques["couleur"][1].isHidden()  # pas de ↺
+    remplissage = onglet.sections["Remplissage"]
+    assert remplissage.retablir.isHidden()  # comme dans le préréglage (ici : tout « comme le texte ») : pas de ↺
     # Raccourci « Karaoké ».
     onglet.raccourci.setCurrentIndex(onglet.raccourci.findData("karaoke"))
     onglet.raccourci.activated.emit(onglet.raccourci.currentIndex())
@@ -199,11 +200,13 @@ def test_onglet_mots_raccourcis_et_comme_le_texte(app_configuree, qtbot):
     onglet.couleur.appliquer(Couleur(239, 68, 68))
     assert onglet.mots().actif.couleur == Couleur(239, 68, 68)
     assert onglet.raccourci.currentData() == PERSONNALISE
-    etiquette, remise = onglet.grilles[1].marques["couleur"]
-    assert etiquette.property("role") == "legende-modifiee" and not remise.isHidden()
-    # ↺ : comme le texte.
-    remise.click()
-    assert onglet.mots().actif.couleur is None
+    etiquette = onglet.grilles[1].marques["couleur"]
+    assert etiquette.property("role") == "legende-modifiee" and not remplissage.retablir.isHidden()
+    assert all(section.retablir.isHidden() for titre, section in onglet.sections.items() if titre != "Remplissage")
+    # ↺ du groupe (V3.1, à côté de son titre) : comme dans le préréglage, donc « comme le texte ».
+    remplissage.retablir.click()
+    assert onglet.mots().actif.couleur is None and etiquette.property("role") == "legende"
+    assert remplissage.retablir.isHidden()
     # Le fond surligné du mot actif, avec son glissement (réglage avancé du mot actif seulement).
     onglet.fond.setChecked(True)
     onglet.fond_glisse.setChecked(True)
@@ -263,3 +266,31 @@ def test_studio_avec_l_onglet_mots(atelier, services):
     assert atelier.toile._dessine[0] == 2
     services.projets.ouvrir(services.projets.projet.dossier)
     assert services.projets.projet.sous_titres.mots.actif.taille_pct == 108.0
+
+
+def test_onglet_mots_par_rapport_au_prereglage(app_configuree, qtbot):
+    """V3.1 : la référence est le préréglage du projet. Un état réglé dans le préréglage (le mot actif
+    en jaune) n'est pas marqué ; le remettre « comme le texte » l'écarte du préréglage, et le ↺ y
+    ramène. « Mot visible » et « Opacité » forment le groupe « Visibilité »."""
+    from ugc_studio.ui.pages.sous_titres.onglet_mots import OngletMots
+
+    onglet = OngletMots()
+    qtbot.addWidget(onglet)
+    prereglage = Mots(actif=EtatMot(couleur=JAUNE_ACTIF, taille_pct=108.0))
+    onglet.charger(prereglage, StyleTexte(), 1920)
+    onglet.definir_reference(prereglage, "Revenir au préréglage « Blanc contour noir »")
+    onglet.etat.bouton(ACTIF).click()
+    assert all(section.retablir.isHidden() for section in onglet.sections.values())
+    assert onglet.grilles[1].marques["couleur"].property("role") == "legende"  # jaune comme le préréglage
+    visibilite = onglet.sections["Visibilité"]
+    assert onglet.visible.isVisibleTo(visibilite) and onglet.opacite.champ.isVisibleTo(visibilite)
+    taille = onglet.sections["Taille et place"]
+    onglet.taille.champ.setValue(120.0)
+    assert not taille.retablir.isHidden() and taille.retablir.toolTip() == "Revenir au préréglage « Blanc contour noir »"
+    taille.retablir.click()
+    assert onglet.mots().actif.taille_pct == 108.0 and taille.retablir.isHidden()
+    # Avance de l'allumage : son propre ↺, sur « Réglages avancés ».
+    onglet.avance.setValue(40)
+    assert not onglet.section_avancee.retablir.isHidden()
+    onglet.section_avancee.retablir.click()
+    assert onglet.mots().avance_ms == 0 and onglet.section_avancee.retablir.isHidden()

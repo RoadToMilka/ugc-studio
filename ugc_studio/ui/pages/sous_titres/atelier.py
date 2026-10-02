@@ -771,8 +771,9 @@ class AtelierSousTitres(Page):
     # --- Préréglages (V2, lot 7) ----------------------------------------------------------------
 
     def _actualiser_prereglage(self) -> None:
-        """Liste des préréglages, avec celui du projet (« (modifié) » s'il s'en écarte) ; « Rétablir »
-        de l'onglet Texte remet les valeurs de ce préréglage."""
+        """Liste des préréglages, avec celui du projet (« (modifié) » s'il s'en écarte) ; dans les
+        onglets, la référence des ↺ et des noms en mauve : ce préréglage tel qu'il est enregistré
+        (sans lui, le style de départ ; V3.1)."""
         if self._projet is None:
             return
         bibliotheque, reglages = self._services.prereglages, self._projet.sous_titres
@@ -783,8 +784,7 @@ class AtelierSousTitres(Page):
             reglages.prereglage_nom,
             origine is not None and modifie(reglages, origine),
         )
-        texte = appliquer_le_prereglage(reglages, origine).texte if origine is not None else None
-        self.panneau.texte.definir_reference(texte)
+        self.panneau.definir_reference(bibliotheque.reference(reglages), bibliotheque.nom_de_reference(reglages))
 
     def _statut_prereglage(self, message: str, role: str = "succes") -> None:
         self._afficher(message, role, self.panneau.statut_prereglage)

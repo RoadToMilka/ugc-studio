@@ -4,13 +4,17 @@ Un préréglage = un nom et un style complet : les réglages des onglets Texte, 
 Position et Découpage, sous la même forme écrite que la partie « style » d'un projet. Ni le format
 ni la plateforme : ils dépendent de la vidéo et de l'endroit où passe la pub.
 
-- **Fournis** : les 6 styles du document V2 (annexe B), dans ressources/prereglages_sous_titres.json.
-  Modifiables et supprimables ; « Rétablir les préréglages fournis » les remet comme à l'origine.
+- **Fournis** : « Par défaut » (V3.1 : neutre, le style de départ) et les 6 styles du document V2
+  (annexe B), dans ressources/prereglages_sous_titres.json. Modifiables et supprimables ; « Rétablir
+  les préréglages fournis » les remet comme à l'origine.
 - **Rangés** dans %APPDATA%\\UGC Studio\\prereglages_sous_titres.json.
-- **★ par défaut** : le style des nouveaux projets (au départ « Blanc contour noir » ; sans ★, le
-  style de départ du lot 4).
+- **★ par défaut** : le style des nouveaux projets (au départ « Par défaut » ; « Blanc contour noir »
+  jusqu'à la 3.0.3 ; sans ★, le style de départ, le même que « Par défaut »).
 - Un projet garde sa **propre copie** du style : modifier ou supprimer un préréglage ne change pas
   un projet déjà fait. Il retient son préréglage d'origine, pour afficher « (modifié) ».
+- **Référence** (V3.1) : le préréglage d'origine du projet **tel qu'il est enregistré** (sans lui,
+  le style de départ). Les ↺ du studio y ramènent un groupe de réglages, et les réglages qui s'en
+  écartent ont leur nom en mauve.
 - **Export** : un petit fichier .json lisible (un ou plusieurs préréglages) ; **import** : ajoutés à
   la liste, avec « (2) » si le nom existe déjà.
 
@@ -26,16 +30,18 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .chemins import dossier_ressources
-from .sous_titres import ReglagesSousTitres
+from .sous_titres import ReglagesSousTitres, avec_le_style, style_de_depart_complet
 from .stockage import ecrire_json, lire_json
-from .style_sous_titres import style_de_depart
 
 FICHIER_FOURNIS = "prereglages_sous_titres.json"  # dans ressources/
 FICHIER_PREREGLAGES = "prereglages_sous_titres.json"  # dans le dossier de l'app
 EXTENSION = ".json"
 TYPE_DE_FICHIER = "prereglages_sous_titres"  # marque d'un fichier exporté par l'app
-VERSION_FORMAT = 1
-DEFAUT_FOURNI = "fourni-blanc-contour-noir"  # ★ au départ
+VERSION_FORMAT = 1  # forme écrite d'un préréglage (fichiers exportés)
+# Fichier de la bibliothèque : 2 depuis la V3.1 (le préréglage « Par défaut » y a été ajouté).
+VERSION_BIBLIOTHEQUE = 2
+DEFAUT_FOURNI = "fourni-par-defaut"  # ★ au départ (V3.1)
+ANCIEN_DEFAUT_FOURNI = "fourni-blanc-contour-noir"  # ★ au départ jusqu'à la 3.0.3
 NOM_MAX = 60  # caractères
 
 
@@ -48,7 +54,7 @@ class Prereglage:
     identifiant: str
     nom: str
     style: dict = field(default_factory=dict)  # forme écrite normalisée (voir normaliser)
-    fourni: bool = False  # un des 6 styles fournis (identifiant stable, « fourni-… »)
+    fourni: bool = False  # un des 7 styles fournis (identifiant stable, « fourni-… »)
 
 
 # --- Style d'un projet et d'un préréglage ------------------------------------------------------
@@ -69,21 +75,7 @@ def normaliser(style) -> dict:
 def appliquer(reglages: ReglagesSousTitres, prereglage: Prereglage) -> ReglagesSousTitres:
     """Réglages du projet avec le style du préréglage (format, plateforme et vidéo d'aperçu ne
     changent pas) ; le préréglage devient celui d'origine."""
-    lu = ReglagesSousTitres.depuis_dict({"style": prereglage.style})
-    return replace(
-        reglages,
-        texte=lu.texte,
-        mots=lu.mots,
-        animations=lu.animations,
-        position=lu.position,
-        caracteres_max=lu.caracteres_max,
-        mots_max=lu.mots_max,
-        lignes_max=lu.lignes_max,
-        couper_sur_ponctuation=lu.couper_sur_ponctuation,
-        duree_min_s=lu.duree_min_s,
-        prereglage=prereglage.identifiant,
-        prereglage_nom=prereglage.nom,
-    )
+    return replace(avec_le_style(reglages, prereglage.style), prereglage=prereglage.identifiant, prereglage_nom=prereglage.nom)
 
 
 def modifie(reglages: ReglagesSousTitres, prereglage: Prereglage) -> bool:
@@ -109,8 +101,16 @@ def _lire(brut, fourni: bool = False) -> Prereglage | None:
     return Prereglage(identifiant, nom, normaliser(brut["style"]), fourni or bool(brut.get("fourni")))
 
 
+def _version(donnees: dict) -> int:
+    try:
+        return int(donnees.get("version_format") or 1)
+    except (TypeError, ValueError):
+        return 1
+
+
 def prereglages_fournis() -> list[Prereglage]:
-    """Les 6 styles fournis (ressources/prereglages_sous_titres.json)."""
+    """Les 7 styles fournis (ressources/prereglages_sous_titres.json) : « Par défaut », puis les 6 du
+    document V2."""
     brut = lire_json(dossier_ressources() / FICHIER_FOURNIS, {})
     lus = [_lire(element, fourni=True) for element in (brut.get("prereglages") if isinstance(brut, dict) else None) or []]
     return [p for p in lus if p is not None]
@@ -164,6 +164,8 @@ class BibliothequePrereglages:
             lus = [_lire(element) for element in donnees["prereglages"]]
             self.prereglages: list[Prereglage] = [p for p in lus if p is not None]
             self.par_defaut: str = str(donnees.get("par_defaut") or "")
+            if _version(donnees) < VERSION_BIBLIOTHEQUE:
+                self._ajouter_par_defaut()
         else:
             self.prereglages = prereglages_fournis()
             self.par_defaut = DEFAUT_FOURNI if self.prereglage(DEFAUT_FOURNI) else ""
@@ -187,11 +189,26 @@ class BibliothequePrereglages:
         return candidat
 
     def reglages_des_nouveaux(self, reglages: ReglagesSousTitres) -> ReglagesSousTitres:
-        """Style d'un nouveau projet : celui du préréglage ★ ; sans ★, le style de départ (lot 4)."""
+        """Style d'un nouveau projet : celui du préréglage ★ ; sans ★, le style de départ (le même
+        que le préréglage fourni « Par défaut »)."""
         defaut = self.defaut()
         if defaut is not None:
             return appliquer(reglages, defaut)
-        return replace(reglages, texte=style_de_depart(), prereglage="", prereglage_nom="")
+        return replace(avec_le_style(reglages, style_de_depart_complet()), prereglage="", prereglage_nom="")
+
+    def reference(self, reglages: ReglagesSousTitres) -> ReglagesSousTitres:
+        """Ce que les ↺ du studio remettent (V3.1) : le style du préréglage d'origine du projet, tel
+        qu'il est enregistré dans la bibliothèque ; sans préréglage (ou s'il a été supprimé depuis), le
+        style de départ. L'écran et la vidéo d'aperçu restent ceux du projet."""
+        origine = self.prereglage(reglages.prereglage)
+        if origine is not None:
+            return appliquer(reglages, origine)
+        return avec_le_style(reglages, style_de_depart_complet())
+
+    def nom_de_reference(self, reglages: ReglagesSousTitres) -> str:
+        """« Revenir au préréglage « Par défaut » », ou au style de départ (infobulle des ↺)."""
+        origine = self.prereglage(reglages.prereglage)
+        return f"Revenir au préréglage « {origine.nom} »" if origine is not None else "Revenir au style de départ"
 
     # --- Modifications -------------------------------------------------------------------------
 
@@ -232,7 +249,7 @@ class BibliothequePrereglages:
         self._enregistrer()
 
     def retablir_fournis(self) -> None:
-        """Les 6 préréglages fournis redeviennent comme à l'origine (remis s'ils avaient été
+        """Les 7 préréglages fournis redeviennent comme à l'origine (remis s'ils avaient été
         supprimés, en tête de liste) ; les autres ne changent pas, ni le choix du ★ (« aucun » compris :
         c'est un choix)."""
         fournis = prereglages_fournis()
@@ -275,6 +292,18 @@ class BibliothequePrereglages:
 
     # --- Interne -------------------------------------------------------------------------------
 
+    def _ajouter_par_defaut(self) -> None:
+        """Bibliothèque d'avant la V3.1 : le préréglage fourni « Par défaut » arrive en tête de liste ;
+        la ★ passe de « Blanc contour noir » (la ★ de départ jusqu'à la 3.0.3) à « Par défaut ». Une ★
+        mise sur un autre préréglage (ou retirée) reste comme elle est. Fait une seule fois : le fichier
+        est réécrit à la nouvelle version."""
+        nouveau = next((p for p in prereglages_fournis() if p.identifiant == DEFAUT_FOURNI), None)
+        if nouveau is not None and self.prereglage(DEFAUT_FOURNI) is None:
+            self.prereglages.insert(0, replace(nouveau, nom=self.nom_libre(nouveau.nom)))
+            if self.par_defaut == ANCIEN_DEFAUT_FOURNI:
+                self.par_defaut = DEFAUT_FOURNI
+        self._enregistrer()
+
     def _existant(self, identifiant: str) -> Prereglage:
         prereglage = self.prereglage(identifiant)
         if prereglage is None:
@@ -292,7 +321,7 @@ class BibliothequePrereglages:
         ecrire_json(
             self._chemin,
             {
-                "version_format": VERSION_FORMAT,
+                "version_format": VERSION_BIBLIOTHEQUE,
                 "par_defaut": self.par_defaut,
                 "prereglages": [
                     {"identifiant": p.identifiant, "nom": p.nom, "fourni": p.fourni, "style": p.style} for p in self.prereglages

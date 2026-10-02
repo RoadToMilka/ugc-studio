@@ -12,8 +12,14 @@ six onglets.
 - Animations (onglet_animations.py) : le mot qui devient actif, son retour à « déjà dit »,
   l'apparition et la disparition du sous-titre (lot 6).
 - Position : haut, centre ou bas, réglage fin, alignement ; avancé : largeur maximale des lignes.
-- Découpage : caractères, mots et lignes au plus, durée minimale, coupure sur la ponctuation,
-  hésitations masquées.
+- Découpage : caractères, mots et lignes au plus, durée minimale, coupure sur la ponctuation ;
+  hésitations masquées (réglage partagé avec la transcription, hors du préréglage).
+
+V3.1 : la référence est le préréglage du projet tel qu'il est enregistré (sans lui, le style de
+départ) ; dans chaque onglet (sauf Écran, qui dépend de la vidéo), un réglage qui s'en écarte a son
+nom en mauve, et le ↺ de son groupe apparaît à côté du titre (definir_reference). Position et
+Découpage forment chacun un groupe ; le ↺ « Revenir à 0 % » du réglage fin a disparu : celui du
+groupe Position remet la position du préréglage, réglage fin compris.
 - Écran : format (suivi de la vidéo quand il y en a une, sinon au choix, dont personnalisé), zone de
   sécurité, marge maximum ; pour un projet sans vidéo, la vidéo choisie seulement pour l'aperçu.
 
@@ -62,8 +68,8 @@ from ...icones import icone_menu
 from ...theme import Espacements
 from .onglet_animations import OngletAnimations
 from .onglet_mots import OngletMots
-from .onglet_texte import OngletTexte
-from .reglages_communs import grille, nombre_lisible
+from .onglet_texte import RETABLIR, OngletTexte
+from .reglages_communs import grille, marque_de, marquer, meme_valeur, nombre_lisible
 
 ONGLET_TEXTE, ONGLET_MOTS, ONGLET_ANIMATIONS, ONGLET_POSITION, ONGLET_DECOUPAGE, ONGLET_ECRAN = range(6)
 PAS_REGLAGE_FIN = 10  # la glissière du réglage fin compte en dixièmes de % de la hauteur
@@ -113,6 +119,7 @@ class PanneauReglages(QWidget):
         disposition.addWidget(self.onglets)
         self._apercu = VideoApercu()
         self._resolution_imposee: tuple[int, int] | None | bool = False  # False : liste des formats pas encore remplie
+        self._reference: ReglagesSousTitres | None = None  # le préréglage du projet (V3.1), donné par la page
 
     # --- Préréglage (lot 7) ----------------------------------------------------------------------
 
@@ -178,49 +185,55 @@ class PanneauReglages(QWidget):
 
     def _onglet_position(self) -> QWidget:
         page, contenu = self._onglet()
+        # Un seul groupe (V3.1), avec le ↺ qui remet la position du préréglage, réglage fin compris.
+        self.section_position = SectionRepliable("Position", True)
+        self.section_position.ajouter_retablir(self._retablir_position, RETABLIR)
+        groupe = self.section_position.contenu
         self.verticale = ChoixEnBoutons(POSITIONS, "Point fixe du sous-titre : son haut, son milieu ou son bas")
         self.reglage_fin = glissiere()
         self.reglage_fin.setToolTip("Décale le sous-titre vers le haut ou vers le bas (en % de la hauteur)")
         self.valeur_reglage_fin = libelle("0 %", "legende", retour_a_la_ligne=False)
-        self.bouton_reglage_fin = bouton("", variante="icone", nom_icone="rotate-ccw", action=lambda: self.reglage_fin.setValue(0))
-        self.bouton_reglage_fin.setToolTip("Revenir à 0 %")
         ligne_fin = QHBoxLayout()
         ligne_fin.setSpacing(Espacements.S)
         ligne_fin.addWidget(self.reglage_fin, 1)
         ligne_fin.addWidget(self.valeur_reglage_fin)
-        ligne_fin.addWidget(self.bouton_reglage_fin)
         self.alignement = ChoixEnBoutons(ALIGNEMENTS, "Alignement des lignes")
         # La glissière prend toute la largeur de sa colonne (les autres champs gardent la leur).
         # V3.1 : les explications au survol d'une icône « i », après le nom du réglage.
-        contenu.addLayout(
-            grille(
+        reglages = grille(
+            (
                 (
-                    (
-                        "Position",
-                        self.verticale,
-                        "« Haut » et « Bas » : juste à l'intérieur de la zone de sécurité de la plateforme. Tu peux "
-                        "aussi glisser le sous-titre dans l'aperçu.",
-                    ),
-                    ("Réglage fin", ligne_fin),
-                    ("Alignement", self.alignement),
+                    "Position",
+                    self.verticale,
+                    "« Haut » et « Bas » : juste à l'intérieur de la zone de sécurité de la plateforme. Tu peux "
+                    "aussi glisser le sous-titre dans l'aperçu.",
                 ),
-                etirees=(1,),
-            )
+                ("Réglage fin", ligne_fin),
+                ("Alignement", self.alignement),
+            ),
+            etirees=(1,),
         )
+        groupe.addLayout(reglages)
         self.avances_position = SectionRepliable("Réglages avancés")
         self.largeur_lignes = champ_decimal(*LIMITES["largeur_lignes_pct"], 1, 0, " %", "Largeur maximale des lignes")
-        self.avances_position.contenu.addLayout(
-            grille(
+        largeur = grille(
+            (
                 (
-                    (
-                        "Largeur des lignes",
-                        self.largeur_lignes,
-                        "En % de la largeur utile (zone de sécurité, ou jusqu'à la marge maximum) : pour un bloc plus étroit.",
-                    ),
-                )
+                    "Largeur des lignes",
+                    self.largeur_lignes,
+                    "En % de la largeur utile (zone de sécurité, ou jusqu'à la marge maximum) : pour un bloc plus étroit.",
+                ),
             )
         )
-        contenu.addWidget(self.avances_position)
+        self.avances_position.contenu.addLayout(largeur)
+        groupe.addWidget(self.avances_position)
+        contenu.addWidget(self.section_position)
+        self._marques_position = [
+            (marque_de(reglages.champs["Position"]), "verticale"),
+            (marque_de(reglages.champs["Réglage fin"]), "decalage_pct"),
+            (marque_de(reglages.champs["Alignement"]), "alignement"),
+            (marque_de(largeur.champs["Largeur des lignes"]), "largeur_lignes_pct"),
+        ]
         contenu.addStretch(1)
         self.verticale.change.connect(lambda _valeur: self.position_change.emit())
         self.reglage_fin.valueChanged.connect(self._reglage_fin_bouge)
@@ -230,24 +243,36 @@ class PanneauReglages(QWidget):
 
     def _onglet_decoupage(self) -> QWidget:
         page, contenu = self._onglet()
+        # Un seul groupe (V3.1), avec son ↺ ; « Masquer les hésitations » reste dehors : réglage
+        # partagé avec la transcription, il ne fait pas partie d'un préréglage.
+        self.section_decoupage = SectionRepliable("Découpage", True)
+        self.section_decoupage.ajouter_retablir(self._retablir_decoupage, RETABLIR)
+        groupe = self.section_decoupage.contenu
         self.caracteres = champ_entier(*LIMITES["caracteres_max"], info="Nombre maximum de caractères par sous-titre, espaces comprises")
         self.mots_max = champ_entier(*LIMITES["mots_max"], info="Nombre maximum de mots par sous-titre")
         self.lignes = champ_entier(*LIMITES["lignes_max"], info="Nombre maximum de lignes (1 ou 2) : jamais dépassé")
         self.duree_min = champ_decimal(*LIMITES["duree_min_s"], 0.1, 1, " s", "Durée minimale d'affichage d'un sous-titre")
-        contenu.addLayout(
-            grille(
-                (
-                    ("Caractères au plus", self.caracteres),
-                    ("Mots au plus", self.mots_max),
-                    ("Lignes au plus", self.lignes),
-                    ("Durée minimale", self.duree_min),
-                )
+        reglages = grille(
+            (
+                ("Caractères au plus", self.caracteres),
+                ("Mots au plus", self.mots_max),
+                ("Lignes au plus", self.lignes),
+                ("Durée minimale", self.duree_min),
             )
         )
+        groupe.addLayout(reglages)
         zone, self.couper_ponctuation = case_a_cocher(
             "Couper de préférence après la ponctuation", "Une fin de phrase termine alors toujours le sous-titre."
         )
-        contenu.addWidget(zone)
+        groupe.addWidget(zone)
+        contenu.addWidget(self.section_decoupage)
+        self._marques_decoupage = [
+            (marque_de(reglages.champs["Caractères au plus"]), "caracteres_max"),
+            (marque_de(reglages.champs["Mots au plus"]), "mots_max"),
+            (marque_de(reglages.champs["Lignes au plus"]), "lignes_max"),
+            (marque_de(reglages.champs["Durée minimale"]), "duree_min_s"),
+            (self.couper_ponctuation, "couper_sur_ponctuation"),
+        ]
         self.zone_masquer, self.masquer = case_a_cocher(
             "Masquer les hésitations", "« euh », « hum »… (même réglage que dans le module Transcription)."
         )
@@ -350,7 +375,6 @@ class PanneauReglages(QWidget):
         pourcentage = valeur / PAS_REGLAGE_FIN
         signe = "+" if pourcentage > 0 else ""
         self.valeur_reglage_fin.setText(f"{signe}{nombre_lisible(pourcentage)} %")
-        self.bouton_reglage_fin.setEnabled(valeur != 0)
         self.position_change.emit()
 
     def definir_limites_reglage_fin(self, bas: float, haut: float) -> None:
@@ -437,12 +461,96 @@ class PanneauReglages(QWidget):
             element.blockSignals(False)
         self._reglage_fin_texte()
         self._montrer_video_apercu(video_du_projet)
+        self._actualiser_marques()
+
+    # --- Référence : le préréglage du projet (V3.1) ------------------------------------------------
+
+    def definir_reference(self, reference: ReglagesSousTitres, infobulle: str = RETABLIR) -> None:
+        """Ce que les ↺ remettent, dans tous les onglets du préréglage : le préréglage du projet tel
+        qu'il est enregistré (sans lui, le style de départ). `infobulle` : « Revenir au préréglage
+        « Par défaut » »."""
+        self._reference = reference
+        self.texte.definir_reference(reference.texte, infobulle)
+        self.mots.definir_reference(reference.mots, infobulle)
+        self.animations.definir_reference(reference.animations, infobulle)
+        for section in (self.section_position, self.section_decoupage):
+            section.retablir.setToolTip(infobulle)
+        self._actualiser_marques()
+
+    def _position_affichee(self) -> Position:
+        return Position(
+            self.verticale.valeur(),
+            round(self.reglage_fin.value() / PAS_REGLAGE_FIN, 2),
+            self.alignement.valeur(),
+            round(self.largeur_lignes.value(), 1),
+        )
+
+    def _decoupage_affiche(self) -> dict:
+        return {
+            "caracteres_max": self.caracteres.value(),
+            "mots_max": self.mots_max.value(),
+            "lignes_max": self.lignes.value(),
+            "duree_min_s": round(self.duree_min.value(), 2),
+            "couper_sur_ponctuation": self.couper_ponctuation.isChecked(),
+        }
+
+    def _actualiser_marques(self) -> None:
+        """Onglets Position et Découpage : noms en mauve et ↺ du groupe, comparés au préréglage."""
+        reference = self._reference
+        if reference is None:
+            return
+        position = self._position_affichee()
+        ecart = False
+        for element, nom in self._marques_position:
+            change = not meme_valeur(getattr(position, nom), getattr(reference.position, nom))
+            marquer(element, change)
+            ecart = ecart or change
+        self.section_position.montrer_retablir(ecart)
+        decoupage = self._decoupage_affiche()
+        ecart = False
+        for element, nom in self._marques_decoupage:
+            change = not meme_valeur(decoupage[nom], getattr(reference, nom))
+            marquer(element, change)
+            ecart = ecart or change
+        self.section_decoupage.montrer_retablir(ecart)
+
+    def _retablir_position(self) -> None:
+        """↺ de la position : celle du préréglage, réglage fin compris (la page l'applique)."""
+        if self._reference is None:
+            return
+        position = self._reference.position
+        for element in (self.verticale, self.reglage_fin, self.alignement, self.largeur_lignes):
+            element.blockSignals(True)
+        self.verticale.definir(position.verticale)
+        self.reglage_fin.setValue(round(position.decalage_pct * PAS_REGLAGE_FIN))
+        self.alignement.definir(position.alignement)
+        self.largeur_lignes.setValue(position.largeur_lignes_pct)
+        for element in (self.verticale, self.reglage_fin, self.alignement, self.largeur_lignes):
+            element.blockSignals(False)
+        self._reglage_fin_texte()
+        self.change.emit()
+
+    def _retablir_decoupage(self) -> None:
+        """↺ du découpage : celui du préréglage (la page vérifie d'abord les sous-titres réorganisés)."""
+        if self._reference is None:
+            return
+        reference = self._reference
+        champs = (self.caracteres, self.mots_max, self.lignes, self.duree_min, self.couper_ponctuation)
+        for element in champs:
+            element.blockSignals(True)
+        self.caracteres.setValue(reference.caracteres_max)
+        self.mots_max.setValue(reference.mots_max)
+        self.lignes.setValue(reference.lignes_max)
+        self.duree_min.setValue(reference.duree_min_s)
+        self.couper_ponctuation.setChecked(reference.couper_sur_ponctuation)
+        for element in champs:
+            element.blockSignals(False)
+        self.change.emit()
 
     def _reglage_fin_texte(self) -> None:
         valeur = self.reglage_fin.value()
         signe = "+" if valeur > 0 else ""
         self.valeur_reglage_fin.setText(f"{signe}{nombre_lisible(valeur / PAS_REGLAGE_FIN)} %")
-        self.bouton_reglage_fin.setEnabled(valeur != 0)
 
     def _remplir_formats(self, resolution_imposee: tuple[int, int] | None) -> None:
         if resolution_imposee == self._resolution_imposee:
@@ -485,12 +593,7 @@ class PanneauReglages(QWidget):
             texte=self.texte.style(base.texte),
             mots=self.mots.mots(),
             animations=self.animations.animations(),
-            position=Position(
-                self.verticale.valeur(),
-                round(self.reglage_fin.value() / PAS_REGLAGE_FIN, 2),
-                self.alignement.valeur(),
-                round(self.largeur_lignes.value(), 1),
-            ),
+            position=self._position_affichee(),
             format=format_choisi or base.format,
             largeur_perso=cote_pair(self.largeur_perso.value()),
             hauteur_perso=cote_pair(self.hauteur_perso.value()),

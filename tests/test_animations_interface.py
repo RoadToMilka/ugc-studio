@@ -128,13 +128,18 @@ def test_onglet_animations(app_configuree, qtbot):
     onglet.type.setCurrentIndex(onglet.type.findData("pop"))
     assert onglet.animations().mot.type == "pop" and onglet.duree.isEnabled() and changes
     assert onglet.taille_sommet.champ.value() == pytest.approx(116.0)  # valeur de l'animation choisie
-    etiquette, remise = onglet.grille_avancee.marques["taille_sommet_pct"]
-    assert remise.isHidden()
+    etiquette = onglet.grille_avancee.marques["taille_sommet_pct"]
+    groupe = onglet.sections["Mot qui devient actif"]
+    assert not groupe.retablir.isHidden()  # « Pop » s'écarte de la référence (aucune animation)
+    onglet.definir_reference(onglet.animations(), "Revenir au préréglage « Mon style »")
+    assert groupe.retablir.isHidden() and etiquette.property("role") == "legende"
     onglet.taille_sommet.champ.setValue(130.0)
-    assert onglet.animations().mot.taille_sommet_pct == 130.0 and not remise.isHidden()
+    assert onglet.animations().mot.taille_sommet_pct == 130.0 and not groupe.retablir.isHidden()
     assert etiquette.property("role") == "legende-modifiee"
-    remise.click()
-    assert onglet.animations().mot.taille_sommet_pct is None
+    # V3.1 : plus de ↺ au bout de la ligne ; celui du groupe remet l'animation du préréglage.
+    groupe.retablir.click()
+    assert onglet.animations().mot.taille_sommet_pct is None and onglet.animations().mot.type == "pop"
+    assert groupe.retablir.isHidden() and etiquette.property("role") == "legende"
     onglet.retour.bouton("fondu").click()
     onglet.apparition.setCurrentIndex(onglet.apparition.findData("haut"))
     animations = onglet.animations()

@@ -230,46 +230,74 @@ def test_corriger_les_mots_depuis_la_frise(app_configuree, qtbot, services, tmp_
 def test_liste_des_prereglages_et_modifie(atelier, services):
     panneau = atelier.panneau
     assert panneau.prereglage.currentText() == "Aucun préréglage"  # projet sans préréglage d'origine
-    assert panneau.prereglage.count() == 7 and not panneau.action_mettre_a_jour.isEnabled()
-    surligneur = services.prereglages.prereglages[1]
+    assert panneau.prereglage.count() == 8 and not panneau.action_mettre_a_jour.isEnabled()
+    surligneur = services.prereglages.prereglages[2]
     panneau.prereglage.setCurrentIndex(panneau.prereglage.findData(surligneur.identifiant))
     panneau.prereglage.activated.emit(panneau.prereglage.currentIndex())
     reglages = services.projets.projet.sous_titres
     assert reglages.prereglage == surligneur.identifiant and reglages.texte.police == "Poppins"
-    assert panneau.prereglage.currentText() == "Surligneur" and panneau.prereglage.count() == 6
+    assert panneau.prereglage.currentText() == "Surligneur" and panneau.prereglage.count() == 7
     assert "appliqué" in panneau.statut_prereglage.text()
-    assert atelier.panneau.texte._reference.police == "Poppins"  # « Rétablir » : les valeurs du préréglage
-    # Un réglage changé : « (modifié) », et le menu ⋯ peut mettre à jour ou revenir.
+    # V3.1 : le préréglage enregistré est la référence des ↺ ; juste après l'avoir choisi, aucun ↺.
+    assert atelier.panneau.texte._reference == reglages.texte
+    assert _retablir_visibles(panneau) == []
+    # Un réglage changé : « (modifié) », son nom en mauve, le ↺ de son groupe ; le menu ⋯ peut mettre
+    # à jour ou revenir.
     panneau.caracteres.setValue(panneau.caracteres.value() + 2)
     assert panneau.prereglage.currentText() == "Surligneur (modifié)"
+    assert _retablir_visibles(panneau) == ["Découpage"]
+    assert panneau._marques_decoupage[0][0].property("role") == "legende-modifiee"
+    assert panneau.section_decoupage.retablir.toolTip() == "Revenir au préréglage « Surligneur »"
     assert panneau.action_mettre_a_jour.isEnabled() and panneau.action_revenir.isEnabled()
     assert "« Surligneur »" in panneau.action_revenir.text()
     atelier.revenir_au_prereglage()
     assert panneau.prereglage.currentText() == "Surligneur"
     assert not modifie(services.projets.projet.sous_titres, surligneur)
-    # La position fait partie du style : la glisser suffit à « (modifié) ».
+    # La position fait partie du style : la glisser suffit à « (modifié) ». Le ↺ du groupe Position la
+    # remet, réglage fin compris (plus de « Revenir à 0 % »).
+    position = services.projets.projet.sous_titres.position
     panneau.reglage_fin.setValue(panneau.reglage_fin.value() - 10)
-    assert panneau.prereglage.currentText() == "Surligneur (modifié)"
+    assert panneau.prereglage.currentText() == "Surligneur (modifié)" and _retablir_visibles(panneau) == ["Position"]
+    panneau.section_position.retablir.click()
+    assert services.projets.projet.sous_titres.position == position and panneau.prereglage.currentText() == "Surligneur"
+    assert _retablir_visibles(panneau) == []
+
+
+def _retablir_visibles(panneau) -> list[str]:
+    """Les groupes dont le ↺ est affiché (V3.1), dans tous les onglets du préréglage."""
+    groupes = {
+        **{f"Texte / {titre}": s for titre, s in panneau.texte.sections.items()},
+        **{f"Mots / {titre}": s for titre, s in panneau.mots.sections.items()},
+        "Mots / Réglages avancés": panneau.mots.section_avancee,
+        **{f"Animations / {titre}": s for titre, s in panneau.animations.sections.items()},
+        "Position": panneau.section_position,
+        "Découpage": panneau.section_decoupage,
+    }
+    return [nom for nom, section in groupes.items() if not section.retablir.isHidden()]
 
 
 def test_enregistrer_et_mettre_a_jour_un_prereglage(atelier, services, monkeypatch):
     panneau = atelier.panneau
     monkeypatch.setattr(atelier, "_demander_nom", lambda _titre, _nom: "Mon style")
     panneau.caracteres.setValue(30)
+    panneau.texte.contour.setChecked(False)
+    assert _retablir_visibles(panneau) == ["Texte / Contour", "Découpage"]  # écartés du style de départ
     panneau.enregistrer_prereglage_demande.emit()
     reglages = services.projets.projet.sous_titres
     cree = services.prereglages.prereglage(reglages.prereglage)
     assert cree is not None and cree.nom == "Mon style" and reglages.prereglage_nom == "Mon style"
     assert panneau.prereglage.currentText() == "Mon style" and not modifie(reglages, cree)
+    # V3.1 : ce qui est enregistré devient la référence : plus aucun ↺, plus de nom en mauve.
+    assert _retablir_visibles(panneau) == [] and panneau.texte.contour.property("modifie") is not True
     # « Mettre à jour » : le préréglage prend le style du projet, après confirmation.
     panneau.caracteres.setValue(32)
-    assert panneau.prereglage.currentText() == "Mon style (modifié)"
+    assert panneau.prereglage.currentText() == "Mon style (modifié)" and _retablir_visibles(panneau) == ["Découpage"]
     monkeypatch.setattr(atelier, "_confirmer", lambda _boite, _oui: False)
     panneau.mettre_a_jour_prereglage_demande.emit()
     assert panneau.prereglage.currentText() == "Mon style (modifié)"
     monkeypatch.setattr(atelier, "_confirmer", lambda _boite, _oui: True)
     panneau.mettre_a_jour_prereglage_demande.emit()
-    assert panneau.prereglage.currentText() == "Mon style"
+    assert panneau.prereglage.currentText() == "Mon style" and _retablir_visibles(panneau) == []
     assert services.prereglages.prereglage(cree.identifiant).style["decoupage"]["caracteres_max"] == 32
     # Supprimé depuis la bibliothèque : le projet garde son style, la liste le dit.
     services.prereglages.supprimer(cree.identifiant)
@@ -286,7 +314,8 @@ def test_nouveau_projet_avec_le_prereglage_par_defaut(app_configuree, qtbot, ser
     qtbot.addWidget(page)
     page.show()
     assert services.projets.projet.sous_titres.prereglage == DEFAUT_FOURNI
-    assert page.atelier.panneau.prereglage.currentText() == "Blanc contour noir"
+    assert page.atelier.panneau.prereglage.currentText() == "Par défaut"
+    assert _retablir_visibles(page.atelier.panneau) == []
 
 
 # --- Fenêtre « Préréglages de sous-titres » ------------------------------------------------------------
@@ -298,16 +327,17 @@ def test_fenetre_des_prereglages(app_configuree, qtbot, services, tmp_path, monk
     fenetre = DialoguePrereglages(services, None, actuel=DEFAUT_FOURNI)
     qtbot.addWidget(fenetre)
     fenetre.show()
-    assert [c.prereglage.nom for c in fenetre.cartes][:2] == ["Blanc contour noir", "Surligneur"] and len(fenetre.cartes) == 6
+    assert [c.prereglage.nom for c in fenetre.cartes][:3] == ["Par défaut", "Blanc contour noir", "Surligneur"]
+    assert len(fenetre.cartes) == 7
     assert "style du projet" in fenetre.cartes[0].details.text() and "fourni" in fenetre.cartes[0].details.text()
     # ★ sur la carte du style des nouveaux projets, sans abréger son nom (« Blanc conto… » au lot 7).
     assert not any(carte.etoile for carte in fenetre.cartes)  # le service des tests n'a pas de ★
     fenetre.definir_par_defaut(DEFAUT_FOURNI)
-    assert [carte.etoile is not None for carte in fenetre.cartes] == [True, False, False, False, False, False]
+    assert [carte.etoile is not None for carte in fenetre.cartes] == [True, False, False, False, False, False, False]
     assert fenetre.cartes[0].etoile.toolTip() == "Le style des nouveaux projets"
     qtbot.waitUntil(lambda: not fenetre.cartes[0].nom.est_abrege(), timeout=2000)
     # Vignettes animées : un exemple dessiné par le moteur (au milieu de « sérum », le sous-titre est là).
-    vignette = fenetre.cartes[2].vignette
+    vignette = fenetre.cartes[3].vignette
     vignette.definir_temps(0.1)
     vide = vignette.grab().toImage()
     vignette.definir_temps(1.0)
@@ -316,13 +346,13 @@ def test_fenetre_des_prereglages(app_configuree, qtbot, services, tmp_path, monk
     # Actions du menu ⋯ (questions remplacées).
     monkeypatch.setattr(fenetre, "_demander_nom", lambda _titre, _nom: "Karaoké fort")
     monkeypatch.setattr(fenetre, "_confirmer", lambda _titre, _question, _action: True)
-    karaoke = fenetre.cartes[2].prereglage.identifiant
+    karaoke = fenetre.cartes[3].prereglage.identifiant
     fenetre.dupliquer(karaoke)
-    assert len(fenetre.cartes) == 7 and fenetre.cartes[3].prereglage.nom == "Karaoké (copie)"
-    fenetre.renommer(fenetre.cartes[3].prereglage.identifiant)
-    assert fenetre.cartes[3].prereglage.nom == "Karaoké fort" and "Renommé" in fenetre.statut.text()
-    fenetre.definir_par_defaut(fenetre.cartes[3].prereglage.identifiant)
-    assert services.prereglages.par_defaut == fenetre.cartes[3].prereglage.identifiant
+    assert len(fenetre.cartes) == 8 and fenetre.cartes[4].prereglage.nom == "Karaoké (copie)"
+    fenetre.renommer(fenetre.cartes[4].prereglage.identifiant)
+    assert fenetre.cartes[4].prereglage.nom == "Karaoké fort" and "Renommé" in fenetre.statut.text()
+    fenetre.definir_par_defaut(fenetre.cartes[4].prereglage.identifiant)
+    assert services.prereglages.par_defaut == fenetre.cartes[4].prereglage.identifiant
     fichier = tmp_path / "export.json"
     monkeypatch.setattr(fenetre, "_fichier_d_export", lambda _nom: fichier)
     fenetre.exporter(karaoke)

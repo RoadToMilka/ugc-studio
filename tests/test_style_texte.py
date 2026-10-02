@@ -83,8 +83,10 @@ def test_projet_de_la_1_4_garde_son_apparence():
 
 
 def test_style_de_depart_des_nouveaux_projets(tmp_path):
+    """V3.1 : le style de départ est celui du préréglage « Par défaut » (Poppins Extra-grasse, blanc,
+    contour noir ; Montserrat jusqu'à la 3.0.3)."""
     depart = style_de_depart()
-    assert (depart.police, depart.graisse, depart.taille_pct, depart.couleur) == ("Montserrat", 800, 4.0, Couleur(255, 255, 255))
+    assert (depart.police, depart.graisse, depart.taille_pct, depart.couleur) == ("Poppins", 800, 4.0, Couleur(255, 255, 255))
     assert depart.contour == Contour(True, Couleur(0, 0, 0), 0.3, "arrondis")
     assert not depart.ombre.active and not depart.lueur.active and not depart.fond.visible
     gestion = GestionnaireProjets(tmp_path / "recents.json")

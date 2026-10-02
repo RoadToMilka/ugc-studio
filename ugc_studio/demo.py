@@ -39,6 +39,7 @@ from .ecriture.scripts import (
     repliques_pour_modele,
 )
 from .generation import repliques_api
+from .prereglages import ANCIEN_DEFAUT_FOURNI, appliquer
 from .projets import DOSSIER_SOURCES, RepliqueProjet
 from .prononciation import Prononciation
 from .script import joindre_repliques
@@ -311,6 +312,11 @@ def remplir_donnees_demo(services: Services) -> None:
 
     if services.projets.projet is None and not services.projets.recents():
         projet = services.projets.creer("Sérum Glowzy", dossier_projets_defaut())
+        # Démonstration : le préréglage « Blanc contour noir » (le mot dit en jaune, un peu plus grand)
+        # plutôt que « Par défaut », neutre : les captures montrent ainsi le mot actif.
+        blanc = services.prereglages.prereglage(ANCIEN_DEFAUT_FOURNI)
+        if blanc is not None:
+            projet.sous_titres = appliquer(projet.sous_titres, blanc)
         projet.repliques = [RepliqueProjet([dict(s) for s in r.script], r.style, r.style_fr) for r in REPLIQUES_DEMO]
         projet.prononciations = [Prononciation("Glowzy", "Glo-zi")]
         projet.ecriture = ecriture_demo()
