@@ -91,8 +91,17 @@ def test_trois_colonnes_en_grande_fenetre(page, qtbot):
 
     atelier = page.atelier
     studio = atelier.studio
-    page.resize(1800, 1500)  # assez haute pour tout voir : les colonnes prennent la hauteur qui reste
+    page.resize(1800, 1500)
     qtbot.waitUntil(lambda: studio.mode == GRANDE, timeout=3000)
+    # Assez haute pour tout voir (V3.2) : la page visible a la place de la bande du haut, des colonnes
+    # avec une vidéo de 640 px, et de la frise ; les colonnes prennent la hauteur qui reste.
+    bande = max(atelier.cadre_source.height(), atelier.cadre_export.height())
+    besoin = (
+        bande + atelier.bloc_apercu.hauteur_pour_video(Dimensions.APERCU_HAUTEUR_GRANDE)
+        + atelier.cadre_frise.height() + 2 * Dimensions.ESPACE_BLOCS + Dimensions.ESPACE_BLOCS
+    )
+    page.resize(1800, page.height() + besoin - studio.hauteur_visible())
+    qtbot.waitUntil(lambda: studio.hauteur_visible() == besoin and studio.mode == GRANDE, timeout=3000)
     colonnes = (atelier.bloc_apercu, atelier.cadre_apparence, atelier.cadre_sous_titres)
     qtbot.waitUntil(lambda: len({colonne.height() for colonne in colonnes}) == 1, timeout=3000)
     positions = [_position(colonne, studio) for colonne in colonnes]
@@ -108,10 +117,10 @@ def test_trois_colonnes_en_grande_fenetre(page, qtbot):
     assert atelier.tableau.minimumHeight() == Dimensions.STUDIO_TABLEAU_HAUTEUR_MIN
     assert colonnes[0].height() >= Dimensions.STUDIO_COLONNES_HAUTEUR_MIN
     # Tout se voit sans faire défiler la page ; l'aperçu prend la hauteur de sa colonne, à la taille
-    # de la vidéo (plus de 540 px de haut).
+    # de la vidéo (640 px de haut au moins, V3.2).
     qtbot.waitUntil(lambda: atelier.defilement.verticalScrollBar().maximum() == 0, timeout=3000)
     qtbot.waitUntil(lambda: _a_la_taille_de_la_video(atelier), timeout=3000)
-    assert atelier.bloc_apercu.zone.height() > Dimensions.APERCU_HAUTEUR_MAX
+    assert atelier.bloc_apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE
 
 
 def test_l_apparence_defile_seule(page, qtbot):
