@@ -95,19 +95,23 @@ def test_case_a_cocher_a_la_taille_du_texte(app_configuree, qtbot):
     _fenetre = _montrer(qtbot, zone, 300)
     option = QStyleOptionButton()
     case.initStyleOption(option)
+    # La place réservée à la case par le style : exactement 14 × 14.
+    indicateur = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, case)
+    assert (indicateur.width(), indicateur.height()) == (Dimensions.CASE_A_COCHER, Dimensions.CASE_A_COCHER)
     texte = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, option, case)
-    # La case dessinée : ce qui n'est pas transparent, à gauche du texte.
+    # La case réellement dessinée : les points au moins à moitié couverts, à gauche du texte (le
+    # lissage des coins arrondis déborde d'un léger voile sur le pixel voisin, d'où la tolérance).
     image = case.grab().toImage()
     echelle = image.width() / case.width()
     points = [
         (x / echelle, y / echelle)
         for x in range(round(texte.left() * echelle))
         for y in range(image.height())
-        if image.pixelColor(x, y).alpha() > 0
+        if image.pixelColor(x, y).alpha() >= 128
     ]
     largeur = max(x for x, _ in points) - min(x for x, _ in points) + 1 / echelle
     hauteur = max(y for _, y in points) - min(y for _, y in points) + 1 / echelle
-    assert abs(largeur - Dimensions.CASE_A_COCHER) < 1 and abs(hauteur - Dimensions.CASE_A_COCHER) < 1
+    assert abs(largeur - Dimensions.CASE_A_COCHER) <= 1 and abs(hauteur - Dimensions.CASE_A_COCHER) <= 1
 
 
 def test_noms_au_dessus_dans_l_app(app_configuree, qtbot, services, tmp_path):
