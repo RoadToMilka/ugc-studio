@@ -114,45 +114,58 @@ jobs:
 
       # Temps de démarrage (V3) : FFmpeg est dans le .exe, mais dans une ressource que le démarrage ne
       # recopie pas (il l'est au premier export). Le .exe de la version 2.0.0 (sans FFmpeg), celui de la
-      # version précédente (2.2.0) et celui-ci sont lancés tour à tour, jusqu'à l'apparition de leur
-      # fenêtre ; le premier lancement de chacun ne compte pas (l'antivirus de Windows l'examine). Les
-      # écarts d'une fabrication à l'autre (une demi-seconde) viennent de la machine prêtée : seule la
-      # comparaison sur une même fabrication compte.
+      # version précédente (2.2.0) et celui-ci sont lancés à tour de rôle (2.0.0, 2.2.0, celui-ci, puis
+      # à nouveau), jusqu'à l'apparition de leur fenêtre : si la machine prêtée ralentit pendant la
+      # mesure, les trois en pâtissent de la même façon (mesurés l'un après l'autre, le dernier pouvait
+      # paraître 3 s plus lent, lot 3). Le premier tour ne compte pas (l'antivirus de Windows examine
+      # chaque .exe à son premier lancement) ; ensuite, la médiane de 5 lancements, et leur détail. Les
+      # écarts d'une fabrication à l'autre viennent de la machine prêtée : seule la comparaison sur une
+      # même fabrication compte.
       - name: Mesurer le démarrage (2.0.0, 2.2.0 et cette version)
-        timeout-minutes: 8
+        timeout-minutes: 10
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download v2.0.0 --pattern UGC-Studio.exe --dir ancien --clobber
           gh release download v2.2.0 --pattern UGC-Studio.exe --dir precedente --clobber
-          function Mesurer([string] $exe) {
-            $mesures = @()
-            foreach ($essai in 1..4) {
-              $chrono = [Diagnostics.Stopwatch]::StartNew()
-              $p = Start-Process -FilePath $exe -PassThru
-              $fenetre = $false
-              while (-not $fenetre -and $chrono.Elapsed.TotalSeconds -lt 60) {
-                Start-Sleep -Milliseconds 50
-                $enfants = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object { $_.ProcessId })
-                foreach ($numero in @($p.Id) + $enfants) {
-                  $processus = Get-Process -Id $numero -ErrorAction SilentlyContinue
-                  if ($processus -and $processus.MainWindowHandle -ne 0) { $fenetre = $true }
-                }
+          function Lancer([string] $exe) {
+            $chrono = [Diagnostics.Stopwatch]::StartNew()
+            $p = Start-Process -FilePath $exe -PassThru
+            $fenetre = $false
+            while (-not $fenetre -and $chrono.Elapsed.TotalSeconds -lt 60) {
+              Start-Sleep -Milliseconds 50
+              $enfants = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object { $_.ProcessId })
+              foreach ($numero in @($p.Id) + $enfants) {
+                $processus = Get-Process -Id $numero -ErrorAction SilentlyContinue
+                if ($processus -and $processus.MainWindowHandle -ne 0) { $fenetre = $true }
               }
-              $secondes = $chrono.Elapsed.TotalSeconds
-              Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-              Start-Sleep -Seconds 3
-              if ($essai -gt 1) { $mesures += $secondes }
             }
-            $triees = @($mesures | Sort-Object)
+            $secondes = $chrono.Elapsed.TotalSeconds
+            Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+            return $secondes
+          }
+          function Mediane($valeurs) {
+            $triees = @($valeurs | Sort-Object)
             return $triees[[int][Math]::Floor($triees.Count / 2)]
           }
-          $ancien = Mesurer "ancien/UGC-Studio.exe"
-          $precedente = Mesurer "precedente/UGC-Studio.exe"
-          $nouveau = Mesurer "dist/UGC-Studio.exe"
-          "Démarrage jusqu'à la fenêtre (médiane de 3 lancements) : 2.0.0 = {0:N2} s ; 2.2.0 = {1:N2} s ; cette version = {2:N2} s ; écart avec la 2.0.0 = {3:N2} s" -f $ancien, $precedente, $nouveau, ($nouveau - $ancien) | Tee-Object -FilePath rapport/demarrage.txt
+          $exes = [ordered]@{ "2.0.0" = "ancien/UGC-Studio.exe"; "2.2.0" = "precedente/UGC-Studio.exe"; "cette version" = "dist/UGC-Studio.exe" }
+          $mesures = @{}
+          foreach ($nom in $exes.Keys) { $mesures[$nom] = @() }
+          foreach ($tour in 1..6) {
+            foreach ($nom in $exes.Keys) {
+              $secondes = Lancer $exes[$nom]
+              if ($tour -gt 1) { $mesures[$nom] += $secondes }
+            }
+          }
+          $ancien = Mediane $mesures["2.0.0"]
+          $precedente = Mediane $mesures["2.2.0"]
+          $nouveau = Mediane $mesures["cette version"]
+          $lignes = @("Démarrage jusqu'à la fenêtre (médiane de 5 lancements, les trois .exe à tour de rôle) : 2.0.0 = {0:N2} s ; 2.2.0 = {1:N2} s ; cette version = {2:N2} s ; écart avec la 2.0.0 = {3:N2} s" -f $ancien, $precedente, $nouveau, ($nouveau - $ancien))
+          foreach ($nom in $exes.Keys) { $lignes += "  {0} : {1}" -f $nom, (($mesures[$nom] | ForEach-Object { "{0:N2}" -f $_ }) -join " ; ") }
+          $lignes | Tee-Object -FilePath rapport/demarrage.txt
 
       - name: Joindre le rapport (tests, autotest, captures)
         if: always()
