@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.17, 02/10/2026 (V3 validée, 3 lots, §12 ; V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.18, 02/10/2026 (V3 en cours, §12.4 : lot 1, calque transparent, version 2.1.0, §8.2 et §8.5 ; V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -12,7 +12,7 @@ Application Windows de bureau pour produire des **publicités e-commerce UGC / i
 1. générer la voix off (TTS) ;
 2. transcrire une vidéo ou un audio en texte horodaté mot par mot (STT) ;
 3. créer, styliser et animer les sous-titres (façon Submagic) ;
-4. exporter soit un fichier de sous-titres, soit un overlay vidéo transparent pour Premiere Pro, soit la vidéo finale avec sous-titres incrustés.
+4. exporter soit un fichier de sous-titres, soit un calque transparent (les sous-titres seuls, sur fond transparent) pour Premiere Pro, soit la vidéo finale avec sous-titres incrustés.
 
 **Workflow actuel remplacé :** montage Premiere → voix ElevenLabs → import audio dans Premiere → Submagic pour les sous-titres → export final.
 **Workflow cible :** montage Premiere → UGC Studio (voix + sous-titres + export) → Premiere ou publication directe.
@@ -27,8 +27,8 @@ Application Windows de bureau pour produire des **publicités e-commerce UGC / i
 |---|---|---|
 | Langage | Python 3.12 | Lisible, grand écosystème audio/vidéo |
 | Interface | PySide6 (Qt) | Interface de bureau moderne, thème sombre personnalisable |
-| Audio / vidéo | FFmpeg : pour la V1, celui de Qt Multimedia (déjà inclus avec Qt) ; FFmpeg en ligne de commande ajouté pour les exports vidéo (V3), en **version GPL**, **intégré au `.exe`** (décisions du 02/10/2026) : la version GPL est la seule qui contient les encodeurs x264 et x265 | Extraction audio et lecture des infos source (V1), encodage (V3) : x264 et x265 donnent la meilleure qualité pour un poids de fichier donné, et x265 garde le HDR des vidéos d'iPhone. Intégré au `.exe` (environ 90 Mo au lieu de 56 ; le `ffmpeg.exe` de la version GPL « essentials » 9.0.2 pèse environ 100 Mo une fois décompressé) : rien à télécharger au premier export, au prix d'un démarrage un peu plus long (mesuré par l'autotest) |
-| Rendu des sous-titres | Dessin image par image en Python (Qt QPainter), puis assemblage par FFmpeg | Contrôle total du design ; aperçu identique à l'export |
+| Audio / vidéo | FFmpeg : pour la V1, celui de Qt Multimedia (déjà inclus avec Qt) ; FFmpeg en ligne de commande pour les exports vidéo (V3, depuis la 2.1.0) : **version GPL 9.0.2 « essentials » de gyan.dev**, **intégrée au `.exe`** (décisions du 02/10/2026 ; empreinte SHA-256 vérifiée à chaque fabrication, §11) : la version GPL est la seule qui contient les encodeurs x264 et x265 | Extraction audio et lecture des infos source (V1), encodage (V3) : x264 et x265 donnent la meilleure qualité pour un poids de fichier donné, et x265 garde le HDR des vidéos d'iPhone. Intégré au `.exe` (`ffmpeg.exe` : 100,5 Mo, 27 Mo compressé au format xz ; le `.exe` passe de 53 à 80 Mo) : rien à télécharger ; rangé dans une ressource Windows du `.exe`, il est recopié une seule fois, au premier export, et ne ralentit pas le démarrage (mesuré par la fabrication, §11) |
+| Rendu des sous-titres | Dessin image par image en Python (Qt QPainter), puis assemblage par FFmpeg | Contrôle total du design ; aperçu identique à l'export (même moteur ; 16 bits par couleur pour les exports, §8.2) |
 | Stockage des clés API | Coffre-fort Windows via la bibliothèque `keyring` | Clés chiffrées, jamais dans un fichier ni sur GitHub |
 | Données locales | Fichiers JSON dans `%APPDATA%\UGC Studio\` | Styles, préréglages, projets, historique des coûts |
 | Appels aux API | Requêtes HTTP directes (module `urllib` de Python), d'après l'API REST officielle ; le SDK officiel `google-genai` sert de référence pour les formats | Aucune bibliothèque en plus, code lisible, testable sans Internet |
@@ -508,7 +508,7 @@ Comme les sous-titres animés exigent l'horodatage par mot, l'app propose :
 ### 7.1 Formats de vidéo
 
 - Préréglages : **9:16** (TikTok, Reels, Snap, Shorts), **4:5** (fil Facebook/Instagram), **3:4**, **1:1**, **16:9**, **personnalisé** (largeur × hauteur, de 240 à 4 096 px, arrondis à un nombre pair).
-- Si une vidéo est importée, **son format s'impose** (liste grisée, « Celui de la vidéo (1080 × 1920) ») : l'overlay de la V3 doit avoir sa taille exacte. Une vidéo choisie seulement pour l'aperçu (projet sans vidéo, §7.9) l'impose aussi.
+- Si une vidéo est importée, **son format s'impose** (liste grisée, « Celui de la vidéo (1080 × 1920) ») : le calque transparent (§8.2) doit avoir sa taille exacte. Une vidéo choisie seulement pour l'aperçu (projet sans vidéo, §7.9) l'impose aussi.
 - Toutes les tailles et positions sont exprimées **en proportion de la hauteur de la vidéo** : un style garde le même aspect quel que soit le format.
 
 ### 7.2 Texte affiché
@@ -859,10 +859,23 @@ Dossier d'un export (décision du 02/10/2026) : au choix, celui de la vidéo sou
 - **SRT** : texte + timecodes (compatible Premiere Pro et la plupart des outils). Respecte le découpage paramétré. Ne contient aucun style. Écrit en UTF-8 **avec BOM** (sans lui, Premiere Pro lit mal les lettres accentuées) et fins de ligne Windows (CRLF) ; temps au format `00:00:01,250` ; blocs séparés par une ligne vide. Nom proposé : celui du projet, dans Documents.
 - *(option, pas prévue pour le moment : décision de l'utilisateur du 01/10/2026)* **ASS** : pour d'autres logiciels ; styles simples uniquement.
 
-### 8.2 Overlay transparent
+### 8.2 Calque transparent (V3, lot 1, version 2.1.0)
 
-- **MOV + ProRes 4444 avec couche alpha** : uniquement les sous-titres animés sur fond transparent, à poser au-dessus du montage dans Premiere Pro.
-- Même résolution et **même fréquence exacte** que la source (sinon décalage progressif).
+L'interface dit « calque transparent » (« overlay » jusqu'à la 3.17 de ce document). Code : `exports/` (sans interface, sauf `calque.py`) et `ui/dialogues/export.py`.
+
+- **MOV + ProRes 4444 avec transparence** : uniquement les sous-titres animés sur fond transparent, à poser au-dessus du montage dans Premiere Pro. Bloc « Exporter » de la page Sous-titres, bouton « Calque transparent… », qui ouvre la fenêtre d'export (§8.5).
+- **Taille** : celle de l'aperçu, c'est-à-dire la vidéo telle qu'on la voit (vidéo de téléphone « couchée » remise debout) ; projet sans vidéo : le format de l'onglet Écran (ou la vidéo d'aperçu, qui l'impose).
+- **Fréquence exacte** (§8.4) : celle de la vidéo, gardée en fraction (29,97 = 30 000 / 1 001). FFmpeg lit la vidéo à l'ouverture de la fenêtre, sans la décoder (`-c copy -f framecrc`, une ou deux secondes) : moment exact de chaque image, nombre d'images, vrais débits, nom exact des codecs (Qt ne reconnaît pas le ProRes) ; et, dans sa description de la source (`-loglevel info`), ses couleurs : format des pixels (donc 8 ou 10 bits), plage, norme (matrice, primaires) et courbe (HLG, PQ ou SDR). Qt, lui, ne gardait pas « HDR : non » à l'import (corrigé : en Python, `False` vaut 0). Fréquence variable (iPhone, enregistrement d'écran) : la fréquence « nominale », celle de l'écart le plus fréquent entre deux images (30 pour un iPhone réglé sur 30), sur laquelle Premiere Pro se cale, avec un avertissement orange ; un écart d'une unité de temps près compte comme constant. Si FFmpeg ne peut pas lire la vidéo : la fréquence de Qt, ramenée à la fréquence courante la plus proche (à 0,05 % près), sinon à une fraction simple.
+- **Nombre d'images** : celui de la vidéo (compté par FFmpeg), à partir de 0 s ; sans vidéo : de quoi couvrir la durée de la voix, à partir de son début. Posé dans Premiere au même endroit que la vidéo ou la voix, le calque tombe juste.
+- **Chaque image** : le moment exact de l'image n est n ÷ fréquence (calculé depuis son numéro, jamais en ajoutant des durées : aucun décalage, même après 10 minutes ; test à 17 982 images). C'est l'image de l'aperçu à ce moment (`sous_titre_au_temps`, puis `image_de_l_instant` du moteur) : mot actif, animations, fond qui glisse compris. Une image identique à la précédente (même sous-titre, même mot actif, rien en mouvement) n'est pas redessinée.
+- **Dessin en 16 bits par couleur** (`Moteur(…, profondeur=16)`, images `Format_RGBA64_Premultiplied`) : ombres et lueurs gardent des nuances douces une fois converties. Comparé à l'aperçu (8 bits), les lettres ont les mêmes couleurs à 3 niveaux sur 255 près, les ombres et lueurs floues à quelques niveaux (6 au plus, presque rien en moyenne) ; l'aperçu, lui, reste en 8 bits (le test de la V2 « aperçu à 100 % = image de l'export », en 8 bits, ne change pas).
+- **Transparence « droite »** (non prémultipliée, la forme courante en ProRes) : l'image du sous-titre est convertie (`Format_RGBA64`), puis recopiée à sa place dans l'image entière, transparente ailleurs.
+- **Commande** (vérifiée dans la documentation de FFmpeg 9.0.2, jointe à l'archive de gyan.dev) : images brutes par l'entrée standard (`-f rawvideo -pixel_format rgba64le -video_size L×H -framerate 30000/1001 -i pipe:0`) ; conversion BT.709, plage limitée (`scale=out_color_matrix=bt709:out_range=tv,format=yuva444p10le`) ; `prores_ks`, profil `4444`, `-alpha_bits 16`, `-vendor apl0` (guide ProRes de l'Academy Software Foundation) ; `-qscale:v 1` (la compression la plus fine partout : sans lui, `prores_ks` cherche pour chaque bande d'image la compression qui tient dans le débit visé, et pour des sous-titres retombe sur la plus fine ; mêmes images à l'octet près, 3 fois plus vite, comme le conseille la documentation de FFmpeg, « Speed considerations ») ; étiquettes `bt709` (primaires, courbe, matrice) et plage `tv`, posées sur les images par le filtre `setparams` (depuis FFmpeg 8, l'encodeur reprend les étiquettes des images : les options `-color_primaries` et `-color_trc` seules sont ignorées ; vu sur la fabrication, puis dans le code de FFmpeg 9.0.2, `fftools/ffmpeg_enc.c`) ; `-frames:v` (nombre exact d'images) ; pas de son (`-an`) ; `-progress pipe:1` (nouvelles 4 fois par seconde).
+- **Comment** : FFmpeg est lancé sans fenêtre noire (`CREATE_NO_WINDOW`) ; les images sont dessinées par petites tranches (25 ms) dans la tâche principale (le moteur dessine avec Qt), et un fil à part les écrit dans le tuyau (4 images en attente au plus) : la fenêtre répond pendant l'export ; deux autres fils lisent les nouvelles et les messages d'erreur de FFmpeg.
+- **Fichier** : écrit sous un nom provisoire (« Sérum Glowzy (calque).mov.en-cours », à côté du fichier final), renommé à la fin ; « Arrêter », une erreur ou la fermeture de la fenêtre l'effacent : rien d'inachevé ne reste. Si le fichier final ne peut pas être remplacé (ouvert dans Premiere Pro), le calque est gardé sous le nom provisoire, avec un message.
+- **Poids** : limite haute d'après le débit visé par Apple (ProRes 4444 : 330 Mb/s en 1920 × 1080 à 29,97, soit ≈ 41 Mo par seconde en 1080 × 1920), ramené à la taille et à la fréquence ; c'est elle que le résumé affiche (« ≈ 1,2 Go au plus » pour 30 s) et qui sert à vérifier la place libre. Mesuré sur la vidéo de démonstration (74 images en 1080 × 1920) : 7,1 Mo, soit ≈ 100 Ko par image (≈ 3 Mo par seconde à 30 images par seconde, bien sous la limite haute : la transparence prend peu de place), écrit en 4 s sur la fabrication, dont 1,1 s de dessin.
+- Nom proposé : celui de la vidéo (ou du projet), suivi de « (calque) » : « Sérum Glowzy (calque).mov ».
+- **Vérifié** : tests (commande, temps exacts, vrai calque écrit par FFmpeg puis relu : nombre d'images, fréquence, taille, étiquettes de couleurs, couleurs et transparence de chaque image comparées à celles envoyées) ; autotest du `.exe` (calque de la vidéo de démonstration, image relue comparée à celle envoyée et à l'aperçu, export arrêté). Transparence lue par Premiere Pro : à confirmer par l'utilisateur sur la Release 2.1.0.
 
 ### 8.3 Vidéo finale (sous-titres incrustés)
 
@@ -886,14 +899,17 @@ La vidéo importée est réencodée avec les sous-titres (une recompression est 
 
 ### 8.4 Fréquence d'images
 
-- Vidéo importée : reprise **exacte** de la fréquence source, y compris 29,97 / 23,976 / 59,94.
-- Sans vidéo (audio seul) : choix manuel, 30 i/s par défaut, 60 ou valeur libre.
+- Vidéo importée : reprise **exacte** de la fréquence source, y compris 29,97 / 23,976 / 59,94 (fractions exactes, `exports/cadence.py` ; lue par FFmpeg, §8.2).
+- Sans vidéo (audio seul) : choix en boutons, 30 i/s par défaut, 60 ou « Autre » (valeur libre, de 1 à 240, ramenée à la fréquence courante la plus proche : 23,976 donne 24 000 / 1 001) ; avec une vidéo d'aperçu (V2), sa fréquence est proposée en premier (« 29,97 (vidéo d'aperçu) »). Le choix est retenu (préférences).
 
 ### 8.5 Résumé avant export
 
-Fenêtre obligatoire avant chaque export vidéo, comparant **Source** et **Export** :
-résolution, fréquence, débit vidéo, codec / conteneur, audio, couleurs (SDR/HDR, profondeur), durée, **taille estimée** (débit × durée).
-Toute valeur différente de la source est **surlignée**.
+Une seule fenêtre par export (V3), obligatoire : un export ne part que d'elle (`ui/dialogues/export.py`).
+1. **Réglages** en haut. Calque (lot 1) : format (MOV · ProRes 4444 avec transparence, non modifiable), images par seconde (avec une vidéo : la sienne, sans choix ; sans vidéo : §8.4), dossier, nom (l'extension à côté).
+2. **Résumé** dessous, mis à jour à chaque réglage changé : un tableau Source / Export (règles des tableaux de l'app, sans sélection, toutes les lignes visibles). Lignes : Taille, Images par seconde, Format et codec, Son, Couleurs (source : « SDR, 8 bits », « HDR (HLG), 10 bits », lues par FFmpeg), Durée, Poids, Sous-titres (nombre et préréglage, « (modifié) » compris). Toute valeur différente de la source est **en mauve** (comme les valeurs modifiées des variantes A/B). Avertissements en orange : fréquence variable, vidéo HDR (calque en SDR jusqu'au lot 3), fichier existant (il sera remplacé), place libre inférieure à la limite haute du poids. Erreurs en rouge, qui grisent « Exporter » : nom vide, dossier absent, nom de la vidéo source (elle n'est jamais remplacée), FFmpeg introuvable, pas de sous-titres. Pendant que FFmpeg lit la vidéo (une ou deux secondes), « Exporter » attend ; au tout premier export, FFmpeg est d'abord recopié depuis le `.exe` (« Préparation de FFmpeg (la première fois seulement, quelques secondes)… », §11), dans une tâche de fond ; s'il ne peut pas l'être (disque plein…), une erreur rouge le dit.
+3. **« Exporter »** : l'export se fait dans la même fenêtre (réglages grisés) : une barre d'avancement (« Images du calque : 412 sur 930 », puis « Finalisation du fichier… »), le temps restant estimé (après une seconde), et « Arrêter » (rien n'est gardé). À la fin : « Calque enregistré en 1 min 12 s : Sérum Glowzy (calque).mov (52 Mo). », « Ouvrir le dossier » (l'Explorateur s'ouvre, le fichier choisi) et « Fermer ». Fermer la fenêtre pendant l'export l'arrête.
+- **Dossier** (décision du 02/10/2026), en choix en boutons : « Celui de la vidéo » (ou « Celui de l'audio » pour un audio importé ; pour une prise, celui de la vidéo d'aperçu s'il y en a une), « Celui du projet », « Autre » (« Changer… »). Sous-titres d'une prise sans vidéo d'aperçu : celui du projet. Le choix et le dernier dossier « Autre » sont retenus.
+- **Écart choisi** (par rapport au document V3) : pas de « Lire la vidéo » pour le calque, car le lecteur de Windows ne montre pas sa transparence (il s'ouvre dans Premiere Pro) ; ce bouton arrive avec la vidéo avec sous-titres (lot 2).
 
 ### 8.6 Export audio
 
@@ -1014,6 +1030,13 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - **Préréglage** (lot 7) : en haut des réglages, une ligne « Préréglage », la liste (qui s'étire), « Enregistrer… » en bouton contour (icône « save ») et le bouton icône ⋯ (menu : « save », « rotate-ccw », « library »). **Frise** (lot 7) : fond de l'app, blocs arrondis (4 px) en surface surélevée avec contour neutre, choisi : contour mauve de 2 px et fond mauve léger, signalé : orange ; graduations et textes en légende (12 px) ; hauteurs dans `theme.Dimensions` (graduations 18 px, blocs 36 px, mots 12 px), bord saisissable à 6 px près. **Vignettes** (lot 7) : 240 × 108 px, fond neutre gris, coins de 8 px ; cartes de la fenêtre des préréglages en blocs, côte à côte, passant à la ligne, la ligne du nom à la hauteur d'une pastille (cartes alignées avec ou sans ★) ; fenêtre de 880 × 680 px (la hauteur maximale d'une fenêtre de dialogue) : les 6 préréglages fournis s'y voient sans faire défiler, en 2 rangées de 3.
 - Les onglets des réglages prennent la hauteur de l'onglet affiché (option `hauteur_selon_l_onglet` des onglets en boutons ; ailleurs, la hauteur reste celle du plus haut) : pas de grand vide sous un onglet court. Une ligne qui ne sert pas disparaît avec son libellé (« Taille » hors format personnalisé), et un message d'état vide ne laisse pas de ligne vide en bas d'un bloc.
 
+### 9.4 decies Exports (V3)
+
+- **Bloc « Exporter »** de la page Sous-titres (le dernier, sous le bloc « Sous-titres », dont il reprend le bouton principal « Exporter en SRT… », devenu « Fichier SRT… ») : une info, puis « Calque transparent… » en bouton normal (icône Lucide « film ») et « Fichier SRT… » en bouton contour (icône « download »), qui passent à la ligne si la fenêtre est étroite ; un message d'état dessous (« Calque enregistré : … »). Tous deux grisés sans sous-titres. Les messages « Lecture impossible dans l'aperçu » vont désormais dans le bloc « Sous-titres ».
+- **Fenêtre d'export** (`ui/dialogues/export.py`) : 760 × 680 px (`Dimensions.DIALOGUE_EXPORT_LARGEUR`, `DIALOGUE_EXPORT_HAUTEUR`) et bouton « Conseils » (page « Exporter le calque transparent / Conseils »). En haut, une info ; puis, dans une zone qui défile, les réglages en grille (libellés en légende à gauche, à la manière des réglages du studio), le titre « Résumé avant export » et son tableau (colonne des noms : 160 px, `COLONNE_RESUME_LIGNE` ; lignes de 30 px, `Hauteurs.LIGNE_RESUME`, plus serrées que les 36 px des autres tableaux : il est en lecture seule, et tient ainsi en entier dans la fenêtre avec les réglages du calque), les messages dessous. Réglages espacés de 8 px ; format et fréquence sur une ligne chacun. En bas, hors de la zone qui défile : l'avancement, le message d'état, puis la rangée de boutons (« Ouvrir le dossier » à gauche, icône « folder-open », visible à la fin ; à droite « Annuler », « Arrêter » pendant l'export, icône « square », et « Exporter » en principal, icône « download », remplacé par « Fermer » à la fin).
+- **Barre d'avancement** (`composants/barre_avancement.py`) : rail arrondi de 8 px de haut (`BARRE_AVANCEMENT_HAUTEUR`), couleur des bordures, rempli de mauve (accent) ; jamais plus court qu'un rond, pour que le début se voie. Pourquoi pas celle de Qt : son allure change d'un style à l'autre (dégradés, « 42 % » collé dessus). L'étape s'écrit au-dessus (texte secondaire), le temps restant dessous (légende).
+- Valeurs différentes de la source en mauve clair (`ACCENT_SURVOL`), comme les valeurs modifiées des variantes ; avertissements en orange, erreurs en rouge (pas d'ampoule : ce sont des messages d'état, §9.4 ter).
+
 ### 9.5 Typographie
 
 - Police : **Inter** (embarquée dans l'app)
@@ -1044,6 +1067,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Dossier de données : `%APPDATA%\UGC Studio\` (styles, préréglages, catalogue de prix, historique des coûts, liste des projets, modèles chargés, exemples de scripts `scripts_exemples.json`, bibliothèque de briefs `briefs.json`, vitesses de parole mesurées `vitesses.json`, polices importées pour les sous-titres `polices\`, préréglages de sous-titres `prereglages_sous_titres.json` ; options d'écriture du module Script retenues dans les préférences).
 - Lecture d'une page produit (module Script) : une seule demande, celle de l'utilisateur, avec les en-têtes d'un navigateur ordinaire ; 5 Mo lus au plus ; aucune clé envoyée au site.
 - Projets : dossier choisi par l'utilisateur (par défaut `Documents\UGC Studio\Projets\`).
+- Exports vidéo (V3) : retenus dans les préférences, le dossier choisi (`export_dossier` : vidéo, projet ou autre), le dernier dossier « Autre » (`export_dossier_autre`) et, pour un projet sans vidéo, la fréquence du calque (`export_calque_frequence`, `export_calque_frequence_libre`). Un export s'écrit sous un nom provisoire (`….en-cours`), effacé s'il n'aboutit pas ; la vidéo source n'est jamais modifiée ni remplacée. FFmpeg ne reçoit que des images et des chemins de fichiers, jamais de clé, et n'utilise pas internet. Sa copie (§11) : `%LOCALAPPDATA%\UGC Studio\ffmpeg\9.0.2\ffmpeg.exe` (100 Mo ; pas dans `%APPDATA%`, qui peut suivre l'utilisateur d'un ordinateur à l'autre), effaçable sans risque (recréée au prochain export) ; les copies d'une ancienne version sont effacées.
 - Journal d'erreurs lisible, accessible depuis Réglages, sans aucune clé API.
 
 ---
@@ -1053,7 +1077,9 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 - Chaque version publiée = une **Release GitHub** avec le `.exe` construit automatiquement (GitHub Actions, machine Windows, PyInstaller).
 - Fabrication automatique à chaque envoi de code : tests, fabrication de `UGC-Studio.exe`, démarrage du `.exe` en mode autotest (vérifications, dont la lecture d'une vidéo de test depuis la 1.4.0, + captures d'écran de chaque module), rapport joint au run.
 - Le numéro de version est dans `ugc_studio/__init__.py`. Quand il change sur la branche `main`, une Release `v<version>` est publiée automatiquement. Les versions `0.x` (étapes de la V1) sont marquées « pré-version ».
-- Les polices (Inter pour l'interface ; Montserrat, Poppins, Anton et Bebas Neue pour les sous-titres, avec leurs licences) et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer. FFmpeg en ligne de commande, en version GPL, sera intégré au `.exe` avec les exports vidéo (V3, §13).
+- Les polices (Inter pour l'interface ; Montserrat, Poppins, Anton et Bebas Neue pour les sous-titres, avec leurs licences) et le décodeur audio/vidéo (FFmpeg, fourni avec Qt Multimedia) sont inclus dans l'app : rien à installer.
+- **FFmpeg en ligne de commande** (V3, depuis la 2.1.0), pour écrire les exports vidéo : version 9.0.2 « essentials » de gyan.dev (licence GPL version 3 ; x264, x265, zimg), l'une des deux sources de versions Windows indiquées par ffmpeg.org. La fabrication automatique la prépare (`outils/preparer_ffmpeg.py`) : téléchargement de l'archive (gardée en cache d'une fabrication à l'autre), vérification de son empreinte SHA-256 (une archive abîmée ou modifiée arrête la fabrication), puis extraction de `ffmpeg.exe` dans `ressources/ffmpeg/` pour les tests (taille et empreinte de `ffmpeg.exe` vérifiées elles aussi), et copie compressée au format xz (27 Mo, gardée en cache, vérifiée avant de resservir). Cette copie compressée est rangée par PyInstaller dans une **ressource Windows** du `.exe` (type 10, données brutes, nom `FFMPEG`), pas avec les ressources de l'app : le `.exe` recopie celles-ci dans un dossier temporaire à chaque démarrage, et les 100 Mo de FFmpeg y ajoutaient 2,4 s (mesuré sur la fabrication : 4,1 s pour la 2.0.0, 6,4 s). Au tout premier export, l'app lit la ressource (fonctions de Windows `FindResource`, `LoadResource`, `LockResource` : rien n'est lu du disque avant), la décompresse sous un nom provisoire, vérifie taille et empreinte, puis la renomme (§10) ; ensuite, elle la reprend telle quelle. La fabrication échoue si la copie compressée manque. `ffmpeg.exe` n'est pas enregistré dans le dépôt (100,5 Mo) ; sa licence, le README de gyan.dev et une page « À propos » (version, adresse exacte du code source, empreinte) le sont, et l'app les montre (Réglages, onglet Données : « Licence et code source de FFmpeg »). Changer de version de FFmpeg : modifier sa version, sa taille et son empreinte dans `ugc_studio/exports/ffmpeg.py`, et l'empreinte de l'archive dans `outils/preparer_ffmpeg.py`, rien d'autre.
+- Taille et démarrage (mesurés par la fabrication, même machine, médiane de 3 démarrages après un premier pour rien) : `.exe` de 80 Mo (53 Mo pour la 2.0.0) ; démarrage jusqu'à la fenêtre en 3,3 s, comme la 2.0.0 (3,5 s), alors que FFmpeg recopié avec les ressources le portait à 6,4 s (4,1 s pour la 2.0.0, ce jour-là). Recopie de FFmpeg au premier export : 1,9 s.
 - *(plus tard)* Installateur qui crée l'icône sur le bureau et dans le menu Démarrer.
 
 ---
@@ -1130,12 +1156,22 @@ Style par personne (pubs à deux voix) : écarté le 02/10/2026 (inutile pour de
 Plan validé le 02/10/2026 : document « UGC Studio - V3 Exports vidéo » (projet ECOM BUILDR), 3 lots, de la version 2.1.0 à la 3.0.0 (calque transparent, vidéo avec sous-titres, HDR).
 
 Priorité de l'utilisateur (02/10/2026) : exporter la vidéo et les sous-titres d'une vidéo ou d'un audio **terminés**, importés dans l'app. L'assemblage de la voix et de la vidéo reste dans Premiere Pro pour le moment : une vidéo sans son y est montée avec la voix, puis réimportée dans l'app, qui refait ses sous-titres à partir d'elle.
-- FFmpeg en ligne de commande, version GPL (x264, x265), intégré au `.exe` (§2).
-- Overlay transparent MOV ProRes 4444 (§8.2).
+- FFmpeg en ligne de commande, version GPL (x264, x265), intégré au `.exe` (§2, §11).
+- Calque transparent MOV ProRes 4444 (§8.2).
 - Vidéo finale incrustée, choix débit / conteneur / codec, HDR (§8.3, §8.4).
 - Résumé avant export (§8.5).
 - Encodage par le processeur (x264, x265).
 - Pas prévus pour le moment : assemblage de la voix et d'une vidéo dans l'app (Premiere Pro s'en charge) ; export ASS (§8.1) ; encodage par la carte graphique (reporté : la GTX 970 de l'utilisateur n'a plus de pilote assez récent pour FFmpeg 9, et n'encode pas en 10 bits). À décider plus tard : vidéo qui contient une prise (§12.3). Écarté : style par personne (§12.3).
+
+#### 12.4 V3 : lots
+
+Demande de l'utilisateur du 02/10/2026, réécrite et validée dans le document « UGC Studio - V3 Exports vidéo » (projet ECOM BUILDR ; ses réponses aux questions sont au §11 de ce document). Même méthode que la V2 : une branche et une Pull Request par lot, fabrication automatique verte, captures relues, fusion et Release, puis le lot suivant sans attendre de validation.
+
+| Lot | Version | Contenu | État |
+|---|---|---|---|
+| 1 | 2.1.0 | **Calque transparent** : FFmpeg 9.0.2 intégré (empreinte vérifiée, licence jointe, démarrage mesuré), fréquence et moments exacts des images (lus par FFmpeg), dessin en 16 bits, MOV ProRes 4444 avec transparence, fenêtre d'export (réglages, résumé avant export, avancement, « Arrêter »), bloc « Exporter » de la page Sous-titres (§8.2, §8.4, §8.5, §9.4 decies) | Fait |
+| 2 | 2.2.0 | **Vidéo avec sous-titres (SDR)** : MP4, MOV ou MKV ; H.264, H.265 ou ProRes 422 HQ ; débit identique, conseillé ou personnalisé, en deux passes ; son copié ; moments exacts des images, fréquence variable comprise ; couleurs BT.709 exactes ; « Lire la vidéo » (§8.3) | À faire |
+| 3 | 3.0.0 | **HDR** : vidéos HDR de téléphone (HLG, PQ) gardées en HDR (H.265 10 bits) avec le blanc de référence BT.2408, ou « Convertir en SDR » ; vidéo de test HLG ; finitions (§8.3) | À faire |
 
 ### V4 : voix avancées et fournisseurs
 - Voice Replication (avec consentement), multi-voix.
@@ -1152,7 +1188,8 @@ Priorité de l'utilisateur (02/10/2026) : exporter la vidéo et les sous-titres 
 - **Zones de sécurité** par plateforme : documentées au §7.8 (TikTok, Meta et YouTube d'après leurs guides ; Snapchat à confirmer). TikTok : la réserve à droite sous le milieu de l'écran (300 px d'après une ancienne note, 140 px sur toute la hauteur d'après des sources de 2026) n'est pas appliquée tant que le modèle officiel n'a pas été relu (lot 3, §7.8).
 - **Lecture de pages par Google avec Gemini 3.8 Flash** (module Script) : les deux pages de Google sur l'outil « URL context » ne listaient pas les mêmes modèles (01/10/2026). Si Google refuse l'outil pour un modèle, l'app essaie un autre modèle chargé qui sait lire les pages, sinon propose de coller le texte. À confirmer au premier vrai essai.
 - **Qualité des scripts** : consignes et exemples s'affineront avec les retours de l'utilisateur sur de vrais produits (lot 2).
-- **FFmpeg (V3)** : intégré au `.exe` (décision du 02/10/2026 ; l'autre possibilité était de le télécharger une seule fois, au premier export). Version prévue, à confirmer dans le document V3 : 9.0.2 « essentials » de gyan.dev (GPL), l'une des deux sources Windows indiquées par ffmpeg.org ; la fabrication automatique la télécharge et vérifie son empreinte SHA-256 avant de l'intégrer. Le temps de démarrage de l'app sera mesuré avant et après : si la différence se sent trop, le téléchargement au premier export reste possible.
+- **FFmpeg (V3)** : réglé au lot 1 (2.1.0) : 9.0.2 « essentials » de gyan.dev intégré au `.exe` (décision du 02/10/2026), empreinte vérifiée à chaque fabrication (§11). Démarrage mesuré avant et après : aucune différence (3,3 s, contre 3,5 s pour la 2.0.0), FFmpeg n'étant recopié qu'au premier export (§11). Point clos.
+- **Calque dans Premiere Pro** (lot 1) : transparence, couleurs et calage sur la vidéo à confirmer par l'utilisateur sur la Release 2.1.0 (les tests relisent le calque avec FFmpeg, pas avec Premiere Pro).
 - **Durée de conservation des voix créées** (Voice Design) : la documentation officielle « Voice Design » indique 1 an et 200 voix par projet ; le guide « Get_Started_Voices » indique 7 jours. L'app affiche la date renvoyée par Google (`expire_time`).
 
 ---

@@ -28,4 +28,4 @@ Au premier lancement, Windows affiche « Windows a protégé votre ordinateur »
 
 Rien n'est à faire à la main : à chaque envoi de code, GitHub prépare FFmpeg (version figée, empreinte vérifiée), lance les tests, fabrique `UGC-Studio.exe`, le démarre pour vérifier qu'il fonctionne (captures d'écran et vrais exports vidéo, relus image par image) et mesure son temps de démarrage (onglet **Actions**). Quand le numéro de version change sur la branche `main`, une Release est publiée avec le `.exe`.
 
-FFmpeg (licence GPL version 3) est fourni avec l'app pour écrire les fichiers vidéo : sa licence et l'adresse de son code source sont dans `ugc_studio/ressources/ffmpeg/` et dans Réglages, « Journal et données », « À propos ».
+FFmpeg (licence GPL version 3) est fourni avec l'app pour écrire les fichiers vidéo : il voyage compressé dans le `.exe` et n'est recopié qu'au premier export (dans `%LOCALAPPDATA%\UGC Studio\ffmpeg`), pour ne pas ralentir le démarrage. Sa licence et l'adresse de son code source sont dans `ugc_studio/ressources/ffmpeg/` et dans Réglages, « Journal et données », « À propos ».
