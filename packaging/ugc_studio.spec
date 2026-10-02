@@ -93,8 +93,13 @@ def _garder(destination):
 
 
 a.datas = [entree for entree in a.datas if _garder(entree[0])]
-# Rendu OpenGL logiciel de secours (~20 Mo) : inutile pour une interface Qt Widgets.
-a.binaries = [entree for entree in a.binaries if Path(entree[0]).name.lower() != "opengl32sw.dll"]
+# PyInstaller range ffmpeg.exe (un programme) avec les « binaires », même pris dans les ressources :
+# le filtre s'applique donc aussi à eux. Rendu OpenGL logiciel de secours (~20 Mo) : inutile pour une
+# interface Qt Widgets.
+a.binaries = [entree for entree in a.binaries if _garder(entree[0]) and Path(entree[0]).name.lower() != "opengl32sw.dll"]
+_restes = [entree[0] for entree in (*a.datas, *a.binaries) if not _garder(entree[0])]
+if _restes:
+    raise SystemExit(f"FFmpeg serait recopié à chaque démarrage : {_restes}")
 
 pyz = PYZ(a.pure)
 
