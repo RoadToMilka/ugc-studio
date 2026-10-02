@@ -23,7 +23,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ....style_sous_titres import (
     ANIM_AUCUNE,
@@ -37,7 +37,7 @@ from ....style_sous_titres import (
 )
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
-from ...composants.elements import ChampNomme, champ_decimal, champ_entier, liste_deroulante
+from ...composants.elements import champ_decimal, champ_entier, liste_deroulante
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements
 from .onglet_mots import GrilleEtat
@@ -155,22 +155,16 @@ class OngletAnimations(QWidget):
         return champ
 
     def _entree_sortie(self, grille: GrilleDeReglages, titre: str, attribut: str):
-        """L'animation et sa durée, chacune sous son nom ; la paire passe à la ligne d'un bloc."""
+        """L'animation, puis sa durée dessous, chacune sous son nom (V3.2 : un réglage par ligne ;
+        côte à côte jusqu'à la 3.1.3)."""
         liste = liste_deroulante(f"{titre} du sous-titre entier")
         for code, nom in ANIMATIONS_DU_SOUS_TITRE.items():
             liste.addItem(nom, code)
         liste.currentIndexChanged.connect(lambda _index: self._modifier(**{attribut: liste.currentData() or ANIM_AUCUNE}))
         duree = _duree(Animations.LIMITES[f"{attribut}_duree_ms"], f"Durée : {titre.lower()}")
         duree.valueChanged.connect(lambda valeur: self._modifier(**{f"{attribut}_duree_ms": valeur}))
-        paire = QWidget()
-        ligne = QHBoxLayout(paire)
-        ligne.setContentsMargins(0, 0, 0, 0)
-        ligne.setSpacing(Espacements.L)
-        champ_liste = ChampNomme(titre, liste)
-        ligne.addWidget(champ_liste)
-        champ_duree = ChampNomme("Durée", duree)
-        ligne.addWidget(champ_duree)
-        grille.addWidget(paire)
+        champ_liste = grille.ajouter(titre, liste)
+        champ_duree = grille.ajouter("Durée", duree)
         self._marques += [(marque_de(champ_liste), attribut), (marque_de(champ_duree), f"{attribut}_duree_ms")]
         return liste, duree, champ_duree
 

@@ -395,8 +395,9 @@ SOUS_TITRES = PageDeConseils(
                 "Le préréglage tel qu'il est enregistré sert de référence : juste après l'avoir choisi, "
                 "enregistré ou mis à jour, aucun ↺ ; tant que tu ne l'enregistres pas, tu vois ce qui a "
                 "changé par rapport à lui.",
-                "« Enregistrer… » crée un préréglage avec le style du projet. Menu ⋯ : « Mettre à jour » le "
-                "préréglage avec tes changements, ou « Revenir » à lui.",
+                "À droite de la liste : la bibliothèque (tous tes préréglages : renommer, dupliquer, importer, "
+                "exporter…), puis « Enregistrer », qui crée un préréglage avec le style du projet. Menu ⋯ : "
+                "« Mettre à jour » le préréglage avec tes changements, ou « Revenir » à lui.",
                 "Sept styles sont fournis (Par défaut, Blanc contour noir, Surligneur, Karaoké, Mot par mot, "
                 "Bandeau, Atténué) : modifie-les ou supprime-les, « Rétablir les préréglages fournis » les remet.",
                 "Si un préréglage change le découpage et défait un sous-titre réorganisé à la main, l'app te "

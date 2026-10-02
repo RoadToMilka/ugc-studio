@@ -599,7 +599,11 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
       bandes sombres) ; Source à gauche d'Exporter dès 880 px de page.
     - Grande fenêtre (1920 × 1010) : trois colonnes, Aperçu | Apparence | Sous-titres, à la même
       hauteur, la frise dessous sur toute la largeur, Source et Exporter au-dessus ; l'apparence
-      défile seule (l'aperçu ne bouge pas) ; la page défile au plus de la hauteur de la bande du haut.
+      défile seule (l'aperçu ne bouge pas). V3.2 : la vidéo fait 640 px de haut et le bloc de
+      l'aperçu se voit en entier dans la page visible ; « Fond » et « Zoom » côte à côte, les trois
+      repères sur une ligne. (Jusqu'à la 3.1.3 : la page défilait au plus de la hauteur de la bande du
+      haut, et la vidéo n'avait que la place qui restait.)
+    - Coins arrondis de l'aperçu (V3.2) : le coin de la zone a la couleur du bloc.
     - Très grande fenêtre (2560 × 1400) : tout se voit sans faire défiler la page, et la vidéo dépasse
       540 px de haut.
     Sur l'écran de la fabrication (1024 × 768), la fenêtre ne peut pas grandir autant : ces deux
@@ -629,6 +633,8 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
     _laisser_afficher()
     source, export = atelier.cadre_source, atelier.cadre_export
     etat: dict = {"apercu_a_la_taille_de_la_video": a_la_taille_de_la_video()}
+    image_zone = apercu.zone.grab().toImage()
+    etat["coins_arrondis"] = image_zone.pixelColor(0, 0).name().upper() == Couleurs.SURFACE.upper()
     if studio.width() >= Dimensions.STUDIO_DEUX_COLONNES_MIN:
         etat["source_a_gauche_d_exporter"] = (
             position(source).y() == position(export).y() and position(source).x() < position(export).x()
@@ -652,10 +658,14 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
         )
         etat["source_et_exporter_au_dessus"] = position(source).y() == position(export).y() < hauts[0]
         etat["grande_apercu_a_la_taille_de_la_video"] = a_la_taille_de_la_video()
-        # La page défile au plus de la hauteur de la bande du haut (fenêtre pas assez haute pour tout
-        # montrer avec des colonnes confortables) : les colonnes et la frise remplissent alors la fenêtre.
+        # V3.2 : une vidéo de 640 px de haut, dont le bloc tient dans la page visible.
         bande = hauts[0] - position(source).y()
-        etat["page_defile_au_plus_de_la_bande"] = page.maximum() == 0 or abs(page.maximum() - bande) <= 2
+        visible = studio.hauteur_visible()
+        etat["grande_video_de_640_px"] = abs(apercu.zone.height() - Dimensions.APERCU_HAUTEUR_GRANDE) <= 1
+        etat["grande_apercu_entier_visible"] = apercu.height() <= visible
+        etat["grande_fond_et_zoom_cote_a_cote"] = position(apercu.champ_fond).y() == position(apercu.champ_zoom).y()
+        cases = (apercu.repere_zone, apercu.repere_marge, apercu.repere_grille)
+        etat["grande_reperes_sur_une_ligne"] = len({position(case).y() for case in cases}) == 1
         capturer(fenetre, "sous-titres-grande-fenetre")
         debordements += _debordements(fenetre, "page Sous-titres en grande fenêtre")
         # L'apparence défile seule : l'aperçu reste où il est.
@@ -673,6 +683,8 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
             "colonnes": [[colonne.x(), colonne.width(), colonne.height()] for colonne in colonnes],
             "defilement_page": page.maximum(),
             "bande": bande,
+            "page_visible": visible,
+            "bloc_apercu": [apercu.width(), apercu.height()],
         }
     else:
         mesures["grande"] = f"non mesurée : fenêtre de {fenetre.width()} × {fenetre.height()} au plus sur cet écran"

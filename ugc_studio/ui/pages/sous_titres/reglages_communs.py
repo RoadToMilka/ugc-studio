@@ -1,6 +1,6 @@
-"""Petits outils communs aux onglets du studio des sous-titres (V2) : réglages sous leur nom, côte à
-côte, nombres écrits à la française, et (V3.1) ce qui compare les réglages au préréglage du projet :
-le nom d'un réglage qui s'en écarte passe en mauve, et le ↺ de son groupe apparaît."""
+"""Petits outils communs aux onglets du studio des sous-titres (V2) : réglages sous leur nom, un par
+ligne (V3.2), nombres écrits à la française, et (V3.1) ce qui compare les réglages au préréglage du
+projet : le nom d'un réglage qui s'en écarte passe en mauve, et le ↺ de son groupe apparaît."""
 
 from __future__ import annotations
 
@@ -21,9 +21,11 @@ def nombre_lisible(valeur: float, decimales: int = 1) -> str:
 
 
 class GrilleDeReglages(DispositionFlux):
-    """Réglages sous leur nom (V3.1, §9.4 ter), côte à côte, qui passent à la ligne quand la place
-    manque : 16 px entre deux réglages d'une rangée, 12 px entre deux rangées. Jusqu'à la 3.0.0, le
-    nom était à gauche de chaque champ, un réglage par ligne. `champs` : nom → ChampNomme."""
+    """Réglages sous leur nom (V3.1, §9.4 ter), **un par ligne** (V3.2) : la couleur d'un contour,
+    puis son épaisseur dessous, et ainsi de suite ; 12 px entre deux réglages. On lit les réglages
+    d'un effet de haut en bas, et la colonne de l'apparence peut être plus étroite. De la 3.0.1 à la
+    3.1.3, ils étaient côte à côte et passaient à la ligne quand la place manquait ; jusqu'à la 3.0.0,
+    le nom était à gauche de chaque champ. `champs` : nom → ChampNomme."""
 
     def __init__(self):
         super().__init__(espacement=Espacements.L, espacement_vertical=Espacements.M)
@@ -32,23 +34,20 @@ class GrilleDeReglages(DispositionFlux):
     def ajouter(
         self, nom: str | None, element, a_cote: QWidget | None = None, etire: bool = False, aide: str | None = None
     ) -> ChampNomme:
-        """Un réglage sous son nom. `etire` : il prend une rangée à lui seul, sur toute la largeur (ex.
-        une glissière) ; sans nom (ex. une case à cocher qui active les réglages suivants) aussi.
-        `aide` : son explication, dans une icône « i » devant le nom (V3.1 ; après lui jusqu'à la 3.1.0)."""
+        """Un réglage sous son nom, sur sa propre ligne. `etire` : le champ prend toute la largeur (ex.
+        une glissière) ; sinon, il garde sa largeur. `aide` : son explication, dans une icône « i »
+        devant le nom (V3.1 ; après lui jusqu'à la 3.1.0)."""
         champ = ChampNomme(nom, element, a_cote=a_cote, etire=etire, aide=aide)
-        if etire or nom is None:
-            self.ajouter_sur_toute_la_largeur(champ)
-        else:
-            self.addWidget(champ)
+        self.ajouter_sur_toute_la_largeur(champ)  # une ligne par réglage (V3.2)
         if nom:
             self.champs[nom] = champ
         return champ
 
 
 def grille(lignes, etirees: tuple[int, ...] = ()) -> GrilleDeReglages:
-    """Réglages sous leur nom, côte à côte (voir GrilleDeReglages) : des couples (nom, champ), ou des
-    triplets (nom, champ, aide) pour un réglage expliqué par une icône « i » ; les lignes `etirees`
-    prennent une rangée à elles seules, sur toute la largeur (ex. une glissière)."""
+    """Réglages sous leur nom, un par ligne (voir GrilleDeReglages) : des couples (nom, champ), ou des
+    triplets (nom, champ, aide) pour un réglage expliqué par une icône « i » ; le champ des lignes
+    `etirees` prend toute la largeur (ex. une glissière)."""
     disposition = GrilleDeReglages()
     for rang, (texte, element, *aide) in enumerate(lignes):
         disposition.ajouter(texte, element, etire=rang in etirees, aide=aide[0] if aide else None)

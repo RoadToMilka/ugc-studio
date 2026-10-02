@@ -4,12 +4,10 @@ Six blocs : Source et Exporter (la bande du haut), Aperçu, Apparence, Sous-titr
 dispositions, selon la place :
 
 - Grande fenêtre (page d'au moins STUDIO_TROIS_COLONNES_MIN de large, et assez haute) : Source à
-  gauche et Exporter à droite ; dessous, trois colonnes, Aperçu | Apparence | Sous-titres, qui
-  prennent la hauteur de la fenêtre et défilent chacune seule : l'aperçu reste visible pendant qu'on
-  règle l'apparence en bas d'un long onglet, ou qu'on parcourt la liste. La frise en bas, sur toute
-  la largeur. Quand la fenêtre n'est pas assez haute pour tout montrer avec des colonnes d'au moins
-  STUDIO_COLONNES_HAUTEUR_CONFORT, les colonnes et la frise remplissent la fenêtre, et la bande du
-  haut part en haut quand la page défile.
+  gauche et Exporter à droite ; dessous, trois colonnes, Aperçu | Apparence | Sous-titres, à la même
+  hauteur, qui défilent chacune seule : l'aperçu reste visible pendant qu'on règle l'apparence en bas
+  d'un long onglet, ou qu'on parcourt la liste. La frise en bas, sur toute la largeur. V3.2 : la
+  hauteur des colonnes est choisie pour une vidéo de 640 px de haut (voir hauteur_des_colonnes).
 - Fenêtre moyenne : la bande du haut, puis l'aperçu et l'apparence côte à côte, puis la frise et la
   liste des sous-titres ; c'est la page qui défile.
 - Petite fenêtre : tout l'un sous l'autre (Source et Exporter aussi, sous 880 px).
@@ -110,7 +108,7 @@ class DispositionStudio(QWidget):
         besoin = self._apercu.largeur_pour_hauteur(hauteur) + 2 * self._rangee.spacing() + autres
         return max(Dimensions.STUDIO_TROIS_COLONNES_MIN, besoin)
 
-    def _hauteur_visible(self) -> int:
+    def hauteur_visible(self) -> int:
         """Hauteur de la page qui se voit d'un coup, pour cette disposition : la partie visible de la
         page, moins ce qui est au-dessus de la disposition (la marge, et l'en-tête quand la fenêtre ne
         l'a pas pris) et la marge du bas."""
@@ -132,22 +130,33 @@ class DispositionStudio(QWidget):
         return hauteur if hauteur >= 0 else element.sizeHint().height()
 
     def hauteur_des_colonnes(self, largeur: int) -> int | None:
-        """Hauteur des trois colonnes en grande fenêtre, ou None si la fenêtre est trop basse (moins de
-        STUDIO_COLONNES_HAUTEUR_MIN pour les colonnes, même en laissant partir la bande du haut).
+        """Hauteur des trois colonnes en grande fenêtre, ou None si la page visible est trop basse
+        (moins de STUDIO_COLONNES_HAUTEUR_MIN).
 
-        Tout se voit d'un coup quand il reste au moins STUDIO_COLONNES_HAUTEUR_CONFORT pour les
-        colonnes ; sinon, les colonnes et la frise remplissent la fenêtre, et la bande du haut part en
-        haut quand la page défile (l'aperçu garde une taille confortable)."""
-        visible = self._hauteur_visible()
+        V3.2 : la vidéo de l'aperçu vise 640 px de haut (APERCU_HAUTEUR_GRANDE ; en plein écran sur un
+        écran de 1080 px). Les colonnes prennent :
+        - la hauteur qui reste sous la bande du haut et au-dessus de la frise, si elle suffit pour une
+          vidéo de 640 px : tout se voit d'un coup ;
+        - sinon, toute la hauteur visible moins la frise, si elle suffit : la bande du haut part en
+          haut quand la page défile ;
+        - sinon, la hauteur du bloc de l'aperçu avec une vidéo de 640 px, au plus toute la hauteur
+          visible : le bloc de l'aperçu se voit en entier, et la frise est sous les colonnes (la page
+          défile jusqu'à elle).
+        Jusqu'à la 3.1.3, les colonnes et la frise remplissaient la fenêtre, et la vidéo n'avait que la
+        place qui restait : 481 px de haut en plein écran sur un écran de 1080 px."""
+        visible = self.hauteur_visible()
+        if visible < Dimensions.STUDIO_COLONNES_HAUTEUR_MIN:
+            return None
         espace = self._principale.spacing()
         frise = self._hauteur(self._frise, largeur)
         frise = frise + espace if frise else 0
         bande = self._hauteur(self._bande, largeur) + espace
-        reste = visible - bande - frise
-        if reste >= Dimensions.STUDIO_COLONNES_HAUTEUR_CONFORT:
-            return reste
-        collee = visible - frise
-        return collee if collee >= Dimensions.STUDIO_COLONNES_HAUTEUR_MIN else None
+        voulue = self._apercu.hauteur_pour_video(Dimensions.APERCU_HAUTEUR_GRANDE)
+        if visible - bande - frise >= voulue:
+            return visible - bande - frise
+        if visible - frise >= voulue:
+            return visible - frise
+        return min(visible, voulue)
 
     # --- Adaptation ----------------------------------------------------------------------------------
 

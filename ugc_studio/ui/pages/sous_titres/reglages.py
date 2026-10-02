@@ -4,8 +4,9 @@ bloc Sous-titres depuis la V3.1 (lot 5) : ce panneau le construit (zone_decoupag
 reste, la page le place.
 
 - Préréglage (lot 7) : la liste des préréglages (choisir l'un l'applique), « (modifié) » quand le style
-  du projet s'en écarte, « Enregistrer… » (nouveau préréglage) et le menu ⋯ (mettre à jour, revenir,
-  gérer les préréglages).
+  du projet s'en écarte, puis trois boutons en icône (V3.2) : la bibliothèque des préréglages,
+  « Enregistrer » (nouveau préréglage) et le menu ⋯ (mettre à jour, revenir). Jusqu'à la 3.1.3, la
+  bibliothèque était dans le menu ⋯ (« Gérer les préréglages… ») et « Enregistrer… » avait son texte.
 
 - Texte (onglet_texte.py) : police, graisse, taille, casse, ponctuation, remplissage, contour,
   ombre, lueur, fond, espaces (lot 4).
@@ -130,10 +131,15 @@ class PanneauReglages(QWidget):
         )
         self.prereglage.activated.connect(lambda _index: self._prereglage_active())
         ligne.addWidget(self.prereglage, 1)
+        # V3.2 : la bibliothèque des préréglages a son bouton (elle était dans le menu ⋯), puis
+        # « Enregistrer », en icône seule (« Enregistrer… » avec son texte jusqu'à la 3.1.3).
+        self.bouton_bibliotheque = bouton("", variante="contour", nom_icone="library", action=lambda: self.gerer_prereglages_demande.emit())
+        self.bouton_bibliotheque.setToolTip("Bibliothèque des préréglages : voir, renommer, importer, exporter…")
+        ligne.addWidget(self.bouton_bibliotheque)
         self.bouton_enregistrer_prereglage = bouton(
-            "Enregistrer…", variante="contour", nom_icone="save", action=lambda: self.enregistrer_prereglage_demande.emit()
+            "", variante="contour", nom_icone="save", action=lambda: self.enregistrer_prereglage_demande.emit()
         )
-        self.bouton_enregistrer_prereglage.setToolTip("Enregistrer ce style comme nouveau préréglage")
+        self.bouton_enregistrer_prereglage.setToolTip("Enregistrer ce style comme nouveau préréglage…")
         ligne.addWidget(self.bouton_enregistrer_prereglage)
         self.bouton_plus_prereglage = bouton("", variante="icone", nom_icone="ellipsis")
         self.bouton_plus_prereglage.setToolTip("Plus d'actions sur les préréglages")
@@ -142,9 +148,6 @@ class PanneauReglages(QWidget):
         self.action_mettre_a_jour.triggered.connect(lambda: self.mettre_a_jour_prereglage_demande.emit())
         self.action_revenir = menu.addAction(icone_menu("rotate-ccw"), "Revenir au préréglage")
         self.action_revenir.triggered.connect(lambda: self.revenir_au_prereglage_demande.emit())
-        menu.addSeparator()
-        self.action_gerer = menu.addAction(icone_menu("library"), "Gérer les préréglages…")
-        self.action_gerer.triggered.connect(lambda: self.gerer_prereglages_demande.emit())
         self.bouton_plus_prereglage.setMenu(menu)
         ligne.addWidget(self.bouton_plus_prereglage)
         return ligne

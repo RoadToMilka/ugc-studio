@@ -27,8 +27,9 @@ fenêtre ; aperçu et apparence côte à côte, puis la liste, en fenêtre moyen
    du sous-titre dans le module Transcription.
 6. Préréglages (V2, lot 7, prereglages.py) : en haut de l'apparence, le préréglage d'origine du
    projet (« (modifié) » quand son style s'en écarte) ; en choisir un l'applique (avec la question de
-   la 1.1.0 s'il défait un ajustement), « Enregistrer… » en crée un, le menu ⋯ met à jour, revient au
-   préréglage ou ouvre la fenêtre « Préréglages de sous-titres ».
+   la 1.1.0 s'il défait un ajustement) ; à côté, trois boutons en icône (V3.2) : la bibliothèque (la
+   fenêtre « Préréglages de sous-titres »), « Enregistrer » (en crée un) et le menu ⋯ (mettre à jour,
+   revenir au préréglage).
 7. Exporter (V3) : la vidéo avec ses sous-titres incrustés (lot 2 ; projet avec une vidéo), le
    calque transparent (MOV, ProRes 4444) à poser sur le montage dans Premiere Pro, tous deux
    dessinés par le moteur de l'aperçu (fenêtre d'export : réglages, résumé, avancement), et le

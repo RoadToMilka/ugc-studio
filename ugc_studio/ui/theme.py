@@ -128,6 +128,7 @@ class Arrondis:
     CONTROLE = 8  # boutons, champs, badges
     BLOC = 12  # blocs, panneaux, fenêtres
     PETIT = 4  # petits éléments : cases à cocher, poignées des barres de défilement
+    APERCU = 8  # coins de l'aperçu des sous-titres (V3.2), à l'écran seulement : pas dans les exports
     # Badges de balises et pastilles : entièrement arrondis (rayon = moitié de la hauteur).
 
 
@@ -265,15 +266,19 @@ class Dimensions:
     STUDIO_DEUX_COLONNES_MIN = 880  # aperçu et apparence côte à côte (fenêtre moyenne)
     STUDIO_TROIS_COLONNES_MIN = 1270  # aperçu, apparence et sous-titres côte à côte (grande fenêtre)
     STUDIO_COLONNE_LARGEUR_MIN = 400  # apparence et sous-titres, en trois colonnes
-    # Hauteur des trois colonnes : au moins 640 px (sinon, fenêtre trop basse : disposition moyenne) ;
-    # au moins 760 px avec Source, Exporter et la frise visibles, sinon la bande du haut part en haut
-    # quand la page défile (les colonnes et la frise remplissent alors la fenêtre).
+    # Hauteur des trois colonnes : au moins 640 px de page visible (sinon, fenêtre trop basse :
+    # disposition moyenne). V3.2 : elles prennent la hauteur qu'il faut pour une vidéo de 640 px de
+    # haut (APERCU_HAUTEUR_GRANDE), quitte à laisser la frise sous elles (voir disposition.py) ; jusqu'à
+    # la 3.1.3, les colonnes et la frise remplissaient la fenêtre (760 px de colonnes avec Source,
+    # Exporter et la frise visibles, sinon la bande du haut partait en haut).
     STUDIO_COLONNES_HAUTEUR_MIN = 640
-    STUDIO_COLONNES_HAUTEUR_CONFORT = 760
     STUDIO_APERCU_LARGEUR_MAX = 560  # colonne de l'aperçu, marges comprises (vidéo 16:9 surtout)
     STUDIO_TABLEAU_HAUTEUR_MIN = 200  # liste des sous-titres en trois colonnes (elle prend la place restante)
     # Aperçu : la zone a exactement la taille de la vidéo affichée (V3.1 : plus de bandes sombres).
     APERCU_HAUTEUR_MAX = 540  # fenêtre moyenne ou petite : une vidéo 9:16 y fait 304 × 540
+    # Grande fenêtre (V3.2) : la vidéo vise 640 px de haut (360 × 640 en 9:16), en plein écran sur un
+    # écran de 1080 px ; moins si la page visible est trop basse, plus s'il reste de la place.
+    APERCU_HAUTEUR_GRANDE = 640
     APERCU_HAUTEUR_MIN = 200
     APERCU_LARGEUR_MIN = 160  # aussi la largeur minimale de la frise
     DAMIER_CASE = 12  # côté d'une case du damier
