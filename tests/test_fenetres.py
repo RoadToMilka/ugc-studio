@@ -106,7 +106,7 @@ def test_question_comme_une_page(app_configuree, qtbot):
     assert dialogue.precision.property("role") == "secondaire"
     # « Annuler », puis l'action (le bouton principal), 8 px entre eux.
     assert _boutons_du_bas(dialogue) == [dialogue.bouton_annuler, dialogue.bouton_action]
-    assert dialogue.bouton_action.variante() == "principal" and dialogue.bouton_action.text() == "Supprimer"
+    assert dialogue.bouton_action.variante == "principal" and dialogue.bouton_action.text() == "Supprimer"
     assert dialogue.bouton_annuler.geometry().right() + 1 + Espacements.S == dialogue.bouton_action.x()
     # Entrée choisit le bouton sans risque.
     assert dialogue.focusWidget() is dialogue.bouton_annuler
