@@ -2,7 +2,8 @@
 
 L'onglet actif a l'allure « sélectionné » des boutons (contour mauve, fond mauve très léger, comme
 le module actif de la barre latérale) ; les autres ont le style « contour ». De haut en bas : une
-ligne de séparation, un espace, la rangée de boutons, puis le contenu de l'onglet.
+ligne de séparation, un espace, la rangée de boutons, puis le contenu de l'onglet. Sans ligne
+(`separateur=False`) quand les onglets ouvrent la page, juste sous le bandeau (Réglages).
 
 Pourquoi pas les onglets standard de Qt (QTabWidget) ? Ils soulignaient l'onglet actif d'un trait
 mauve qui effaçait la ligne de séparation au-dessus de lui, et ils se règlent mal dans la feuille
@@ -22,10 +23,25 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
-from ..theme import Espacements
+from ..theme import Dimensions, Espacements
 from .bouton import Bouton
-from .elements import separateur
+from .elements import separateur as ligne_de_separation
 from .flux import DispositionFlux
+
+
+def contenu_d_onglet(onglet: QWidget) -> QVBoxLayout:
+    """Contenu d'un onglet d'une page qui défile (Réglages, V3.1) : les blocs l'un sous l'autre,
+    16 px sous les boutons des onglets et entre eux ; la place en trop reste en bas. Renvoie la
+    disposition où ajouter les blocs."""
+    disposition = QVBoxLayout(onglet)
+    disposition.setContentsMargins(0, Dimensions.ESPACE_BLOCS, 0, 0)
+    disposition.setSpacing(0)
+    contenu = QVBoxLayout()
+    contenu.setContentsMargins(0, 0, 0, 0)
+    contenu.setSpacing(Dimensions.ESPACE_BLOCS)
+    disposition.addLayout(contenu)
+    disposition.addStretch(1)
+    return contenu
 
 
 class PileAjustee(QWidget):
@@ -81,13 +97,20 @@ class PileAjustee(QWidget):
 class Onglets(QWidget):
     currentChanged = Signal(int)  # même nom que chez QTabWidget
 
-    def __init__(self, parent: QWidget | None = None, hauteur_selon_l_onglet: bool = False, en_flux: bool = False):
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        hauteur_selon_l_onglet: bool = False,
+        en_flux: bool = False,
+        separateur: bool = True,
+    ):
         super().__init__(parent)
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
-        disposition.addWidget(separateur())
-        disposition.addSpacing(Espacements.L)  # de l'air entre la ligne et les boutons
+        if separateur:  # sans ligne (Réglages, V3.1) : les onglets sont en haut de la page
+            disposition.addWidget(ligne_de_separation())
+            disposition.addSpacing(Espacements.L)  # de l'air entre la ligne et les boutons
         if en_flux:
             self._rangee = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la place manque
         else:

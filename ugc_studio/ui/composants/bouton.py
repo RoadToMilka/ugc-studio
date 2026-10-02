@@ -16,7 +16,9 @@ que son importance se lise d'un coup d'œil :
 - « icone » : petit bouton carré avec une icône seule (⋯, ▶…), fond au survol.
 Un bouton « normal » ou « contour » qui peut rester enfoncé (onglet actif, variante écoutée)
 prend l'état « sélectionné » : contour mauve et fond mauve très léger, comme le module actif de la
-barre latérale. Variante à part : « projet » (nom du projet dans le bandeau, flèche à droite).
+barre latérale. Variante à part : « projet » (V3.1 : le projet ouvert, en haut de la barre latérale ;
+contour gris comme « contour », le nom à gauche, abrégé par « … » s'il est long, la flèche au bord
+droit, comme une liste déroulante).
 """
 
 from __future__ import annotations
@@ -215,7 +217,7 @@ class Bouton(QAbstractButton):
 
     def _police(self) -> QFont:
         if self._variante == "projet":
-            return police(Typo.TITRE_BLOC, Typo.GRAISSE_FORTE)
+            return police(Typo.COURANT, Typo.GRAISSE_FORTE)
         return police(Typo.COURANT, Typo.GRAISSE_MOYENNE)
 
     def _cote_icone(self) -> int:
@@ -227,10 +229,15 @@ class Bouton(QAbstractButton):
         mesures = QFontMetricsF(self._police())
         largeur = math.ceil(largeur_icone_et_texte(mesures, self.text(), self._cote_icone()))
         if self._variante == "projet":
-            return QSize(largeur, max(math.ceil(mesures.height()), self._cote_icone()))
+            return QSize(largeur + 2 * Espacements.M, Hauteurs.CONTROLE)
         return QSize(largeur + 2 * Espacements.L, Hauteurs.CONTROLE)
 
     def minimumSizeHint(self) -> QSize:
+        if self._variante == "projet":
+            # Le nom du projet peut se resserrer jusqu'à « … » : la barre latérale garde sa largeur.
+            mesures = QFontMetricsF(self._police())
+            largeur = math.ceil(largeur_icone_et_texte(mesures, "…", self._cote_icone()))
+            return QSize(largeur + 2 * Espacements.M, Hauteurs.CONTROLE)
         return self.sizeHint()
 
     # --- Clavier -----------------------------------------------------------------------------
@@ -279,13 +286,15 @@ class Bouton(QAbstractButton):
             variante = "selectionne"  # onglet actif, variante écoutée : comme le module actif de la barre latérale
 
         if variante == "projet":
+            # Comme « contour » (fond au survol, contour plus net), mais le nom reste blanc : c'est
+            # une donnée, pas un outil. Sans projet : gris.
             if not actif:
-                texte = Couleurs.TEXTE_DESACTIVE
-            elif survol or enfonce or focus:
-                texte = Couleurs.ACCENT_SURVOL
-            else:
-                texte = Couleurs.TEXTE_SECONDAIRE if self._attenue else Couleurs.TEXTE
-            return _Apparence(None, None, texte)
+                return _Apparence(None, qcolor(Couleurs.BORDURE), Couleurs.TEXTE_DESACTIVE)
+            fond = qcolor(Couleurs.FOND) if enfonce else (qcolor(Couleurs.SURFACE_ELEVEE) if survol else None)
+            opacite = Opacites.CONTOUR_BOUTON_SURVOL if (survol or enfonce) else Opacites.CONTOUR_BOUTON
+            contour = qcolor(Couleurs.ACCENT_SURVOL) if focus else qcolor(Couleurs.TEXTE_SECONDAIRE, opacite)
+            texte = Couleurs.TEXTE_SECONDAIRE if (self._attenue and not (survol or enfonce)) else Couleurs.TEXTE
+            return _Apparence(fond, contour, texte)
 
         sans_cadre = variante == "icone"
         if not actif:
@@ -346,7 +355,11 @@ class Bouton(QAbstractButton):
             peintre.drawRoundedRect(cadre, Arrondis.CONTROLE, Arrondis.CONTROLE)
 
         zone = QRectF(self.rect())
-        if self._variante not in ("icone", "projet"):
+        if self._variante == "projet":
+            self._dessiner_projet(peintre, zone.adjusted(Espacements.M, 0, -Espacements.M, 0), apparence)
+            peintre.end()
+            return
+        if self._variante != "icone":
             zone = zone.adjusted(Espacements.L, 0, -Espacements.L, 0)
         dessiner_icone_et_texte(
             peintre,
@@ -356,10 +369,23 @@ class Bouton(QAbstractButton):
             self.text(),
             self._police(),
             qcolor(apparence.texte),
-            centrer=self._variante != "projet",
             icone_a_droite=self._icone_a_droite,
         )
         peintre.end()
+
+    def _dessiner_projet(self, peintre: QPainter, zone: QRectF, apparence: _Apparence) -> None:
+        """Style « projet » : le nom à gauche (abrégé par « … »), la flèche au bord droit."""
+        image = self._image_icone()
+        cote = self._cote_icone()
+        if image is not None:
+            peintre.drawPixmap(QPointF(zone.right() - cote, round(zone.top() + (zone.height() - cote) / 2)), image)
+            zone = zone.adjusted(0, 0, -(cote + Dimensions.ECART_ICONE_TEXTE), 0)
+        dessiner_icone_et_texte(peintre, zone, None, 0, self.text(), self._police(), qcolor(apparence.texte), centrer=False)
+
+    def texte_abrege(self) -> bool:
+        """Vrai si le texte ne tient pas en entier dans le bouton (style « projet » : nom abrégé par « … »)."""
+        mesures = QFontMetricsF(self._police())
+        return math.ceil(largeur_icone_et_texte(mesures, self.text(), self._cote_icone())) + 2 * Espacements.M > self.width()
 
 
 class _EntreeDeclenche(QObject):

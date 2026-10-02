@@ -7,7 +7,7 @@ import platform
 
 import PySide6
 from PySide6.QtCore import qVersion
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QWidget
 
 from .... import NOM_APP, __version__
 from ....chemins import dossier_donnees, dossier_journal, dossier_ressources
@@ -15,16 +15,13 @@ from ....exports.ffmpeg import DOSSIER_FFMPEG, VERSION_INTEGREE
 from ...composants.elements import bloc, bouton, info, libelle
 from ...ouvrir import ouvrir_dossier, ouvrir_fichier, ouvrir_journal
 from ...theme import Espacements
-from ...composants.defilement import zone_defilante
+from ...composants.onglets import contenu_d_onglet
 
 
 class OngletDonnees(QWidget):
     def __init__(self):
         super().__init__()
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(0, 0, 0, 0)
-        zone, contenu = zone_defilante(marges=(0, Espacements.XL, 0, Espacements.XXL))
-        disposition.addWidget(zone)
+        contenu = contenu_d_onglet(self)  # la page Réglages défile : pas de zone à part (V3.1)
 
         # Journal d'erreurs
         cadre, d = bloc("Journal d'erreurs")

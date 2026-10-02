@@ -16,7 +16,7 @@ from ...composants.elements import bloc, bouton, info, libelle, pastille, vider_
 from ...dialogues.cle_api import DialogueCle
 from ...icones import icone, icone_menu
 from ...theme import Couleurs, Dimensions, Espacements
-from ...composants.defilement import zone_defilante
+from ...composants.onglets import contenu_d_onglet
 
 
 def date_lisible(texte_iso: str) -> str:
@@ -98,10 +98,7 @@ class OngletConnexions(QWidget):
         self._services = services
         self._tests_en_cours: set[str] = set()
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(0, 0, 0, 0)
-        zone, contenu = zone_defilante(marges=(0, Espacements.XL, 0, Espacements.XXL))
-        disposition.addWidget(zone)
+        contenu = contenu_d_onglet(self)  # la page Réglages défile : pas de zone à part (V3.1)
 
         cadre, self._liste = bloc("Clés API")
         self._liste.addWidget(

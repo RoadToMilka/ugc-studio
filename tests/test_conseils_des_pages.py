@@ -48,10 +48,10 @@ def test_les_conseils_de_google_sont_repris():
 
 def _cles_utilisees() -> dict[str, list[str]]:
     """Pages de conseils demandées par l'interface : entete_de_fenetre(titre, "cle"),
-    entete_de_page(titre, sous_titre, "cle"), SansProjet(…, "cle"), bouton_conseils("cle"),
+    EnteteDePage(titre, sous_titre, "cle"), SansProjet(…, "cle"), bouton_conseils("cle"),
     conseils="cle", et PAGE_CONSEILS = "cle" (fenêtres d'export, V3 : la fenêtre commune en fait
     son en-tête)."""
-    position = {"entete_de_fenetre": 1, "entete_de_page": 2, "SansProjet": 3, "bouton_conseils": 0}
+    position = {"entete_de_fenetre": 1, "EnteteDePage": 2, "SansProjet": 3, "bouton_conseils": 0}
     utilisees: dict[str, list[str]] = {}
     for fichier in sorted(RACINE_UI.rglob("*.py")):
         for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8"))):

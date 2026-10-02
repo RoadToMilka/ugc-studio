@@ -458,6 +458,14 @@ def separateur() -> QFrame:
     return ligne
 
 
+def separateur_vertical(hauteur: int = Hauteurs.CONTROLE) -> QFrame:
+    """Fine ligne verticale (ex. entre le titre du module et le coût de la session, dans le bandeau)."""
+    ligne = QFrame()
+    ligne.setProperty("role", "separateur-vertical")
+    ligne.setFixedHeight(hauteur)
+    return ligne
+
+
 def vider_disposition(disposition) -> None:
     """Retire et détruit tout le contenu d'une disposition (y compris les dispositions imbriquées)."""
     while disposition.count():

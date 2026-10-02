@@ -1,7 +1,7 @@
 """Fenêtre principale : barre latérale, bandeau, navigation entre les modules."""
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QMenu
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtWidgets import QMenu, QWidget
 
 from ugc_studio.connexions import CoffreMemoire
 from ugc_studio.services import creer_services
@@ -111,3 +111,95 @@ def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path,
     # « Corriger les mots » : dans le module Transcription.
     fenetre.page("sous-titres").atelier.corriger_demande.emit(-1.0)
     assert fenetre.module_actuel() == "transcription"
+
+
+# --- V3.1, lot 1 : barre latérale, bandeau, espaces ------------------------------------------------
+
+
+def test_barre_laterale_plus_fine_avec_le_projet_en_haut(app_configuree, qtbot, tmp_path):
+    from ugc_studio import NOM_APP, __version__
+    from ugc_studio.ui.theme import Dimensions, Hauteurs
+
+    fenetre = _fenetre(qtbot)
+    fenetre.show()
+    barre = fenetre.barre_laterale
+    assert barre.width() == Dimensions.LARGEUR_BARRE_LATERALE == 200
+    projet = barre.bouton_projet
+    # Le bouton du projet est centré dans une bande de la hauteur du bandeau : 16 px au-dessus, 16 px
+    # dessous, puis la ligne (1 px) qui continue celle du bandeau.
+    assert projet.mapTo(barre, QPoint(0, 0)).y() == (Hauteurs.BANDEAU - Dimensions.BORDURE - projet.height()) // 2 == 16
+    assert fenetre.entete.height() == Hauteurs.BANDEAU
+    # Le premier module est à 16 px sous cette bande, comme le premier bloc de la page.
+    premier = barre.boutons()[0]
+    assert premier.mapTo(barre, QPoint(0, 0)).y() == Hauteurs.BANDEAU + Dimensions.ESPACE_BLOCS
+    assert barre.version.text() == f"{NOM_APP} {__version__}"  # le logo n'y est plus : le nom de l'app, ici
+    fenetre.services.projets.creer("Sérum", tmp_path)
+    assert projet.text() == "Sérum" and not projet.est_attenue()
+
+
+def test_le_bandeau_montre_le_titre_du_module(app_configuree, qtbot, tmp_path):
+    fenetre = _fenetre(qtbot)
+    fenetre.show()
+    fenetre.afficher_module("voix")
+    entete = fenetre.entete.entete_affichee()
+    assert entete is fenetre.page("voix").sans_projet.entete
+    assert (entete.titre.text(), entete.sous_titre.text()) == ("Voix", "Voix off générée par IA (TTS).")
+    fenetre.services.projets.creer("Sérum", tmp_path)
+    entete = fenetre.entete.entete_affichee()
+    assert entete is fenetre.page("voix").atelier.entete and entete.titre.text() == "Voix / Sérum"
+    fenetre.afficher_module("reglages")
+    assert fenetre.entete.entete_affichee().titre.text() == "Réglages"
+    # Le titre ne prend plus de place en haut des pages : il est dans le bandeau.
+    for identifiant in fenetre.identifiants_modules():
+        page = fenetre.page(identifiant)
+        assert not any(page.isAncestorOf(e) for e in fenetre.entete.findChildren(QWidget))
+
+
+def test_les_memes_espaces_partout(app_configuree, qtbot):
+    """16 px entre la barre latérale et les blocs, sous le bandeau et jusqu'au bord droit, avec ou
+    sans barre de défilement (elle prend place dans cet espace, au bord de la fenêtre)."""
+    from ugc_studio.ui.theme import Dimensions, Hauteurs
+
+    fenetre = _fenetre(qtbot)
+    fenetre.resize(Dimensions.FENETRE_LARGEUR_MIN, Dimensions.FENETRE_HAUTEUR_MIN)
+    fenetre.show()
+    espace = Dimensions.ESPACE_BLOCS
+    barres_vues = set()
+    for identifiant, onglet in (("voix", None), ("reglages", 0), ("reglages", 1)):
+        fenetre.afficher_module(identifiant)
+        page = fenetre.page_affichee()
+        if onglet is not None:
+            page.onglets.setCurrentIndex(onglet)
+        qtbot.wait(20)
+        premier = page.contenu.itemAt(0).geometry()
+        colonne = page.contenu.parentWidget()
+        haut_gauche = colonne.mapTo(fenetre, premier.topLeft())
+        droite = colonne.mapTo(fenetre, QPoint(premier.x() + premier.width(), 0)).x()
+        barre = page.defilement.verticalScrollBar()
+        barres_vues.add(barre.isVisible())
+        assert (haut_gauche.x(), haut_gauche.y()) == (Dimensions.LARGEUR_BARRE_LATERALE + espace, Hauteurs.BANDEAU + espace)
+        assert fenetre.width() - droite == espace, (identifiant, onglet, barre.isVisible())
+        if barre.isVisible():
+            assert barre.mapTo(fenetre, QPoint(barre.width(), 0)).x() == fenetre.width()  # au bord de la fenêtre
+    assert barres_vues == {True, False}  # les deux cas ont été vérifiés
+
+
+def test_reglages_defile_comme_les_autres_pages(app_configuree, qtbot):
+    """Une seule zone qui défile pour toute la page (V3.1) : sa barre est au bord de la fenêtre."""
+    from PySide6.QtWidgets import QScrollArea
+
+    from ugc_studio.ui.theme import Dimensions
+
+    fenetre = _fenetre(qtbot)
+    fenetre.resize(Dimensions.FENETRE_LARGEUR_MIN, Dimensions.FENETRE_HAUTEUR_MIN)
+    fenetre.show()
+    fenetre.afficher_module("reglages")
+    reglages = fenetre.page("reglages")
+    assert reglages.findChildren(QScrollArea) == [reglages.defilement]
+    reglages.onglets.setCurrentIndex(1)  # Modèles et prix : plus haut que la fenêtre
+    qtbot.wait(20)
+    barre = reglages.defilement.verticalScrollBar()
+    assert barre.maximum() > 0
+    barre.setValue(barre.maximum())
+    reglages.onglets.setCurrentIndex(2)
+    assert barre.value() == 0  # un autre onglet s'ouvre en haut

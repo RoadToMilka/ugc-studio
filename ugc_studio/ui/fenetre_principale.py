@@ -1,4 +1,5 @@
-"""Fenêtre principale (§9.6) : barre latérale à gauche, bandeau en haut, module au centre."""
+"""Fenêtre principale (§9.6) : barre latérale à gauche (le projet ouvert en haut), bandeau en haut
+(titre du module affiché, « Conseils », coût de la session), module au centre."""
 
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from ..services import Services
 from .actions_projet import remplir_menu_projet
 from .composants.barre_laterale import BarreLaterale, Module
 from .composants.entete import Entete
+from .pages.base import Page
 from .pages.reglages import PageReglages
 from .pages.script import PageScript
 from .pages.sous_titres import PageSousTitres
@@ -78,15 +80,16 @@ class FenetrePrincipale(QMainWindow):
         self._index_pages: dict[str, int] = {}
         for identifiant, page in _creer_pages(services).items():
             self._index_pages[identifiant] = self.pages.addWidget(page)
+            self._confier_les_entetes(page)
+        self.pages.currentChanged.connect(lambda _index: self._montrer_l_entete())
 
         # Compteur de coût de la session (bandeau du haut) : mis à jour à chaque appel payant.
         services.couts.abonner(lambda _appel: self.entete.definir_cout_session(services.couts.cout_session))
         self.entete.definir_cout_session(services.couts.cout_session)
 
-        # Menu « Projet » du bandeau, reconstruit à chaque ouverture (pour les projets récents).
-        self.entete.menu_projet.aboutToShow.connect(
-            lambda: remplir_menu_projet(self.entete.menu_projet, self, services)
-        )
+        # Menu « Projet » (haut de la barre latérale), reconstruit à chaque ouverture (projets récents).
+        menu_projet = self.barre_laterale.menu_projet
+        menu_projet.aboutToShow.connect(lambda: remplir_menu_projet(menu_projet, self, services))
         services.projets.abonner(self._projet_change)
 
         # « Créer les sous-titres » d'une prise (§3.3) : depuis la liste des prises du module Voix.
@@ -102,11 +105,12 @@ class FenetrePrincipale(QMainWindow):
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
         self._rouvrir_dernier_projet()
+        self._montrer_l_entete()  # le module affiché au départ n'a pas forcément changé de page
 
     # --- Projet ------------------------------------------------------------------------------
 
     def _projet_change(self, projet: Projet | None) -> None:
-        self.entete.definir_projet(projet.nom if projet else None)
+        self.barre_laterale.definir_projet(projet.nom if projet else None)
         self.setWindowTitle(f"{NOM_APP} / {projet.nom}" if projet else NOM_APP)
 
     def _rouvrir_dernier_projet(self) -> None:
@@ -121,6 +125,30 @@ class FenetrePrincipale(QMainWindow):
             self.services.projets.ouvrir(dernier)
         except ErreurProjet:
             journal.warning("Dernier projet non rouvert : %s", dernier, exc_info=True)
+
+    # --- En-têtes des pages (bandeau) ---------------------------------------------------------
+
+    def _confier_les_entetes(self, module: QWidget) -> None:
+        """Les en-têtes (titre, sous-titre, « Conseils ») des pages d'un module passent dans le
+        bandeau. Un module avec et sans projet ouvert a deux pages (ex. Voix : « Commence par un
+        projet », puis l'atelier) : le bandeau montre celui de la page affichée."""
+        pages = [module] if isinstance(module, Page) else []
+        pages += module.findChildren(Page)
+        for page in pages:
+            self.entete.ajouter(page.detacher_entete())
+        if isinstance(module, QStackedWidget):
+            module.currentChanged.connect(lambda _index: self._montrer_l_entete())
+
+    def page_affichee(self) -> Page | None:
+        """La page visible : celle du module affiché (avec ou sans projet ouvert)."""
+        page = self.pages.currentWidget()
+        while isinstance(page, QStackedWidget):
+            page = page.currentWidget()
+        return page if isinstance(page, Page) else None
+
+    def _montrer_l_entete(self) -> None:
+        page = self.page_affichee()
+        self.entete.montrer(page.entete if page is not None else None)
 
     # --- Navigation -------------------------------------------------------------------------
 

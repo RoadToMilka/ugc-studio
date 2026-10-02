@@ -52,9 +52,12 @@ class OngletCouts(QWidget):
         super().__init__()
         self._services = services
 
+        # Comme les autres onglets (V3.1) : 16 px sous les boutons des onglets et entre les blocs ; le
+        # tableau prend la hauteur qui reste dans la fenêtre (la page Réglages défile en dessous de
+        # sa hauteur minimale).
         disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(0, Espacements.XL, 0, Espacements.XL)
-        disposition.setSpacing(Espacements.L)
+        disposition.setContentsMargins(0, Dimensions.ESPACE_BLOCS, 0, 0)
+        disposition.setSpacing(Dimensions.ESPACE_BLOCS)
 
         # Filtres
         filtres = QHBoxLayout()

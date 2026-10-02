@@ -1,9 +1,9 @@
-"""Bouton « Conseils » (V1.1) : en haut à droite de chaque module et des fenêtres, il ouvre les
-conseils de la page, en français."""
+"""Bouton « Conseils » (V1.1) : dans le bandeau pour chaque module (V3.1), en haut à droite des
+fenêtres ; il ouvre les conseils de la page, en français."""
 
 import pytest
 from PySide6.QtCore import QPoint, Qt
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QFrame, QLabel
 
 from ugc_studio.connexions import CoffreMemoire
 from ugc_studio.conseils import CONSEILS_STYLE
@@ -12,6 +12,7 @@ from ugc_studio.services import creer_services
 from ugc_studio.ui.composants.bouton import Bouton
 from ugc_studio.ui.composants.conseils import TEXTE_BOUTON, DialogueConseils
 from ugc_studio.ui.fenetre_principale import FenetrePrincipale
+from ugc_studio.ui.theme import Espacements
 
 
 def _boutons_conseils(racine) -> list[Bouton]:
@@ -25,32 +26,44 @@ def fenetre(app_configuree, qtbot):
     return fenetre
 
 
-def test_chaque_module_a_son_bouton_conseils(fenetre):
-    """Dans chaque module, avec ou sans projet ouvert : le bouton ouvre les conseils du module."""
-    for module in ("voix", "transcription", "sous-titres", "reglages"):
-        boutons = _boutons_conseils(fenetre.page(module))
-        assert boutons, module
-        assert {b.property("conseils") for b in boutons} == {module}
-        assert all(b.variante == "contour" for b in boutons)
+def test_chaque_module_a_son_bouton_conseils(fenetre, tmp_path):
+    """Dans chaque module, avec ou sans projet ouvert : le bandeau montre le bouton « Conseils » de
+    la page affichée, qui ouvre les conseils du module (V3.1 : il quitte le haut de la page)."""
+    for avec_projet in (False, True):
+        if avec_projet:
+            fenetre.services.projets.creer("Sérum", tmp_path)
+        for module in ("script", "voix", "transcription", "sous-titres", "reglages"):
+            fenetre.afficher_module(module)
+            entete = fenetre.entete.entete_affichee()
+            assert entete is fenetre.page_affichee().entete, (module, avec_projet)
+            bouton = entete.conseils
+            assert bouton is fenetre.page_affichee().bouton_conseils
+            assert bouton.property("conseils") == module and bouton.variante == "contour"
+            assert bouton.text() == TEXTE_BOUTON
 
 
-def test_bouton_en_haut_a_droite_sur_la_ligne_du_titre(fenetre):
+def test_conseils_dans_le_bandeau_au_bout_du_titre(fenetre):
+    """Le bouton est au bout de la partie titre du bandeau, juste avant la ligne verticale qui la
+    sépare du coût de la session, centré en hauteur."""
     fenetre.show()
     fenetre.afficher_module("reglages")
-    page = fenetre.page("reglages")
+    page, entete = fenetre.page("reglages"), fenetre.entete
     bouton = page.bouton_conseils
-    titre = next(e for e in page.findChildren(QLabel) if e.text() == "Réglages")
-    centre_bouton = bouton.mapTo(page, QPoint(0, bouton.height() // 2)).y()
-    centre_titre = titre.mapTo(page, QPoint(0, titre.height() // 2)).y()
-    assert abs(centre_bouton - centre_titre) <= 1  # sur la ligne du titre
-    droite = bouton.mapTo(page, QPoint(bouton.width(), 0)).x()
-    assert droite >= page.onglets.mapTo(page, QPoint(page.onglets.width(), 0)).x() - 1  # tout à droite
+    assert entete.isAncestorOf(bouton) and not page.isAncestorOf(bouton)
+    assert abs(bouton.mapTo(entete, QPoint(0, bouton.height() // 2)).y() - entete.height() // 2) <= 1
+    (ligne,) = [f for f in entete.findChildren(QFrame) if f.property("role") == "separateur-vertical"]
+    droite = bouton.mapTo(entete, QPoint(bouton.width(), 0)).x()
+    assert ligne.mapTo(entete, QPoint(0, 0)).x() == droite + Espacements.L  # juste avant la ligne
+    titre = page.titre
+    assert titre.text() == "Réglages" and entete.isAncestorOf(titre)
+    assert titre.mapTo(entete, QPoint(titre.width(), 0)).x() <= bouton.mapTo(entete, QPoint(0, 0)).x()
 
 
 def test_le_bouton_ouvre_les_conseils(fenetre, qtbot, monkeypatch):
     ouvertes: list[DialogueConseils] = []
     monkeypatch.setattr(DialogueConseils, "exec", lambda self: ouvertes.append(self) or 0)
     fenetre.show()
+    fenetre.afficher_module("transcription")
     bouton = fenetre.page("transcription").sans_projet.bouton_conseils
     qtbot.mouseClick(bouton, Qt.MouseButton.LeftButton)
     (dialogue,) = ouvertes

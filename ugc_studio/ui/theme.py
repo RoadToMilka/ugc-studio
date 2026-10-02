@@ -120,6 +120,10 @@ class Hauteurs:
     """§9.4 — Hauteurs (px)."""
 
     CONTROLE = 36  # boutons et champs
+    # Bandeau du haut (V3.1) : titre du module, « Conseils » et coût de la session ; le haut de la
+    # barre latérale (bouton du projet) a la même hauteur, et la même ligne dessous. 69 px : 16 px,
+    # le bouton du projet (36 px), 16 px, puis la ligne de 1 px.
+    BANDEAU = 69
     PETIT_BOUTON = 28  # petits boutons (icônes)
     PASTILLE = 20  # pastilles d'information (ex. « Étape 2 »)
     CHOIX_LISTE = 32  # un choix dans une liste déroulante ouverte
@@ -154,12 +158,15 @@ class Dimensions:
     """Autres tailles fixes de l'interface (px)."""
 
     BORDURE = 1  # épaisseur des bordures
-    LARGEUR_BARRE_LATERALE = 224
+    LARGEUR_BARRE_LATERALE = 200  # 224 jusqu'à la 3.0.0 (V3.1 : barre plus fine)
     ICONE = 20  # icônes de la barre latérale et des boutons-icônes (⋯, lecture)
     ICONE_PETITE = 16  # icônes des boutons avec texte et des menus, flèches, coches
     # Espace entre une icône et son texte : le même partout (barre latérale, boutons, menus…).
     ECART_ICONE_TEXTE = Espacements.M
-    LOGO = 28
+    # Espace autour des blocs d'une page et entre eux (V3.1) : le même partout, entre la barre
+    # latérale et les blocs, en haut, en bas, et entre deux blocs, l'un sous l'autre comme côte à côte.
+    # À droite, la barre de défilement prend place dans cet espace (voir zone_defilante).
+    ESPACE_BLOCS = Espacements.L
     CASE_A_COCHER = 18
     BARRE_DEFILEMENT = 16
     POIGNEE_DEFILEMENT_MIN = 32
@@ -354,6 +361,12 @@ QFrame#entete {
     border: none;
     border-bottom: ${bordure}px solid $couleur_bordure;
 }
+/* Haut de la barre latérale (bouton du projet) : même ligne dessous que le bandeau. */
+QFrame#hautBarreLaterale {
+    background: transparent;
+    border: none;
+    border-bottom: ${bordure}px solid $couleur_bordure;
+}
 
 /* ---------- Textes ---------- */
 QLabel {
@@ -368,7 +381,7 @@ QLabel[role="intitule"] {
     font-family: "$famille_moyenne";
     font-weight: $graisse_moyenne;
 }
-QLabel[role="titre-bloc"], QLabel[role="nom-app"] {
+QLabel[role="titre-bloc"] {
     font-size: ${titre_bloc}px;
     font-family: "$famille_forte";
     font-weight: $graisse_forte;
@@ -440,6 +453,12 @@ QFrame[role="separateur"] {
     border: none;
     min-height: ${bordure}px;
     max-height: ${bordure}px;
+}
+QFrame[role="separateur-vertical"] {
+    background: $couleur_bordure;
+    border: none;
+    min-width: ${bordure}px;
+    max-width: ${bordure}px;
 }
 QFrame[role="depot"] {
     background: transparent;
