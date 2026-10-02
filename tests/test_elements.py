@@ -68,16 +68,18 @@ def test_champs_de_nombre(app_configuree, qtbot):
 
 
 def test_case_a_cocher_avec_explication(app_configuree, qtbot):
-    """V3.1 : l'explication d'une case est une icône « i », 4 px après le texte de la case, centrée
-    sur sa hauteur ; plus de phrase toujours affichée dessous."""
+    """V3.1 : l'explication d'une case est une icône « i », centrée sur sa hauteur ; plus de phrase
+    toujours affichée dessous. V3.2 : l'icône est entre la case et le texte, 8 px de chaque côté (4 px
+    après le texte jusqu'à la 3.1.0)."""
     zone, case = case_a_cocher("Séparer les voix", "Chaque mot reçoit la personne qui parle.")
     qtbot.addWidget(zone)
     zone.resize(zone.sizeHint())
     zone.show()
     assert isinstance(zone.aide, BoutonInfo) and zone.aide.text() == "Chaque mot reçoit la personne qui parle."
     assert case.text() == "Séparer les voix" and zone.findChildren(QLabel) == []  # aucune phrase visible
-    assert zone.aide.x() == case.x() + case.width() + Dimensions.ECART_INFO  # juste après le texte
-    assert abs(zone.aide.geometry().center().y() - case.geometry().center().y()) <= 1
+    assert zone.aide.parentWidget() is case  # posée sur la case, entre la case et son texte
+    assert zone.aide.x() == Dimensions.CASE_A_COCHER + Dimensions.ECART_INFO
+    assert abs(zone.aide.y() + zone.aide.height() / 2 - case.height() / 2) <= 1
     zone.setEnabled(False)  # griser la zone grise la case et son icône
     assert not case.isEnabled() and not zone.aide.isEnabled()
     zone, case = case_a_cocher("Tout en majuscules")
