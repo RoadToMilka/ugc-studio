@@ -202,7 +202,9 @@ def test_onglet_mots_raccourcis_et_comme_le_texte(app_configuree, qtbot):
     assert onglet.raccourci.currentData() == PERSONNALISE
     etiquette = onglet.grilles[1].marques["couleur"]
     assert etiquette.property("role") == "legende-modifiee" and not remplissage.retablir.isHidden()
-    assert all(section.retablir.isHidden() for titre, section in onglet.sections.items() if titre != "Remplissage")
+    # Karaoké agrandit aussi le mot actif (106 %) : le groupe « Taille et place » s'écarte du préréglage.
+    changes_de_groupe = {titre for titre, section in onglet.sections.items() if not section.retablir.isHidden()}
+    assert changes_de_groupe == {"Remplissage", "Taille et place"}
     # ↺ du groupe (V3.1, à côté de son titre) : comme dans le préréglage, donc « comme le texte ».
     remplissage.retablir.click()
     assert onglet.mots().actif.couleur is None and etiquette.property("role") == "legende"

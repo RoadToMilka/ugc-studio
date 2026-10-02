@@ -458,10 +458,14 @@ def bouton(
 ) -> Bouton:
     """Bouton de l'app (voir composants/bouton.py). Variantes : « principal » (l'action principale
     d'une zone), None (normal, dit secondaire), « contour » (outils dans un bloc), « icone » (petit
-    bouton carré, icône seule)."""
+    bouton carré, icône seule).
+
+    `action` est appelée sans argument. Le signal `clicked` de Qt transmet « coché ou non » : passé
+    tel quel, il remplacerait le premier paramètre d'une action qui en a un par défaut (ex.
+    `lambda groupe=titre: …` recevrait False au lieu du titre)."""
     resultat = Bouton(texte, variante, nom_icone)
     if action is not None:
-        resultat.clicked.connect(action)
+        resultat.clicked.connect(lambda _coche=False: action())
     return resultat
 
 
