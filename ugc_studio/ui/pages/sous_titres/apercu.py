@@ -130,6 +130,15 @@ class BlocApercu(QFrame):
 
     # --- Taille : la zone à la taille de la vidéo (V3.1, lot 5) -----------------------------------
 
+    def _bords(self) -> int:
+        """Largeur prise par le bloc autour de son contenu : ses marges (24 px de chaque côté) et sa
+        bordure (1 px de chaque côté, que Qt retire aussi de la place du contenu ; jusqu'à la 3.1.3,
+        elle était oubliée : la zone avait 2 px de plus que la place, et « Fond » et « Zoom » passaient
+        à la ligne dans une colonne à leur largeur exacte)."""
+        self.ensurePolished()  # la bordure vient de la feuille de style
+        cadre, marges = self.contentsMargins(), self.layout().contentsMargins()
+        return cadre.left() + cadre.right() + marges.left() + marges.right()
+
     def largeur_min(self, sur_une_ligne: bool = False) -> int:
         """Largeur du bloc sous laquelle les commandes ne tiennent plus (la plus longue rangée qui ne
         passe pas à la ligne : « Fond » et ses trois choix). `sur_une_ligne` (grande fenêtre, V3.2) :
@@ -140,15 +149,13 @@ class BlocApercu(QFrame):
             commandes = max(self._lecture.minimumSize().width(), options.largeur_sur_une_ligne(), reperes.largeur_sur_une_ligne())
         else:
             commandes = max(self._lecture.minimumSize().width(), options.minimumSize().width(), reperes.minimumSize().width())
-        marges = self.layout().contentsMargins()
-        return commandes + marges.left() + marges.right()
+        return commandes + self._bords()
 
     def _bornee(self, largeur_video: int, sur_une_ligne: bool = False) -> int:
         """La largeur du bloc pour une vidéo de cette largeur : au moins celle des commandes (voir
         largeur_min), au plus STUDIO_APERCU_LARGEUR_MAX (une vidéo 16:9 laisse ainsi de la place aux
         autres colonnes)."""
-        marges = self.layout().contentsMargins()
-        largeur = largeur_video + marges.left() + marges.right()
+        largeur = largeur_video + self._bords()
         return max(self.largeur_min(sur_une_ligne), min(largeur, Dimensions.STUDIO_APERCU_LARGEUR_MAX))
 
     def largeur_naturelle(self) -> int:
@@ -181,8 +188,7 @@ class BlocApercu(QFrame):
         largeur maximale de la colonne (STUDIO_APERCU_LARGEUR_MAX)."""
         largeur_video, hauteur_video = self.toile.taille_video()
         largeur = self._bornee(round(hauteur_video_voulue * largeur_video / hauteur_video), sur_une_ligne=True)
-        marges = self.layout().contentsMargins()
-        place = largeur - marges.left() - marges.right()
+        place = largeur - self._bords()
         hauteur = min(hauteur_video_voulue, round(place * hauteur_video / largeur_video))
         return self._hauteur_sans_la_video(largeur) + max(hauteur, Dimensions.APERCU_HAUTEUR_MIN)
 
@@ -195,8 +201,7 @@ class BlocApercu(QFrame):
 
     def ajuster_la_zone(self) -> None:
         """La zone prend la taille de la vidéo affichée, entière, dans la place du bloc."""
-        marges = self.layout().contentsMargins()
-        largeur = self.width() - marges.left() - marges.right()
+        largeur = self.width() - self._bords()
         if self._hauteur_imposee is None:
             hauteur = Dimensions.APERCU_HAUTEUR_MAX
         else:
