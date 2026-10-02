@@ -277,7 +277,8 @@ def test_conseils_en_cartes(app_configuree, qtbot):
         assert isinstance(carte, QFrame) and carte.property("role") == "bloc"
         (titre,) = [e for e in carte.findChildren(QLabel) if e.property("role") == "intitule"]
         assert titre.text().replace(" ", " ") == rubrique.titre
-        assert titre.y() < min(e.y() for e in carte.findChildren(QLabel) if e is not titre)  # le titre en haut
+        hauts = [e.mapTo(carte, QPoint(0, 0)).y() for e in carte.findChildren(QLabel) if e is not titre]
+        assert titre.mapTo(carte, QPoint(0, 0)).y() < min(hauts)  # le titre en haut, les conseils dessous
     premiere, seconde = dialogue.cartes[:2]
     assert seconde.y() - (premiere.y() + premiere.height()) == Espacements.M
     assert dialogue.conseils() == [c for rubrique in page.rubriques for c in rubrique.conseils]
