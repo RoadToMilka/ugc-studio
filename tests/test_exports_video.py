@@ -503,6 +503,10 @@ def test_export_prores_et_son_converti(tmp_path):
     sortie = analyser(prores.en_cours)
     assert sortie.images.codec == "prores" and sortie.images.nombre == 15 and sortie.son.codec == "pcm_s16le"  # copié
     assert sortie.couleurs.format_pixels.startswith("yuv422p10")
+    _calque_blanc_et_jaune(prores, tmp_path / "calque.mov", seize_bits=True)  # PNG de 16 bits, comme ceux de l'app
+    _exporter(prores, tmp_path / "calque.mov", tmp_path)
+    assert _proches(_pixel_rgb(prores.en_cours, 4, 10, 24, 64, 48), (255, 255, 255), 4)
+    assert _proches(_pixel_rgb(prores.en_cours, 4, 50, 24, 64, 48), (255, 212, 59), 6)
     mp4 = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "montage (sous-titres).mp4")
     _exporter(mp4, tmp_path / "calque.mov", tmp_path)
     assert analyser(mp4.en_cours).son.codec == "aac"
@@ -520,17 +524,22 @@ def test_export_h265_mkv(tmp_path):
     assert sortie.images.codec == "hevc" and sortie.images.nombre == 15 and sortie.son is None
 
 
-def _calque_blanc_et_jaune(plan, chemin: Path) -> None:
-    """Calque : moitié gauche blanche, moitié droite jaune #FFD43B, opaques, sur toute la vidéo."""
+def _calque_blanc_et_jaune(plan, chemin: Path, seize_bits: bool = False) -> None:
+    """Calque : moitié gauche blanche, moitié droite jaune #FFD43B, opaques, sur toute la vidéo ; en
+    PNG de 8 ou de 16 bits par couleur (ceux de l'app pour une vidéo en 10 bits)."""
     largeur, hauteur = plan.largeur, plan.hauteur
-    ligne = bytes((255, 255, 255, 255)) * (largeur // 2) + bytes((255, 212, 59, 255)) * (largeur - largeur // 2)
+    if seize_bits:
+        blanc, jaune = struct.pack(">4H", 65535, 65535, 65535, 65535), struct.pack(">4H", 65535, 212 * 257, 59 * 257, 65535)
+    else:
+        blanc, jaune = bytes((255, 255, 255, 255)), bytes((255, 212, 59, 255))
+    ligne = blanc * (largeur // 2) + jaune * (largeur - largeur // 2)
     brut = b"".join(b"\0" + ligne for _ in range(hauteur))
 
     def morceau(nom: bytes, donnees: bytes) -> bytes:
         return struct.pack(">I", len(donnees)) + nom + donnees + struct.pack(">I", zlib.crc32(nom + donnees))
 
-    png = (b"\x89PNG\r\n\x1a\n" + morceau(b"IHDR", struct.pack(">IIBBBBB", largeur, hauteur, 8, 6, 0, 0, 0))
-           + morceau(b"IDAT", zlib.compress(brut)) + morceau(b"IEND", b""))
+    entete = struct.pack(">IIBBBBB", largeur, hauteur, 16 if seize_bits else 8, 6, 0, 0, 0)
+    png = (b"\x89PNG\r\n\x1a\n" + morceau(b"IHDR", entete) + morceau(b"IDAT", zlib.compress(brut)) + morceau(b"IEND", b""))
     images = plan.images
     ecriture = EcritureMovPng(chemin, largeur, hauteur, images.base_de_temps.denominator)
     ecriture.ajouter(png, images.moments[-1] - images.moments[0] + images.duree_derniere)
@@ -575,22 +584,23 @@ def test_export_hdr_reel(tmp_path):
     hlg = _source_hdr(tmp_path, "arib-std-b67")
     assert hlg.analyse.couleurs.hlg and hlg.analyse.couleurs.bits == 10
     plan = plan_video(hlg, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "hlg (sous-titres).mp4")
-    assert plan.codec == H265
-    _calque_blanc_et_jaune(plan, tmp_path / "calque.mov")
-    _exporter(plan, tmp_path / "calque.mov", tmp_path)
-    sortie = analyser(plan.en_cours)
-    couleurs = sortie.couleurs
-    assert sortie.images.codec == "hevc" and sortie.images.nombre == hlg.analyse.images.nombre
-    assert (couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert) == (
-        "yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67"
-    )
-    assert abs(_yuv10(plan.en_cours, 20, 32, 96) - 721) <= 4  # blanc de référence : 75 % de 64 à 940
-    assert _proches(_rgb_depuis_le_hdr(plan.en_cours, 20, 32, 96), (255, 255, 255), 4)
-    assert _proches(_rgb_depuis_le_hdr(plan.en_cours, 70, 32, 96), (255, 212, 59), 6)
+    assert plan.codec == H265 and plan.calque_16_bits
+    for seize_bits in (False, True):  # l'app donne des PNG de 16 bits pour une vidéo en 10 bits
+        _calque_blanc_et_jaune(plan, tmp_path / "calque.mov", seize_bits)
+        _exporter(plan, tmp_path / "calque.mov", tmp_path)
+        sortie = analyser(plan.en_cours)
+        couleurs = sortie.couleurs
+        assert sortie.images.codec == "hevc" and sortie.images.nombre == hlg.analyse.images.nombre
+        assert (couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert) == (
+            "yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67"
+        )
+        assert abs(_yuv10(plan.en_cours, 20, 32, 96) - 721) <= 4, seize_bits  # blanc de référence : 75 % de 64 à 940
+        assert _proches(_rgb_depuis_le_hdr(plan.en_cours, 20, 32, 96), (255, 255, 255), 4), seize_bits
+        assert _proches(_rgb_depuis_le_hdr(plan.en_cours, 70, 32, 96), (255, 212, 59), 6), seize_bits
 
     pq = _source_hdr(tmp_path, "smpte2084")
     prores = plan_video(pq, MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "pq (sous-titres).mov")
-    _calque_blanc_et_jaune(prores, tmp_path / "calque.mov")
+    _calque_blanc_et_jaune(prores, tmp_path / "calque.mov", seize_bits=True)
     _exporter(prores, tmp_path / "calque.mov", tmp_path)
     sortie = analyser(prores.en_cours)
     assert sortie.images.codec == "prores" and sortie.couleurs.pq and sortie.couleurs.format_pixels.startswith("yuv422p10")

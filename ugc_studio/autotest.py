@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import platform
+import subprocess
 import sys
 import time
 import traceback
@@ -1220,7 +1221,36 @@ def _rgb_ramene_en_sdr(ffmpeg: Path, video: Path, numero: int, point: tuple[int,
     return list(brut[position : position + 3])
 
 
-def _video_hdr(atelier, capturer, rapport: dict) -> bool:
+def _morceaux_png(png: bytes) -> dict:
+    """Ce que contient un PNG : bits par couleur, sorte d'image (6 : RGBA) et noms de ses morceaux
+    (diagnostic : un PNG de 16 bits écrit par Qt, relu par FFmpeg)."""
+    import struct
+
+    morceaux, position = [], 8
+    while position + 8 <= len(png):
+        longueur, nom = struct.unpack_from(">I4s", png, position)
+        morceaux.append(nom.decode("latin-1"))
+        position += 12 + longueur
+    bits, sorte = (png[24], png[25]) if len(png) > 26 else (0, 0)
+    return {"bits": bits, "sorte": sorte, "morceaux": morceaux}
+
+
+def _png_relu_par_ffmpeg(ffmpeg: Path, png: bytes, point: tuple[int, int], largeur: int) -> list[int]:
+    """Un point d'un PNG relu par FFmpeg (RGBA sur 16 bits) : ce que reçoit l'export."""
+    import struct
+
+    resultat = subprocess.run(
+        [str(ffmpeg), "-hide_banner", "-loglevel", "error", "-f", "png_pipe", "-i", "pipe:0",
+         "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"],
+        input=png, capture_output=True, timeout=60, **({"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}),
+    )
+    position = (point[1] * largeur + point[0]) * 8
+    if len(resultat.stdout) < position + 8:
+        return []
+    return list(struct.unpack_from("<4H", resultat.stdout, position))
+
+
+def _video_hdr(atelier, capturer, capturer_image, rapport: dict) -> bool:
     """V3, lot 3 : une vidéo HDR comme celles d'un iPhone (la vidéo de démonstration convertie en HLG,
     10 bits, par FFmpeg) à la place de celle du projet, le temps de cette vérification.
 
@@ -1315,6 +1345,27 @@ def _video_hdr(atelier, capturer, rapport: dict) -> bool:
                 mesures["y_blanc"] = int.from_bytes(luminance[(blanc[1] * plan.largeur + blanc[0]) * 2 :][:2], "little")
                 mesures["jaune_ramene_en_sdr"] = _rgb_ramene_en_sdr(ffmpeg, fichier, numero, dans_le_jaune, plan.largeur)
                 mesures["jaune_attendu"] = list(jaune)
+                # Diagnostic : l'image du calque en 16 bits (celle de l'export), son PNG écrit par Qt et
+                # relu par FFmpeg au point blanc ; l'image exportée, ramenée en SDR.
+                from .exports.composition import CalqueDeLaVideo, png_de
+
+                contenu = atelier.contenu_a_exporter()
+                calque16 = CalqueDeLaVideo(contenu.reglages, plan.largeur, plan.hauteur, contenu.sous_titres, contenu.mots, True)
+                temps_image = float(moments_source[numero])
+                png = png_de(calque16.image(calque16.cle(temps_image), temps_image))
+                mesures["png_16_bits"] = _morceaux_png(png)
+                mesures["png_16_bits_relu_au_point_blanc"] = _png_relu_par_ffmpeg(ffmpeg, png, blanc, plan.largeur)
+                image_relue = executer(
+                    [str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(fichier),
+                     "-vf", f"select=eq(n\\,{numero}),zscale=p=bt709:t=bt709:m=bt709:r=full:npl=203,format=rgb24",
+                     "-frames:v", "1", "-f", "rawvideo", "-"],
+                    60, binaire=True,
+                ).stdout
+                if len(image_relue) == plan.largeur * plan.hauteur * 3:
+                    capturer_image(
+                        QImage(image_relue, plan.largeur, plan.hauteur, plan.largeur * 3, QImage.Format.Format_RGB888).copy(),
+                        "video-hdr-relue-en-sdr",
+                    )
                 etat["blanc_de_reference"] = abs(mesures["y_blanc"] - 721) <= 8
                 etat["jaune_hdr"] = all(abs(a - b) <= 8 for a, b in zip(mesures["jaune_ramene_en_sdr"], jaune, strict=True))
             else:
@@ -1593,7 +1644,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             # V3, lot 2 : la vidéo de démonstration avec ses sous-titres.
             verifs["video_avec_sous_titres"] = _video_avec_sous_titres(sous_titres, capturer, rapport)
             # V3, lot 3 : une vidéo HDR (HLG, comme un iPhone), gardée en HDR ou convertie en SDR.
-            verifs["video_hdr"] = _video_hdr(sous_titres, capturer, rapport)
+            verifs["video_hdr"] = _video_hdr(sous_titres, capturer, capturer_image, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()
