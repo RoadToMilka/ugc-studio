@@ -1672,6 +1672,7 @@ def _zone_source(fenetre, atelier, capturer, rapport: dict) -> bool:
 
     projet, source = atelier._projet, atelier.source
     page = atelier.defilement.verticalScrollBar()
+    atelier.rafraichir()  # la page telle que la voit l'utilisateur (après les exports vidéo)
     page.setValue(0)
     module = projet.transcription
     depart = [s.texte for s in atelier.sous_titres]
