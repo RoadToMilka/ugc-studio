@@ -66,7 +66,7 @@ class CouleursApercu:
 
     AUTOUR = "#09090D"  # autour de la vidéo, dans la toile (plus sombre que le fond de l'app)
     FOND_NEUTRE = "#52525B"  # gris moyen : un texte blanc ou noir y reste lisible
-    DAMIER_CLAIR = "#71717A"  # damier : pour juger un texte prévu pour l'overlay transparent (V3)
+    DAMIER_CLAIR = "#71717A"  # damier : pour juger un texte prévu pour le calque transparent (V3)
     DAMIER_FONCE = "#3F3F46"
     ZONE_DE_SECURITE = Couleurs.ACCENT  # pointillés mauves
     MARGE_MAXIMUM = Couleurs.ERREUR  # trait rouge
@@ -123,6 +123,7 @@ class Hauteurs:
     PETIT_BOUTON = 28  # petits boutons (icônes)
     PASTILLE = 20  # pastilles d'information (ex. « Étape 2 »)
     CHOIX_LISTE = 32  # un choix dans une liste déroulante ouverte
+    LIGNE_RESUME = 30  # résumé avant export (V3) : tableau en lecture seule, lignes plus serrées
 
 
 class Typo:
@@ -226,6 +227,12 @@ class Dimensions:
     VIGNETTE_IMAGES_PAR_SECONDE = 20
     DIALOGUE_PREREGLAGES_LARGEUR = 880
     DIALOGUE_PREREGLAGES_HAUTEUR = DIALOGUE_HAUTEUR_MAX
+    # Fenêtre d'export (V3) : réglages, résumé avant export et avancement dans une seule fenêtre, qui
+    # tient sur l'écran d'un portable ; le résumé (source et export côte à côte) défile si besoin.
+    DIALOGUE_EXPORT_LARGEUR = 760
+    DIALOGUE_EXPORT_HAUTEUR = DIALOGUE_HAUTEUR_MAX
+    BARRE_AVANCEMENT_HAUTEUR = 8  # barre d'avancement d'un export : rail arrondi, rempli de mauve
+    COLONNE_RESUME_LIGNE = 160  # résumé avant export : la colonne des noms (« Images par seconde »)
     EDITEUR_REPLIQUE_HAUTEUR_MIN = 88  # éditeur d'une réplique (grandit ensuite avec son texte)
     # Badges de balises : même hauteur que les pastilles (Hauteurs.PASTILLE), entièrement arrondis.
     BADGE_MARGE_HORIZONTALE = 8  # espace intérieur, à gauche et à droite du nom de la balise

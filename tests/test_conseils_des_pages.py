@@ -73,11 +73,12 @@ def test_chaque_bouton_ouvre_une_page_qui_existe_et_chaque_page_sert():
     assert set(PAGES) <= set(utilisees), f"Conseils jamais affichés : {set(PAGES) - set(utilisees)}"
 
 
-def test_cinq_modules_et_seize_fenetres():
+def test_cinq_modules_et_dix_sept_fenetres():
     modules = {"script", "voix", "transcription", "sous-titres", "reglages"}
     assert modules <= set(PAGES)
-    # Dont 4 au lot 2 de la V2 (variantes, comparaison, briefs, exemples) et 1 au lot 7 (préréglages).
-    assert len(set(PAGES) - modules) == 16
+    # Dont 4 au lot 2 de la V2 (variantes, comparaison, briefs, exemples), 1 au lot 7 (préréglages)
+    # et 1 au lot 1 de la V3 (fenêtre d'export).
+    assert len(set(PAGES) - modules) == 17
     assert all(re.fullmatch(r"[a-z-]+", cle) for cle in PAGES)
 
 

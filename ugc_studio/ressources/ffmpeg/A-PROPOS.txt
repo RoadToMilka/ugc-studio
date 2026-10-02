@@ -1,0 +1,24 @@
+FFmpeg dans UGC Studio
+======================
+
+UGC Studio utilise FFmpeg pour écrire les fichiers vidéo de ses exports (calque transparent, vidéo
+avec sous-titres). FFmpeg est un programme à part, fourni avec l'app : il est lancé par UGC Studio
+pendant un export, sans fenêtre.
+
+Il voyage compressé dans le fichier UGC-Studio.exe. Au tout premier export, l'app le recopie (une
+seule fois, après avoir vérifié son empreinte) dans :
+%LOCALAPPDATA%\UGC Studio\ffmpeg\9.0.2\ffmpeg.exe
+Ce dossier peut être effacé sans risque : l'app le recrée au prochain export.
+
+Version : FFmpeg 9.0.2, version « essentials » de gyan.dev (https://www.gyan.dev/ffmpeg/builds/),
+l'une des deux sources de versions Windows indiquées par https://ffmpeg.org/download.html.
+
+Licence : GNU General Public License, version 3 (texte complet : LICENCE-FFmpeg.txt).
+
+Code source de cette version : https://github.com/FFmpeg/FFmpeg/commit/946fcce07b
+Configuration et bibliothèques de cette version (x264, x265, zimg…) : README-gyan.dev.txt.
+
+Archive d'origine : ffmpeg-9.0.2-essentials_build.zip
+(https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2),
+empreinte SHA-256 : 60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba
+(vérifiée à chaque fabrication de l'app).

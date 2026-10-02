@@ -77,7 +77,7 @@ class BlocApercu(QFrame):
 
         # Fond et zoom.
         options = DispositionFlux(espacement=Espacements.M)
-        self.fond = ChoixEnBoutons(FONDS, "Fond de l'aperçu : la vidéo, un gris neutre, ou un damier (overlay transparent)")
+        self.fond = ChoixEnBoutons(FONDS, "Fond de l'aperçu : la vidéo, un gris neutre, ou un damier (calque transparent)")
         self.zoom = ChoixEnBoutons(ZOOMS, "« 100 % » : un pixel de la vidéo par pixel de l'écran, pour juger la netteté")
         for titre, choix in (("Fond", self.fond), ("Zoom", self.zoom)):
             groupe = QWidget()

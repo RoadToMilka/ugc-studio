@@ -51,7 +51,8 @@ from .ui.polices import police
 from .ui.theme import Dimensions, Espacements, Typo
 
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
-DELAI_MAX_MS = 120_000  # sécurité : l'autotest ne peut pas bloquer la fabrication
+DELAI_MAX_MS = 240_000  # sécurité : l'autotest ne peut pas bloquer la fabrication (exports vidéo compris)
+DELAI_EXPORT_S = 90  # un export de la vidéo de démonstration (7,4 s) : quelques secondes d'habitude
 PAUSE_AFFICHAGE_S = 0.4
 DELAI_DECODAGE_S = 15
 CODE_DELAI_DEPASSE = 4
@@ -78,6 +79,8 @@ VERIFICATIONS_OBLIGATOIRES = (
     "style_texte",
     "mots_du_studio",
     "animations",
+    "ffmpeg_integre",
+    "calque",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -315,6 +318,27 @@ def _attendre(condition, secondes: float = DELAI_DECODAGE_S) -> bool:
     while not condition() and time.monotonic() < fin:
         QApplication.processEvents()
         time.sleep(0.02)
+    return bool(condition())
+
+
+def _attendre_sans_pause(condition, secondes: float) -> bool:
+    """Comme _attendre, mais la boucle de Qt tourne comme dans l'app, sans les petites pauses de
+    _attendre : un export (dessiné par tranches dans la tâche principale) y va à sa vraie vitesse."""
+    from PySide6.QtCore import QEventLoop
+
+    if condition():
+        return True
+    boucle = QEventLoop()
+    verification = QTimer()
+    verification.timeout.connect(lambda: boucle.quit() if condition() else None)
+    verification.start(50)
+    limite = QTimer()
+    limite.setSingleShot(True)
+    limite.timeout.connect(boucle.quit)
+    limite.start(round(secondes * 1000))
+    boucle.exec()
+    verification.stop()
+    limite.stop()
     return bool(condition())
 
 
@@ -790,6 +814,210 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
     return all(etat.values())
 
 
+def _ffmpeg_integre(rapport: dict) -> bool:
+    """V3, lot 1 : FFmpeg est bien dans le .exe, à sa version (9.0.2 de gyan.dev), avec les encodeurs
+    des exports (ProRes, x264, x265, FFV1, AAC) ; x265 sait encoder en 10 bits (HDR, lot 3).
+
+    Dans le .exe, FFmpeg voyage dans une ressource Windows, pas avec les fichiers recopiés à chaque
+    démarrage : sa copie (dossier temporaire de l'autotest) est effacée, puis refaite comme au premier
+    export (durée mesurée, empreinte vérifiée)."""
+    import hashlib
+    import shutil
+
+    from .exports.ffmpeg import (
+        EMPREINTE_DU_PROGRAMME,
+        VERSION_INTEGREE,
+        copie_de_ffmpeg,
+        ffmpeg_a_preparer,
+        ffmpeg_dans_le_exe,
+        infos_ffmpeg,
+        preparer_ffmpeg,
+        programme_ffmpeg,
+        programme_integre,
+    )
+
+    gele = bool(getattr(sys, "frozen", False))
+    dans_le_exe = ffmpeg_dans_le_exe()
+    etat: dict = {"dans_le_exe": dans_le_exe, "pas_recopie_au_demarrage": not programme_integre().exists()}
+    if dans_le_exe:
+        shutil.rmtree(copie_de_ffmpeg().parent, ignore_errors=True)
+        etat["a_preparer"] = ffmpeg_a_preparer() and programme_ffmpeg() is None
+        debut = time.monotonic()
+        try:
+            chemin = preparer_ffmpeg()
+        except Exception as erreur:  # noqa: BLE001 (le rapport dit pourquoi)
+            etat["erreur"] = str(erreur)
+            chemin = None
+        etat["preparation_s"] = round(time.monotonic() - debut, 2)
+        etat["empreinte_verifiee"] = bool(
+            chemin and hashlib.sha256(chemin.read_bytes()).hexdigest() == EMPREINTE_DU_PROGRAMME
+        )
+        etat["pret_ensuite"] = not ffmpeg_a_preparer() and programme_ffmpeg() == chemin == copie_de_ffmpeg()
+    else:
+        chemin = programme_ffmpeg()
+    infos = infos_ffmpeg(chemin) if chemin is not None else None
+    voulus = ("prores_ks", "libx264", "libx265", "ffv1", "aac")
+    rapport["ffmpeg"] = {
+        "chemin": str(chemin),
+        **etat,
+        "version": infos.version if infos else "",
+        "encodeurs": {nom: nom in infos.encodeurs for nom in voulus} if infos else {},
+        "x265_10_bits": bool(infos and infos.x265_10_bits),
+        "poids_mo": round(chemin.stat().st_size / 1024**2, 1) if chemin is not None and chemin.is_file() else None,
+    }
+    bon_endroit = (
+        dans_le_exe and etat["pas_recopie_au_demarrage"] and etat["a_preparer"] and etat["empreinte_verifiee"] and etat["pret_ensuite"]
+        if gele
+        else chemin == programme_integre()
+    )
+    return bool(
+        infos and bon_endroit and infos.version.startswith(VERSION_INTEGREE)
+        and all(nom in infos.encodeurs for nom in voulus) and infos.x265_10_bits
+    )
+
+
+def _damier_sous(image: QImage) -> QImage:
+    """L'image posée sur un damier (comme le fond « Damier » de l'aperçu) : on voit sa transparence."""
+    from .ui.theme import CouleursApercu, qcolor
+
+    fond = QImage(image.width(), image.height(), QImage.Format.Format_ARGB32_Premultiplied)
+    peintre = QPainter(fond)
+    case = Dimensions.DAMIER_CASE
+    for y in range(0, image.height(), case):
+        for x in range(0, image.width(), case):
+            clair = (x // case + y // case) % 2 == 0
+            peintre.fillRect(x, y, case, case, qcolor(CouleursApercu.DAMIER_CLAIR if clair else CouleursApercu.DAMIER_FONCE))
+    peintre.drawImage(QPoint(0, 0), image)
+    peintre.end()
+    return fond
+
+
+def _ecarts_rgba64(a: bytes, b: bytes, largeur: int, zone: QRect) -> tuple[int, int]:
+    """Deux images RGBA 16 bits (transparence droite) comparées dans `zone` : plus grand écart de
+    transparence, et de couleur là où les deux sont presque opaques (sur 255)."""
+    import struct
+
+    alpha = couleur = 0
+    for y in range(zone.top(), zone.bottom() + 1):
+        debut, fin = (y * largeur + zone.left()) * 8, (y * largeur + zone.right() + 1) * 8
+        for p, q in zip(struct.iter_unpack("<4H", a[debut:fin]), struct.iter_unpack("<4H", b[debut:fin]), strict=True):
+            alpha = max(alpha, abs(p[3] - q[3]))
+            if p[3] > 0xF000 and q[3] > 0xF000:
+                couleur = max(couleur, abs(p[0] - q[0]), abs(p[1] - q[1]), abs(p[2] - q[2]))
+    return round(alpha / 257), round(couleur / 257)
+
+
+def _calque(atelier, capturer, capturer_image, rapport: dict) -> bool:
+    """V3, lot 1 : le calque transparent de la vidéo de démonstration, exporté depuis sa fenêtre.
+
+    - La fenêtre (réglages et résumé avant export), pendant l'export (avancement) et à la fin.
+    - Le fichier relu par FFmpeg : ProRes, autant d'images que la vidéo, à sa fréquence, à sa taille.
+    - Une image relue (pendant « Sérum ») comparée à celle envoyée (fidélité du ProRes) et à l'aperçu
+      (le moteur à 8 bits) : transparence et couleurs, à quelques niveaux sur 255 près.
+    - Un export arrêté ne laisse rien. Les fichiers exportés sont ensuite effacés (rapport léger)."""
+    from PySide6.QtGui import QImage
+
+    from .exports.calque import ImagesDuCalque
+    from .exports.ffmpeg import analyser, commande_lire_une_image, executer, programme_ffmpeg
+
+    etat: dict = {}
+    dialogue = atelier.dialogue_calque()
+    dialogue.show()
+    etat["analyse_finie"] = _attendre(lambda: dialogue.analyse_finie, 30)
+    _laisser_afficher()
+    capturer(dialogue, "dialogue-export-calque")
+    problemes = _debordements(dialogue, "fenêtre d'export du calque")
+    rapport["calque_debordements"] = problemes
+    etat["sans_debordement"] = not problemes
+    plan = dialogue.plan()
+    source = dialogue.source
+    rapport["calque_plan"] = {
+        "sortie": plan.sortie.name, "taille": [plan.largeur, plan.hauteur], "frequence": str(plan.frequence),
+        "images": plan.nombre_images, "source_images": source.nombre_images, "source_codec": source.codec_video,
+        "messages": dialogue.messages_affiches(),
+    }
+    # La vidéo de démonstration : 74 images à 10 par seconde (comptées par FFmpeg) ; le projet est en
+    # 1080 × 1920 (la vidéo, deux fois plus petite, y est agrandie, comme dans l'aperçu).
+    etat["plan_de_la_video"] = (plan.largeur, plan.hauteur) == (atelier.toile.taille_video()) and plan.nombre_images == source.nombre_images == 74
+    debut = time.monotonic()
+    dialogue.exporter()
+    _attendre(lambda: dialogue.barre.avancee() > 0.05 or not dialogue.en_cours(), 30)
+    capturer(dialogue, "dialogue-export-calque-avancement")
+    etat["export_fini"] = _attendre_sans_pause(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
+    rapport["calque_duree_s"] = round(time.monotonic() - debut, 2)
+    rapport["calque_dessin_s"] = round(dialogue.dessin_s, 2)  # temps passé à dessiner les images (le reste : FFmpeg)
+    rapport["calque_images_dessinees"] = dialogue.images_dessinees
+    _laisser_afficher()
+    capturer(dialogue, "dialogue-export-calque-fin")
+    rapport["calque_message"] = dialogue.statut.text()
+    fichier = dialogue.fichier
+    etat["fichier_ecrit"] = fichier is not None and fichier.is_file() and not plan.en_cours.exists()
+    if etat["fichier_ecrit"]:
+        rapport["calque_poids_mo"] = round(fichier.stat().st_size / 1024**2, 2)
+        rapport["calque_poids_max_mo"] = round(plan.poids_max / 1024**2, 2)
+        analyse = analyser(fichier)
+        images = analyse.images if analyse else None
+        couleurs = analyse.couleurs if analyse else None
+        rapport["calque_relu"] = {
+            "codec": images.codec if images else "", "images": images.nombre if images else 0,
+            "frequence": str(images.frequence) if images else "", "taille": [images.largeur, images.hauteur] if images else [],
+            "son": analyse.son is not None if analyse else None,
+            "couleurs": [couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert] if couleurs else [],
+        }
+        etat["fichier_relu"] = bool(
+            images and images.codec == "prores" and images.nombre == plan.nombre_images and images.frequence == plan.frequence
+            and (images.largeur, images.hauteur) == (plan.largeur, plan.hauteur) and analyse.son is None
+            and couleurs is not None and (couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("bt709", "bt709", "bt709")
+        )
+        # Une image pendant « Sérum » : relue, envoyée, et celle de l'aperçu.
+        serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), 0)
+        numero = int((atelier.mots[serum].debut + 0.15) * plan.frequence)
+        temps = plan.temps(numero)
+        contenu = atelier.contenu_a_exporter()
+        envoyee = ImagesDuCalque(contenu.reglages, plan.largeur, plan.hauteur, contenu.sous_titres, contenu.mots).image(temps)
+        lue = executer(commande_lire_une_image(programme_ffmpeg(), fichier, numero), binaire=True).stdout
+        moteur = atelier.toile._moteur
+        index = next(i for i, s in enumerate(contenu.sous_titres) if s.debut <= temps < s.fin)
+        apercu = moteur.image(contenu.sous_titres[index], contenu.mots, temps).convertToFormat(QImage.Format.Format_RGBA64)
+        apercu_octets = bytes(apercu.constBits())
+        bloc = moteur.bloc(contenu.sous_titres[index], contenu.mots)
+        marge = round(plan.hauteur * 0.03)
+        zone = QRect(0, max(0, round(bloc.y) - marge), plan.largeur, min(plan.hauteur - max(0, round(bloc.y) - marge), round(bloc.hauteur) + 2 * marge))
+        if len(lue) == len(envoyee) == len(apercu_octets):
+            relu_alpha, relu_couleur = _ecarts_rgba64(envoyee, lue, plan.largeur, zone)
+            apercu_alpha, apercu_couleur = _ecarts_rgba64(envoyee, apercu_octets, plan.largeur, zone)
+            rapport["calque_ecarts_sur_255"] = {
+                "relu_transparence": relu_alpha, "relu_couleur": relu_couleur,
+                "apercu_transparence": apercu_alpha, "apercu_couleur": apercu_couleur,
+            }
+            # ProRes 10 bits : 3 niveaux sur 255 au plus. Aperçu (8 bits) : les lettres à 3 niveaux près,
+            # les ombres et lueurs floues à quelques niveaux (le 16 bits y garde plus de nuances).
+            etat["image_relue_fidele"] = relu_alpha <= 2 and relu_couleur <= 3
+            etat["image_comme_l_apercu"] = apercu_alpha <= 6 and apercu_couleur <= 3
+            relue = QImage(lue, plan.largeur, plan.hauteur, plan.largeur * 8, QImage.Format.Format_RGBA64).copy()
+            capturer_image(_damier_sous(relue.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)).copy(zone), "calque-relu-sur-damier")
+            capturer_image(_damier_sous(apercu.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)).copy(zone), "calque-apercu-sur-damier")
+        else:
+            rapport["calque_ecarts_sur_255"] = f"tailles différentes : {len(lue)}, {len(envoyee)}, {len(apercu_octets)}"
+            etat["image_relue_fidele"] = etat["image_comme_l_apercu"] = False
+        fichier.unlink(missing_ok=True)
+    dialogue.accept()
+
+    # « Arrêter » : rien n'est gardé.
+    dialogue = atelier.dialogue_calque()
+    dialogue.show()
+    _attendre(lambda: dialogue.analyse_finie, 30)
+    plan = dialogue.plan()
+    dialogue.exporter()
+    _attendre(lambda: dialogue.barre.avancee() > 0 or not dialogue.en_cours(), 30)
+    dialogue.arreter()
+    _laisser_afficher()
+    etat["arreter_ne_garde_rien"] = not plan.sortie.exists() and not plan.en_cours.exists() and dialogue.statut.text().startswith("Export arrêté")
+    dialogue.reject()
+    rapport["calque"] = etat
+    return all(etat.values())
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -971,6 +1199,9 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["mots_du_studio"] = _mots_du_studio(sous_titres, capturer, capturer_image, rapport)
             verifs["animations"] = _animations(sous_titres, capturer, capturer_image, rapport)
             verifs["frise_et_prereglages"] = _frise_et_prereglages(sous_titres, capturer, capturer_image, rapport)
+            # V3, lot 1 : FFmpeg intégré, puis le calque transparent de la vidéo de démonstration.
+            verifs["ffmpeg_integre"] = _ffmpeg_integre(rapport)
+            verifs["calque"] = _calque(sous_titres, capturer, capturer_image, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()

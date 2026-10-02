@@ -7,10 +7,11 @@ import logging
 import os
 import platform
 import sys
+import tempfile
 from pathlib import Path
 
 from . import NOM_APP, __version__
-from .chemins import VARIABLE_DOSSIER_DONNEES, dossier_ressources, fichier_journal
+from .chemins import VARIABLE_DOSSIER_DONNEES, VARIABLE_DOSSIER_PROGRAMMES, dossier_ressources, fichier_journal
 from .journal import configurer_journal
 
 journal = logging.getLogger(__name__)
@@ -101,6 +102,8 @@ def main(arguments: list[str] | None = None) -> int:
         dossier_autotest.mkdir(parents=True, exist_ok=True)
         # L'autotest travaille dans son propre dossier et ne touche pas aux vraies données.
         os.environ[VARIABLE_DOSSIER_DONNEES] = str(dossier_autotest / "donnees")
+        # FFmpeg recopié (100 Mo) : hors du dossier de l'autotest, qui part dans le rapport.
+        os.environ[VARIABLE_DOSSIER_PROGRAMMES] = str(Path(tempfile.gettempdir()) / f"{NOM_APP} autotest" / "programmes")
 
     configurer_journal(fichier_journal())
     journal.info(

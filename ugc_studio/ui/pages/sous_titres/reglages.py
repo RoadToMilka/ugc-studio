@@ -431,7 +431,7 @@ class PanneauReglages(QWidget):
         if resolution_imposee:
             largeur, hauteur = resolution_imposee
             self.format.addItem(f"Celui de la vidéo ({largeur} × {hauteur})", FORMAT_AUTO)
-            self.info_format.setText("Le format suit la vidéo : l'overlay de la V3 doit avoir sa taille exacte.")
+            self.info_format.setText("Le format suit la vidéo : le calque transparent doit avoir sa taille exacte.")
         else:
             for identifiant, nom in NOMS_FORMATS.items():
                 self.format.addItem(nom, identifiant)

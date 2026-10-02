@@ -4,6 +4,7 @@
   %APPDATA%\\UGC Studio\\
 - Journal d'erreurs : %APPDATA%\\UGC Studio\\journal\\
 - Ressources embarquées dans le .exe (police Inter, icônes) : dossier « ressources » du code.
+- Programmes recopiés par l'app (FFmpeg, V3) : %LOCALAPPDATA%\\UGC Studio\\
 
 Pour les tests automatiques, la variable d'environnement UGC_STUDIO_DOSSIER_DONNEES
 permet d'utiliser un dossier temporaire au lieu du vrai dossier de données.
@@ -18,6 +19,7 @@ from pathlib import Path
 from . import NOM_APP
 
 VARIABLE_DOSSIER_DONNEES = "UGC_STUDIO_DOSSIER_DONNEES"
+VARIABLE_DOSSIER_PROGRAMMES = "UGC_STUDIO_DOSSIER_PROGRAMMES"  # autotest : FFmpeg recopié hors du rapport
 
 
 def _creer(dossier: Path) -> Path:
@@ -51,6 +53,22 @@ def fichier_preferences() -> Path:
 def dossier_cache() -> Path:
     """Fichiers recréables à tout moment (ex. icônes recolorées pour le thème)."""
     return _creer(dossier_donnees() / "cache")
+
+
+def dossier_programmes() -> Path:
+    """Programmes recopiés par l'app (FFmpeg, V3) : %LOCALAPPDATA%\\UGC Studio\\.
+
+    Pas dans %APPDATA% (les données), qui peut suivre l'utilisateur d'un ordinateur à l'autre dans
+    une entreprise : 100 Mo de programme n'ont rien à y faire. Tests : dans leur dossier temporaire."""
+    force = os.environ.get(VARIABLE_DOSSIER_PROGRAMMES)
+    if force:
+        return _creer(Path(force))
+    force = os.environ.get(VARIABLE_DOSSIER_DONNEES)
+    if force:
+        return _creer(Path(force) / "programmes")
+    if sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        return _creer(Path(os.environ["LOCALAPPDATA"]) / NOM_APP)
+    return _creer(Path.home() / ".cache" / NOM_APP)
 
 
 def dossier_documents() -> Path:

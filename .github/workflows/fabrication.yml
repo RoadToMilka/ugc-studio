@@ -1,10 +1,11 @@
 # Fabrication automatique de l'app, sur une machine Windows prêtée par GitHub.
 #
 # À chaque envoi de code sur GitHub :
-#   1. installe Python et les bibliothèques ;
+#   1. installe Python et les bibliothèques, et prépare FFmpeg (version figée, empreinte vérifiée) ;
 #   2. lance les tests automatiques ;
 #   3. fabrique UGC-Studio.exe ;
-#   4. démarre le .exe pour vérifier qu'il fonctionne (autotest avec captures d'écran) ;
+#   4. démarre le .exe pour vérifier qu'il fonctionne (autotest avec captures d'écran et vrais
+#      exports vidéo), et mesure son temps de démarrage à côté de celui de la version 2.0.0 ;
 #   5. joint le .exe et le rapport au « run » (onglet Actions du dépôt) ;
 #   6. sur la branche main uniquement : publie une Release « v<version> » avec le .exe,
 #      si cette version n'a pas encore été publiée.
@@ -56,6 +57,27 @@ jobs:
           New-Item -ItemType Directory -Force -Path rapport | Out-Null
           python -m pip freeze | Out-File -Encoding utf8 rapport/versions.txt
 
+      # FFmpeg (V3, exports vidéo) : la version 9.0.2 « essentials » de gyan.dev, figée. Son archive,
+      # et sa copie compressée pour le .exe (xz), sont gardées en cache d'une fabrication à l'autre (la
+      # clé change avec sa version, son empreinte et la façon de le compresser).
+      - name: Garder l'archive de FFmpeg (cache)
+        uses: actions/cache@v6
+        with:
+          path: outils/cache
+          key: ffmpeg-9.0.2-essentials-60f467265b1e-xz6
+
+      - name: Préparer FFmpeg 9.0.2 (empreinte vérifiée)
+        run: |
+          python outils/preparer_ffmpeg.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Ce que sait faire ce FFmpeg (version, x265 en 10 bits, ProRes, FFV1), joint au rapport.
+          $ffmpeg = "ugc_studio/ressources/ffmpeg/ffmpeg.exe"
+          & $ffmpeg -hide_banner -version | Out-File -Encoding utf8 rapport/ffmpeg.txt
+          foreach ($encodeur in @("libx265", "libx264", "prores_ks", "ffv1")) {
+            & $ffmpeg -hide_banner -h "encoder=$encodeur" | Out-File -Encoding utf8 -Append rapport/ffmpeg.txt
+          }
+          Get-Content rapport/ffmpeg.txt -TotalCount 1
+
       - name: Tests automatiques
         env:
           QT_QPA_PLATFORM: offscreen
@@ -72,7 +94,7 @@ jobs:
           "Taille du .exe : {0:N1} Mo" -f $taille | Tee-Object -FilePath rapport/taille-exe.txt
 
       - name: Démarrer le .exe (autotest sur l'écran Windows)
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: |
           $dossier = Join-Path $PWD "rapport/autotest-ecran"
           $p = Start-Process -FilePath "dist/UGC-Studio.exe" -ArgumentList @("--autotest", "`"$dossier`"") -Wait -PassThru
@@ -80,7 +102,7 @@ jobs:
           if ($p.ExitCode -ne 0) { Write-Error "L'autotest du .exe a échoué (code $($p.ExitCode))"; exit 1 }
 
       - name: Captures d'écran en taille réelle (sans écran)
-        timeout-minutes: 5
+        timeout-minutes: 8
         continue-on-error: true
         env:
           QT_QPA_PLATFORM: offscreen
@@ -88,6 +110,44 @@ jobs:
           $dossier = Join-Path $PWD "rapport/captures"
           $p = Start-Process -FilePath "dist/UGC-Studio.exe" -ArgumentList @("--autotest", "`"$dossier`"", "--captures-taille-fixe") -Wait -PassThru
           if ($p.ExitCode -ne 0) { Write-Warning "Captures incomplètes (code $($p.ExitCode))" }
+
+      # Temps de démarrage (V3) : FFmpeg est dans le .exe, mais dans une ressource que le démarrage ne
+      # recopie pas (il l'est au premier export). Le .exe de la version 2.0.0 (sans FFmpeg) et celui-ci
+      # sont lancés tour à tour, jusqu'à l'apparition de leur fenêtre ; le premier lancement de chacun
+      # ne compte pas (l'antivirus de Windows l'examine).
+      - name: Mesurer le démarrage (2.0.0 et cette version)
+        timeout-minutes: 6
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v2.0.0 --pattern UGC-Studio.exe --dir ancien --clobber
+          function Mesurer([string] $exe) {
+            $mesures = @()
+            foreach ($essai in 1..4) {
+              $chrono = [Diagnostics.Stopwatch]::StartNew()
+              $p = Start-Process -FilePath $exe -PassThru
+              $fenetre = $false
+              while (-not $fenetre -and $chrono.Elapsed.TotalSeconds -lt 60) {
+                Start-Sleep -Milliseconds 50
+                $enfants = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object { $_.ProcessId })
+                foreach ($numero in @($p.Id) + $enfants) {
+                  $processus = Get-Process -Id $numero -ErrorAction SilentlyContinue
+                  if ($processus -and $processus.MainWindowHandle -ne 0) { $fenetre = $true }
+                }
+              }
+              $secondes = $chrono.Elapsed.TotalSeconds
+              Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+              Start-Sleep -Seconds 3
+              if ($essai -gt 1) { $mesures += $secondes }
+            }
+            $triees = @($mesures | Sort-Object)
+            return $triees[[int][Math]::Floor($triees.Count / 2)]
+          }
+          $ancien = Mesurer "ancien/UGC-Studio.exe"
+          $nouveau = Mesurer "dist/UGC-Studio.exe"
+          "Démarrage jusqu'à la fenêtre (médiane de 3 lancements) : 2.0.0 = {0:N2} s ; cette version = {1:N2} s ; écart = {2:N2} s" -f $ancien, $nouveau, ($nouveau - $ancien) | Tee-Object -FilePath rapport/demarrage.txt
 
       - name: Joindre le rapport (tests, autotest, captures)
         if: always()

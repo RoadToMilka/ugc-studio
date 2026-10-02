@@ -1,4 +1,5 @@
-"""Onglet « Journal et données » (§10) : journal d'erreurs, dossier de données, à propos."""
+"""Onglet « Journal et données » (§10) : journal d'erreurs, dossier de données, à propos (dont
+FFmpeg, fourni avec l'app pour les exports vidéo : sa licence et l'adresse de son code source)."""
 
 from __future__ import annotations
 
@@ -9,9 +10,10 @@ from PySide6.QtCore import qVersion
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from .... import NOM_APP, __version__
-from ....chemins import dossier_donnees, dossier_journal
+from ....chemins import dossier_donnees, dossier_journal, dossier_ressources
+from ....exports.ffmpeg import DOSSIER_FFMPEG, VERSION_INTEGREE
 from ...composants.elements import bloc, bouton, info, libelle
-from ...ouvrir import ouvrir_dossier, ouvrir_journal
+from ...ouvrir import ouvrir_dossier, ouvrir_fichier, ouvrir_journal
 from ...theme import Espacements
 from ...composants.defilement import zone_defilante
 
@@ -76,4 +78,18 @@ class OngletDonnees(QWidget):
             )
         )
         d.addWidget(libelle("Icônes Lucide (licence ISC) · Police Inter (licence SIL OFL 1.1).", "legende"))
+        # FFmpeg (V3) : programme fourni avec l'app pour les exports vidéo ; sa licence (GPL) et l'adresse
+        # de son code source sont jointes à l'app (ressources/ffmpeg).
+        d.addWidget(libelle(f"FFmpeg {VERSION_INTEGREE} (gyan.dev, licence GPL version 3) : écrit les fichiers vidéo des exports", "legende"))
+        boutons = QHBoxLayout()
+        boutons.addWidget(
+            bouton(
+                "Licence et code source de FFmpeg",
+                variante="contour",
+                nom_icone="file-text",
+                action=lambda: ouvrir_fichier(dossier_ressources() / DOSSIER_FFMPEG / "A-PROPOS.txt"),
+            )
+        )
+        boutons.addStretch(1)
+        d.addLayout(boutons)
         contenu.addWidget(cadre)

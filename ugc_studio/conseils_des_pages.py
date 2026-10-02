@@ -377,10 +377,10 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Aperçu",
             (
-                "L'aperçu dessine les sous-titres avec le même moteur que les futurs exports : ce que tu vois "
-                "est ce qui sera exporté, à la finesse de ton écran près.",
+                "L'aperçu dessine les sous-titres avec le même moteur que les exports : ce que tu vois "
+                "est ce qui est exporté, à la finesse de ton écran près.",
                 "Fond « Vidéo » : la vidéo du projet ; « Gris » : un fond neutre ; « Damier » : pour juger un "
-                "texte prévu pour une incrustation transparente.",
+                "texte prévu pour le calque transparent.",
                 "« 100 % » montre un pixel de la vidéo par pixel de ton écran, pour juger la netteté ; la "
                 "zone défile.",
                 "La boucle rejoue le sous-titre choisi dans la liste ; la barre Espace lance ou arrête la "
@@ -401,8 +401,8 @@ SOUS_TITRES = PageDeConseils(
                 "haut (Bas).",
                 "L'alignement à gauche ou à droite part du bord de la zone de sécurité ; il peut changer le "
                 "découpage, comme la largeur maximale des lignes (réglages avancés).",
-                "Avec une vidéo, le format est le sien : l'incrustation transparente de la V3 doit avoir sa "
-                "taille exacte. Sans vidéo, choisis-le (9:16, 4:5…) ou donne une taille personnalisée.",
+                "Avec une vidéo, le format est le sien : le calque transparent doit avoir sa taille exacte. "
+                "Sans vidéo, choisis-le (9:16, 4:5…) ou donne une taille personnalisée.",
                 "Sous-titres d'une prise de voix : « Choisir une vidéo… » (onglet Écran) montre tes "
                 "sous-titres sur ton montage, avec le moment où la voix commence.",
             ),
@@ -443,10 +443,65 @@ SOUS_TITRES = PageDeConseils(
             ),
         ),
         Rubrique(
-            "Export",
+            "Exporter",
             (
-                "« Exporter en SRT… » : le texte et le moment de chaque sous-titre, sans style. Premiere Pro "
-                "et la plupart des logiciels le lisent, accents compris.",
+                "« Calque transparent… » : les sous-titres seuls, animations comprises, sur un fond transparent "
+                "(MOV, ProRes 4444). Pose-le dans Premiere Pro sur une piste au-dessus de ton montage, au même "
+                "point de départ : il tombe juste, image par image.",
+                "Le calque est dessiné par le moteur de l'aperçu : ce que tu vois dans le studio est ce qui sort.",
+                "« Fichier SRT… » : le texte et le moment de chaque sous-titre, sans style. Premiere Pro et la "
+                "plupart des logiciels le lisent, accents compris.",
+                "Chaque export passe par sa fenêtre : réglages, résumé avant export (ta source et l'export côte à "
+                "côte), puis l'avancement. Ta vidéo n'est jamais modifiée.",
+            ),
+        ),
+    ),
+)
+
+EXPORT = PageDeConseils(
+    "Exporter le calque transparent",
+    (
+        Rubrique(
+            "Le calque transparent",
+            (
+                "C'est une vidéo des sous-titres seuls, sur un fond transparent : tout ce que tu vois dans "
+                "l'aperçu (mot actif, animations, fond qui glisse), image par image.",
+                "Il a la taille et le nombre d'images par seconde de ta vidéo, à partir de 0 s : posé au même "
+                "endroit que ta vidéo ou ta voix, il ne se décale jamais, même au bout de 10 minutes.",
+                "Sans vidéo (sous-titres d'une voix) : choisis le nombre d'images par seconde de ta séquence "
+                "Premiere Pro (30 au départ) ; avec une vidéo d'aperçu, c'est le sien qui est proposé.",
+            ),
+        ),
+        Rubrique(
+            "Le poser dans Premiere Pro",
+            (
+                "Importe le fichier .mov, puis pose-le sur une piste au-dessus de ta vidéo (V2 au-dessus de V1), "
+                "au même point de départ que ta vidéo, ou que ta voix pour des sous-titres d'une prise.",
+                "Premiere Pro lit sa transparence : seuls les sous-titres apparaissent sur ton montage.",
+                "Si tu changes un réglage des sous-titres, exporte un nouveau calque et remplace l'ancien sur la "
+                "piste (ferme d'abord le projet Premiere Pro si tu gardes le même nom de fichier).",
+            ),
+        ),
+        Rubrique(
+            "Poids et place sur le disque",
+            (
+                "ProRes 4444 est un format de montage, sans perte visible : jusqu'à environ 40 Mo par seconde en "
+                "1080 × 1920 (souvent bien moins, la transparence prend peu de place).",
+                "L'app vérifie la place libre avant de commencer ; supprime les anciens calques dont tu n'as plus "
+                "besoin.",
+            ),
+        ),
+        Rubrique(
+            "Pendant l'export",
+            (
+                "Les images sont dessinées puis encodées par FFmpeg, intégré à l'app : la barre d'avancement et "
+                "le temps restant te disent où il en est.",
+                "Au tout premier export, FFmpeg est d'abord préparé (quelques secondes, une seule fois) : il "
+                "est rangé avec l'app sur ton ordinateur (100 Mo), dans « AppData\\Local\\UGC Studio ».",
+                "« Arrêter » interrompt l'export : rien n'est gardé. Le fichier ne prend son nom qu'une fois "
+                "terminé (avant, il s'appelle « … .mov.en-cours »).",
+                "Le dossier choisi (celui de la vidéo, celui du projet ou un autre) est retenu pour la prochaine "
+                "fois.",
             ),
         ),
     ),
@@ -937,4 +992,5 @@ PAGES: dict[str, PageDeConseils] = {
     "bibliotheque-briefs": BIBLIOTHEQUE_BRIEFS,
     "meilleurs-scripts": MEILLEURS_SCRIPTS,
     "prereglages": PREREGLAGES,
+    "export": EXPORT,
 }
