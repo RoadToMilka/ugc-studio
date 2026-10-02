@@ -21,8 +21,9 @@
    (« (modifié) » quand son style s'en écarte) ; en choisir un l'applique (avec la question de la
    1.1.0 s'il défait un ajustement), « Enregistrer… » en crée un, le menu ⋯ met à jour, revient au
    préréglage ou ouvre la fenêtre « Préréglages de sous-titres ».
-7. Exporter (V3) : le calque transparent (MOV, ProRes 4444) à poser sur le montage dans Premiere
-   Pro, dessiné par le moteur de l'aperçu (fenêtre d'export : réglages, résumé, avancement), et le
+7. Exporter (V3) : la vidéo avec ses sous-titres incrustés (lot 2 ; projet avec une vidéo), le
+   calque transparent (MOV, ProRes 4444) à poser sur le montage dans Premiere Pro, tous deux
+   dessinés par le moteur de l'aperçu (fenêtre d'export : réglages, résumé, avancement), et le
    fichier SRT.
 """
 
@@ -38,7 +39,7 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QInputDialog, QMenu, QMe
 
 from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
-from ....exports.plan import SousTitresAExporter
+from ....exports.plan import SousTitresAExporter, source_du_projet
 from ....fournisseurs.stt import MODE_VERBATIM
 from ....mise_en_page import limites_du_reglage_fin
 from ....modeles_charges import SOUS_TITRES
@@ -85,7 +86,7 @@ from ...composants.frise import FriseSousTitres
 from ...composants.montant_label import MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
-from ...dialogues.export import DialogueExportCalque
+from ...dialogues.export import DialogueExportCalque, DialogueExportVideo
 from ...dialogues.prereglages import DialoguePrereglages
 from ...extraction import FILTRE_FICHIERS, LecteurInfos
 from ...sous_titres_du_projet import (
@@ -264,17 +265,22 @@ class AtelierSousTitres(Page):
         return self.cadre_frise
 
     def _bloc_export(self):
-        """Exporter (V3) : le calque transparent pour Premiere Pro, et le fichier SRT. Chaque export
-        vidéo passe par sa fenêtre (réglages, résumé avant export, avancement)."""
+        """Exporter (V3) : la vidéo avec sous-titres (bouton principal), le calque transparent pour
+        Premiere Pro, et le fichier SRT. Chaque export vidéo passe par sa fenêtre (réglages, résumé
+        avant export, avancement)."""
         self.cadre_export, d = bloc("Exporter")
         d.addWidget(
             info(
-                "Calque transparent : les sous-titres seuls, sur un fond transparent, à poser au-dessus de ton "
-                "montage dans Premiere Pro. Fichier SRT : le texte et le moment de chaque sous-titre, sans style.",
+                "Vidéo avec sous-titres : ta vidéo, sous-titres incrustés, prête à publier. Calque transparent : "
+                "les sous-titres seuls, à poser au-dessus de ton montage dans Premiere Pro. Fichier SRT : le texte "
+                "et le moment de chaque sous-titre, sans style.",
                 "legende",
             )
         )
         boutons = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la fenêtre est étroite
+        self.bouton_video = bouton("Vidéo avec sous-titres…", variante="principal", nom_icone="clapperboard", action=self.exporter_video)
+        self.bouton_video.setToolTip("MP4, MOV ou MKV : ta vidéo et ses sous-titres, chaque image à son moment exact")
+        boutons.addWidget(self.bouton_video)
         self.bouton_calque = bouton("Calque transparent…", nom_icone="film", action=self.exporter_calque)
         self.bouton_calque.setToolTip("MOV, ProRes 4444 avec transparence, à la taille et aux images de ta vidéo")
         boutons.addWidget(self.bouton_calque)
@@ -282,6 +288,14 @@ class AtelierSousTitres(Page):
         self.bouton_exporter.setToolTip("Texte et temps de chaque sous-titre, sans style : pour Premiere Pro et la plupart des logiciels")
         boutons.addWidget(self.bouton_exporter)
         d.addLayout(boutons)
+        # Grisé sans vidéo (sous-titres d'une voix, d'un audio) : l'explication est dessous.
+        self.info_video = info(
+            "Vidéo avec sous-titres : seulement pour une vidéo importée dans le module Transcription. Ici, "
+            "exporte le calque transparent et pose-le sur ton montage.",
+            "legende",
+        )
+        self.info_video.hide()
+        d.addWidget(self.info_video)
         self.statut_export = libelle("", "secondaire")
         self.statut_export.hide()
         d.addWidget(self.statut_export)
@@ -577,6 +591,9 @@ class AtelierSousTitres(Page):
         self.resume.setText("  ·  ".join(morceaux))
         self.bouton_exporter.setEnabled(bool(self.sous_titres))
         self.bouton_calque.setEnabled(bool(self.sous_titres))
+        avec_video = self._projet is not None and source_du_projet(self._projet).video
+        self.bouton_video.setEnabled(bool(self.sous_titres) and avec_video)
+        self.info_video.setVisible(bool(self.sous_titres) and not avec_video)
         self._actualiser_toile()
         self._actualiser_reorganisation()
         self._actualiser_boucle()
@@ -1222,6 +1239,23 @@ class AtelierSousTitres(Page):
         dialogue.exec()
         if dialogue.fichier is not None:
             self._afficher(f"Calque enregistré : {dialogue.fichier.name}.", "succes", self.statut_export)
+
+    def dialogue_video(self) -> DialogueExportVideo | None:
+        """La fenêtre d'export de la vidéo avec sous-titres (None : rien à exporter, ou pas de vidéo)."""
+        contenu = self.contenu_a_exporter()
+        if contenu is None or not source_du_projet(self._projet).video:
+            return None
+        if self.lecteur.en_lecture():
+            self.lecteur.basculer()
+        return DialogueExportVideo(self._services, self._projet, contenu, self.window())
+
+    def exporter_video(self) -> None:
+        dialogue = self.dialogue_video()
+        if dialogue is None:
+            return
+        dialogue.exec()
+        if dialogue.fichier is not None:
+            self._afficher(f"Vidéo enregistrée : {dialogue.fichier.name}.", "succes", self.statut_export)
 
     # --- Pour l'autotest ---------------------------------------------------------------------
 

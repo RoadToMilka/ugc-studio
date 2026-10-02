@@ -48,12 +48,17 @@ def test_les_conseils_de_google_sont_repris():
 
 def _cles_utilisees() -> dict[str, list[str]]:
     """Pages de conseils demandées par l'interface : entete_de_fenetre(titre, "cle"),
-    entete_de_page(titre, sous_titre, "cle"), SansProjet(…, "cle"), bouton_conseils("cle") et
-    conseils="cle"."""
+    entete_de_page(titre, sous_titre, "cle"), SansProjet(…, "cle"), bouton_conseils("cle"),
+    conseils="cle", et PAGE_CONSEILS = "cle" (fenêtres d'export, V3 : la fenêtre commune en fait
+    son en-tête)."""
     position = {"entete_de_fenetre": 1, "entete_de_page": 2, "SansProjet": 3, "bouton_conseils": 0}
     utilisees: dict[str, list[str]] = {}
     for fichier in sorted(RACINE_UI.rglob("*.py")):
         for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8"))):
+            if isinstance(noeud, ast.Assign) and any(getattr(cible, "id", None) == "PAGE_CONSEILS" for cible in noeud.targets):
+                if isinstance(noeud.value, ast.Constant) and noeud.value.value:
+                    utilisees.setdefault(noeud.value.value, []).append(f"{fichier.name}:{noeud.lineno}")
+                continue
             if not isinstance(noeud, ast.Call):
                 continue
             nom = getattr(noeud.func, "id", getattr(noeud.func, "attr", None))
@@ -73,12 +78,12 @@ def test_chaque_bouton_ouvre_une_page_qui_existe_et_chaque_page_sert():
     assert set(PAGES) <= set(utilisees), f"Conseils jamais affichés : {set(PAGES) - set(utilisees)}"
 
 
-def test_cinq_modules_et_dix_sept_fenetres():
+def test_cinq_modules_et_dix_huit_fenetres():
     modules = {"script", "voix", "transcription", "sous-titres", "reglages"}
     assert modules <= set(PAGES)
     # Dont 4 au lot 2 de la V2 (variantes, comparaison, briefs, exemples), 1 au lot 7 (préréglages)
-    # et 1 au lot 1 de la V3 (fenêtre d'export).
-    assert len(set(PAGES) - modules) == 17
+    # et 2 dans la V3 (fenêtres d'export du calque, lot 1, et de la vidéo, lot 2).
+    assert len(set(PAGES) - modules) == 18
     assert all(re.fullmatch(r"[a-z-]+", cle) for cle in PAGES)
 
 

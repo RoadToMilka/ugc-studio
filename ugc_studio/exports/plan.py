@@ -95,6 +95,8 @@ class Source:
     couleurs: CouleursDeLaVideo | None = None  # lues par FFmpeg (format des pixels, norme, HDR)
     prise: bool = False  # sous-titres d'une prise de voix
     video_d_apercu: Path | None = None  # projet sans vidéo : celle choisie pour l'aperçu
+    debut: Fraction = Fraction(0)  # moment de la première image (0 le plus souvent), lu par FFmpeg
+    analyse: Analyse | None = None  # tout ce que FFmpeg a lu (vidéo avec sous-titres, lot 2)
 
     @property
     def dossier(self) -> Path | None:
@@ -147,6 +149,7 @@ def source_du_projet(projet: Projet, analyse: Analyse | None = None) -> Source:
     # FFmpeg a lu la vidéo : ses chiffres sont exacts (Qt ne connaît pas tous les codecs, ni le
     # moment exact de chaque image).
     images, son = analyse.images, analyse.son
+    source = replace(source, analyse=analyse)
     if images is not None and video:
         source = replace(
             source,
@@ -156,6 +159,7 @@ def source_du_projet(projet: Projet, analyse: Analyse | None = None) -> Source:
             codec_video=nom_du_codec(images.codec) or source.codec_video,
             debit_video=images.debit or source.debit_video,
             duree_s=float(images.duree) or source.duree_s,
+            debut=images.debut,
         )
     if son is not None:
         source = replace(source, codec_audio=nom_du_codec(son.codec) or source.codec_audio, debit_audio=son.debit or source.debit_audio)
@@ -215,14 +219,16 @@ class PlanCalque:
     frequence: Fraction
     nombre_images: int
     sortie: Path
+    debut: Fraction = Fraction(0)  # moment de la première image de la vidéo (0 le plus souvent)
 
     @property
     def duree_s(self) -> float:
         return float(self.nombre_images / self.frequence)
 
     def temps(self, numero: int) -> float:
-        """Moment exact de l'image `numero` (calculé depuis son numéro : aucun décalage qui s'accumule)."""
-        return float(temps_de_l_image(numero, self.frequence))
+        """Moment exact de l'image `numero` (calculé depuis son numéro : aucun décalage qui s'accumule),
+        compté depuis le début de la vidéo : si sa première image n'est pas à 0 s, le calque la suit."""
+        return float(self.debut + temps_de_l_image(numero, self.frequence))
 
     @property
     def en_cours(self) -> Path:
@@ -253,7 +259,8 @@ def nombre_d_images_du_calque(source: Source, frequence: Fraction) -> int:
 
 def plan_du_calque(source: Source, largeur: int, hauteur: int, frequence: Fraction | None, sortie: Path) -> PlanCalque:
     frequence = frequence_du_calque(source, frequence)
-    return PlanCalque(largeur, hauteur, frequence, nombre_d_images_du_calque(source, frequence), sortie)
+    debut = source.debut if source.video else Fraction(0)
+    return PlanCalque(largeur, hauteur, frequence, nombre_d_images_du_calque(source, frequence), sortie, debut)
 
 
 # --- Résumé avant export (§8.5) ----------------------------------------------------------------

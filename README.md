@@ -16,7 +16,7 @@ Au premier lancement, Windows affiche « Windows a protégé votre ordinateur »
 | `ugc_studio/ecriture/` | Le module Script, sans interface : lecture de la page produit, brief, consignes du modèle, relecture, exemples, variantes, retouche, bibliothèque de briefs |
 | `ugc_studio/sous_titres.py`, `style_sous_titres.py`, `mise_en_page.py`, `prereglages.py` | Les sous-titres, sans interface : découpage, style (forme écrite des projets et des préréglages), place des lignes et des mots, préréglages (les 6 fournis, ★ des nouveaux projets, export et import) |
 | `ugc_studio/rendu/` | Le moteur de dessin des sous-titres, commun à l'aperçu et aux exports vidéo, et les polices des sous-titres (fournies, importées, de Windows) |
-| `ugc_studio/exports/` | Les exports vidéo (V3) : fréquences exactes, commandes données à FFmpeg, résumé avant export, images du calque transparent |
+| `ugc_studio/exports/` | Les exports vidéo (V3) : fréquences exactes, commandes données à FFmpeg, résumé avant export, images du calque transparent, vidéo avec sous-titres (calque provisoire en MOV d'images PNG, posé sur la vidéo par FFmpeg) |
 | `ugc_studio/ui/` | L'interface : fenêtre principale, pages, composants réutilisables |
 | `ugc_studio/ressources/` | Polices (Inter pour l'interface ; Montserrat, Poppins, Anton et Bebas Neue pour les sous-titres, licence SIL OFL), style de départ et préréglages fournis des sous-titres, icônes (Lucide) et icône de l'app, licence de FFmpeg, embarqués dans le `.exe` |
 | `tests/` | Tests automatiques, lancés à chaque envoi de code |
