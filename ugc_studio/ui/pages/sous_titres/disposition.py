@@ -20,7 +20,7 @@ imbriquées). Changer un bloc de widget parent le ferait disparaître le temps d
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QPoint, Signal
+from PySide6.QtCore import QEvent, QPoint, QSize, Signal
 from PySide6.QtWidgets import QBoxLayout, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from ...composants.defilement import ColonneDefilante
@@ -150,6 +150,15 @@ class DispositionStudio(QWidget):
         return collee if collee >= Dimensions.STUDIO_COLONNES_HAUTEUR_MIN else None
 
     # --- Adaptation ----------------------------------------------------------------------------------
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        """Largeur minimale : celle de la petite fenêtre (tout l'un sous l'autre). Sans cela, en deux
+        ou trois colonnes, la disposition ne pourrait pas devenir plus étroite que ses colonnes : il
+        n'y aurait jamais assez peu de place pour passer à une disposition plus étroite, et le bord
+        droit de la page serait coupé."""
+        blocs = (self._source, self._export, self._apparence, self._sous_titres, self._frise)
+        largeur = max(self._apercu.largeur_min(), *(bloc.minimumSizeHint().width() for bloc in blocs))
+        return QSize(largeur, super().minimumSizeHint().height())
 
     def resizeEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
         super().resizeEvent(evenement)
