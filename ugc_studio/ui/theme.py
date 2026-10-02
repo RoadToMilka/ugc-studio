@@ -229,13 +229,15 @@ class Dimensions:
     SEPARATEUR_LISTE = 2 * Espacements.XS + BORDURE  # séparation entre deux groupes de choix
     # (Les pages ne sont plus limitées en largeur depuis la 1.0.1 : en plein écran, les blocs
     # prennent toute la place disponible.)
-    # Fenêtres (V3.2) : contenu dans un bloc, 16 px autour ; elles s'élargissent de 2 × 16 px pour que
-    # leur contenu garde sa largeur (520, 760, 1000 et 880 px jusqu'à la 3.1.2).
-    DIALOGUE_LARGEUR = 552
-    DIALOGUE_LARGE_LARGEUR = 792  # bibliothèque de styles, dictionnaire de prononciation
+    # Fenêtres (V3.2) : contenu dans un bloc, 16 px autour, et sa bordure de 1 px ; elles s'élargissent
+    # d'autant (2 × 17 px) pour que leur contenu garde exactement sa largeur (520, 760, 1000 et 880 px
+    # jusqu'à la 3.1.2 : ex. la fenêtre des préréglages garde ses trois cartes par rangée).
+    MARGES_FENETRE = 2 * (ESPACE_BLOCS + BORDURE)
+    DIALOGUE_LARGEUR = 520 + MARGES_FENETRE
+    DIALOGUE_LARGE_LARGEUR = 760 + MARGES_FENETRE  # bibliothèque de styles, dictionnaire de prononciation
     DIALOGUE_LARGE_HAUTEUR = 560
     DIALOGUE_CONSEILS_LARGEUR = 640  # fenêtre « Conseils » : des lignes de texte faciles à lire
-    DIALOGUE_VARIANTES_LARGEUR = 1032  # variantes A/B : une colonne par variante (le tableau défile)
+    DIALOGUE_VARIANTES_LARGEUR = 1000 + MARGES_FENETRE  # variantes A/B : une colonne par variante (le tableau défile)
     COLONNE_VARIANTE_LARGEUR = 240
     COLONNE_TITRES_VARIANTES_LARGEUR = 104  # « Modèle », « Voix », « Style », « Texte »
     CHAMP_DESCRIPTION_HAUTEUR = 88  # description d'une voix (Voice Design) : environ 3 lignes
@@ -244,7 +246,7 @@ class Dimensions:
     # Module Script, lot 2 : tableau « Réglages par variante » (« Personne qui parle »…) et
     # comparaison de scripts côte à côte (2 ou 3 colonnes, la fenêtre défile au-delà).
     COLONNE_TITRES_VARIANTES_SCRIPT_LARGEUR = 136
-    DIALOGUE_COMPARER_SCRIPTS_LARGEUR = 1032
+    DIALOGUE_COMPARER_SCRIPTS_LARGEUR = 1000 + MARGES_FENETRE
     COLONNE_SCRIPT_COMPARE_LARGEUR = 296
     DIALOGUE_SCRIPTS_HAUTEUR = 660  # variantes de script et comparaison : plus de lignes visibles d'un coup
     CHAMP_SCRIPT_COLLE_HAUTEUR = 120  # « Ajouter un script qui a marché » : environ 5 lignes
@@ -295,11 +297,11 @@ class Dimensions:
     VIGNETTE_LARGEUR = 240
     VIGNETTE_HAUTEUR = 108
     VIGNETTE_IMAGES_PAR_SECONDE = 20
-    DIALOGUE_PREREGLAGES_LARGEUR = 912
+    DIALOGUE_PREREGLAGES_LARGEUR = 880 + MARGES_FENETRE  # trois cartes par rangée
     DIALOGUE_PREREGLAGES_HAUTEUR = DIALOGUE_HAUTEUR_MAX
     # Fenêtre d'export (V3) : réglages, résumé avant export et avancement dans une seule fenêtre, qui
     # tient sur l'écran d'un portable ; le résumé (source et export côte à côte) défile si besoin.
-    DIALOGUE_EXPORT_LARGEUR = 792
+    DIALOGUE_EXPORT_LARGEUR = 760 + MARGES_FENETRE
     DIALOGUE_EXPORT_HAUTEUR = DIALOGUE_HAUTEUR_MAX
     BARRE_AVANCEMENT_HAUTEUR = 8  # barre d'avancement d'un export : rail arrondi, rempli de mauve
     EDITEUR_REPLIQUE_HAUTEUR_MIN = 88  # éditeur d'une réplique (grandit ensuite avec son texte)

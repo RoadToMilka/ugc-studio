@@ -96,6 +96,9 @@ VERIFICATIONS_OBLIGATOIRES = (
     "aides_v31",
     "disposition_studio",
     "zone_source",
+    "frise_et_prereglages",
+    "bulle_v32",
+    "menu_v32",
     "fenetres_v32",
 )
 ELEMENTS_SIGNALES_MAX = 6
