@@ -416,6 +416,65 @@ def test_bouton_video_grise_sans_video(app_configuree, qtbot, services, projet_p
     assert atelier.bouton_calque.isEnabled()
 
 
+# --- Images du calque d'une vidéo en 10 bits : PNG de 16 bits écrits par Qt (V3, lot 3) ------------
+
+
+def _morceaux_png(png: bytes) -> dict:
+    morceaux, position = [], 8
+    while position + 8 <= len(png):
+        longueur, nom = struct.unpack_from(">I4s", png, position)
+        morceaux.append(nom.decode("latin-1"))
+        position += 12 + longueur
+    return {"bits": png[24], "sorte": png[25], "morceaux": morceaux}
+
+
+@avec_ffmpeg
+def test_png_de_16_bits_relu_par_ffmpeg(app_configuree, tmp_path, record_property):
+    """Pour une vidéo en 10 bits (HDR, ProRes), les images du calque partent en PNG de 16 bits par
+    couleur, écrits par Qt : relus par FFmpeg, seuls ou dans le calque provisoire (MOV), ils ont la
+    transparence et les couleurs de l'image dessinée (à un niveau sur 255 près)."""
+    import json
+
+    from PySide6.QtGui import QImage
+
+    from ugc_studio.exports.composition import CalqueDeLaVideo, png_de
+    from ugc_studio.exports.mov_png import EcritureMovPng
+
+    reglages = _reglages()
+    contenu = _contenu(reglages)
+    calque = CalqueDeLaVideo(reglages, LARGEUR, HAUTEUR, contenu.sous_titres, contenu.mots, True)
+    serum = next(m for m in contenu.mots if m.texte == "sérum")
+    temps = serum.debut + 0.3  # le pop du mot actif est fini
+    image = calque.image(calque.cle(temps), temps)
+    assert image.format() == QImage.Format.Format_RGBA64
+    png = png_de(image)
+    record_property("png_16_bits", json.dumps(_morceaux_png(png)))
+    assert (png[24], png[25]) == (16, 6)  # 16 bits, RGBA
+    attendu = _pixels(image)
+
+    def relu(commande: list[str], entree: bytes | None = None) -> list[tuple[int, int, int, int]]:
+        import subprocess
+
+        sortie = subprocess.run(commande, input=entree, capture_output=True, timeout=60).stdout
+        assert len(sortie) == LARGEUR * HAUTEUR * 8
+        return _depuis_octets(sortie)
+
+    seul = relu([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "png_pipe", "-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"], png)
+    alpha, couleur = _ecarts(attendu, seul)
+    record_property("ecarts_png_seul", json.dumps([alpha, couleur]))
+    assert alpha <= 257 and couleur <= 257, (alpha / 257, couleur / 257, _morceaux_png(png))
+    vide = png_de(calque.image(None, 0.0))
+    ecriture = EcritureMovPng(tmp_path / "calque.mov", LARGEUR, HAUTEUR, 600)
+    for donnees in (vide, png, vide):
+        ecriture.ajouter(donnees, 20)
+    ecriture.fermer()
+    dans_le_mov = relu([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(tmp_path / "calque.mov"),
+                        "-vf", "select=eq(n\\,1)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"])
+    alpha, couleur = _ecarts(attendu, dans_le_mov)
+    record_property("ecarts_png_dans_le_mov", json.dumps([alpha, couleur]))
+    assert alpha <= 257 and couleur <= 257, (alpha / 257, couleur / 257)
+
+
 # --- Vidéo HDR (V3, lot 3) ---------------------------------------------------------------------------
 
 
@@ -467,7 +526,8 @@ def test_fenetre_de_la_video_hdr(app_configuree, qtbot, services, projet_hdr):
     assert _lignes_du_resume(dialogue)["Couleurs"] == ("HDR (HLG), 10 bits", "HDR (HLG), 10 bits")
     assert dialogue.bouton_exporter.isEnabled() and not dialogue.messages_affiches()
     dialogue.choix_debit.bouton(DEBIT_CONSEILLE).click()
-    assert dialogue.texte_debit.text().endswith("le double du débit conseillé par YouTube en HDR")
+    # 270 × 480 : YouTube ne donne pas de débit HDR sous la 720p, celui du SDR (2 × 1 Mb/s) sert.
+    assert dialogue.plan().debit == 2_000_000 and dialogue.texte_debit.text().endswith("le double du débit conseillé par YouTube")
     dialogue.case_sdr.setChecked(True)
     assert dialogue.choix_codec.bouton(H264).isEnabled() and dialogue.choix_codec.valeur() == H264
     plan = dialogue.plan()

@@ -1050,7 +1050,7 @@ def _video_avec_sous_titres(atelier, capturer, rapport: dict) -> bool:
     - Un export arrêté ne laisse rien (ni fichier, ni dossier provisoire). Les fichiers exportés sont
       ensuite effacés (rapport léger)."""
     from .exports.composition import CalqueDeLaVideo
-    from .exports.ffmpeg import analyser, executer, programme_ffmpeg
+    from .exports.ffmpeg import analyser, executer, lecture_en_rgb, programme_ffmpeg
     from .exports.video import MKV, MOV, MP4, PRORES
 
     etat: dict = {}
@@ -1133,7 +1133,7 @@ def _video_avec_sous_titres(atelier, capturer, rapport: dict) -> bool:
         if point is not None:
             brut = executer(
                 [str(programme_ffmpeg()), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(fichier),
-                 "-vf", f"select=eq(n\\,{numero}),scale=in_color_matrix={plan.couleurs.matrice_du_filtre}:in_range=tv,format=rgb24",
+                 "-vf", f"select=eq(n\\,{numero}),{lecture_en_rgb(plan.couleurs.matrice)},format=gbrp,format=rgb24",
                  "-frames:v", "1", "-f", "rawvideo", "-"],
                 60, binaire=True,
             ).stdout
@@ -1262,7 +1262,7 @@ def _video_hdr(atelier, capturer, capturer_image, rapport: dict) -> bool:
     - « Convertir en SDR » : H.264, 8 bits, BT.709 ; le jaune et le blanc des sous-titres exacts.
     - Calque d'une vidéo HDR : ProRes 4444 aux étiquettes HLG, blanc à 721.
     Les fichiers sont ensuite effacés, et le projet retrouve sa vidéo."""
-    from .exports.ffmpeg import analyser, executer, programme_ffmpeg
+    from .exports.ffmpeg import analyser, executer, lecture_en_rgb, programme_ffmpeg
     from .exports.video import H264, H265
 
     etat: dict = {}
@@ -1393,7 +1393,7 @@ def _video_hdr(atelier, capturer, capturer_image, rapport: dict) -> bool:
             etat["fichier_sdr_relu"] = (couleurs.bits, couleurs.matrice, couleurs.transfert) == (8, "bt709", "bt709")
             brut = executer(
                 [str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(fichier),
-                 "-vf", f"select=eq(n\\,{numero}),scale=in_color_matrix=bt709:in_range=tv,format=rgb24",
+                 "-vf", f"select=eq(n\\,{numero}),{lecture_en_rgb()},format=gbrp,format=rgb24",
                  "-frames:v", "1", "-f", "rawvideo", "-"],
                 60, binaire=True,
             ).stdout

@@ -663,7 +663,25 @@ def analyser(source: Path, ffmpeg: Path | None = None) -> Analyse | None:
 # Depuis FFmpeg 8, l'encodeur reprend les étiquettes portées par les images : les options
 # « -color_primaries » et « -color_trc » seules ne suffisent plus (vérifié dans le code de FFmpeg
 # 9.0.2, fftools/ffmpeg_enc.c, et par les tests). Le filtre setparams les pose donc sur les images.
-CONVERSION_BT709 = "scale=out_color_matrix=bt709:out_range=tv"
+
+
+def conversion_des_sous_titres(matrice: str = "bt709") -> str:
+    """Les sous-titres (RGB, SDR) dans la norme d'une vidéo SDR (matrice, nom de FFmpeg : « bt709 »,
+    « smpte170m »…), en plage limitée, par le filtre zscale (bibliothèque zimg, comme pour le HDR) :
+    même calcul, exact, que les images aient 8 ou 16 bits par couleur. Les primaires et la courbe ne
+    changent pas (pin=p, tin=t) : seule la norme de la matrice compte ici.
+    Pourquoi pas le filtre « scale » (lots 1 et 2) : avec FFmpeg 9.0.2, ses images de 16 bits par
+    couleur (vidéos en 10 bits) sortaient avec une autre norme que celle demandée (vu sur la
+    fabrication, lot 3 : le jaune #FFD43B relu 255, 207, 49)."""
+    return f"zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m={matrice}:r=limited"
+
+
+def lecture_en_rgb(matrice: str = "bt709") -> str:
+    """L'inverse (vérifications) : une image d'une vidéo SDR relue en RGB, plage complète, par zscale."""
+    return f"zscale=min={matrice}:rin=limited:pin=bt709:tin=bt709:p=bt709:t=bt709:m=gbr:r=full"
+
+
+CONVERSION_BT709 = conversion_des_sous_titres("bt709")
 ETIQUETAGE_BT709 = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"
 ETIQUETTES_BT709 = ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"]
 
@@ -764,10 +782,10 @@ def commande_calque(
 
 def commande_lire_une_image(ffmpeg: Path, video: Path, numero: int) -> list[str]:
     """Une image d'une vidéo exportée, décodée en RGBA 16 bits (vérifications de l'autotest) : la
-    conversion inverse utilise la même norme BT.709 que l'export."""
+    conversion inverse utilise la même norme BT.709 que l'export (zscale, puis RGBA rangé autrement)."""
     return [
         str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video),
-        "-vf", f"select=eq(n\\,{numero}),scale=in_color_matrix=bt709:in_range=tv,format={FORMAT_DES_IMAGES}",
+        "-vf", f"select=eq(n\\,{numero}),{lecture_en_rgb()},format=gbrap16le,format={FORMAT_DES_IMAGES}",
         "-frames:v", "1", "-f", "rawvideo", "-",
     ]
 

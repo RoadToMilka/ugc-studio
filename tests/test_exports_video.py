@@ -20,7 +20,16 @@ from pathlib import Path
 
 import pytest
 
-from ugc_studio.exports.ffmpeg import Analyse, CouleursDeLaVideo, ImagesDeLaVideo, SonDeLaVideo, analyser, executer, programme_ffmpeg
+from ugc_studio.exports.ffmpeg import (
+    Analyse,
+    CouleursDeLaVideo,
+    ImagesDeLaVideo,
+    SonDeLaVideo,
+    analyser,
+    executer,
+    lecture_en_rgb,
+    programme_ffmpeg,
+)
 from ugc_studio.exports.mov_png import EcritureMovPng
 from ugc_studio.exports.plan import Source
 from ugc_studio.exports.video import (
@@ -39,6 +48,7 @@ from ugc_studio.exports.video import (
     commande_video,
     couleurs_de_l_export,
     debit_conseille,
+    debit_hdr_de_youtube,
     debit_par_defaut,
     decalage_du_calque,
     graphe_de_filtres,
@@ -166,7 +176,7 @@ def test_commandes_h264_en_deux_passages(tmp_path):
     assert "-map [sortie] -map 0:a:0 -c:a copy" in texte and "-pass 2" in texte
     assert second[-4:] == ["+faststart", "-f", "mp4", str(plan.en_cours)]
     assert graphe_de_filtres(plan) == (
-        "[0:v]format=yuv420p[video];[1:v]scale=out_color_matrix=bt709:out_range=tv,format=yuva420p[calque];"
+        "[0:v]format=yuv420p[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva420p[calque];"
         "[video][calque]overlay=format=yuv420:eof_action=repeat,"
         "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[sortie]"
     )
@@ -196,7 +206,7 @@ def test_video_en_plage_complete_et_debut_decale(tmp_path):
     images = _images(depart=2002)
     couleurs = CouleursDeLaVideo("yuvj420p", "pc", "bt470bg", "", "")
     plan = plan_video(_source(tmp_path, images, couleurs=couleurs), MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
-    assert graphe_de_filtres(plan).startswith("[0:v]scale=in_range=pc:out_range=tv,format=yuv420p[video];[1:v]scale=out_color_matrix=bt470")
+    assert graphe_de_filtres(plan).startswith("[0:v]scale=in_range=pc:out_range=tv,format=yuv420p[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:")
     assert decalage_du_calque(images) == ["-itsoffset", "0.066733"]
     assert decalage_du_calque(_images(depart=-2002)) == ["-itsoffset", "-0.066734"]
     assert decalage_du_calque(_images()) == []
@@ -265,6 +275,7 @@ def test_debit_conseille_en_hdr():
     assert debit_conseille(2160, 3840, Fraction(30), hdr=True) == 112_000_000
     assert debit_conseille(720, 1280, Fraction(30), hdr=True) == 13_000_000
     assert debit_conseille(540, 960, Fraction(30), hdr=True) == debit_conseille(540, 960, Fraction(30)) == 5_000_000
+    assert debit_hdr_de_youtube(1080, 1920) and debit_hdr_de_youtube(720, 1280) and not debit_hdr_de_youtube(540, 960)
 
 
 def test_couleurs_de_l_export_en_hdr():
@@ -299,7 +310,7 @@ def test_graphes_du_hdr(tmp_path):
         "[0:v]zscale=min=bt2020nc:pin=bt2020:tin=arib-std-b67:rin=limited:t=linear:npl=203,format=gbrpf32le,"
         "zscale=pin=bt2020:tin=linear:p=bt709,tonemap=tonemap=mobius:param=0.5:peak=4.926:desat=0,"
         "zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited,format=yuv420p[video];"
-        "[1:v]scale=out_color_matrix=bt709:out_range=tv,format=yuva420p[calque];"
+        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva420p[calque];"
         "[video][calque]overlay=format=yuv420:eof_action=repeat,"
         "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[sortie]"
     )
@@ -386,6 +397,40 @@ def test_calque_provisoire_relu_par_ffmpeg(tmp_path):
     assert (images.largeur, images.hauteur) == (64, 48)
 
 
+def _png16(largeur: int, hauteur: int, carre: tuple[int, int, int, int] | None) -> bytes:
+    """Un PNG RGBA de 16 bits par couleur : transparent, avec un carré jaune #FFD43B opaque."""
+    vide, jaune = bytes(8), struct.pack(">4H", 0xFFFF, 0xD4D4, 0x3B3B, 0xFFFF)
+    lignes = []
+    for y in range(hauteur):
+        dedans = carre is not None and carre[1] <= y < carre[3]
+        lignes.append(b"\0" + b"".join(jaune if dedans and carre[0] <= x < carre[2] else vide for x in range(largeur)))
+
+    def morceau(nom: bytes, donnees: bytes) -> bytes:
+        return struct.pack(">I", len(donnees)) + nom + donnees + struct.pack(">I", zlib.crc32(nom + donnees))
+
+    entete = struct.pack(">IIBBBBB", largeur, hauteur, 16, 6, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + morceau(b"IHDR", entete) + morceau(b"IDAT", zlib.compress(b"".join(lignes))) + morceau(b"IEND", b"")
+
+
+@avec_ffmpeg
+def test_calque_provisoire_de_16_bits_relu(tmp_path):
+    """Calque provisoire d'une vidéo en 10 bits : des PNG de 16 bits, transparent, puis un carré, puis
+    transparent ; relu par FFmpeg, chaque image est la bonne (transparence et couleur)."""
+    ecriture = EcritureMovPng(tmp_path / "calque.mov", 32, 24, 600)
+    ecriture.ajouter(_png16(32, 24, None), 20)
+    ecriture.ajouter(_png16(32, 24, (8, 6, 24, 18)), 20)
+    ecriture.ajouter(_png16(32, 24, None), 20)
+    ecriture.fermer()
+    for numero, attendu in ((0, (0, 0, 0, 0)), (1, (0xFFFF, 0xD4D4, 0x3B3B, 0xFFFF)), (2, (0, 0, 0, 0))):
+        brut = executer(
+            [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(tmp_path / "calque.mov"),
+             "-vf", f"select=eq(n\\,{numero})", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"],
+            60, binaire=True,
+        ).stdout
+        assert len(brut) == 32 * 24 * 8, numero
+        assert struct.unpack_from("<4H", brut, (12 * 32 + 16) * 8) == attendu, numero
+
+
 # --- Vrais exports -----------------------------------------------------------------------------------
 
 
@@ -436,7 +481,7 @@ def _exporter(plan, calque: Path, dossier: Path) -> None:
 def _pixel_rgb(video: Path, numero: int, x: int, y: int, largeur: int, hauteur: int) -> tuple[int, int, int]:
     image = executer(
         [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video),
-         "-vf", f"select=eq(n\\,{numero}),scale=in_color_matrix=bt709:in_range=tv,format=rgb24", "-frames:v", "1", "-f", "rawvideo", "-"],
+         "-vf", f"select=eq(n\\,{numero}),{lecture_en_rgb()},format=gbrp,format=rgb24", "-frames:v", "1", "-f", "rawvideo", "-"],
         60, binaire=True,
     ).stdout
     assert len(image) == largeur * hauteur * 3

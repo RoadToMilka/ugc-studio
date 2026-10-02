@@ -76,6 +76,7 @@ from ...exports.video import (
     PlanVideo,
     codecs_possibles,
     debit_conseille,
+    debit_hdr_de_youtube,
     debit_par_defaut,
     debit_prores,
     plan_video,
@@ -460,6 +461,7 @@ class DialogueExport(QDialog):
         while self.messages.count():
             element = self.messages.takeAt(0).widget()
             if element is not None:
+                element.hide()  # tout de suite : il n'est effacé qu'au prochain passage de la boucle de Qt
                 element.deleteLater()
         for texte, role in [*((t, "erreur") for t in resume.erreurs), *((t, "avertissement") for t in resume.avertissements)]:
             message = libelle(texte, role)
@@ -871,7 +873,8 @@ class DialogueExportVideo(DialogueExport):
         elif self.choix_debit.valeur() == DEBIT_CONSEILLE and analyse is not None and analyse.images is not None:
             largeur, hauteur = analyse.taille_affichee
             conseille = debit_conseille(largeur, hauteur, analyse.images.frequence, hdr)
-            youtube = "le double du débit conseillé par YouTube" + (" en HDR" if hdr else "")
+            en_hdr = hdr and debit_hdr_de_youtube(largeur, hauteur)  # sous la 720p, YouTube n'en donne qu'en SDR
+            youtube = "le double du débit conseillé par YouTube" + (" en HDR" if en_hdr else "")
             self.texte_debit.setText(f"{debit_lisible(conseille)} pour la publication : {youtube}")
         elif self.choix_debit.valeur() == DEBIT_IDENTIQUE and analyse is not None and analyse.images is not None and analyse.images.debit:
             plan = self.plan()

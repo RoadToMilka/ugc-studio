@@ -8,6 +8,7 @@ intégré à l'app sur la fabrication Windows, celui de l'ordinateur ailleurs), 
 import hashlib
 import lzma
 import struct
+import subprocess
 import sys
 import time
 from fractions import Fraction
@@ -213,7 +214,10 @@ def test_commande_du_calque():
     texte = " ".join(commande)
     assert commande[0] == "ffmpeg.exe" and commande[-1] == str(Path("D:/pub (calque).mov.en-cours"))
     assert "-f rawvideo -pixel_format rgba64le -video_size 1080x1920 -framerate 30000/1001 -i pipe:0" in texte
-    assert "-vf scale=out_color_matrix=bt709:out_range=tv,format=yuva444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv" in texte
+    assert (
+        "-vf zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva444p10le,"
+        "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"
+    ) in texte  # zscale : la même norme exacte en 8 et en 16 bits par couleur
     assert "-c:v prores_ks -profile:v 4444 -alpha_bits 16 -vendor apl0 -qscale:v 1" in texte  # compression la plus fine, sans recherche
     assert "-color_primaries bt709 -color_trc bt709 -colorspace bt709 -color_range tv" in texte
     assert "-frames:v 930 -an -f mov" in texte
@@ -424,6 +428,39 @@ def test_calque_hdr_ecrit_puis_relu(tmp_path):
 
     assert valeur(0, 10, 20) == 721 and valeur(3, 10, 20) == 1023  # blanc de référence, opaque
     assert abs(valeur(3, 40, 20) - 512) <= 1 and valeur(3, 60, 20) == 0  # à moitié, puis transparent
+
+
+@avec_ffmpeg
+def test_norme_bt709_en_8_et_16_bits(record_property):
+    """Le jaune #FFD43B, en RGB de 8 et de 16 bits par couleur, converti en YUV 10 bits (BT.709, plage
+    limitée) puis relu en RGB : exact avec zscale (celui des exports, lot 3) dans les deux sens. Pour
+    mémoire, le rapport des tests (tests.xml) garde aussi ce que donne le filtre « scale »."""
+    import json
+
+    largeur, hauteur = 16, 8
+    resultats = {}
+    for bits in (8, 16):
+        if bits == 16:
+            pixel, format_rgb = struct.pack("<4H", 0xFFFF, 0xD4D4, 0x3B3B, 0xFFFF), "rgba64le"
+        else:
+            pixel, format_rgb = bytes((255, 212, 59, 255)), "rgba"
+        for encodeur, conversion in (("zscale", module_ffmpeg.conversion_des_sous_titres()), ("scale", "scale=out_color_matrix=bt709:out_range=tv")):
+            yuv = subprocess.run(
+                [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", format_rgb,
+                 "-video_size", f"{largeur}x{hauteur}", "-i", "pipe:0", "-vf", f"{conversion},format=yuva422p10le", "-f", "rawvideo", "-"],
+                input=pixel * largeur * hauteur, capture_output=True, timeout=60,
+            ).stdout
+            for decodeur, lecture in (("zscale", f"{module_ffmpeg.lecture_en_rgb()},format=gbrp"), ("scale", "scale=in_color_matrix=bt709:in_range=tv")):
+                rgb = subprocess.run(
+                    [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", "yuva422p10le",
+                     "-video_size", f"{largeur}x{hauteur}", "-i", "pipe:0", "-vf", f"{lecture},format=rgb24", "-f", "rawvideo", "-"],
+                    input=yuv, capture_output=True, timeout=60,
+                ).stdout
+                resultats[f"{bits} bits, {encodeur} puis {decodeur}"] = list(rgb[3 * 20 : 3 * 20 + 3])
+    record_property("jaune_relu", json.dumps(resultats, ensure_ascii=False))
+    for bits in (8, 16):
+        jaune = resultats[f"{bits} bits, zscale puis zscale"]
+        assert all(abs(a - b) <= 1 for a, b in zip(jaune, (255, 212, 59), strict=True)), resultats
 
 
 @avec_ffmpeg

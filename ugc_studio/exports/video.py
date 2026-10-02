@@ -41,6 +41,7 @@ from .ffmpeg import (
     CouleursDeLaVideo,
     ImagesDeLaVideo,
     NormeHDR,
+    conversion_des_sous_titres,
     conversion_vers_le_hdr,
     etiquetage,
     norme_hdr,
@@ -124,11 +125,21 @@ CONTENEURS_DOLBY_VISION = (MP4, MKV)
 DEBIT_MAX_DOLBY_VISION, RESERVE_DOLBY_VISION = 2, 4
 
 
+def rangee_youtube(largeur: int, hauteur: int) -> int:
+    """La rangée des tableaux de YouTube (2160, 1440, 1080, 720, 480, 360) d'après le petit côté."""
+    cote = min(largeur, hauteur) if largeur and hauteur else 1080
+    return next((r for r in sorted(DEBITS_YOUTUBE_SDR, reverse=True) if cote >= r * 0.9), 360)
+
+
+def debit_hdr_de_youtube(largeur: int, hauteur: int) -> bool:
+    """YouTube donne un débit HDR pour cette taille (de la 720p à la 2160p)."""
+    return rangee_youtube(largeur, hauteur) in DEBITS_YOUTUBE_HDR
+
+
 def debit_conseille(largeur: int, hauteur: int, frequence: Fraction | None, hdr: bool = False) -> int:
     """« Conseillé pour la publication » : le double du débit conseillé par YouTube, en bits par
     seconde (1080 × 1920 à 30 images par seconde : 16 Mb/s ; en HDR : 20 Mb/s)."""
-    cote = min(largeur, hauteur) if largeur and hauteur else 1080
-    rangee = next((r for r in sorted(DEBITS_YOUTUBE_SDR, reverse=True) if cote >= r * 0.9), 360)
+    rangee = rangee_youtube(largeur, hauteur)
     table = DEBITS_YOUTUBE_HDR if hdr and rangee in DEBITS_YOUTUBE_HDR else DEBITS_YOUTUBE_SDR
     normal, haut = table[rangee]
     debit = haut if frequence is not None and frequence > FREQUENCE_HAUTE else normal
@@ -333,8 +344,8 @@ def graphe_de_filtres(plan: PlanVideo) -> str:
       si elle est en RGB ; ou ramenée en SDR, « Convertir en SDR »), puis dans le format de l'export
       (8 ou 10 bits, 4:2:0 ou 4:2:2). FFmpeg la redresse lui-même si elle est « couchée ». En HDR
       gardé, ses images ne changent pas.
-    - Calque : ses couleurs (RGB) converties avec la norme de la vidéo, en plage limitée ; en HDR, au
-      blanc de référence (conversion_vers_le_hdr).
+    - Calque : ses couleurs (RGB) converties avec la norme de la vidéo, en plage limitée, par zscale
+      (conversion_des_sous_titres) ; en HDR, au blanc de référence (conversion_vers_le_hdr).
     - overlay : le calque par-dessus, chaque image du calque sur les images de la vidéo de son moment
       jusqu'au suivant ; après la dernière, il reste en place (eof_action=repeat).
     - setparams : les étiquettes de couleurs posées sur les images (FFmpeg 9 les reprend des images)."""
@@ -349,7 +360,7 @@ def graphe_de_filtres(plan: PlanVideo) -> str:
     if couleurs.hdr:
         conversion = conversion_vers_le_hdr(NormeHDR(couleurs.matrice, couleurs.primaires, couleurs.transfert))
     else:
-        conversion = f"scale=out_color_matrix={couleurs.matrice_du_filtre}:out_range=tv"
+        conversion = conversion_des_sous_titres(couleurs.matrice)
     calque = f"{conversion},format={plan.format_du_calque}"
     etiquettes = etiquetage(couleurs.primaires, couleurs.transfert, couleurs.matrice)
     format_de_l_overlay = {"yuv420p": "yuv420", "yuv420p10le": "yuv420p10", "yuv422p10le": "yuv422p10"}[plan.format_des_pixels]
