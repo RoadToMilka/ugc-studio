@@ -1,12 +1,12 @@
-"""V3, lot 1 (§8.2, §8.4, §8.5) : ce qui sera exporté (source, nom, dossier, fréquence, nombre
-d'images) et le résumé avant export, sans interface."""
+"""V3, lots 1 et 3 (§8.2, §8.4, §8.5) : ce qui sera exporté (source, nom, dossier, fréquence, nombre
+d'images, couleurs du calque) et le résumé avant export, sans interface."""
 
 from fractions import Fraction
 from pathlib import Path
 
 from dataclasses import replace
 
-from ugc_studio.exports.ffmpeg import CouleursDeLaVideo, lire_analyse
+from ugc_studio.exports.ffmpeg import CouleursDeLaVideo, NormeHDR, lire_analyse
 from ugc_studio.exports.plan import (
     PlanCalque,
     debit_lisible,
@@ -71,7 +71,7 @@ def test_source_completee_par_ffmpeg(tmp_path):
 
 def test_couleurs_de_la_source_lues_par_ffmpeg(tmp_path):
     """Qt ne disait rien du HDR (projet importé avec la 2.0.0) : FFmpeg donne les couleurs, et le
-    résumé les montre ; une vidéo HDR est signalée (calque en SDR jusqu'à la 3.0.0)."""
+    résumé les montre ; le calque d'une vidéo HDR est en HDR (lot 3), sauf « Convertir en SDR »."""
     infos = dict(INFOS_VIDEO)
     del infos["hdr"]
     projet = _projet_video(tmp_path, infos)
@@ -79,13 +79,20 @@ def test_couleurs_de_la_source_lues_par_ffmpeg(tmp_path):
     hlg = CouleursDeLaVideo("yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67")
     source = source_du_projet(projet, replace(analyse, couleurs=hlg))
     assert source.couleurs == hlg and source.hdr
-    resume = resume_calque(source, plan_du_calque(source, 1080, 1920, None, tmp_path / "c.mov"), "")
+    plan = plan_du_calque(source, 1080, 1920, None, tmp_path / "c.mov")
+    assert plan.hdr == NormeHDR("bt2020nc", "bt2020", "arib-std-b67")
+    resume = resume_calque(source, plan, "")
     lignes = {ligne.titre: ligne for ligne in resume.lignes}
-    assert lignes["Couleurs"].source == "HDR (HLG), 10 bits" and lignes["Couleurs"].differente
-    assert any("HDR" in texte for texte in resume.avertissements)
+    assert (lignes["Couleurs"].source, lignes["Couleurs"].export) == ("HDR (HLG), 10 bits", "HDR (HLG), 10 bits + transparence")
+    assert not any("HDR" in texte for texte in resume.avertissements)
+    converti = plan_du_calque(source, 1080, 1920, None, tmp_path / "c.mov", convertir_en_sdr=True)
+    assert converti.hdr is None
+    lignes = {ligne.titre: ligne for ligne in resume_calque(source, converti, "").lignes}
+    assert lignes["Couleurs"].export == "SDR (BT.709), 10 bits + transparence" and lignes["Couleurs"].differente
     sdr = CouleursDeLaVideo("yuv420p", "tv", "bt709", "bt709", "bt709")
     source = source_du_projet(projet, replace(analyse, couleurs=sdr))
     assert not source.hdr and source.couleurs.texte() == "SDR, 8 bits"
+    assert plan_du_calque(source, 1080, 1920, None, tmp_path / "c.mov").hdr is None
     assert source_du_projet(projet).hdr is None  # sans FFmpeg ni Qt : inconnu
 
 
@@ -120,6 +127,7 @@ def test_plan_d_une_prise(tmp_path):
     source = source_du_projet(_projet_prise(tmp_path))
     plan = plan_du_calque(source, 1080, 1920, None, tmp_path / "c.mov")
     assert plan.frequence == Fraction(30) and plan.nombre_images == 371  # 12,34 s à 30 : 371 images
+    assert plan.hdr is None  # sans vidéo : SDR (BT.709), décision du 02/10/2026
     assert plan_du_calque(source, 1080, 1920, Fraction(60), tmp_path / "c.mov").nombre_images == 741
 
 
@@ -161,7 +169,7 @@ def test_resume_avertissements_et_erreurs(tmp_path):
     resume = resume_calque(source, plan_du_calque(source, 1080, 1920, None, existant), "3 sous-titres", libre=1000)
     textes = " ".join(resume.avertissements)
     assert "fréquence d'images variable" in textes and "30 images" in textes
-    assert "HDR" in textes and "existe déjà" in textes and "Place libre" in textes
+    assert "existe déjà" in textes and "Place libre" in textes
     assert resume.possible  # des avertissements, rien qui empêche l'export
     # Ce qui empêche l'export : la vidéo elle-même, un dossier absent, un nom vide.
     for sortie, motif in (

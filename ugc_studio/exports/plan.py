@@ -28,7 +28,7 @@ from .cadence import (
     temps_de_l_image,
     texte_frequence,
 )
-from .ffmpeg import Analyse, CouleursDeLaVideo
+from .ffmpeg import Analyse, CouleursDeLaVideo, NormeHDR, norme_hdr
 
 SORTE_CALQUE = "calque"
 
@@ -212,7 +212,7 @@ def nom_propose(source: Source, projet: Projet, suffixe: str = SUFFIXE_CALQUE) -
 
 @dataclass(frozen=True)
 class PlanCalque:
-    """Le calque qui sera fabriqué : taille, fréquence et nombre d'images, fichier."""
+    """Le calque qui sera fabriqué : taille, fréquence et nombre d'images, fichier, couleurs."""
 
     largeur: int
     hauteur: int
@@ -220,6 +220,7 @@ class PlanCalque:
     nombre_images: int
     sortie: Path
     debut: Fraction = Fraction(0)  # moment de la première image de la vidéo (0 le plus souvent)
+    hdr: NormeHDR | None = None  # vidéo HDR : le calque l'est aussi (lot 3) ; None : SDR, BT.709
 
     @property
     def duree_s(self) -> float:
@@ -257,10 +258,15 @@ def nombre_d_images_du_calque(source: Source, frequence: Fraction) -> int:
     return nombre_d_images(source.duree_s, frequence)
 
 
-def plan_du_calque(source: Source, largeur: int, hauteur: int, frequence: Fraction | None, sortie: Path) -> PlanCalque:
+def plan_du_calque(
+    source: Source, largeur: int, hauteur: int, frequence: Fraction | None, sortie: Path, convertir_en_sdr: bool = False
+) -> PlanCalque:
+    """Le HDR suit la vidéo source (décision du 02/10/2026) : calque HDR pour une vidéo HDR (sauf
+    « Convertir en SDR ») ; sans vidéo, SDR (BT.709), comme tout graphisme importé dans Premiere Pro."""
     frequence = frequence_du_calque(source, frequence)
     debut = source.debut if source.video else Fraction(0)
-    return PlanCalque(largeur, hauteur, frequence, nombre_d_images_du_calque(source, frequence), sortie, debut)
+    hdr = norme_hdr(source.couleurs) if source.video and not convertir_en_sdr else None
+    return PlanCalque(largeur, hauteur, frequence, nombre_d_images_du_calque(source, frequence), sortie, debut, hdr)
 
 
 # --- Résumé avant export (§8.5) ----------------------------------------------------------------
@@ -336,6 +342,7 @@ def resume_calque(source: Source, plan: PlanCalque, sous_titres: str, libre: int
         couleurs_source = source.couleurs.texte()
     else:
         couleurs_source = ("HDR" if source.hdr else "SDR") if source.video and source.hdr is not None else ""
+    gamme = f"HDR ({plan.hdr.nom})" if plan.hdr is not None else "SDR (BT.709)"
     resume.lignes = [
         _ligne("Taille", taille_source or ("son seul" if not source.video else "inconnue"), f"{plan.largeur} × {plan.hauteur}", bool(taille_source)),
         _ligne(
@@ -344,7 +351,7 @@ def resume_calque(source: Source, plan: PlanCalque, sous_titres: str, libre: int
         ),
         _ligne("Format et codec", _format_source(source), "MOV, ProRes 4444 (transparent)"),
         _ligne("Son", _son_source(source), "aucun (le son reste dans ton montage)"),
-        _ligne("Couleurs", couleurs_source, "SDR (BT.709), 10 bits + transparence"),
+        _ligne("Couleurs", couleurs_source, f"{gamme}, 10 bits + transparence"),
         _ligne("Durée", duree_lisible(source.duree_s) if source.duree_s else "", duree_lisible(plan.duree_s)),
         _ligne("Poids", poids_lisible(source.poids) if source.poids else "", f"≈ {poids_lisible(plan.poids_max)} au plus", False),
         _ligne("Sous-titres", "", sous_titres, False),
@@ -353,10 +360,6 @@ def resume_calque(source: Source, plan: PlanCalque, sous_titres: str, libre: int
         resume.avertissements.append(
             f"Ta vidéo a une fréquence d'images variable : le calque est à {texte_frequence(plan.frequence)} images "
             "par seconde (sa moyenne). Premiere Pro le pose sans décalage."
-        )
-    if source.video and source.hdr:
-        resume.avertissements.append(
-            "Ta vidéo est en HDR : le calque est en SDR (BT.709). Le HDR des exports arrive avec la version 3.0.0."
         )
     avertissements, erreurs = verifier_la_sortie(plan.sortie, source)
     resume.avertissements += avertissements

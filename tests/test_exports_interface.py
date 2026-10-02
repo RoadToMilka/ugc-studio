@@ -1,6 +1,7 @@
-"""V3, lot 1 (§8.2, §8.5) : calque transparent. Moteur en 16 bits (identique à l'aperçu à 8 bits
-près), images au moment exact, fenêtre d'export (réglages, résumé, avancement, « Arrêter »), bloc
-« Exporter » de la page Sous-titres, et un vrai calque écrit par FFmpeg, relu image par image."""
+"""V3, lots 1 à 3 (§8.2, §8.3, §8.5) : calque transparent. Moteur en 16 bits (identique à l'aperçu à
+8 bits près), images au moment exact, fenêtre d'export (réglages, résumé, avancement, « Arrêter »),
+bloc « Exporter » de la page Sous-titres, et un vrai calque écrit par FFmpeg, relu image par image ;
+vidéo avec sous-titres (lot 2) ; vidéo HDR (lot 3) : « Convertir en SDR », codecs, vrai export."""
 
 import struct
 import time
@@ -163,6 +164,7 @@ def test_fenetre_du_calque_d_une_prise(app_configuree, qtbot, services, projet_p
     # Pas de vidéo source : le dossier du projet ; le nom vient du projet.
     assert dialogue.choix_dossier.valeur() == DOSSIER_PROJET
     assert dialogue.plan().sortie == projet_prise.dossier / "Voix Glowzy (calque).mov"
+    assert dialogue.zone_sdr.isHidden() and dialogue.plan().hdr is None  # sans vidéo : SDR, pas de choix
     autre = tmp_path / "exports"
     autre.mkdir()
     dialogue._demander_un_dossier = lambda _depart: autre
@@ -412,3 +414,104 @@ def test_bouton_video_grise_sans_video(app_configuree, qtbot, services, projet_p
     assert atelier.bouton_video.text() == "Vidéo avec sous-titres…" and not atelier.bouton_video.isEnabled()
     assert atelier.info_video.isVisible() and atelier.dialogue_video() is None
     assert atelier.bouton_calque.isEnabled()
+
+
+# --- Vidéo HDR (V3, lot 3) ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def projet_hdr(services, tmp_path):
+    """Un projet dont les sous-titres viennent d'une vidéo HDR comme celles d'un iPhone (H.265, 10 bits,
+    BT.2020, HLG), 270 × 480 à 30, avec son AAC."""
+    if FFMPEG is None:
+        pytest.skip("FFmpeg absent de cet ordinateur")
+    video = tmp_path / "Vidéos" / "IMG_0420.mov"
+    video.parent.mkdir()
+    resultat = executer(
+        [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"testsrc2=size={LARGEUR}x{HAUTEUR}:rate=30",
+         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2",
+         "-vf", "zscale=rin=limited:pin=bt709:tin=bt709:min=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,"
+                "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv",
+         "-c:v", "libx265", "-x265-params", "log-level=error", "-tag:v", "hvc1", "-c:a", "aac", str(video)],
+        120,
+    )
+    assert resultat.returncode == 0, resultat.stderr
+    projet = services.projets.creer("IMG 0420", tmp_path / "projets")
+    projet.sous_titres = _reglages()
+    projet.transcription = Transcription(
+        source=str(video), duree_s=2.0, mots=[Mot(t, d, f) for t, d, f in MOTS],
+        infos={"duree_s": 2.0, "video": True, "resolution": [LARGEUR, HAUTEUR], "images_par_seconde": 30, "codec_video": "H265",
+               "codec_audio": "AAC", "format": "QuickTime", "hdr": True},
+    )
+    services.projets.enregistrer()
+    return projet
+
+
+def _lignes_du_resume(dialogue) -> dict[str, tuple[str, str]]:
+    tableau = dialogue.tableau
+    return {tableau.item(rang, 0).text(): (tableau.item(rang, 1).text(), tableau.item(rang, 2).text()) for rang in range(tableau.rowCount())}
+
+
+def test_fenetre_de_la_video_hdr(app_configuree, qtbot, services, projet_hdr):
+    """Vidéo HDR : « Convertir en SDR » apparaît, décoché (le HDR est gardé) ; H.264 est grisé (pas de
+    HDR), H.265 choisi en 10 bits ; cochée, H.264 (le codec retenu) revient, en SDR 8 bits."""
+    from ugc_studio.exports.video import DEBIT_CONSEILLE, H264, H265, MOV, MP4, PRORES
+
+    dialogue = _dialogue_video(services, projet_hdr, qtbot)
+    assert dialogue.zone_sdr.isVisible() and not dialogue.case_sdr.isChecked()
+    assert dialogue.info_hdr.text().startswith("Ta vidéo est en HDR (HLG)")
+    assert not dialogue.choix_codec.bouton(H264).isEnabled() and "Convertir en SDR" in dialogue.choix_codec.bouton(H264).toolTip()
+    assert dialogue.choix_conteneur.valeur() == MP4 and dialogue.choix_codec.valeur() == H265
+    plan = dialogue.plan()
+    assert (plan.codec, plan.bits) == (H265, 10) and plan.couleurs.hdr
+    assert _lignes_du_resume(dialogue)["Couleurs"] == ("HDR (HLG), 10 bits", "HDR (HLG), 10 bits")
+    assert dialogue.bouton_exporter.isEnabled() and not dialogue.messages_affiches()
+    dialogue.choix_debit.bouton(DEBIT_CONSEILLE).click()
+    assert dialogue.texte_debit.text().endswith("le double du débit conseillé par YouTube en HDR")
+    dialogue.case_sdr.setChecked(True)
+    assert dialogue.choix_codec.bouton(H264).isEnabled() and dialogue.choix_codec.valeur() == H264
+    plan = dialogue.plan()
+    assert (plan.codec, plan.bits) == (H264, 8) and not plan.couleurs.hdr
+    assert _lignes_du_resume(dialogue)["Couleurs"] == ("HDR (HLG), 10 bits", "SDR (BT.709), 8 bits")
+    dialogue.case_sdr.setChecked(False)
+    assert dialogue.choix_codec.valeur() == H265
+    dialogue.choix_conteneur.bouton(MOV).click()
+    dialogue.choix_codec.bouton(PRORES).click()
+    assert dialogue.plan().codec == PRORES and dialogue.plan().couleurs.hdr  # le ProRes garde aussi le HDR
+
+
+def test_calque_d_une_video_hdr(app_configuree, qtbot, services, projet_hdr):
+    """Le calque d'une vidéo HDR l'est aussi (sous-titres au blanc de référence) ; « Convertir en
+    SDR » le remet en BT.709."""
+    dialogue = _dialogue(services, projet_hdr, qtbot)
+    assert dialogue.zone_sdr.isVisible() and "séquence HDR de Premiere Pro" in dialogue.info_hdr.text()
+    assert dialogue.plan().hdr is not None and dialogue.plan().hdr.nom == "HLG"
+    assert _lignes_du_resume(dialogue)["Couleurs"][1] == "HDR (HLG), 10 bits + transparence"
+    dialogue.case_sdr.setChecked(True)
+    assert dialogue.plan().hdr is None and _lignes_du_resume(dialogue)["Couleurs"][1].startswith("SDR (BT.709)")
+
+
+def test_export_hdr_depuis_la_fenetre(app_configuree, qtbot, services, projet_hdr):
+    """Une vraie vidéo HDR exportée depuis la fenêtre (dessin en 16 bits, deux passages) : H.265 10 bits,
+    étiquettes HLG, mêmes images aux mêmes moments, son copié ; les sous-titres sont dans l'image."""
+    dialogue = _dialogue_video(services, projet_hdr, qtbot)
+    plan = dialogue.plan()
+    assert plan.calque_16_bits
+    dialogue.exporter()
+    qtbot.waitUntil(lambda: not dialogue.en_cours(), timeout=180_000)
+    assert dialogue.statut.text().startswith("Vidéo enregistrée en "), dialogue.statut.text()
+    source, sortie = analyser(Path(projet_hdr.transcription.source)), analyser(plan.sortie)
+    assert sortie.images.codec == "hevc" and sortie.images.nombre == source.images.nombre == 60
+    assert [m * sortie.images.base_de_temps for m in sortie.images.moments] == [m * source.images.base_de_temps for m in source.images.moments]
+    couleurs = sortie.couleurs
+    assert (couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("yuv420p10le", "bt2020nc", "bt2020", "arib-std-b67")
+    assert sortie.son.codec == "aac"
+    numero = 18  # 0,60 s, pendant « sérum »
+    commande = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", "", "-vf", f"select=eq(n\\,{numero}),format=yuv420p10le",
+                "-frames:v", "1", "-f", "rawvideo", "-"]
+    avant = executer([*commande[:6], str(projet_hdr.transcription.source), *commande[7:]], 60, binaire=True).stdout
+    apres = executer([*commande[:6], str(plan.sortie), *commande[7:]], 60, binaire=True).stdout
+    luminances = LARGEUR * HAUTEUR * 2  # le plan Y : 2 octets par pixel
+    paires = zip(struct.iter_unpack("<H", avant[:luminances]), struct.iter_unpack("<H", apres[:luminances]), strict=True)
+    ecarts = sorted(abs(a[0] - b[0]) for a, b in paires)
+    assert ecarts[-1] > 300 and ecarts[len(ecarts) // 2] < 24  # des sous-titres, et le reste de l'image intact (sur 1 023)

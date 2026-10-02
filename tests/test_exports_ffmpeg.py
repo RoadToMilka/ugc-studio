@@ -1,4 +1,4 @@
-"""V3, lot 1 (§2, §8.2) : FFmpeg, ses commandes, l'analyse d'une vidéo et le suivi d'un export.
+"""V3, lots 1 et 3 (§2, §8.2) : FFmpeg, ses commandes, l'analyse d'une vidéo et le suivi d'un export.
 
 Les commandes sont vérifiées option par option (sans interface). Quand un FFmpeg est disponible (celui
 intégré à l'app sur la fabrication Windows, celui de l'ordinateur ailleurs), de vrais fichiers sont
@@ -18,7 +18,9 @@ import pytest
 from ugc_studio.exports import ffmpeg as module_ffmpeg
 from ugc_studio.exports.ffmpeg import (
     FORMAT_DES_IMAGES,
+    CouleursDeLaVideo,
     ErreurFFmpeg,
+    NormeHDR,
     Nouvelles,
     Processus,
     analyser,
@@ -32,10 +34,13 @@ from ugc_studio.exports.ffmpeg import (
     infos_ffmpeg,
     lire_analyse,
     lire_couleurs,
+    lire_dolby_vision,
     lire_encodeurs,
     lire_formats_d_encodeur,
     lire_nouvelles,
+    lire_rotation,
     lire_version,
+    norme_hdr,
     preparer_ffmpeg,
     programme_ffmpeg,
 )
@@ -163,6 +168,43 @@ def test_couleurs_de_la_source():
     assert pq.pq and pq.texte() == "HDR (PQ), 10 bits"
     huit = lire_couleurs("Input #0, mov, from 'a.mov':\n  Stream #0:0: Video: prores, yuv422p10le(8 bpc, tv, bt709), 64x48\n")
     assert huit.bits == 8
+
+
+def test_dolby_vision_et_rotation_de_la_source():
+    """Le profil Dolby Vision et la rotation de la première image, d'après la description de FFmpeg
+    (« Side data » de l'image ; ceux d'un autre flux ne comptent pas)."""
+    assert lire_dolby_vision(MESSAGES_IPHONE) == "8.4"  # profil 8, compatible HLG
+    assert lire_dolby_vision(MESSAGES_PREMIERE) == lire_dolby_vision(MESSAGES_MJPEG) == ""
+    streaming = MESSAGES_IPHONE.replace("compatibility id: 4", "compatibility id: 0").replace("profile: 8", "profile: 5")
+    assert lire_dolby_vision(streaming) == "5"  # profil 5 : sans image compatible
+    couchee = MESSAGES_IPHONE.replace(
+        "      DOVI configuration record", "    Side data:\n      displaymatrix: rotation of -90.00 degrees\n      DOVI configuration record"
+    )
+    assert lire_rotation(couchee) == 270 and lire_dolby_vision(couchee) == "8.4"  # -90 degrés : un quart de tour
+    assert lire_rotation(MESSAGES_IPHONE) == 0
+    ailleurs = MESSAGES_PREMIERE.replace("(attached pic)", "(attached pic)\n      displaymatrix: rotation of 90.00 degrees")
+    assert lire_rotation(ailleurs) == 0  # la pochette n'est pas l'image de la vidéo
+
+
+def test_norme_hdr():
+    """La norme d'une vidéo HDR : celle de la vidéo, ou celle du HDR (BT.2020) quand elle manque."""
+    assert norme_hdr(lire_couleurs(MESSAGES_IPHONE)) == NormeHDR("bt2020nc", "bt2020", "arib-std-b67")
+    assert norme_hdr(lire_couleurs(MESSAGES_IPHONE)).nom == "HLG"
+    assert norme_hdr(CouleursDeLaVideo("yuv420p10le", "tv", "", "unknown", "smpte2084")) == NormeHDR("bt2020nc", "bt2020", "smpte2084")
+    assert norme_hdr(lire_couleurs(MESSAGES_PREMIERE)) is None and norme_hdr(None) is None
+
+
+def test_commande_du_calque_hdr():
+    """Vidéo HDR (lot 3) : les sous-titres convertis au blanc de référence (zscale, npl=203), dans les
+    couleurs de la vidéo, et le fichier en porte les étiquettes."""
+    hlg = NormeHDR("bt2020nc", "bt2020", "arib-std-b67")
+    texte = " ".join(commande_calque(Path("ffmpeg.exe"), 1080, 1920, Fraction(30), 90, Path("c.mov"), hlg))
+    assert (
+        "-vf zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,format=yuva444p10le,"
+        "setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv"
+    ) in texte
+    assert "-color_primaries bt2020 -color_trc arib-std-b67 -colorspace bt2020nc -color_range tv" in texte
+    assert "-c:v prores_ks -profile:v 4444 -alpha_bits 16" in texte
 
 
 def test_commande_du_calque():
@@ -351,6 +393,37 @@ def test_calque_prores_4444_ecrit_puis_relu(tmp_path):
         assert abs(alpha - a0) <= 0x0040, (x, y)  # transparence sur 10 bits au moins
         if a0 > 0xF000:  # couleur opaque : la même, à un niveau sur 255 près
             assert max(abs(rouge - r0), abs(vert - v0), abs(bleu - b0)) <= 0x0101, (x, y)
+
+
+@avec_ffmpeg
+def test_calque_hdr_ecrit_puis_relu(tmp_path):
+    """Un calque pour une vidéo HDR : étiquettes HLG ; le blanc opaque à 75 % du signal (Y = 721 sur
+    1 023), la transparence intacte (opaque, transparente, à moitié)."""
+    sortie = tmp_path / "calque.mov.en-cours"
+    pixels = bytearray(LARGEUR * HAUTEUR * 8)
+    for y in range(HAUTEUR):
+        for x in range(LARGEUR):
+            alpha = 0xFFFF if x < 32 else (0x8000 if x < 48 else 0)
+            struct.pack_into("<4H", pixels, (y * LARGEUR + x) * 8, 0xFFFF, 0xFFFF, 0xFFFF, alpha)
+    commande = commande_calque(FFMPEG, LARGEUR, HAUTEUR, Fraction(30), 2, sortie, NormeHDR("bt2020nc", "bt2020", "arib-std-b67"))
+    processus = Processus(commande, avec_images=True)
+    for _numero in range(2):
+        while not processus.envoyer(bytes(pixels)):
+            time.sleep(0.01)
+    while not processus.fin_des_images():
+        time.sleep(0.01)
+    assert processus.attendre(60) == 0, processus.erreurs()
+    couleurs = analyser(sortie).couleurs
+    assert (couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("bt2020nc", "bt2020", "arib-std-b67"), couleurs
+    brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(sortie), "-frames:v", "1",
+                     "-f", "rawvideo", "-pix_fmt", "yuva444p10le", "-"], 60, binaire=True).stdout
+    plan = LARGEUR * HAUTEUR
+
+    def valeur(numero_du_plan: int, x: int, y: int) -> int:
+        return struct.unpack_from("<H", brut, (numero_du_plan * plan + y * LARGEUR + x) * 2)[0]
+
+    assert valeur(0, 10, 20) == 721 and valeur(3, 10, 20) == 1023  # blanc de référence, opaque
+    assert abs(valeur(3, 40, 20) - 512) <= 1 and valeur(3, 60, 20) == 0  # à moitié, puis transparent
 
 
 @avec_ffmpeg

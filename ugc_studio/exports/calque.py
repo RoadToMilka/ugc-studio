@@ -159,7 +159,9 @@ class ExportDuCalque(QObject):
         except OSError as erreur:
             self.echec.emit(f"Fichier impossible à écrire dans ce dossier : {erreur}")
             return
-        commande = commande_calque(self._ffmpeg, plan.largeur, plan.hauteur, plan.frequence, plan.nombre_images, plan.en_cours)
+        commande = commande_calque(
+            self._ffmpeg, plan.largeur, plan.hauteur, plan.frequence, plan.nombre_images, plan.en_cours, plan.hdr
+        )
         try:
             self._processus = Processus(commande, avec_images=True)
         except OSError as erreur:
@@ -167,7 +169,10 @@ class ExportDuCalque(QObject):
             return
         self._numero, self._fin_envoyee = 0, False
         self.debut = time.monotonic()
-        journal.info("Export du calque : %s (%d images à %s i/s)", plan.sortie, plan.nombre_images, plan.frequence)
+        journal.info(
+            "Export du calque : %s (%d images à %s i/s, %s)", plan.sortie, plan.nombre_images, plan.frequence,
+            f"HDR ({plan.hdr.nom})" if plan.hdr is not None else "SDR",
+        )
         self._minuterie.start(0)
 
     def _travailler(self) -> None:

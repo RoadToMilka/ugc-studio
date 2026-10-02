@@ -82,6 +82,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "ffmpeg_integre",
     "calque",
     "video_avec_sous_titres",
+    "video_hdr",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -835,6 +836,7 @@ def _ffmpeg_integre(rapport: dict) -> bool:
         preparer_ffmpeg,
         programme_ffmpeg,
         programme_integre,
+        version_de_x265,
     )
 
     gele = bool(getattr(sys, "frozen", False))
@@ -864,6 +866,8 @@ def _ffmpeg_integre(rapport: dict) -> bool:
         "version": infos.version if infos else "",
         "encodeurs": {nom: nom in infos.encodeurs for nom in voulus} if infos else {},
         "x265_10_bits": bool(infos and infos.x265_10_bits),
+        "x265_dolby_vision": bool(infos and infos.dolby_vision_x265),  # lot 3 : Dolby Vision repris
+        "x265_version": version_de_x265(chemin) if chemin is not None else "",
         "poids_mo": round(chemin.stat().st_size / 1024**2, 1) if chemin is not None and chemin.is_file() else None,
     }
     bon_endroit = (
@@ -1164,6 +1168,244 @@ def _video_avec_sous_titres(atelier, capturer, rapport: dict) -> bool:
     return all(etat.values())
 
 
+def _video_hlg_de_demonstration(source: Path, ffmpeg: Path) -> Path | None:
+    """La vidéo de démonstration (Motion JPEG, BT.601, plage complète) convertie en HDR comme celles d'un
+    iPhone (H.265, 10 bits, BT.2020, HLG), son blanc au blanc de référence ; mêmes images, mêmes moments."""
+    from .exports.ffmpeg import executer
+
+    chemin = source.with_name(f"{source.stem}-hlg.mov")
+    resultat = executer(
+        [str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i", str(source),
+         "-vf", "zscale=rin=full:min=bt470bg:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,"
+                "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv",
+         "-fps_mode", "passthrough", "-c:v", "libx265", "-x265-params", "log-level=error", "-tag:v", "hvc1", "-an", str(chemin)],
+        120,
+    )
+    return chemin if resultat.returncode == 0 and chemin.is_file() else None
+
+
+def _image_du_calque_8_bits(atelier, plan, temps: float) -> QImage:
+    """L'image des sous-titres à ce moment, à la taille de la vidéo (8 bits, transparence droite)."""
+    from .exports.composition import CalqueDeLaVideo
+
+    contenu = atelier.contenu_a_exporter()
+    calque = CalqueDeLaVideo(contenu.reglages, plan.largeur, plan.hauteur, contenu.sous_titres, contenu.mots, False)
+    return calque.image(calque.cle(temps), temps)
+
+
+def _plan_y_10_bits(ffmpeg: Path, video: Path, numero: int, largeur: int, hauteur: int) -> bytes:
+    """La luminance (Y, 10 bits, 2 octets par point) de l'image `numero` d'une vidéo."""
+    from .exports.ffmpeg import executer
+
+    brut = executer(
+        [str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video),
+         "-vf", f"select=eq(n\\,{numero}),format=yuv420p10le", "-frames:v", "1", "-f", "rawvideo", "-"],
+        60, binaire=True,
+    ).stdout
+    return brut[: largeur * hauteur * 2]
+
+
+def _rgb_ramene_en_sdr(ffmpeg: Path, video: Path, numero: int, point: tuple[int, int], largeur: int) -> list[int]:
+    """Un point d'une vidéo HDR ramené en SDR (BT.709) avec le même blanc de référence : la couleur des
+    sous-titres d'origine."""
+    from .exports.ffmpeg import executer
+
+    brut = executer(
+        [str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video),
+         "-vf", f"select=eq(n\\,{numero}),zscale=p=bt709:t=bt709:m=bt709:r=full:npl=203,format=rgb24",
+         "-frames:v", "1", "-f", "rawvideo", "-"],
+        60, binaire=True,
+    ).stdout
+    position = (point[1] * largeur + point[0]) * 3
+    return list(brut[position : position + 3])
+
+
+def _video_hdr(atelier, capturer, rapport: dict) -> bool:
+    """V3, lot 3 : une vidéo HDR comme celles d'un iPhone (la vidéo de démonstration convertie en HLG,
+    10 bits, par FFmpeg) à la place de celle du projet, le temps de cette vérification.
+
+    - Fenêtre de la vidéo : « Convertir en SDR » proposé (décoché), H.264 grisé, H.265 en 10 bits ;
+      résumé « HDR (HLG), 10 bits ».
+    - Export gardé en HDR : H.265, 10 bits, étiquettes HLG, mêmes images aux mêmes moments ; le blanc
+      des sous-titres au blanc de référence (75 % du signal : 721 sur 1 023), et leur jaune redevient
+      celui de l'aperçu une fois ramené en SDR.
+    - « Convertir en SDR » : H.264, 8 bits, BT.709 ; le jaune et le blanc des sous-titres exacts.
+    - Calque d'une vidéo HDR : ProRes 4444 aux étiquettes HLG, blanc à 721.
+    Les fichiers sont ensuite effacés, et le projet retrouve sa vidéo."""
+    from .exports.ffmpeg import analyser, executer, programme_ffmpeg
+    from .exports.video import H264, H265
+
+    etat: dict = {}
+    ffmpeg = programme_ffmpeg()
+    projet = atelier._projet
+    transcription = projet.transcription if projet is not None else None
+    if ffmpeg is None or transcription is None or not transcription.source:
+        rapport["video_hdr"] = {"preparation": False}
+        return False
+    origine, infos_origine = transcription.source, transcription.infos
+    hlg = _video_hlg_de_demonstration(Path(origine), ffmpeg)
+    etat["video_hlg_fabriquee"] = hlg is not None
+    if hlg is None:
+        rapport["video_hdr"] = etat
+        return False
+    transcription.source = str(hlg)
+    transcription.infos = dict(infos_origine or {}, format="QuickTime", codec_video="H265", hdr=True)
+    fichiers: list[Path] = [hlg]
+    try:
+        dialogue = atelier.dialogue_video()
+        dialogue.show()
+        etat["analyse_finie"] = _attendre(lambda: dialogue.analyse_finie, 30)
+        dialogue.choix_debit.bouton("conseille").click()  # de la marge : le blanc mesuré au plus près
+        _laisser_afficher()
+        capturer(dialogue, "dialogue-export-video-hdr")
+        problemes = _debordements(dialogue, "fenêtre d'export d'une vidéo HDR")
+        rapport["video_hdr_debordements"] = problemes
+        etat["sans_debordement"] = not problemes
+        plan = dialogue.plan()
+        resume = {ligne.titre: [ligne.source, ligne.export] for ligne in dialogue.resume().lignes}
+        rapport["video_hdr_plan"] = {
+            "codec": plan.codec if plan else "", "bits": plan.bits if plan else 0, "debit": plan.debit if plan else None,
+            "couleurs": resume.get("Couleurs"), "messages": dialogue.messages_affiches(),
+            "info": dialogue.info_hdr.text() if dialogue.info_hdr is not None else "",
+        }
+        etat["fenetre"] = bool(
+            plan and dialogue.zone_sdr.isVisible() and not dialogue.case_sdr.isChecked()
+            and not dialogue.choix_codec.bouton(H264).isEnabled() and plan.codec == H265 and plan.bits == 10
+            and resume.get("Couleurs") == ["HDR (HLG), 10 bits", "HDR (HLG), 10 bits"]
+        )
+        images_source = dialogue.source.analyse.images if dialogue.source.analyse is not None else None
+        if plan is None or images_source is None:
+            etat["source_lue"] = False
+            rapport["video_hdr"] = etat
+            dialogue.reject()
+            return False
+        # Pendant « Sérum » : un point dans un mot blanc (blanc de référence), un dans le mot actif jaune.
+        moments_source = [m * images_source.base_de_temps for m in images_source.moments]
+        serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), 0)
+        temps = atelier.mots[serum].debut + 0.15
+        numero = min(range(images_source.nombre), key=lambda n: abs(float(moments_source[n]) - temps))
+        actif = atelier.contenu_a_exporter().reglages.mots.actif.couleur
+        jaune = (actif.rouge, actif.vert, actif.bleu) if actif is not None else (0xFF, 0xD4, 0x3B)
+        dialogue.exporter()
+        etat["export_hdr_fini"] = _attendre_sans_pause(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
+        rapport["video_hdr_duree_s"] = round(dialogue.duree_s or 0, 2)
+        _laisser_afficher()
+        capturer(dialogue, "dialogue-export-video-hdr-fin")
+        fichier = dialogue.fichier
+        etat["fichier_hdr_ecrit"] = fichier is not None and fichier.is_file()
+        if etat["fichier_hdr_ecrit"]:
+            fichiers.append(fichier)
+            analyse = analyser(fichier)
+            images, couleurs = analyse.images, analyse.couleurs
+            moments = [m * images.base_de_temps for m in images.moments]
+            rapport["video_hdr_relue"] = {
+                "codec": images.codec, "images": images.nombre, "memes_moments": moments == moments_source,
+                "couleurs": [couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert],
+            }
+            etat["fichier_hdr_relu"] = (
+                images.codec == "hevc" and moments == moments_source
+                and (couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert)
+                == ("yuv420p10le", "bt2020nc", "bt2020", "arib-std-b67")
+            )
+            image = _image_du_calque_8_bits(atelier, plan, float(moments_source[numero]))
+            blanc, dans_le_jaune = _point_dans_le_jaune(image, (255, 255, 255)), _point_dans_le_jaune(image, jaune)
+            mesures: dict = {"image": numero, "point_blanc": blanc, "point_jaune": dans_le_jaune}
+            if blanc is not None and dans_le_jaune is not None:
+                luminance = _plan_y_10_bits(ffmpeg, fichier, numero, plan.largeur, plan.hauteur)
+                mesures["y_blanc"] = int.from_bytes(luminance[(blanc[1] * plan.largeur + blanc[0]) * 2 :][:2], "little")
+                mesures["jaune_ramene_en_sdr"] = _rgb_ramene_en_sdr(ffmpeg, fichier, numero, dans_le_jaune, plan.largeur)
+                mesures["jaune_attendu"] = list(jaune)
+                etat["blanc_de_reference"] = abs(mesures["y_blanc"] - 721) <= 8
+                etat["jaune_hdr"] = all(abs(a - b) <= 8 for a, b in zip(mesures["jaune_ramene_en_sdr"], jaune, strict=True))
+            else:
+                etat["blanc_de_reference"] = etat["jaune_hdr"] = False
+            rapport["video_hdr_mesures"] = mesures
+        dialogue.accept()
+
+        # « Convertir en SDR » : H.264 (le codec retenu) revient ; le jaune et le blanc sont exacts.
+        dialogue = atelier.dialogue_video()
+        dialogue.show()
+        _attendre(lambda: dialogue.analyse_finie, 30)
+        dialogue.case_sdr.setChecked(True)
+        _laisser_afficher()
+        capturer(dialogue, "dialogue-export-video-hdr-en-sdr")
+        plan = dialogue.plan()
+        etat["conversion_prevue"] = bool(plan and plan.codec == H264 and plan.bits == 8 and not plan.couleurs.hdr)
+        dialogue.exporter()
+        etat["export_sdr_fini"] = _attendre_sans_pause(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
+        fichier = dialogue.fichier
+        if fichier is not None and fichier.is_file() and plan is not None:
+            fichiers.append(fichier)
+            couleurs = analyser(fichier).couleurs
+            image = _image_du_calque_8_bits(atelier, plan, float(moments_source[numero]))
+            mesures = {}
+            etat["fichier_sdr_relu"] = (couleurs.bits, couleurs.matrice, couleurs.transfert) == (8, "bt709", "bt709")
+            brut = executer(
+                [str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(fichier),
+                 "-vf", f"select=eq(n\\,{numero}),scale=in_color_matrix=bt709:in_range=tv,format=rgb24",
+                 "-frames:v", "1", "-f", "rawvideo", "-"],
+                60, binaire=True,
+            ).stdout
+            for nom, couleur in (("blanc", (255, 255, 255)), ("jaune", jaune)):
+                point = _point_dans_le_jaune(image, couleur)
+                lu = list(brut[(point[1] * plan.largeur + point[0]) * 3 :][:3]) if point is not None and brut else []
+                mesures[nom] = {"attendu": list(couleur), "lu": lu}
+                etat[f"{nom}_sdr_exact"] = len(lu) == 3 and all(abs(a - b) <= 8 for a, b in zip(lu, couleur, strict=True))
+            rapport["video_hdr_en_sdr"] = mesures
+        else:
+            etat["fichier_sdr_relu"] = False
+        dialogue.accept()
+
+        # Calque d'une vidéo HDR : HLG aussi, blanc au blanc de référence.
+        dialogue = atelier.dialogue_calque()
+        dialogue.show()
+        _attendre(lambda: dialogue.analyse_finie, 30)
+        _laisser_afficher()
+        capturer(dialogue, "dialogue-export-calque-hdr")
+        plan_calque = dialogue.plan()
+        etat["calque_hdr_prevu"] = plan_calque.hdr is not None and plan_calque.hdr.nom == "HLG" and dialogue.zone_sdr.isVisible()
+        dialogue.exporter()
+        etat["calque_hdr_fini"] = _attendre_sans_pause(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
+        fichier = dialogue.fichier
+        if fichier is not None and fichier.is_file():
+            fichiers.append(fichier)
+            couleurs = analyser(fichier).couleurs
+            numero_calque = int(temps * plan_calque.frequence)
+            contenu = atelier.contenu_a_exporter()
+            from .exports.calque import ImagesDuCalque
+
+            octets = ImagesDuCalque(contenu.reglages, plan_calque.largeur, plan_calque.hauteur, contenu.sous_titres, contenu.mots).image(
+                plan_calque.temps(numero_calque)
+            )
+            image = QImage(octets, plan_calque.largeur, plan_calque.hauteur, plan_calque.largeur * 8, QImage.Format.Format_RGBA64).copy()
+            point = _point_dans_le_jaune(image, (255, 255, 255))
+            y_blanc = None
+            if point is not None:
+                brut = executer(
+                    [str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(fichier),
+                     "-vf", f"select=eq(n\\,{numero_calque})", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "yuva444p10le", "-"],
+                    60, binaire=True,
+                ).stdout
+                position = (point[1] * plan_calque.largeur + point[0]) * 2
+                y_blanc = int.from_bytes(brut[position : position + 2], "little") if len(brut) >= position + 2 else None
+            rapport["calque_hdr"] = {
+                "couleurs": [couleurs.matrice, couleurs.primaires, couleurs.transfert], "point_blanc": point, "y_blanc": y_blanc,
+            }
+            etat["calque_hdr_relu"] = (
+                (couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("bt2020nc", "bt2020", "arib-std-b67")
+                and y_blanc is not None and abs(y_blanc - 721) <= 3
+            )
+        else:
+            etat["calque_hdr_relu"] = False
+        dialogue.accept()
+    finally:
+        transcription.source, transcription.infos = origine, infos_origine
+        for fichier in fichiers:
+            fichier.unlink(missing_ok=True)
+    rapport["video_hdr"] = etat
+    return all(etat.values())
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -1350,6 +1592,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["calque"] = _calque(sous_titres, capturer, capturer_image, rapport)
             # V3, lot 2 : la vidéo de démonstration avec ses sous-titres.
             verifs["video_avec_sous_titres"] = _video_avec_sous_titres(sous_titres, capturer, rapport)
+            # V3, lot 3 : une vidéo HDR (HLG, comme un iPhone), gardée en HDR ou convertie en SDR.
+            verifs["video_hdr"] = _video_hdr(sous_titres, capturer, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()

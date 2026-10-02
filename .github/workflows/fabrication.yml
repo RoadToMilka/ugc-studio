@@ -5,7 +5,8 @@
 #   2. lance les tests automatiques ;
 #   3. fabrique UGC-Studio.exe ;
 #   4. démarre le .exe pour vérifier qu'il fonctionne (autotest avec captures d'écran et vrais
-#      exports vidéo), et mesure son temps de démarrage à côté de celui de la version 2.0.0 ;
+#      exports vidéo), et mesure son temps de démarrage à côté de ceux de la version 2.0.0 et de la
+#      précédente ;
 #   5. joint le .exe et le rapport au « run » (onglet Actions du dépôt) ;
 #   6. sur la branche main uniquement : publie une Release « v<version> » avec le .exe,
 #      si cette version n'a pas encore été publiée.
@@ -112,16 +113,19 @@ jobs:
           if ($p.ExitCode -ne 0) { Write-Warning "Captures incomplètes (code $($p.ExitCode))" }
 
       # Temps de démarrage (V3) : FFmpeg est dans le .exe, mais dans une ressource que le démarrage ne
-      # recopie pas (il l'est au premier export). Le .exe de la version 2.0.0 (sans FFmpeg) et celui-ci
-      # sont lancés tour à tour, jusqu'à l'apparition de leur fenêtre ; le premier lancement de chacun
-      # ne compte pas (l'antivirus de Windows l'examine).
-      - name: Mesurer le démarrage (2.0.0 et cette version)
-        timeout-minutes: 6
+      # recopie pas (il l'est au premier export). Le .exe de la version 2.0.0 (sans FFmpeg), celui de la
+      # version précédente (2.2.0) et celui-ci sont lancés tour à tour, jusqu'à l'apparition de leur
+      # fenêtre ; le premier lancement de chacun ne compte pas (l'antivirus de Windows l'examine). Les
+      # écarts d'une fabrication à l'autre (une demi-seconde) viennent de la machine prêtée : seule la
+      # comparaison sur une même fabrication compte.
+      - name: Mesurer le démarrage (2.0.0, 2.2.0 et cette version)
+        timeout-minutes: 8
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download v2.0.0 --pattern UGC-Studio.exe --dir ancien --clobber
+          gh release download v2.2.0 --pattern UGC-Studio.exe --dir precedente --clobber
           function Mesurer([string] $exe) {
             $mesures = @()
             foreach ($essai in 1..4) {
@@ -146,8 +150,9 @@ jobs:
             return $triees[[int][Math]::Floor($triees.Count / 2)]
           }
           $ancien = Mesurer "ancien/UGC-Studio.exe"
+          $precedente = Mesurer "precedente/UGC-Studio.exe"
           $nouveau = Mesurer "dist/UGC-Studio.exe"
-          "Démarrage jusqu'à la fenêtre (médiane de 3 lancements) : 2.0.0 = {0:N2} s ; cette version = {1:N2} s ; écart = {2:N2} s" -f $ancien, $nouveau, ($nouveau - $ancien) | Tee-Object -FilePath rapport/demarrage.txt
+          "Démarrage jusqu'à la fenêtre (médiane de 3 lancements) : 2.0.0 = {0:N2} s ; 2.2.0 = {1:N2} s ; cette version = {2:N2} s ; écart avec la 2.0.0 = {3:N2} s" -f $ancien, $precedente, $nouveau, ($nouveau - $ancien) | Tee-Object -FilePath rapport/demarrage.txt
 
       - name: Joindre le rapport (tests, autotest, captures)
         if: always()

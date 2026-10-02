@@ -30,7 +30,7 @@ from PySide6.QtGui import QImage, QImageWriter
 from ..rendu.moteur import Moteur
 from ..sous_titres import MotAffiche, ReglagesSousTitres, SousTitre
 from .calque import cle_de_l_image, index_de_la_cle, meme_image
-from .ffmpeg import Processus
+from .ffmpeg import COURBES_HDR, Processus
 from .mov_png import EcritureMovPng
 from .video import PlanVideo, commande_video
 
@@ -139,8 +139,14 @@ class ExportVideo(QObject):
         self._fils = ThreadPoolExecutor(max_workers=FILS_PNG, thread_name_prefix="png")
         self._etat = "dessin"
         self.debut = time.monotonic()
+        couleurs = plan.couleurs
+        if couleurs.hdr:
+            gamme = f"HDR ({COURBES_HDR[couleurs.transfert]}{', Dolby Vision' if plan.dolby_vision else ''})"
+        else:
+            gamme = "SDR, converti du HDR" if couleurs.hdr_converti is not None else "SDR"
         journal.info(
-            "Export de la vidéo : %s (%d images, %s, %s)", plan.sortie, plan.nombre_images, plan.conteneur, plan.codec
+            "Export de la vidéo : %s (%d images, %s, %s, %s, %d bits)", plan.sortie, plan.nombre_images, plan.conteneur,
+            plan.codec, gamme, plan.bits,
         )
         self.etape.emit("Dessin des sous-titres", False)
         self._minuterie.start(0)
@@ -251,7 +257,11 @@ class ExportVideo(QObject):
         if code != 0:
             journal.warning("Encodage en échec (passage %d, code %s) : %s", self._passage, code, " | ".join(processus.erreurs()))
             detail = processus.erreur() or f"FFmpeg s'est arrêté (code {code})"
-            self._echouer(f"L'encodage a échoué : {detail}")
+            message = f"L'encodage a échoué : {detail}"
+            if plan.dolby_vision and "dolby" in " ".join(processus.erreurs()).casefold():
+                # Dolby Vision repris de la source (lot 3) : sans lui, la vidéo reste en HDR.
+                message += " Pour exporter sans Dolby Vision (la vidéo reste en HDR), choisis le format MOV."
+            self._echouer(message)
             return
         self._processus = None
         if self._passage < plan.passages:

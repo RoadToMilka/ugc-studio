@@ -1,12 +1,15 @@
-"""V3, lot 2 (§8.3, §8.5) : vidéo avec sous-titres, sans interface.
+"""V3, lots 2 et 3 (§8.3, §8.5) : vidéo avec sous-titres, sans interface.
 
 - Ce qui sera exporté : débits (identique + 10 %, conseillé, personnalisé), son copié ou converti,
   couleurs, combinaisons de conteneur et de codec, résumé avant export.
+- HDR (lot 3) : gardé (H.265 en 10 bits ou ProRes, sous-titres au blanc de référence), Dolby Vision
+  repris en MP4 et MKV, ou « Convertir en SDR ».
 - Les commandes données à FFmpeg, option par option.
 - Le calque provisoire (MOV d'images PNG, chacune avec sa durée), relu par FFmpeg.
 - De vrais exports (quand FFmpeg est là : celui de l'app sur la fabrication Windows) : la vidéo
   relue a les mêmes images aux mêmes moments (fréquence variable comprise), le son copié, les
-  étiquettes de couleurs, et le jaune des sous-titres est le bon.
+  étiquettes de couleurs, et le jaune des sous-titres est le bon ; en HDR, le blanc des sous-titres
+  est au blanc de référence (75 % du signal en HLG, 58 % en PQ).
 """
 
 import struct
@@ -32,21 +35,28 @@ from ugc_studio.exports.video import (
     PRORES,
     SON_AAC,
     SON_COPIE,
+    codecs_possibles,
     commande_video,
     couleurs_de_l_export,
     debit_conseille,
     debit_par_defaut,
     decalage_du_calque,
     graphe_de_filtres,
+    options_conteneur,
+    options_video,
     plan_video,
     resume_video,
     son_de_l_export,
 )
 
+from video_dolby_vision import fabriquer_video_dolby_vision
+
 FFMPEG = programme_ffmpeg()
 avec_ffmpeg = pytest.mark.skipif(FFMPEG is None, reason="FFmpeg absent de cet ordinateur")
 
 SDR_HD = CouleursDeLaVideo("yuv420p", "tv", "bt709", "bt709", "bt709")
+HLG_IPHONE = CouleursDeLaVideo("yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67")
+PQ_HDR10 = CouleursDeLaVideo("yuv420p10le", "tv", "bt2020nc", "bt2020", "smpte2084")
 
 
 def _images(nombre=930, base=Fraction(1, 30000), ecart=1001, debit_octets=46_500, codec="h264", depart=0) -> ImagesDeLaVideo:
@@ -58,12 +68,14 @@ def _images(nombre=930, base=Fraction(1, 30000), ecart=1001, debit_octets=46_500
     )
 
 
-def _source(tmp_path: Path, images=None, son="aac", couleurs=SDR_HD, rotation=0, format_="MP4", codec_video="H.264") -> Source:
+def _source(
+    tmp_path: Path, images=None, son="aac", couleurs=SDR_HD, rotation=0, format_="MP4", codec_video="H.264", dolby_vision=""
+) -> Source:
     chemin = tmp_path / "Sérum Glowzy.mp4"
     chemin.write_bytes(b"\0" * 1000)
     images = images or _images()
     sons = SonDeLaVideo(son, 256_000 // 8 * 31, Fraction(31)) if son else None
-    analyse = Analyse(images, sons, couleurs, rotation)
+    analyse = Analyse(images, sons, couleurs, rotation, dolby_vision)
     return Source(
         chemin, True, 1080, 1920, images.frequence, True, images.nombre, float(images.duree), format_, codec_video,
         images.debit, "AAC" if son == "aac" else (son or "").upper(), 256_000 if son else None, 1000,
@@ -217,15 +229,131 @@ def test_resume_avertissements_et_erreurs(tmp_path):
     plan = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
     son = next(ligne for ligne in resume_video(source, plan, "").lignes if ligne.titre == "Son")
     assert son.export == "converti en AAC, 320 kb/s" and son.differente
-    hdr = _source(tmp_path, couleurs=CouleursDeLaVideo("yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67"))
+    hdr = _source(tmp_path, couleurs=HLG_IPHONE)
     resume = resume_video(hdr, plan_video(hdr, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4"), "")
-    assert not resume.possible and "HDR" in resume.erreurs[0]  # le HDR arrive avec la 3.0.0
+    assert resume.possible and not resume.avertissements  # le HDR est gardé (lot 3), en H.265
     sans_analyse = Source(source.chemin, True)
     resume = resume_video(sans_analyse, plan_video(sans_analyse, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "x.mp4"), "")
     assert not resume.possible and "FFmpeg n'a pas pu lire ta vidéo" in resume.erreurs[0]
     disparue = Source(tmp_path / "déplacée.mp4", True)
     resume = resume_video(disparue, None, "")
     assert not resume.possible and "« déplacée.mp4 » est introuvable" in resume.erreurs[0]
+
+
+# --- HDR (lot 3) -----------------------------------------------------------------------------------
+
+
+def test_hdr_garde_en_h265_10_bits(tmp_path):
+    """Le HDR suit la vidéo source : H.265 en 10 bits (H.264 demandé : H.265), ou ProRes ; mêmes
+    couleurs (BT.2020, HLG) ; débit conseillé d'après les débits HDR de YouTube."""
+    source = _source(tmp_path, couleurs=HLG_IPHONE)
+    assert codecs_possibles(MP4, True) == (H265,) and codecs_possibles(MOV, True) == (H265, PRORES)
+    assert codecs_possibles(MP4, False) == (H264, H265)
+    plan = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
+    assert (plan.codec, plan.bits, plan.format_des_pixels, plan.format_du_calque) == (H265, 10, "yuv420p10le", "yuva420p10le")
+    assert plan.calque_16_bits and plan.couleurs.hdr and not plan.dolby_vision
+    assert (plan.couleurs.matrice, plan.couleurs.primaires, plan.couleurs.transfert) == ("bt2020nc", "bt2020", "arib-std-b67")
+    assert plan.debit == 20_000_000  # 1080 × 1920 à 29,97 en HDR : 2 × 10 Mb/s
+    prores = plan_video(source, MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "v.mov")
+    assert (prores.codec, prores.bits, prores.format_des_pixels) == (PRORES, 10, "yuv422p10le") and prores.couleurs.hdr
+
+
+def test_debit_conseille_en_hdr():
+    """Le double des débits HDR de YouTube ; sous la 720p (pas de HDR chez YouTube), ceux du SDR."""
+    assert debit_conseille(1080, 1920, Fraction(30000, 1001), hdr=True) == 20_000_000
+    assert debit_conseille(1080, 1920, Fraction(60), hdr=True) == 30_000_000
+    assert debit_conseille(2160, 3840, Fraction(30), hdr=True) == 112_000_000
+    assert debit_conseille(720, 1280, Fraction(30), hdr=True) == 13_000_000
+    assert debit_conseille(540, 960, Fraction(30), hdr=True) == debit_conseille(540, 960, Fraction(30)) == 5_000_000
+
+
+def test_couleurs_de_l_export_en_hdr():
+    hlg = couleurs_de_l_export(HLG_IPHONE)
+    assert hlg.hdr and (hlg.matrice, hlg.primaires, hlg.transfert, hlg.hdr_converti) == ("bt2020nc", "bt2020", "arib-std-b67", None)
+    pq = couleurs_de_l_export(CouleursDeLaVideo("yuv420p10le", "tv", "", "", "smpte2084"))
+    assert pq.hdr and (pq.matrice, pq.primaires) == ("bt2020nc", "bt2020")  # étiquettes manquantes : celles du HDR
+    sdr = couleurs_de_l_export(HLG_IPHONE, convertir_en_sdr=True)
+    assert not sdr.hdr and (sdr.matrice, sdr.primaires, sdr.transfert) == ("bt709", "bt709", "bt709")
+    assert (sdr.hdr_converti.matrice, sdr.hdr_converti.primaires, sdr.hdr_converti.courbe) == ("bt2020nc", "bt2020", "arib-std-b67")
+    assert couleurs_de_l_export(SDR_HD, convertir_en_sdr=True) == couleurs_de_l_export(SDR_HD)  # une vidéo SDR ne change pas
+
+
+def test_graphes_du_hdr(tmp_path):
+    """HDR gardé : l'image de la vidéo telle quelle, les sous-titres convertis au blanc de référence
+    (npl=203) ; « Convertir en SDR » : la vidéo en lumière linéaire, ramenée en BT.709, reflets adoucis
+    (mobius, genou à la moitié du blanc de référence, crête de 1 000 cd/m²), puis BT.709 limité."""
+    source = _source(tmp_path, couleurs=HLG_IPHONE)
+    hdr = plan_video(source, MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
+    assert graphe_de_filtres(hdr) == (
+        "[0:v]format=yuv420p10le[video];"
+        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,format=yuva420p10le[calque];"
+        "[video][calque]overlay=format=yuv420p10:eof_action=repeat,"
+        "setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv[sortie]"
+    )
+    pq = plan_video(_source(tmp_path, couleurs=PQ_HDR10), MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "v.mov")
+    assert ":t=smpte2084:" in graphe_de_filtres(pq) and "overlay=format=yuv422p10" in graphe_de_filtres(pq)
+    sdr = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4", convertir_en_sdr=True)
+    assert (sdr.codec, sdr.bits, sdr.format_des_pixels) == (H264, 8, "yuv420p") and not sdr.calque_16_bits
+    assert sdr.debit == 16_000_000  # le débit conseillé du SDR
+    assert graphe_de_filtres(sdr) == (
+        "[0:v]zscale=min=bt2020nc:pin=bt2020:tin=arib-std-b67:rin=limited:t=linear:npl=203,format=gbrpf32le,"
+        "zscale=pin=bt2020:tin=linear:p=bt709,tonemap=tonemap=mobius:param=0.5:peak=4.926:desat=0,"
+        "zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited,format=yuv420p[video];"
+        "[1:v]scale=out_color_matrix=bt709:out_range=tv,format=yuva420p[calque];"
+        "[video][calque]overlay=format=yuv420:eof_action=repeat,"
+        "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[sortie]"
+    )
+    h265 = plan_video(source, MKV, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mkv", convertir_en_sdr=True)
+    assert h265.bits == 8 and not h265.couleurs.hdr  # « Convertir en SDR » : 8 bits
+
+
+def test_dolby_vision_repris_en_mp4_et_mkv(tmp_path):
+    """Profil 8.4 (iPhone) : repris en MP4 et MKV avec H.265 (« -dolbyvision 1 », limite de débit
+    demandée par x265) ; en MP4, « -strict unofficial » pour que FFmpeg écrive la boîte dvvC."""
+    source = _source(tmp_path, couleurs=HLG_IPHONE, dolby_vision="8.4")
+    mp4 = plan_video(source, MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
+    assert mp4.dolby_vision and mp4.debit == 20_000_000
+    texte = " ".join(options_video(mp4, 1, tmp_path / "p"))
+    assert "-dolbyvision 1 -maxrate 40000000 -bufsize 80000000" in texte and "-tag:v hvc1" in texte
+    assert options_conteneur(mp4)[:2] == ["-strict", "unofficial"]
+    second = commande_video(Path("ffmpeg"), mp4, tmp_path / "c.mov", 2, tmp_path / "p")
+    assert "-strict unofficial -movflags +faststart -f mp4" in " ".join(second)
+    assert "-strict" not in commande_video(Path("ffmpeg"), mp4, tmp_path / "c.mov", 1, tmp_path / "p")  # premier passage : rien d'écrit
+    mkv = plan_video(source, MKV, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mkv")
+    assert mkv.dolby_vision and "-strict" not in options_conteneur(mkv)
+    for plan in (
+        plan_video(source, MOV, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mov"),  # FFmpeg n'écrit pas la boîte dans un MOV
+        plan_video(source, MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "v.mov"),
+        plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4", convertir_en_sdr=True),
+        plan_video(_source(tmp_path, couleurs=PQ_HDR10, dolby_vision="8.1"), MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4"),
+    ):
+        assert not plan.dolby_vision and "-dolbyvision" not in options_video(plan, 2, tmp_path / "p")
+
+
+def test_resume_du_hdr(tmp_path):
+    """Couleurs : « HDR (HLG, Dolby Vision), 10 bits » gardées (pas en mauve) ; perdues en MOV (mauve,
+    avertissement) ; « Convertir en SDR » en mauve, sans avertissement ; profil 5 : erreur."""
+    source = _source(tmp_path, couleurs=HLG_IPHONE, dolby_vision="8.4")
+
+    def couleurs(plan):
+        resume = resume_video(source, plan, "", libre=10**12)
+        ligne = next(ligne for ligne in resume.lignes if ligne.titre == "Couleurs")
+        return (ligne.source, ligne.export, ligne.differente), resume
+
+    (ligne, resume) = couleurs(plan_video(source, MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4"))
+    assert ligne == ("HDR (HLG, Dolby Vision), 10 bits", "HDR (HLG, Dolby Vision), 10 bits", False)
+    assert resume.possible and not resume.avertissements
+    (ligne, resume) = couleurs(plan_video(source, MOV, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mov"))
+    assert ligne == ("HDR (HLG, Dolby Vision), 10 bits", "HDR (HLG), 10 bits", True)
+    assert resume.possible and "Dolby Vision n'est gardé qu'en MP4 ou en MKV" in resume.avertissements[0]
+    (ligne, resume) = couleurs(plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4", convertir_en_sdr=True))
+    assert ligne == ("HDR (HLG, Dolby Vision), 10 bits", "SDR (BT.709), 8 bits", True) and not resume.avertissements
+    pq = _source(tmp_path, couleurs=PQ_HDR10, dolby_vision="8.1")
+    resume = resume_video(pq, plan_video(pq, MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4"), "", libre=10**12)
+    assert "(profil 8.1) ne sont pas gardées : elle reste en HDR (PQ)" in resume.avertissements[0]
+    streaming = _source(tmp_path, couleurs=CouleursDeLaVideo("yuv420p10le", "tv", "", "", ""), dolby_vision="5")
+    resume = resume_video(streaming, plan_video(streaming, MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4"), "")
+    assert not resume.possible and "profil 5" in resume.erreurs[0]
 
 
 # --- Calque provisoire : MOV d'images PNG ----------------------------------------------------------
@@ -390,6 +518,132 @@ def test_export_h265_mkv(tmp_path):
     _exporter(plan, tmp_path / "calque.mov", tmp_path)
     sortie = analyser(plan.en_cours)
     assert sortie.images.codec == "hevc" and sortie.images.nombre == 15 and sortie.son is None
+
+
+def _calque_blanc_et_jaune(plan, chemin: Path) -> None:
+    """Calque : moitié gauche blanche, moitié droite jaune #FFD43B, opaques, sur toute la vidéo."""
+    largeur, hauteur = plan.largeur, plan.hauteur
+    ligne = bytes((255, 255, 255, 255)) * (largeur // 2) + bytes((255, 212, 59, 255)) * (largeur - largeur // 2)
+    brut = b"".join(b"\0" + ligne for _ in range(hauteur))
+
+    def morceau(nom: bytes, donnees: bytes) -> bytes:
+        return struct.pack(">I", len(donnees)) + nom + donnees + struct.pack(">I", zlib.crc32(nom + donnees))
+
+    png = (b"\x89PNG\r\n\x1a\n" + morceau(b"IHDR", struct.pack(">IIBBBBB", largeur, hauteur, 8, 6, 0, 0, 0))
+           + morceau(b"IDAT", zlib.compress(brut)) + morceau(b"IEND", b""))
+    images = plan.images
+    ecriture = EcritureMovPng(chemin, largeur, hauteur, images.base_de_temps.denominator)
+    ecriture.ajouter(png, images.moments[-1] - images.moments[0] + images.duree_derniere)
+    ecriture.fermer()
+
+
+def _source_hdr(tmp_path: Path, courbe: str) -> Source:
+    """Une vidéo HDR (H.265, 10 bits, BT.2020) fabriquée par FFmpeg : la mire de FFmpeg convertie en HLG
+    ou en PQ, son blanc au blanc de référence."""
+    chemin = tmp_path / f"hdr-{courbe}.mov"
+    _ffmpeg("-f", "lavfi", "-i", "testsrc2=size=96x64:rate=30", "-t", "0.4",
+            "-vf", f"zscale=rin=limited:pin=bt709:tin=bt709:min=bt709:p=bt2020:t={courbe}:m=bt2020nc:r=limited:npl=203,"
+                   f"format=yuv420p10le,setparams=color_primaries=bt2020:color_trc={courbe}:colorspace=bt2020nc:range=tv",
+            "-c:v", "libx265", "-x265-params", "log-level=error", "-tag:v", "hvc1", str(chemin))
+    return _source_reelle(chemin)
+
+
+def _yuv10(video: Path, x: int, y: int, largeur: int) -> int:
+    """La luminance (Y, sur 1 023) d'un point de la première image, en 10 bits."""
+    brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video), "-frames:v", "1",
+                     "-f", "rawvideo", "-pix_fmt", "yuv420p10le", "-"], 60, binaire=True).stdout
+    return struct.unpack_from("<H", brut, (y * largeur + x) * 2)[0]
+
+
+def _rgb_depuis_le_hdr(video: Path, x: int, y: int, largeur: int) -> tuple[int, int, int]:
+    """Un point de la première image d'une vidéo HDR, ramené en SDR avec le même blanc de référence :
+    les couleurs des sous-titres d'origine."""
+    brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video), "-frames:v", "1",
+                     "-vf", "zscale=p=bt709:t=bt709:m=bt709:r=full:npl=203,format=rgb24", "-f", "rawvideo", "-"], 60, binaire=True).stdout
+    debut = (y * largeur + x) * 3
+    return tuple(brut[debut : debut + 3])
+
+
+def _proches(a, b, ecart: int) -> bool:
+    return all(abs(p - q) <= ecart for p, q in zip(a, b, strict=True))
+
+
+@avec_ffmpeg
+def test_export_hdr_reel(tmp_path):
+    """HLG gardé (H.265, 10 bits) : le blanc des sous-titres à 75 % du signal (Y = 721 sur 1 023), et
+    leur jaune redevient #FFD43B une fois ramené en SDR ; PQ en ProRes : 58 % (Y = 573)."""
+    hlg = _source_hdr(tmp_path, "arib-std-b67")
+    assert hlg.analyse.couleurs.hlg and hlg.analyse.couleurs.bits == 10
+    plan = plan_video(hlg, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "hlg (sous-titres).mp4")
+    assert plan.codec == H265
+    _calque_blanc_et_jaune(plan, tmp_path / "calque.mov")
+    _exporter(plan, tmp_path / "calque.mov", tmp_path)
+    sortie = analyser(plan.en_cours)
+    couleurs = sortie.couleurs
+    assert sortie.images.codec == "hevc" and sortie.images.nombre == hlg.analyse.images.nombre
+    assert (couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert) == (
+        "yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67"
+    )
+    assert abs(_yuv10(plan.en_cours, 20, 32, 96) - 721) <= 4  # blanc de référence : 75 % de 64 à 940
+    assert _proches(_rgb_depuis_le_hdr(plan.en_cours, 20, 32, 96), (255, 255, 255), 4)
+    assert _proches(_rgb_depuis_le_hdr(plan.en_cours, 70, 32, 96), (255, 212, 59), 6)
+
+    pq = _source_hdr(tmp_path, "smpte2084")
+    prores = plan_video(pq, MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "pq (sous-titres).mov")
+    _calque_blanc_et_jaune(prores, tmp_path / "calque.mov")
+    _exporter(prores, tmp_path / "calque.mov", tmp_path)
+    sortie = analyser(prores.en_cours)
+    assert sortie.images.codec == "prores" and sortie.couleurs.pq and sortie.couleurs.format_pixels.startswith("yuv422p10")
+    assert abs(_yuv10(prores.en_cours, 20, 32, 96) - 573) <= 3  # blanc de référence : 58 % en PQ
+
+
+@avec_ffmpeg
+def test_export_converti_en_sdr_reel(tmp_path):
+    """« Convertir en SDR » : H.264, 8 bits, étiquettes BT.709 ; les sous-titres gardent exactement
+    leurs couleurs (blanc et jaune), et l'image de la vidéo a changé de couleurs (lumière, BT.709)."""
+    hlg = _source_hdr(tmp_path, "arib-std-b67")
+    plan = plan_video(hlg, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "hlg (sous-titres).mp4", convertir_en_sdr=True)
+    _calque_blanc_et_jaune(plan, tmp_path / "calque.mov")
+    _exporter(plan, tmp_path / "calque.mov", tmp_path)
+    sortie = analyser(plan.en_cours)
+    couleurs = sortie.couleurs
+    assert sortie.images.codec == "h264" and couleurs.bits == 8 and not couleurs.hdr
+    assert (couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("tv", "bt709", "bt709", "bt709")
+    assert _proches(_pixel_rgb(plan.en_cours, 0, 20, 32, 96, 64), (255, 255, 255), 4)
+    assert _proches(_pixel_rgb(plan.en_cours, 0, 70, 32, 96, 64), (255, 212, 59), 6)
+
+
+def _sait_garder_dolby_vision() -> bool:
+    """FFmpeg 7.1 et plus (celui de l'app : 9.0.2) : x265 reprend Dolby Vision (option « -dolbyvision »)."""
+    if FFMPEG is None:
+        return False
+    return "-dolbyvision" in executer([str(FFMPEG), "-hide_banner", "-h", "encoder=libx265"], 60).stdout
+
+
+@pytest.mark.skipif(not _sait_garder_dolby_vision(), reason="FFmpeg sans Dolby Vision pour x265 (celui de l'app le sait)")
+def test_export_dolby_vision_reel(tmp_path):
+    """Une vidéo d'iPhone en HDR (HLG et Dolby Vision 8.4, fabriquée par video_dolby_vision.py) : en MP4
+    et en MKV, l'export reste en Dolby Vision 8.4 (description du fichier, et informations de chaque
+    image) ; en MOV, il reste en HDR (HLG), sans Dolby Vision."""
+    chemin = tmp_path / "IMG_0420.mp4"
+    fabriquer_video_dolby_vision(executer, FFMPEG, chemin)
+    source = _source_reelle(chemin)
+    assert source.analyse.dolby_vision == "8.4" and source.analyse.couleurs.hlg
+    for conteneur in (MP4, MKV, MOV):
+        plan = plan_video(source, conteneur, H265, DEBIT_CONSEILLE, 0, tmp_path / f"IMG_0420 (sous-titres).{conteneur}")
+        assert plan.dolby_vision == (conteneur != MOV)
+        _calque_blanc_et_jaune(plan, tmp_path / "calque.mov")
+        _exporter(plan, tmp_path / "calque.mov", tmp_path)
+        sortie = analyser(plan.en_cours)
+        assert sortie.couleurs.hlg and sortie.images.nombre == source.analyse.images.nombre, conteneur
+        images = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "info", "-i", str(plan.en_cours),
+                           "-vf", "showinfo", "-frames:v", "3", "-f", "null", "-"], 60).stderr
+        if conteneur == MOV:
+            assert sortie.dolby_vision == "" and "Dolby Vision Metadata" not in images
+        else:
+            assert sortie.dolby_vision == "8.4", conteneur  # boîte dvvC (MP4), ou sa place dans le MKV
+            assert images.count("Dolby Vision Metadata") >= 3, conteneur  # chaque image a ses informations
+        assert abs(_yuv10(plan.en_cours, 20, 48, 128) - 721) <= 4  # sous-titres au blanc de référence
 
 
 def test_rien_d_inutile_dans_les_commandes(tmp_path):

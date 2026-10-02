@@ -1,6 +1,6 @@
-"""Vidéo avec sous-titres (V3, lot 2, §8.3) : ce qui sera exporté (conteneur, codec, débit, son,
-couleurs), le résumé avant export, et les commandes données à FFmpeg. Rien ici ne dépend de
-l'interface : les tests vérifient chaque choix et chaque option.
+"""Vidéo avec sous-titres (V3, lots 2 et 3, §8.3) : ce qui sera exporté (conteneur, codec, débit,
+son, couleurs, HDR), le résumé avant export, et les commandes données à FFmpeg. Rien ici ne dépend
+de l'interface : les tests vérifient chaque choix et chaque option.
 
 Le principe (document V3, §6) : le calque des sous-titres (lot 1) est posé sur la vidéo.
 1. Le calque est d'abord écrit dans un fichier provisoire (mov_png.py) : une image PNG à chaque
@@ -15,6 +15,13 @@ Chaque image de la vidéo garde son moment exact : FFmpeg ne change ni n'ajoute 
 (« -fps_mode passthrough »), et écrit les moments dans l'unité de temps de la vidéo elle-même
 (« -enc_time_base:v demux »). Les couleurs des sous-titres sont converties avec la norme de la vidéo
 (BT.709 pour une vidéo HD), et le fichier porte ses étiquettes de couleurs.
+
+HDR (lot 3 ; vidéos d'iPhone) : le HDR suit la vidéo source (décision du 02/10/2026). Une vidéo HDR
+(courbe HLG ou PQ) reste en HDR : H.265 en 10 bits (ou ProRes), mêmes couleurs, et les sous-titres
+posés au « blanc de référence » de la norme ITU-R BT.2408 (203 cd/m²) : posés tels quels, ils
+monteraient au maximum de l'écran et éblouiraient. Dolby Vision (profil 8.4 des iPhone) est gardé en
+MP4 et en MKV. « Convertir en SDR » ramène la vidéo en BT.709, ses reflets les plus forts adoucis ;
+les sous-titres y sont posés comme dans une vidéo SDR.
 """
 
 from __future__ import annotations
@@ -25,7 +32,19 @@ from fractions import Fraction
 from pathlib import Path
 
 from .cadence import texte_frequence
-from .ffmpeg import PERIODE_DES_NOUVELLES_S, Analyse, CouleursDeLaVideo, ImagesDeLaVideo
+from .ffmpeg import (
+    BLANC_DE_REFERENCE,
+    COURBES_HDR,
+    HLG,
+    PERIODE_DES_NOUVELLES_S,
+    Analyse,
+    CouleursDeLaVideo,
+    ImagesDeLaVideo,
+    NormeHDR,
+    conversion_vers_le_hdr,
+    etiquetage,
+    norme_hdr,
+)
 from .plan import (
     SUFFIXE_EN_COURS,
     LigneResume,
@@ -84,15 +103,43 @@ MATRICES_DU_FILTRE = {"bt709": "bt709", "smpte170m": "smpte170m", "bt470bg": "bt
 PRIMAIRES_CONNUES = {"bt709", "bt470m", "bt470bg", "smpte170m", "smpte240m", "film", "bt2020", "smpte428", "smpte431", "smpte432", "jedec-p22"}
 COURBES_CONNUES = {"bt709", "bt470m", "bt470bg", "smpte170m", "smpte240m", "linear", "iec61966-2-4", "bt1361e", "iec61966-2-1", "bt2020-10", "bt2020-12"}
 
+# --- HDR (lot 3, §8.3 ; courbes, normes et blanc de référence : voir ffmpeg.py) ---
+# Débits conseillés par YouTube en HDR (même page, consultée le 02/10/2026) ; sous la 720p, YouTube
+# n'en donne pas : ceux du SDR.
+DEBITS_YOUTUBE_HDR = {2160: (56, 85), 1440: (20, 30), 1080: (10, 15), 720: (6.5, 9.5)}
+# « Convertir en SDR » : la vidéo est ramenée en BT.709 avec le même blanc de référence (203 cd/m²
+# deviennent le blanc du SDR), puis ses reflets plus lumineux (jusqu'à 1 000 cd/m², la crête d'un écran
+# HLG et de la plupart des vidéos PQ) sont adoucis par une courbe « mobius » (filtre tonemap) : en
+# dessous de la moitié du blanc de référence, rien ne change ; au-dessus, la courbe s'infléchit
+# doucement. Le blanc de référence de la vidéo arrive ainsi vers 90 % du SDR, comme le conseille l'EBU
+# (« Best practices in live HDR production », 2019 : 80 à 90 %, pour garder de la place aux reflets).
+CRETE_HDR = 1000  # cd/m²
+GENOU_DU_SDR = 0.5  # en part du blanc de référence
+# Dolby Vision : x265 sait le reprendre (FFmpeg 9.0.2, option « -dolbyvision ») pour le profil 8.4 des
+# iPhone (image HLG, lue en HDR partout, et informations Dolby Vision en plus). FFmpeg n'écrit sa
+# description que dans un MP4 ou un MKV (pas dans un MOV) ; x265 demande alors une limite de débit
+# (« VBV ») : jusqu'à 2 fois le débit visé, avec une réserve de 4 fois ce débit.
+DOLBY_VISION_GARDE = "8.4"
+CONTENEURS_DOLBY_VISION = (MP4, MKV)
+DEBIT_MAX_DOLBY_VISION, RESERVE_DOLBY_VISION = 2, 4
 
-def debit_conseille(largeur: int, hauteur: int, frequence: Fraction | None) -> int:
+
+def debit_conseille(largeur: int, hauteur: int, frequence: Fraction | None, hdr: bool = False) -> int:
     """« Conseillé pour la publication » : le double du débit conseillé par YouTube, en bits par
-    seconde (1080 × 1920 à 30 images par seconde : 16 Mb/s)."""
+    seconde (1080 × 1920 à 30 images par seconde : 16 Mb/s ; en HDR : 20 Mb/s)."""
     cote = min(largeur, hauteur) if largeur and hauteur else 1080
     rangee = next((r for r in sorted(DEBITS_YOUTUBE_SDR, reverse=True) if cote >= r * 0.9), 360)
-    normal, haut = DEBITS_YOUTUBE_SDR[rangee]
+    table = DEBITS_YOUTUBE_HDR if hdr and rangee in DEBITS_YOUTUBE_HDR else DEBITS_YOUTUBE_SDR
+    normal, haut = table[rangee]
     debit = haut if frequence is not None and frequence > FREQUENCE_HAUTE else normal
     return round(debit * FACTEUR_CONSEILLE * 1_000_000)
+
+
+def codecs_possibles(conteneur: str, hdr: bool) -> tuple[str, ...]:
+    """Codecs possibles dans ce conteneur : le ProRes ne va que dans un MOV ; une vidéo qui reste en
+    HDR demande H.265 en 10 bits (ou ProRes) : H.264 n'est proposé qu'en SDR."""
+    codecs = CODECS_POSSIBLES[conteneur]
+    return tuple(codec for codec in codecs if codec != H264) if hdr else codecs
 
 
 def debit_prores(largeur: int, hauteur: int, frequence: Fraction | None) -> int:
@@ -118,22 +165,37 @@ def son_de_l_export(conteneur: str, codec_ffmpeg: str | None) -> str | None:
 
 @dataclass(frozen=True)
 class CouleursDeLExport:
-    """Norme des couleurs de la vidéo exportée : celle de la source quand elle est connue, sinon celle
-    d'une vidéo HD (BT.709) ; toujours en plage limitée (celle des vidéos)."""
+    """Norme des couleurs de la vidéo exportée, toujours en plage limitée (celle des vidéos).
+    - SDR : celle de la source quand elle est connue, sinon celle d'une vidéo HD (BT.709).
+    - HDR gardé : celle de la source (BT.2020, et la courbe HLG ou PQ), dans laquelle les sous-titres
+      sont convertis au blanc de référence.
+    - « Convertir en SDR » : BT.709 ; `hdr_converti` garde la norme de la source HDR, dont part la
+      conversion."""
 
     matrice: str  # nom de FFmpeg (étiquette)
     primaires: str
     transfert: str
     plage_source: str  # « pc » : la vidéo est convertie en plage limitée
     rgb_source: bool = False  # vidéo en RGB (images PNG, certains enregistrements d'écran) : convertie elle aussi
+    hdr_converti: NormeHDR | None = None
+
+    @property
+    def hdr(self) -> bool:
+        """La vidéo exportée est en HDR (courbe HLG ou PQ)."""
+        return self.transfert in COURBES_HDR
 
     @property
     def matrice_du_filtre(self) -> str:
         return MATRICES_DU_FILTRE.get(self.matrice, "bt709")
 
 
-def couleurs_de_l_export(couleurs: CouleursDeLaVideo | None) -> CouleursDeLExport:
+def couleurs_de_l_export(couleurs: CouleursDeLaVideo | None, convertir_en_sdr: bool = False) -> CouleursDeLExport:
     couleurs = couleurs or CouleursDeLaVideo()
+    hdr = norme_hdr(couleurs)
+    if hdr is not None and convertir_en_sdr:
+        return CouleursDeLExport("bt709", "bt709", "bt709", couleurs.plage, hdr_converti=hdr)
+    if hdr is not None:
+        return CouleursDeLExport(hdr.matrice, hdr.primaires, hdr.courbe, couleurs.plage)
     matrice = couleurs.matrice if couleurs.matrice in MATRICES_DU_FILTRE else "bt709"
     primaires = couleurs.primaires if couleurs.primaires in PRIMAIRES_CONNUES else "bt709"
     transfert = couleurs.transfert if couleurs.transfert in COURBES_CONNUES else "bt709"
@@ -158,6 +220,7 @@ class PlanVideo:
     couleurs: CouleursDeLExport
     bits: int  # 8 ou 10
     sortie: Path
+    dolby_vision: bool = False  # informations Dolby Vision de la source reprises (profil 8.4)
 
     @property
     def en_cours(self) -> Path:
@@ -202,14 +265,18 @@ class PlanVideo:
 
 
 def plan_video(
-    source: Source, conteneur: str, codec: str, mode_debit: str, debit_personnalise_mbps: float, sortie: Path
+    source: Source, conteneur: str, codec: str, mode_debit: str, debit_personnalise_mbps: float, sortie: Path,
+    convertir_en_sdr: bool = False,
 ) -> PlanVideo | None:
-    """None : la vidéo n'a pas été lue par FFmpeg (rien à exporter)."""
+    """None : la vidéo n'a pas été lue par FFmpeg (rien à exporter). `convertir_en_sdr` : une vidéo HDR
+    est ramenée en SDR (sinon, elle reste en HDR)."""
     analyse: Analyse | None = source.analyse
     if analyse is None or analyse.images is None or not analyse.images.nombre:
         return None
-    if codec not in CODECS_POSSIBLES[conteneur]:
-        codec = CODECS_POSSIBLES[conteneur][0]
+    couleurs = couleurs_de_l_export(analyse.couleurs, convertir_en_sdr)
+    possibles = codecs_possibles(conteneur, couleurs.hdr)
+    if codec not in possibles:
+        codec = possibles[0]
     largeur, hauteur = analyse.taille_affichee
     images = analyse.images
     if codec == PRORES:
@@ -219,7 +286,7 @@ def plan_video(
     elif mode_debit == DEBIT_PERSONNALISE:
         debit = round(max(0.0, debit_personnalise_mbps) * 1_000_000)
     else:
-        debit = debit_conseille(largeur, hauteur, images.frequence)
+        debit = debit_conseille(largeur, hauteur, images.frequence, couleurs.hdr)
     son = son_de_l_export(conteneur, analyse.son.codec if analyse.son is not None else None)
     if son == SON_COPIE:
         debit_son = analyse.son.debit
@@ -228,34 +295,63 @@ def plan_video(
     else:
         debit_son = None
     bits_source = analyse.couleurs.bits if analyse.couleurs is not None else 8
-    bits = 10 if codec == PRORES or (codec == H265 and bits_source >= 10) else 8
+    # 10 bits : le ProRes, le HDR, et une vidéo en 10 bits gardée en H.265 ; « Convertir en SDR » : 8 bits.
+    dix_bits = codec == H265 and bits_source >= 10 and couleurs.hdr_converti is None
+    bits = 10 if codec == PRORES or couleurs.hdr or dix_bits else 8
+    dolby_vision = (
+        couleurs.transfert == HLG and analyse.dolby_vision == DOLBY_VISION_GARDE
+        and codec == H265 and conteneur in CONTENEURS_DOLBY_VISION
+    )
     return PlanVideo(
         source.chemin, largeur, hauteur, images, conteneur, codec, debit, son, debit_son,
-        couleurs_de_l_export(analyse.couleurs), bits, sortie,
+        couleurs, bits, sortie, dolby_vision,
     )
 
 
 # --- Commandes ---------------------------------------------------------------------------------
 
 
+def conversion_en_sdr(norme: NormeHDR, plage_source: str) -> str:
+    """« Convertir en SDR » (voir CRETE_HDR) : la vidéo HDR en lumière linéaire, le blanc de référence
+    valant 1 (zscale, « npl=203 ») ; ses couleurs ramenées dans celles du BT.709 ; ses reflets adoucis
+    (tonemap, courbe « mobius » : rien ne change sous le genou, la crête de 1 000 cd/m² devient le
+    blanc) ; puis la courbe et la norme du SDR (BT.709), en plage limitée. La norme de la source est
+    donnée en entier : une étiquette manquante ne bloque pas la conversion."""
+    plage = "full" if plage_source == "pc" else "limited"
+    return (
+        f"zscale=min={norme.matrice}:pin={norme.primaires}:tin={norme.courbe}:rin={plage}:t=linear"
+        f":npl={BLANC_DE_REFERENCE},format=gbrpf32le,zscale=pin={norme.primaires}:tin=linear:p=bt709,"
+        f"tonemap=tonemap=mobius:param={GENOU_DU_SDR}:peak={CRETE_HDR / BLANC_DE_REFERENCE:.3f}:desat=0,"
+        f"zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited"
+    )
+
+
 def graphe_de_filtres(plan: PlanVideo) -> str:
     """La vidéo (entrée 0) et le calque (entrée 1), posés l'un sur l'autre.
 
     - Vidéo : convertie en plage limitée si elle était en plage complète (ou avec la norme de l'export
-      si elle est en RGB), puis dans le format de l'export (8 ou 10 bits, 4:2:0 ou 4:2:2). FFmpeg la
-      redresse lui-même si elle est « couchée ».
-    - Calque : ses couleurs (RGB) converties avec la norme de la vidéo, en plage limitée.
+      si elle est en RGB ; ou ramenée en SDR, « Convertir en SDR »), puis dans le format de l'export
+      (8 ou 10 bits, 4:2:0 ou 4:2:2). FFmpeg la redresse lui-même si elle est « couchée ». En HDR
+      gardé, ses images ne changent pas.
+    - Calque : ses couleurs (RGB) converties avec la norme de la vidéo, en plage limitée ; en HDR, au
+      blanc de référence (conversion_vers_le_hdr).
     - overlay : le calque par-dessus, chaque image du calque sur les images de la vidéo de son moment
       jusqu'au suivant ; après la dernière, il reste en place (eof_action=repeat).
     - setparams : les étiquettes de couleurs posées sur les images (FFmpeg 9 les reprend des images)."""
     couleurs = plan.couleurs
     principal = f"format={plan.format_des_pixels}"
-    if couleurs.rgb_source:  # comme le calque : convertie avec la norme de l'export
+    if couleurs.hdr_converti is not None:
+        principal = f"{conversion_en_sdr(couleurs.hdr_converti, couleurs.plage_source)},{principal}"
+    elif couleurs.rgb_source:  # comme le calque : convertie avec la norme de l'export
         principal = f"scale=out_color_matrix={couleurs.matrice_du_filtre}:out_range=tv,{principal}"
     elif couleurs.plage_source == "pc":
         principal = f"scale=in_range=pc:out_range=tv,{principal}"
-    calque = f"scale=out_color_matrix={couleurs.matrice_du_filtre}:out_range=tv,format={plan.format_du_calque}"
-    etiquettes = f"setparams=color_primaries={couleurs.primaires}:color_trc={couleurs.transfert}:colorspace={couleurs.matrice}:range=tv"
+    if couleurs.hdr:
+        conversion = conversion_vers_le_hdr(NormeHDR(couleurs.matrice, couleurs.primaires, couleurs.transfert))
+    else:
+        conversion = f"scale=out_color_matrix={couleurs.matrice_du_filtre}:out_range=tv"
+    calque = f"{conversion},format={plan.format_du_calque}"
+    etiquettes = etiquetage(couleurs.primaires, couleurs.transfert, couleurs.matrice)
     format_de_l_overlay = {"yuv420p": "yuv420", "yuv420p10le": "yuv420p10", "yuv422p10le": "yuv422p10"}[plan.format_des_pixels]
     return (
         f"[0:v]{principal}[video];[1:v]{calque}[calque];"
@@ -272,6 +368,13 @@ def options_video(plan: PlanVideo, passage: int, journal_des_passages: Path) -> 
                 "-b:v", str(plan.debit), *deux_passages]
     options = ["-c:v", "libx265", "-preset", "medium", "-pix_fmt", plan.format_des_pixels, "-b:v", str(plan.debit),
                "-x265-params", "log-level=error", *deux_passages]
+    if plan.dolby_vision:
+        # Dolby Vision repris de la source : FFmpeg passe à x265 les informations de chaque image
+        # (« -dolbyvision 1 »), et x265 demande une limite de débit (VBV, voir DEBIT_MAX_DOLBY_VISION).
+        options += [
+            "-dolbyvision", "1", "-maxrate", str(plan.debit * DEBIT_MAX_DOLBY_VISION),
+            "-bufsize", str(plan.debit * RESERVE_DOLBY_VISION),
+        ]
     if plan.conteneur in (MP4, MOV):
         options += ["-tag:v", "hvc1"]  # marqué « hvc1 » : lu par les iPhone et les Mac
     return options
@@ -288,8 +391,11 @@ def options_son(plan: PlanVideo) -> list[str]:
 def options_conteneur(plan: PlanVideo) -> list[str]:
     if plan.conteneur == MKV:
         return ["-f", "matroska"]
+    # Dolby Vision dans un MP4 : FFmpeg 9.0.2 n'écrit sa description (boîte « dvvC ») qu'avec
+    # « -strict unofficial » (code de FFmpeg, libavformat/movenc.c : la boîte n'est pas dans la norme MP4).
+    officieux = ["-strict", "unofficial"] if plan.dolby_vision and plan.conteneur == MP4 else []
     # « fast start » : l'index au début du fichier, la vidéo démarre avant d'être entièrement téléchargée.
-    return ["-movflags", "+faststart", "-f", "mp4" if plan.conteneur == MP4 else "mov"]
+    return [*officieux, "-movflags", "+faststart", "-f", "mp4" if plan.conteneur == MP4 else "mov"]
 
 
 def decalage_du_calque(images: ImagesDeLaVideo) -> list[str]:
@@ -325,12 +431,53 @@ def commande_video(ffmpeg: Path, plan: PlanVideo, calque: Path, passage: int, jo
 # --- Résumé avant export (§8.5) ----------------------------------------------------------------
 
 
+def texte_hdr(courbe: str, bits: int, dolby_vision: bool = False) -> str:
+    """« HDR (HLG), 10 bits », « HDR (HLG, Dolby Vision), 10 bits »."""
+    details = COURBES_HDR[courbe] + (", Dolby Vision" if dolby_vision else "")
+    return f"HDR ({details}), {bits} bits" if bits else f"HDR ({details})"
+
+
 def _couleurs_source(source: Source) -> str:
-    couleurs = source.analyse.couleurs if source.analyse is not None else None
+    analyse = source.analyse
+    couleurs = analyse.couleurs if analyse is not None else None
     if couleurs is None:
         return ""
-    texte = couleurs.texte()
+    texte = texte_hdr(couleurs.transfert, couleurs.bits, bool(analyse.dolby_vision)) if couleurs.hdr else couleurs.texte()
     return f"{texte} (plage complète)" if couleurs.plage == "pc" else texte
+
+
+def _couleurs_export(plan: PlanVideo) -> tuple[str, str]:
+    """Le texte des couleurs de l'export, et sa forme comparable à celle de la source (sans la norme
+    BT.709, que le texte de la source ne donne pas)."""
+    if plan.couleurs.hdr:
+        texte = texte_hdr(plan.couleurs.transfert, plan.bits, plan.dolby_vision)
+        return texte, texte
+    gamme = "SDR (BT.709)" if plan.couleurs.matrice == "bt709" else "SDR"
+    return f"{gamme}, {plan.bits} bits", f"SDR, {plan.bits} bits"
+
+
+def _dolby_vision(analyse: Analyse, plan: PlanVideo, resume: Resume) -> None:
+    """Dolby Vision : gardé (profil 8.4 des iPhone, en MP4 ou MKV avec H.265), sinon dit en orange ;
+    le profil 5 (plateformes de streaming) n'a pas d'image lisible sans Dolby Vision : erreur."""
+    profil = analyse.dolby_vision
+    if not profil or plan.dolby_vision or plan.couleurs.hdr_converti is not None:
+        return
+    if profil == "5":
+        resume.erreurs.append(
+            "Ta vidéo est en Dolby Vision sans image compatible (profil 5, celui des plateformes de streaming) : "
+            "ses couleurs ne peuvent pas être lues correctement, l'export est impossible."
+        )
+    elif profil == DOLBY_VISION_GARDE and plan.couleurs.hdr:
+        resume.avertissements.append(
+            "Dolby Vision n'est gardé qu'en MP4 ou en MKV, avec H.265 : en MOV, ta vidéo reste en HDR (HLG), "
+            "lue partout en HDR."
+        )
+    else:
+        gamme = f"HDR ({COURBES_HDR[plan.couleurs.transfert]})" if plan.couleurs.hdr else "SDR"
+        resume.avertissements.append(
+            f"Les informations Dolby Vision de ta vidéo (profil {profil}) ne sont pas gardées : elle reste en "
+            f"{gamme}, lue partout."
+        )
 
 
 def resume_video(source: Source, plan: PlanVideo | None, sous_titres: str, libre: int | None = None) -> Resume:
@@ -358,8 +505,7 @@ def resume_video(source: Source, plan: PlanVideo | None, sous_titres: str, libre
         if analyse.son.debit:
             son_source += f", {debit_lisible(analyse.son.debit)}"
     son_export = {SON_COPIE: "copié tel quel", SON_AAC: f"converti en AAC, {debit_lisible(DEBIT_AAC)}", None: "aucun"}[plan.son]
-    gamme = "SDR (BT.709)" if plan.couleurs.matrice == "bt709" else "SDR"
-    couleurs_export = f"{gamme}, {plan.bits} bits"
+    couleurs_export, comparable = _couleurs_export(plan)
     couleurs_source = _couleurs_source(source)
     resume.lignes = [
         LigneResume("Taille", f"{largeur} × {hauteur}", f"{plan.largeur} × {plan.hauteur}", False),
@@ -367,19 +513,12 @@ def resume_video(source: Source, plan: PlanVideo | None, sous_titres: str, libre
         LigneResume("Débit vidéo", debit_source, debit_export, images.debit is not None and plan.debit != images.debit),
         LigneResume("Format et codec", format_source, format_export, format_source != format_export),
         LigneResume("Son", son_source, son_export, plan.son == SON_AAC),
-        LigneResume(
-            "Couleurs", couleurs_source, couleurs_export,
-            bool(couleurs_source) and (couleurs_source != f"SDR, {plan.bits} bits"),
-        ),
+        LigneResume("Couleurs", couleurs_source, couleurs_export, bool(couleurs_source) and couleurs_source != comparable),
         LigneResume("Durée", duree_lisible(float(images.duree)), duree_lisible(plan.duree_s), False),
         LigneResume("Poids", poids_lisible(source.poids) if source.poids else "", f"≈ {poids_lisible(plan.poids_estime)}", False),
         LigneResume("Sous-titres", "", sous_titres, False),
     ]
-    if analyse.couleurs is not None and analyse.couleurs.hdr:
-        resume.erreurs.append(
-            "Ta vidéo est en HDR : la vidéo avec sous-titres en HDR arrive avec la version 3.0.0. En attendant, "
-            "exporte le calque transparent et pose-le sur ta vidéo dans Premiere Pro."
-        )
+    _dolby_vision(analyse, plan, resume)
     if plan.debit is not None and plan.debit <= 0:
         resume.erreurs.append("Donne un débit (en Mb/s).")
     if plan.conteneur == MKV:
@@ -389,7 +528,8 @@ def resume_video(source: Source, plan: PlanVideo | None, sous_titres: str, libre
             f"Poids estimé : {poids_lisible(plan.poids_estime)}, plus que la limite de TikTok (500 Mo). Choisis un "
             "débit plus bas, comme « Conseillé pour la publication »."
         )
-    if images.codec in CODECS_DE_MONTAGE and plan.debit is not None and images.debit and plan.debit > debit_conseille(largeur, hauteur, images.frequence) * 2:
+    conseille = debit_conseille(largeur, hauteur, images.frequence, plan.couleurs.hdr)
+    if images.codec in CODECS_DE_MONTAGE and plan.debit is not None and images.debit and plan.debit > conseille * 2:
         resume.avertissements.append(
             "Ta vidéo est dans un format de montage : à son débit, le fichier serait énorme. « Conseillé pour la "
             "publication » est plus adapté."
