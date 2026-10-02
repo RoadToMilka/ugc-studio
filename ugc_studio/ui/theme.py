@@ -121,9 +121,9 @@ class Hauteurs:
 
     CONTROLE = 36  # boutons et champs
     # Bandeau du haut (V3.1) : titre du module, « Conseils » et coût de la session ; le haut de la
-    # barre latérale (bouton du projet) a la même hauteur, et la même ligne dessous. 68 px : le
-    # bouton du projet (36 px) y tombe à 16 px du haut et du bas.
-    BANDEAU = 68
+    # barre latérale (bouton du projet) a la même hauteur, et la même ligne dessous. 69 px : 16 px,
+    # le bouton du projet (36 px), 16 px, puis la ligne de 1 px.
+    BANDEAU = 69
     PETIT_BOUTON = 28  # petits boutons (icônes)
     PASTILLE = 20  # pastilles d'information (ex. « Étape 2 »)
     CHOIX_LISTE = 32  # un choix dans une liste déroulante ouverte

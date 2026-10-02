@@ -125,8 +125,9 @@ def test_barre_laterale_plus_fine_avec_le_projet_en_haut(app_configuree, qtbot, 
     barre = fenetre.barre_laterale
     assert barre.width() == Dimensions.LARGEUR_BARRE_LATERALE == 200
     projet = barre.bouton_projet
-    # Le bouton du projet est centré dans une bande de la hauteur du bandeau (16 px au-dessus et dessous).
-    assert projet.mapTo(barre, QPoint(0, 0)).y() == (Hauteurs.BANDEAU - projet.height()) // 2 == 16
+    # Le bouton du projet est centré dans une bande de la hauteur du bandeau : 16 px au-dessus, 16 px
+    # dessous, puis la ligne (1 px) qui continue celle du bandeau.
+    assert projet.mapTo(barre, QPoint(0, 0)).y() == (Hauteurs.BANDEAU - Dimensions.BORDURE - projet.height()) // 2 == 16
     assert fenetre.entete.height() == Hauteurs.BANDEAU
     # Le premier module est à 16 px sous cette bande, comme le premier bloc de la page.
     premier = barre.boutons()[0]

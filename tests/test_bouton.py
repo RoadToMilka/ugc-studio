@@ -242,7 +242,8 @@ def test_bouton_du_projet(app_configuree, qtbot):
     qtbot.addWidget(barre)
     barre.show()
     projet = barre.bouton_projet
-    assert projet.width() == Dimensions.LARGEUR_BARRE_LATERALE - 2 * Espacements.M
+    # 12 px de chaque côté, dans la barre latérale (moins sa bordure de droite, 1 px).
+    assert projet.width() == Dimensions.LARGEUR_BARRE_LATERALE - Dimensions.BORDURE - 2 * Espacements.M
     assert projet.height() == Hauteurs.CONTROLE
     apparence = projet._apparence()
     assert apparence.fond is None and apparence.contour == qcolor(Couleurs.TEXTE_SECONDAIRE, Opacites.CONTOUR_BOUTON)
