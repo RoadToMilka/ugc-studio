@@ -11,6 +11,7 @@ from ugc_studio.sous_titres import (
     ReglagesSousTitres,
     caler_les_temps,
     creer_sous_titres,
+    decales,
     decouper,
     ecran,
     ecrire_srt,
@@ -254,3 +255,17 @@ def test_fichier_srt(tmp_path):
     assert brut.startswith(b"\xef\xbb\xbf")  # UTF-8 avec BOM, pour Premiere Pro
     assert "sérum".encode() in brut and b"\r\n" in brut and b"\r\r\n" not in brut
     assert srt([]) == ""
+
+
+def test_sous_titres_sur_le_temps_de_la_video():
+    """V3.1, lot 6 : la voix commence à 2 s dans la vidéo (« La voix commence à ») ; les exports
+    posent les sous-titres et leurs mots à ce moment de la vidéo. Sans décalage, rien ne change."""
+    mots = [Mot("Franchement,", 0.1, 0.7), Mot("ce", 0.8, 0.9), Mot("sérum", 0.9, 1.3)]
+    reglages = ReglagesSousTitres(caracteres_max=14, mots_max=3, lignes_max=1, duree_min_s=0.0)
+    affiches, sous_titres = creer_sous_titres(mots, reglages, "fr-FR", ECRAN, mesure)
+    decales_st, decales_mots = decales(sous_titres, affiches, 2.0)
+    assert [(s.debut, s.fin) for s in decales_st] == [(s.debut + 2.0, s.fin + 2.0) for s in sous_titres]
+    assert [(m.debut, m.texte) for m in decales_mots] == [(m.debut + 2.0, m.texte) for m in affiches]
+    assert [s.texte for s in decales_st] == [s.texte for s in sous_titres] and sous_titres[0].debut == 0.1  # copies
+    assert srt(decales_st).startswith("1\r\n00:00:02,100 --> ")
+    assert decales(sous_titres, affiches, 0.0) == (sous_titres, affiches)

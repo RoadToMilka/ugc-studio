@@ -203,7 +203,7 @@ def test_moins_de_phrases_d_aide_dans_l_app(app_configuree, qtbot, services, tmp
     sous_titres = fenetre.page("sous-titres").atelier
     assert _infos_visibles(sous_titres) == []
     assert sous_titres.cadre_frise.aide.text().startswith("Clic : aller à ce moment")
-    assert sous_titres.cadre_export.aide.text().startswith("Vidéo avec sous-titres : ta vidéo")
+    assert sous_titres.cadre_export.aide.text().startswith("Vidéo avec sous-titres : la vidéo de l'aperçu")
     assert sous_titres.titre_reorganiser.aide.text().startswith("Choisis un sous-titre dans la liste")
     # « Rétablir » : l'icône seule, au milieu des autres boutons ; même sens au survol, même menu.
     retablir = sous_titres.bouton_retablir

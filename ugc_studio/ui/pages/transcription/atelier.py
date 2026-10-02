@@ -7,7 +7,12 @@ puis corriger la transcription en l'écoutant.
    texte seul (mode « smart », sans les temps), dictionnaire de remplacements, hésitations.
 3. Transcription : texte mot par mot synchronisé avec la lecture ; clic sur un mot pour le
    choisir, le corriger sans perdre son timing, le fusionner, le couper, le supprimer ou ajuster
-   son début et sa fin.
+   son début et sa fin (composants/correcteur_mots.py, le même que la fenêtre « Corriger les mots »
+   des sous-titres importés, V3.1).
+
+V3.1 (lot 6) : la page Sous-titres peut importer ici une vidéo ou un audio, et la transcrire, avec
+les options choisies ici (importer, transcrire, et les signaux import_termine, transcription_terminee
+et infos_lues) : les deux modules montrent la même source.
 """
 
 from __future__ import annotations
@@ -16,14 +21,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QInputDialog,
-    QLineEdit,
     QMessageBox,
     QPlainTextEdit,
     QVBoxLayout,
@@ -34,9 +38,9 @@ from ....chemins import dossier_documents
 from ....fournisseurs.capacites import MODELES_CONNUS, Capacite, modele_connu, modeles_pour
 from ....fournisseurs.stt import MODE_SMART, MODE_VERBATIM
 from ....modeles_charges import TRANSCRIPTION
-from ....prix import lire_decimal
-from ....projets import FICHIER_AUDIO, LANGUES, Projet
+from ....projets import FICHIER_AUDIO, LANGUES, Projet, liberer_la_piste_son
 from ....services import Services
+from ....sources import mots_des_sous_titres
 from ....stt import (
     MODELE_PAR_DEFAUT,
     PREFERENCE_HESITATIONS,
@@ -49,20 +53,16 @@ from ....stt import (
 )
 from ....transcription import (
     Transcription,
-    ajuster,
     appliquer_remplacements,
-    corriger,
-    couper,
-    fusionner,
     fusionner_remplacements,
     index_au_temps,
     resolution_video,
-    supprimer,
 )
 from ... import taches
 from ...composants.bouton import BoutonOccupe
 from ...composants.choix_voix import choisir, propose
-from ...composants.editeur_transcription import EditeurTranscription, nom_de_personne
+from ...composants.correcteur_mots import CorrecteurDeMots
+from ...composants.editeur_transcription import nom_de_personne
 from ...composants.elements import (
     bloc,
     bouton,
@@ -149,6 +149,12 @@ class ZoneDepot(QFrame):
 
 
 class AtelierTranscription(Page):
+    # V3.1, lot 6 : la fin d'un import ou d'une transcription demandés depuis la page Sous-titres
+    # (message, rôle : « succes », « erreur »…).
+    import_termine = Signal(str, str)
+    transcription_terminee = Signal(str, str)
+    infos_lues = Signal()  # les informations de la source (taille de la vidéo…), arrivées après son import
+
     def __init__(self, services: Services):
         super().__init__(
             "Transcription",
@@ -255,15 +261,21 @@ class AtelierTranscription(Page):
         self.temps = libelle("0:00 / 0:00", "legende", retour_a_la_ligne=False)
         lecture.addWidget(self.temps)
         d.addLayout(lecture)
-        self.editeur = EditeurTranscription()
-        self.editeur.mot_clique.connect(self.choisir_mot)
-        d.addWidget(self.editeur)
+        # Le texte mot par mot et le mot choisi (composants/correcteur_mots.py).
+        self.correcteur = CorrecteurDeMots()
+        self.correcteur.mot_clique.connect(self.choisir_mot)
+        self.correcteur.corrige.connect(self._mots_corriges)
+        self.correcteur.refuse.connect(lambda raison: self._afficher(raison, "erreur"))
+        d.addWidget(self.correcteur)
+        correcteur = self.correcteur
+        self.editeur, self.panneau_mot, self.titre_mot = correcteur.editeur, correcteur.panneau, correcteur.titre_mot
+        self.champ_mot, self.champ_debut, self.champ_fin = correcteur.champ_mot, correcteur.champ_debut, correcteur.champ_fin
+        self.bouton_appliquer, self.bouton_fusionner = correcteur.bouton_appliquer, correcteur.bouton_fusionner
+        self.bouton_couper, self.bouton_supprimer = correcteur.bouton_couper, correcteur.bouton_supprimer
         self.texte_smart = QPlainTextEdit()
         self.texte_smart.setReadOnly(True)
         self.texte_smart.setMinimumHeight(Dimensions.EDITEUR_HAUTEUR_MIN)
         d.addWidget(self.texte_smart)
-        self.panneau_mot = self._panneau_mot()
-        d.addWidget(self.panneau_mot)
         copier = QHBoxLayout()
         copier.addWidget(bouton("Copier le texte", variante="contour", nom_icone="copy", action=self.copier_texte))
         copier.addStretch(1)
@@ -278,46 +290,10 @@ class AtelierTranscription(Page):
         self._remplir_modeles()
         self._projet_change(services.projets.projet)
 
-    def _panneau_mot(self) -> QFrame:
-        """« Mot choisi » : corriger son texte, ses temps ; fusionner, couper, supprimer."""
-        panneau = QFrame()
-        disposition = QVBoxLayout(panneau)
-        disposition.setContentsMargins(0, Espacements.S, 0, 0)
-        disposition.setSpacing(Espacements.S)
-        self.titre_mot = info("Clique sur un mot pour le corriger.")
-        disposition.addWidget(self.titre_mot)
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.S)
-        self.champ_mot = QLineEdit()
-        self.champ_mot.setPlaceholderText("Texte du mot")
-        self.champ_mot.returnPressed.connect(self.appliquer_mot)
-        ligne.addWidget(self.champ_mot, 1)
-        ligne.addWidget(libelle("Début", "legende", retour_a_la_ligne=False))
-        self.champ_debut = QLineEdit()
-        self.champ_debut.setFixedWidth(Dimensions.CHAMP_NOMBRE_LARGEUR)
-        self.champ_debut.setToolTip("Début du mot, en secondes (ex. 1.25)")
-        self.champ_debut.returnPressed.connect(self.appliquer_mot)
-        ligne.addWidget(self.champ_debut)
-        ligne.addWidget(libelle("Fin", "legende", retour_a_la_ligne=False))
-        self.champ_fin = QLineEdit()
-        self.champ_fin.setFixedWidth(Dimensions.CHAMP_NOMBRE_LARGEUR)
-        self.champ_fin.setToolTip("Fin du mot, en secondes")
-        self.champ_fin.returnPressed.connect(self.appliquer_mot)
-        ligne.addWidget(self.champ_fin)
-        self.bouton_appliquer = bouton("Appliquer", nom_icone="check", action=self.appliquer_mot)
-        ligne.addWidget(self.bouton_appliquer)
-        disposition.addLayout(ligne)
-        actions = QHBoxLayout()
-        actions.setSpacing(Espacements.S)
-        self.bouton_fusionner = bouton("Fusionner avec le suivant", variante="contour", nom_icone="list-plus", action=self.fusionner_mot)
-        actions.addWidget(self.bouton_fusionner)
-        self.bouton_couper = bouton("Couper en deux", variante="contour", nom_icone="scissors", action=self.couper_mot)
-        actions.addWidget(self.bouton_couper)
-        self.bouton_supprimer = bouton("Supprimer", variante="contour", nom_icone="trash", action=self.supprimer_mot)
-        actions.addWidget(self.bouton_supprimer)
-        actions.addStretch(1)
-        disposition.addLayout(actions)
-        return panneau
+    @property
+    def occupe(self) -> bool:
+        """Une extraction du son ou une transcription en cours (V3.1 : la page Sous-titres le sait)."""
+        return self._occupe
 
     # --- Projet ------------------------------------------------------------------------------
 
@@ -407,15 +383,15 @@ class AtelierTranscription(Page):
         self.cadre_transcription.setVisible(a_texte)
         if a_texte:
             horodatee = transcription.horodatee
-            self.editeur.setVisible(horodatee)
-            self.panneau_mot.setVisible(horodatee)
+            self.correcteur.setVisible(horodatee)
             self.texte_smart.setVisible(not horodatee)
             if horodatee:
-                self.editeur.afficher(transcription.mots, self._hesitations(), transcription.masquer_hesitations)
+                self.correcteur.afficher(
+                    transcription.mots, self._hesitations(), transcription.masquer_hesitations, transcription.duree_s or None
+                )
             else:
                 self.texte_smart.setPlainText(transcription.texte)
             self.resume.setText(self._resume(transcription))
-            self._mot_choisi_change()
         self.bouton_transcrire.setEnabled(a_source and (not self._occupe or self._bouton_occupe.est(self.bouton_transcrire)))
         self._etat_lecture()
         self._mettre_a_jour_estimation()
@@ -479,16 +455,19 @@ class AtelierTranscription(Page):
             evenement.acceptProposedAction()
             self.importer(fichiers[0])
 
-    def importer(self, chemin: Path) -> None:
-        """Nouvelle source : extraction de la piste son, lecture de ses informations."""
+    def importer(self, chemin: Path) -> bool:
+        """Nouvelle source : extraction de la piste son, lecture de ses informations. Renvoie True si
+        l'import commence (la fin arrive avec le signal import_termine)."""
         if self._projet is None or self._occupe:
-            return
+            return False
         if chemin.suffix.lower() not in EXTENSIONS_ACCEPTEES:
-            self._afficher(f"Format non pris en charge : {chemin.suffix or chemin.name}.", "erreur")
-            return
+            message = f"Format non pris en charge : {chemin.suffix or chemin.name}."
+            self._afficher(message, "erreur")
+            self.import_termine.emit(message, "erreur")
+            return False
         transcription = self.transcription
         if transcription and transcription.mots and not self._confirmer_remplacement():
-            return
+            return False
         self.lecteur.arreter()
         self._source_en_cours = chemin
         self._infos_en_attente = {}
@@ -498,6 +477,7 @@ class AtelierTranscription(Page):
         self._afficher(f"Extraction de la piste son de « {chemin.name} »…", "secondaire")
         self.extracteur.extraire(chemin)
         self.infos.lire(chemin)
+        return True
 
     def _confirmer_remplacement(self) -> bool:
         boite = QMessageBox(self.window())
@@ -528,9 +508,12 @@ class AtelierTranscription(Page):
         chemin = projet.chemin(FICHIER_AUDIO)
         try:
             chemin.parent.mkdir(parents=True, exist_ok=True)
+            liberer_la_piste_son(projet)  # des sous-titres importés d'avant la 3.1.0 gardent la leur
             chemin.write_bytes(wav)
         except OSError as erreur:
-            self._afficher(f"Piste son non enregistrée dans le projet : {erreur}", "erreur")
+            message = f"Piste son non enregistrée dans le projet : {erreur}"
+            self._afficher(message, "erreur")
+            self.import_termine.emit(message, "erreur")
             return
         duree = round(duree_wav(wav), 3)
         projet.transcription = Transcription(
@@ -545,12 +528,15 @@ class AtelierTranscription(Page):
         self.editeur.choisir(-1)
         self._afficher(f"Piste son prête ({minutes_secondes(duree)}) : clique sur « Transcrire ».", "succes")
         self.rafraichir()
+        self.import_termine.emit(f"« {source.name} » importée ({minutes_secondes(duree)}) : prête à être transcrite.", "succes")
 
     def _extraction_echouee(self, raison: str) -> None:
         self._occuper(False)
         nom = self._source_en_cours.name if self._source_en_cours else "ce fichier"
         self._source_en_cours = None
-        self._afficher(f"Impossible de lire la piste son de « {nom} » : {raison}.", "erreur")
+        message = f"Impossible de lire la piste son de « {nom} » : {raison}."
+        self._afficher(message, "erreur")
+        self.import_termine.emit(message, "erreur")
 
     def _infos_pretes(self, infos: dict) -> None:
         """Informations de la source (arrivent pendant ou après l'extraction)."""
@@ -560,10 +546,12 @@ class AtelierTranscription(Page):
             transcription.infos = infos
             self._services.projets.enregistrer()
             self.rafraichir()
+            self.infos_lues.emit()
         elif transcription and self._source_en_cours is not None and transcription.source == str(self._source_en_cours):
             transcription.infos = infos
             self._services.projets.enregistrer()
             self.rafraichir()
+            self.infos_lues.emit()  # la page Sous-titres suit (vidéo de l'aperçu, format)
 
     def _occuper(self, occupe: bool, bouton=None) -> None:
         """Pendant l'extraction de la piste son ou la transcription : le cercle tourne dans `bouton`
@@ -590,20 +578,21 @@ class AtelierTranscription(Page):
             FOURNISSEUR,
         )
 
-    def transcrire(self) -> None:
+    def transcrire(self) -> bool:
+        """Transcrit la source avec les options choisies ici. Renvoie True si la transcription
+        commence (la fin arrive avec le signal transcription_terminee)."""
         projet, transcription = self._projet, self.transcription
+        if self._occupe:
+            return False
         if projet is None or transcription is None or not transcription.audio:
-            self._afficher("Importe d'abord une vidéo ou un audio.", "erreur")
-            return
+            return self._refuser_la_transcription("Importe d'abord une vidéo ou un audio.")
         chemin = projet.chemin(transcription.audio)
         if not chemin.exists():
-            self._afficher("Piste son introuvable dans le dossier du projet : importe à nouveau la source.", "erreur")
-            return
+            return self._refuser_la_transcription("Piste son introuvable dans le dossier du projet : importe à nouveau la source.")
         try:
             adaptateur = adaptateur_par_defaut(self._services)
         except Exception as erreur:  # noqa: BLE001 — message clair affiché
-            self._afficher(message_erreur(erreur), "erreur")
-            return
+            return self._refuser_la_transcription(message_erreur(erreur))
         options = self.options()
         wav = chemin.read_bytes()
         self.lecteur.arreter()
@@ -617,19 +606,29 @@ class AtelierTranscription(Page):
             fini = terminer_transcription(self._services, transcription, options, resultat)
             self.editeur.choisir(-1)
             if options.mode == MODE_VERBATIM and not fini.mots:
-                self._afficher("Google n'a renvoyé aucun mot : la source est-elle silencieuse ?", "avertissement")
+                message, role = "Google n'a renvoyé aucun mot : la source est-elle silencieuse ?", "avertissement"
             elif options.mode == MODE_VERBATIM:
                 suite = f" (source coupée en {resultat.morceaux} morceaux)" if resultat.morceaux > 1 else ""
-                self._afficher(f"Transcription prête : {len(fini.mots)} mots{suite}.", "succes")
+                message, role = f"Transcription prête : {len(fini.mots)} mots{suite}.", "succes"
             else:
-                self._afficher("Texte prêt (mode « smart », sans le moment de chaque mot).", "succes")
+                message, role = "Texte prêt (mode « smart », sans le moment de chaque mot).", "succes"
+            self._afficher(message, role)
             self.rafraichir()
+            self.transcription_terminee.emit(message, role)
 
         def echec(erreur: Exception) -> None:
             self._occuper(False)
-            self._afficher(f"Transcription impossible : {message_erreur(erreur)}", "erreur")
+            message = f"Transcription impossible : {message_erreur(erreur)}"
+            self._afficher(message, "erreur")
+            self.transcription_terminee.emit(message, "erreur")
 
         taches.lancer(lambda: transcrire_source(adaptateur, wav, options, projet.nom), fin, echec)
+        return True
+
+    def _refuser_la_transcription(self, message: str) -> bool:
+        self._afficher(message, "erreur")
+        self.transcription_terminee.emit(message, "erreur")
+        return False
 
     # --- Options qui s'appliquent tout de suite ------------------------------------------------
 
@@ -638,8 +637,10 @@ class AtelierTranscription(Page):
         if transcription is None:
             return
         # Même réglage que dans la page Sous-titres : s'il défait un sous-titre réorganisé à la
-        # main, la même question est posée (V1.1).
-        if not confirmer_reglage(self.window(), self._services, self._projet, masquer=masquer):
+        # main, la même question est posée (V1.1) ; seulement quand les sous-titres sont faits de ces
+        # mots (V3.1 : ils peuvent venir de mots importés).
+        concerne = mots_des_sous_titres(self._projet) is transcription
+        if concerne and not confirmer_reglage(self.window(), self._services, self._projet, masquer=masquer):
             self.masquer.blockSignals(True)  # « Garder le réglage actuel »
             self.masquer.setChecked(not masquer)
             self.masquer.blockSignals(False)
@@ -723,15 +724,14 @@ class AtelierTranscription(Page):
         if transcription and transcription.mots:
             self.editeur.mettre_en_lecture(index_au_temps(transcription.mots, position_ms / 1000))
 
-    # --- Mot choisi (§6.4) ---------------------------------------------------------------------
+    # --- Mot choisi (§6.4, composants/correcteur_mots.py) ---------------------------------------
 
     def choisir_mot(self, index: int) -> None:
         """Clic sur un mot : il est choisi pour être corrigé ; la lecture se place à ce moment."""
         transcription = self.transcription
         if transcription is None or not 0 <= index < len(transcription.mots):
             return
-        self.editeur.choisir(index)
-        self._mot_choisi_change()
+        self.correcteur.choisir(index)
         chemin = self._chemin_audio()
         if chemin is not None and self.lecteur.chemin == str(chemin):
             self.lecteur.aller_a(round(transcription.mots[index].debut * 1000))
@@ -747,67 +747,26 @@ class AtelierTranscription(Page):
         index = next((i for i, mot in enumerate(mots) if mot.debut >= temps - MEME_MOMENT_S), len(mots) - 1)
         self.choisir_mot(index)
 
-    def _mot_choisi_change(self) -> None:
+    def _mots_corriges(self, message: str) -> None:
+        """Une correction faite dans le texte : enregistrée, puis réaffichée."""
         transcription = self.transcription
-        index = self.editeur.mot_choisi
-        valide = transcription is not None and 0 <= index < len(transcription.mots)
-        for element in (self.champ_mot, self.champ_debut, self.champ_fin, self.bouton_appliquer, self.bouton_couper, self.bouton_supprimer):
-            element.setEnabled(valide)
-        self.bouton_fusionner.setEnabled(valide and index < len(transcription.mots) - 1)
-        if not valide:
-            self.titre_mot.setText("Clique sur un mot pour le corriger (son moment dans l'audio est gardé).")
-            for champ in (self.champ_mot, self.champ_debut, self.champ_fin):
-                champ.clear()
-            return
-        mot = transcription.mots[index]
-        personne = f" · {nom_de_personne(mot.locuteur)}" if mot.locuteur else ""
-        self.titre_mot.afficher_etat(f"Mot {index + 1} sur {len(transcription.mots)}{personne}")  # donnée : sans ampoule
-        self.champ_mot.setText(mot.texte)
-        self.champ_debut.setText(f"{mot.debut:.2f}")
-        self.champ_fin.setText(f"{mot.fin:.2f}")
-
-    def _modifier(self, action, message: str, choisi: int | None = None) -> None:
-        """Applique une correction aux mots, enregistre, puis réaffiche."""
-        transcription = self.transcription
-        try:
-            action(transcription.mots)
-        except ValueError as erreur:
-            self._afficher(str(erreur), "erreur")
-            return
+        if transcription is not None:
+            transcription.corrigee = True
         self._services.projets.enregistrer()
-        self.editeur.choisir(-1 if choisi is None else min(choisi, len(transcription.mots) - 1))
         self._afficher(message, "succes")
         self.rafraichir()
 
     def appliquer_mot(self) -> None:
-        index = self.editeur.mot_choisi
-        transcription = self.transcription
-        if transcription is None or not 0 <= index < len(transcription.mots):
-            return
-        try:
-            debut = float(lire_decimal(self.champ_debut.text()))
-            fin = float(lire_decimal(self.champ_fin.text()))
-        except ValueError:
-            self._afficher("Début et fin : des secondes, ex. 1.25", "erreur")
-            return
-
-        def action(mots) -> None:
-            corriger(mots, index, self.champ_mot.text())
-            ajuster(mots, index, debut, fin, transcription.duree_s or None)
-
-        self._modifier(action, "Mot corrigé.", index)
+        self.correcteur.appliquer_mot()
 
     def fusionner_mot(self) -> None:
-        index = self.editeur.mot_choisi
-        self._modifier(lambda mots: fusionner(mots, index), "Mots fusionnés : corrige le texte si besoin.", index)
+        self.correcteur.fusionner_mot()
 
     def couper_mot(self) -> None:
-        index = self.editeur.mot_choisi
-        self._modifier(lambda mots: couper(mots, index), "Mot coupé en deux.", index)
+        self.correcteur.couper_mot()
 
     def supprimer_mot(self) -> None:
-        index = self.editeur.mot_choisi
-        self._modifier(lambda mots: supprimer(mots, index), "Mot supprimé.", index)
+        self.correcteur.supprimer_mot()
 
     def copier_texte(self) -> None:
         transcription = self.transcription

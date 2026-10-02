@@ -9,7 +9,8 @@ Le principe (document V3, §6) : le calque des sous-titres (lot 1) est posé sur
    en deux passages pour H.264 et H.265 (le premier analyse la vidéo, le second répartit le débit
    là où il sert), en un seul pour le ProRes (format de montage, sans débit à choisir).
 3. Le son est copié tel quel quand le conteneur choisi l'accepte ; sinon, il est converti en AAC à
-   320 kb/s (signalé en mauve dans le résumé).
+   320 kb/s (signalé en mauve dans le résumé). V3.1 (lot 6) : sous une vidéo importée muette, c'est
+   la voix des sous-titres (une prise), placée au moment où elle commence dans la vidéo, en AAC.
 
 Chaque image de la vidéo garde son moment exact : FFmpeg ne change ni n'ajoute aucune image
 (« -fps_mode passthrough »), et écrit les moments dans l'unité de temps de la vidéo elle-même
@@ -97,6 +98,9 @@ SONS_COPIABLES = {
     MKV: {"aac", "mp3", "ac3", "eac3", "alac", "opus", "vorbis", "flac", "pcm_s16le", "pcm_s24le", "pcm_s32le", "pcm_f32le"},
 }
 SON_COPIE, SON_AAC = "copie", "aac"
+# V3.1, lot 6 : sous une vidéo importée muette (« Son de la vidéo » décoché), la voix des sous-titres
+# (une prise), placée au moment où elle commence dans la vidéo, et convertie en AAC.
+SON_VOIX = "voix"
 
 # Normes de couleurs que la conversion des sous-titres sait suivre : nom donné par FFmpeg en lisant la
 # vidéo → nom attendu par son filtre « scale » (out_color_matrix).
@@ -233,6 +237,8 @@ class PlanVideo:
     bits: int  # 8 ou 10
     sortie: Path
     dolby_vision: bool = False  # informations Dolby Vision de la source reprises (profil 8.4)
+    voix: Path | None = None  # SON_VOIX : la piste son des sous-titres (une prise)
+    decalage_voix: float = 0.0  # … qui commence à ce moment de la vidéo (secondes)
 
     @property
     def en_cours(self) -> Path:
@@ -300,9 +306,11 @@ def plan_video(
     else:
         debit = debit_conseille(largeur, hauteur, images.frequence, couleurs.hdr)
     son = son_de_l_export(conteneur, analyse.son.codec if analyse.son is not None else None)
+    if source.voix is not None:
+        son = SON_VOIX  # la voix des sous-titres, sous la vidéo muette
     if son == SON_COPIE:
         debit_son = analyse.son.debit
-    elif son == SON_AAC:
+    elif son in (SON_AAC, SON_VOIX):
         debit_son = DEBIT_AAC
     else:
         debit_son = None
@@ -316,7 +324,7 @@ def plan_video(
     )
     return PlanVideo(
         source.chemin, largeur, hauteur, images, conteneur, codec, debit, son, debit_son,
-        couleurs, bits, sortie, dolby_vision,
+        couleurs, bits, sortie, dolby_vision, source.voix if son == SON_VOIX else None, source.decalage_s,
     )
 
 
@@ -404,6 +412,15 @@ def options_son(plan: PlanVideo) -> list[str]:
         return ["-map", "0:a:0", "-c:a", "copy"]
     if plan.son == SON_AAC:
         return ["-map", "0:a:0", "-c:a", "aac", "-b:a", str(DEBIT_AAC)]
+    if plan.son == SON_VOIX:
+        # La voix (3e entrée) : précédée du silence qui la place au bon moment (adelay), puis
+        # prolongée de silence (apad) ; « -shortest » arrête le fichier avec la dernière image de la
+        # vidéo, que la voix finisse avant ou après elle.
+        retard = round(plan.decalage_voix * 1000)
+        return [
+            "-map", "2:a:0", "-filter:a", f"adelay=delays={retard}:all=1,apad",
+            "-c:a", "aac", "-b:a", str(DEBIT_AAC), "-shortest",
+        ]
     return ["-an"]
 
 
@@ -437,6 +454,7 @@ def commande_video(ffmpeg: Path, plan: PlanVideo, calque: Path, passage: int, jo
         str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-y",
         "-progress", "pipe:1", "-stats_period", PERIODE_DES_NOUVELLES_S,
         "-i", str(plan.source), *decalage_du_calque(plan.images), "-i", str(calque),
+        *(["-i", str(plan.voix)] if plan.son == SON_VOIX and dernier else []),
         "-filter_complex", graphe_de_filtres(plan), "-map", "[sortie]",
         *(options_son(plan) if dernier else ["-an"]),
         "-fps_mode", "passthrough", "-enc_time_base:v", "demux",
@@ -523,7 +541,12 @@ def resume_video(source: Source, plan: PlanVideo | None, sous_titres: str, libre
         son_source = source.codec_audio or analyse.son.codec
         if analyse.son.debit:
             son_source += f", {debit_lisible(analyse.son.debit)}"
-    son_export = {SON_COPIE: "copié tel quel", SON_AAC: f"converti en AAC, {debit_lisible(DEBIT_AAC)}", None: "aucun"}[plan.son]
+    son_export = {
+        SON_COPIE: "copié tel quel",
+        SON_AAC: f"converti en AAC, {debit_lisible(DEBIT_AAC)}",
+        SON_VOIX: f"voix des sous-titres, en AAC, {debit_lisible(DEBIT_AAC)}",
+        None: "aucun",
+    }[plan.son]
     couleurs_export, comparable = _couleurs_export(plan)
     couleurs_source = _couleurs_source(source)
     resume.lignes = [
@@ -531,7 +554,7 @@ def resume_video(source: Source, plan: PlanVideo | None, sous_titres: str, libre
         LigneResume("Images par seconde", frequence, frequence if images.constante else f"{frequence}, gardée", False),
         LigneResume("Débit vidéo", debit_source, debit_export, images.debit is not None and plan.debit != images.debit),
         LigneResume("Format et codec", format_source, format_export, format_source != format_export),
-        LigneResume("Son", son_source, son_export, plan.son == SON_AAC),
+        LigneResume("Son", son_source, son_export, plan.son in (SON_AAC, SON_VOIX)),
         LigneResume("Couleurs", couleurs_source, couleurs_export, bool(couleurs_source) and couleurs_source != comparable),
         LigneResume("Durée", duree_lisible(float(images.duree)), duree_lisible(plan.duree_s), False),
         LigneResume("Poids", poids_lisible(source.poids) if source.poids else "", f"≈ {poids_lisible(plan.poids_estime)}", False),

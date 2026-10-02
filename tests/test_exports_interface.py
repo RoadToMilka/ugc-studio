@@ -13,7 +13,7 @@ import pytest
 
 from ugc_studio.exports.ffmpeg import analyser, commande_lire_une_image, executer, programme_ffmpeg
 from ugc_studio.exports.plan import DOSSIER_AUTRE, DOSSIER_PROJET, SousTitresAExporter
-from ugc_studio.projets import FICHIER_AUDIO
+from ugc_studio.sources import SOURCE_IMPORTEE
 from ugc_studio.sous_titres import FORMAT_PERSONNALISE, ReglagesSousTitres, calculer_sous_titres, ecran
 from ugc_studio.style_sous_titres import AnimationMot, Animations, Couleur, Lueur, Ombre, StyleTexte
 from ugc_studio.transcription import Mot, Transcription
@@ -130,9 +130,11 @@ def test_images_du_calque(app_configuree):
 def projet_prise(services, tmp_path):
     projet = services.projets.creer("Voix Glowzy", tmp_path / "projets")
     projet.sous_titres = _reglages()
-    projet.transcription = Transcription(
-        source="Prise 1", audio=FICHIER_AUDIO, duree_s=2.0, prise="prise-001", mots=[Mot(t, d, f) for t, d, f in MOTS]
+    # Des mots importés (V3.1, lot 6), choisis : ceux d'une prise de voix.
+    projet.sous_titres_importes = Transcription(
+        source="Prise 1", audio="prises/prise-001.wav", duree_s=2.0, prise="prise-001", mots=[Mot(t, d, f) for t, d, f in MOTS]
     )
+    projet.sources.sous_titres = SOURCE_IMPORTEE
     services.projets.enregistrer()
     return projet
 
@@ -253,7 +255,7 @@ def test_export_du_calque_puis_relu(app_configuree, qtbot, services, projet_pris
 @avec_ffmpeg
 def test_arreter_le_calque(app_configuree, qtbot, services, projet_prise):
     """« Arrêter » : rien n'est gardé, ni le fichier, ni son nom provisoire."""
-    projet_prise.transcription.duree_s = 120.0  # 3 600 images : le temps d'arrêter
+    projet_prise.sous_titres_importes.duree_s = 120.0  # 3 600 images : le temps d'arrêter
     dialogue = _dialogue(services, projet_prise, qtbot)
     plan = dialogue.plan()
     dialogue.exporter()
@@ -266,7 +268,7 @@ def test_arreter_le_calque(app_configuree, qtbot, services, projet_prise):
 def test_fermer_pendant_l_export_l_arrete(app_configuree, qtbot, services, projet_prise):
     if FFMPEG is None:
         pytest.skip("FFmpeg absent de cet ordinateur")
-    projet_prise.transcription.duree_s = 120.0
+    projet_prise.sous_titres_importes.duree_s = 120.0
     dialogue = _dialogue(services, projet_prise, qtbot)
     plan = dialogue.plan()
     dialogue.exporter()

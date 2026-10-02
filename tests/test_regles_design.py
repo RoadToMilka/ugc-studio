@@ -243,7 +243,8 @@ def test_les_phrases_d_aide_sont_des_infos():
 INFOS_VISIBLES_PERMISES = {
     "ui/composants/elements.py": 1,  # la fonction info() elle-même
     "ui/galerie.py": 1,  # la galerie des composants
-    "ui/pages/transcription/atelier.py": 2,  # quoi déposer ; cliquer sur un mot pour le corriger
+    "ui/pages/transcription/atelier.py": 1,  # quoi déposer
+    "ui/composants/correcteur_mots.py": 1,  # cliquer sur un mot pour le corriger (V3.1 : aussi pour les mots importés)
     "ui/pages/script/formulaire.py": 1,  # passer la langue du projet ? (une question)
     "ui/pages/script/produit.py": 2,  # état de la page lue (une donnée) ; noms à faire prononcer
     "ui/pages/script/resultats.py": 2,  # cocher les accroches ; étiquette « IA » de TikTok

@@ -12,6 +12,9 @@ qui dessine l'aperçu ; le format est celui de la vidéo du projet, ou de la vid
 pour l'aperçu, sinon celui choisi.
 V2, lot 5 : sous-titres d'une prise, avec l'état « Accentués » : les mots accentués de son script
 sont repérés (alignement.marquer_les_accentues).
+V3.1, lot 6 : les mots sont ceux de la source choisie (module Transcription, ou mots importés : voir
+sources.py), et le format celui de la vidéo de l'aperçu (celle du module Transcription, ou la vidéo
+importée).
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from ..alignement import marquer_les_accentues
 from ..projets import Projet
 from ..rendu.moteur import Moteur
 from ..services import Services
+from ..sources import SOURCE_IMPORTEE, a_une_video, mots_des_sous_titres
 from ..sous_titres import (
     Ajustement,
     Decoupage,
@@ -53,26 +57,15 @@ class Calcul:
     moteur: Moteur | None = None
 
 
-def a_sa_video(transcription: Transcription | None) -> bool:
-    """Le projet a-t-il sa propre vidéo (transcrite dans le module Transcription) ? Sinon (prise de
-    voix, audio importé), une vidéo peut être choisie seulement pour l'aperçu."""
-    if transcription is None or transcription.prise:
-        return False
-    infos = transcription.infos or {}
-    return bool(infos.get("video")) or resolution_video(infos) is not None
-
-
-def video_du_projet(projet: Projet) -> tuple[int, int] | None:
-    """Résolution de la vidéo transcrite dans le projet (None : pas de vidéo, ex. une prise de voix)."""
-    transcription = projet.transcription
-    return resolution_video(transcription.infos) if a_sa_video(transcription) else None
-
-
 def resolution_imposee(projet: Projet, reglages: ReglagesSousTitres | None = None) -> tuple[int, int] | None:
-    """Résolution qu'impose une vidéo (§7.1) : celle du projet, sinon celle choisie seulement pour
-    l'aperçu. None : le format choisi s'applique."""
+    """Résolution qu'impose la vidéo de l'aperçu (§7.1) : celle du module Transcription, ou la vidéo
+    importée, selon le choix de l'onglet « Vidéo ou audio » (V3.1). None : pas de vidéo, le format
+    choisi s'applique. `reglages` : ceux à essayer (ex. une nouvelle vidéo importée)."""
     reglages = reglages if reglages is not None else projet.sous_titres
-    return video_du_projet(projet) or reglages.apercu.resolution
+    if projet.sources.video == SOURCE_IMPORTEE:
+        return reglages.apercu.resolution
+    transcription = projet.transcription
+    return resolution_video(transcription.infos) if a_une_video(transcription) else None
 
 
 def script_de_la_prise(projet: Projet, transcription: Transcription | None) -> list[dict] | None:
@@ -104,7 +97,7 @@ def calculer(
     masquer: bool | None = None,
 ) -> Calcul:
     """Sous-titres du projet, avec ses réglages (ou ceux donnés, pour essayer un nouveau réglage)."""
-    transcription = projet.transcription
+    transcription = mots_des_sous_titres(projet)
     reglages = reglages if reglages is not None else projet.sous_titres
     if masquer is None:
         masquer = transcription.masquer_hesitations if transcription is not None else True
@@ -139,7 +132,7 @@ def ajustements_defaits_par(
 ) -> list[tuple[int, str, Ajustement, tuple]]:
     """Ajustements faits à la main que ce nouveau réglage défait : (numéro du sous-titre
     aujourd'hui, son texte aujourd'hui, ajustement, raisons)."""
-    transcription = projet.transcription
+    transcription = mots_des_sous_titres(projet)
     if transcription is None or not transcription.ajustements_sous_titres:
         return []
     actuel = calculer(services, projet).decoupage
@@ -201,6 +194,6 @@ def confirmer_reglage(
     if not demander(parent, texte, len(concernes) > 1):
         return False
     retires = {ajustement for _n, _t, ajustement, _r in concernes}
-    transcription = projet.transcription
+    transcription = mots_des_sous_titres(projet)
     ranger_ajustements(transcription, [a for a in ajustements(transcription) if a not in retires])
     return True

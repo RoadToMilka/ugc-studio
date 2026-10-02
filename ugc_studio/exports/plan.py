@@ -4,9 +4,11 @@ résumé avant export (source et export côte à côte).
 Rien ici ne dépend de l'interface : la fenêtre d'export (ui/dialogues/export.py) affiche ce que ces
 fonctions calculent, et les tests les vérifient seules.
 
-- Source : la vidéo (ou l'audio) importée dans le module Transcription, ou la prise de voix des
-  sous-titres. Ses informations viennent de Qt (lues à l'import : taille, rotation, codecs, débits,
-  HDR) et de FFmpeg (analyse.py : moment exact de chaque image, vrais débits, nom exact des codecs).
+- Source : la vidéo de l'aperçu (V3.1, lot 6 : celle du module Transcription, ou la vidéo importée
+  dans la page Sous-titres) ; sans vidéo, l'audio du module Transcription, ou les mots importés
+  (prise de voix, fichier SRT). Ses informations viennent de Qt (lues à l'import : taille, rotation,
+  codecs, débits, HDR) et de FFmpeg (analyse.py : moment exact de chaque image, vrais débits, nom
+  exact des codecs).
 - Dossier (décision du 02/10/2026) : celui de la vidéo source, celui du projet, ou un autre.
 - Nom proposé : celui de la vidéo (ou du projet), suivi de « (calque) » : « Sérum Glowzy (calque).mov ».
 """
@@ -18,7 +20,9 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
 
+from ..import_srt import est_srt
 from ..projets import Projet, nom_de_dossier
+from ..sources import audio_des_mots, decalage_des_mots, mots_des_sous_titres, video_de_l_apercu
 from ..transcription import resolution_video
 from .cadence import (
     FREQUENCE_SANS_VIDEO,
@@ -77,7 +81,7 @@ def nom_du_codec(code: str) -> str:
 class Source:
     """Ce que l'on sait de la source des sous-titres."""
 
-    chemin: Path | None  # fichier importé (vidéo ou audio) ; None : prise de voix (dans le projet)
+    chemin: Path | None  # fichier importé (vidéo ou audio) ; None : prise de voix ou fichier SRT
     video: bool  # la source a une image
     largeur: int | None = None  # telle qu'on la voit (vidéo de téléphone « couchée » remise debout)
     hauteur: int | None = None
@@ -94,16 +98,17 @@ class Source:
     hdr: bool | None = None
     couleurs: CouleursDeLaVideo | None = None  # lues par FFmpeg (format des pixels, norme, HDR)
     prise: bool = False  # sous-titres d'une prise de voix
-    video_d_apercu: Path | None = None  # projet sans vidéo : celle choisie pour l'aperçu
     debut: Fraction = Fraction(0)  # moment de la première image (0 le plus souvent), lu par FFmpeg
     analyse: Analyse | None = None  # tout ce que FFmpeg a lu (vidéo avec sous-titres, lot 2)
+    # V3.1, lot 6 : les mots viennent d'un autre enregistrement que la vidéo (ex. les sous-titres d'une
+    # prise sur le montage) ; ils commencent à ce moment de la vidéo (« La voix commence à »).
+    decalage_s: float = 0.0
+    voix: Path | None = None  # sous la vidéo importée, muette : la piste son des mots (une prise)
 
     @property
     def dossier(self) -> Path | None:
-        """Dossier de la vidéo (ou de l'audio) importée ; sinon celui de la vidéo d'aperçu."""
-        if self.chemin is not None:
-            return self.chemin.parent
-        return self.video_d_apercu.parent if self.video_d_apercu is not None else None
+        """Dossier de la vidéo (ou de l'audio) importée."""
+        return self.chemin.parent if self.chemin is not None else None
 
 
 def _entier(valeur) -> int | None:
@@ -115,34 +120,49 @@ def _entier(valeur) -> int | None:
 
 
 def source_du_projet(projet: Projet, analyse: Analyse | None = None) -> Source:
-    """La source des sous-titres du projet : la vidéo ou l'audio importés (infos lues par Qt à
-    l'import, complétées par l'analyse de FFmpeg), ou la prise de voix."""
+    """La source des sous-titres du projet (V3.1, lot 6, sources.py) : la vidéo de l'aperçu (celle du
+    module Transcription, ou la vidéo importée) ; sans vidéo, l'audio du module Transcription, ou les
+    mots importés (prise de voix, fichier SRT). Infos lues par Qt à l'import, complétées par
+    l'analyse de FFmpeg."""
+    video = video_de_l_apercu(projet)
+    mots = mots_des_sous_titres(projet)
+    prise = mots is not None and bool(mots.prise)
     transcription = projet.transcription
-    apercu = projet.sous_titres.apercu
-    video_d_apercu = Path(apercu.chemin) if apercu.chemin else None
-    if transcription is None or transcription.prise or not transcription.source:
-        duree = transcription.duree_s if transcription is not None else 0.0
-        return Source(None, False, duree_s=duree or 0.0, format="WAV", codec_audio="PCM (non compressé)",
-                      prise=transcription is not None and bool(transcription.prise), video_d_apercu=video_d_apercu)
-    infos = transcription.infos or {}
-    chemin = Path(transcription.source)
+    audio_du_module = mots is transcription and transcription is not None and bool(transcription.source) and not prise
+    if video is not None and video.importee:
+        infos = {"video": True, "resolution": list(video.resolution) if video.resolution else None}
+        chemin, duree = Path(video.chemin), 0.0  # la durée vient de l'analyse de FFmpeg
+    elif video is not None or audio_du_module:
+        infos, chemin, duree = transcription.infos or {}, Path(transcription.source), transcription.duree_s
+    else:
+        srt = est_srt(mots)
+        return Source(
+            None, False, duree_s=mots.duree_s if mots is not None else 0.0, format="SRT" if srt else "WAV",
+            codec_audio="" if srt else "PCM (non compressé)", prise=prise,
+        )
     resolution = resolution_video(infos)
-    video = bool(infos.get("video")) or resolution is not None
+    est_video = bool(infos.get("video")) or resolution is not None
     format_ = NOMS_FORMATS.get(str(infos.get("format", "")), "") or chemin.suffix.lstrip(".").upper()
+    # Sous la vidéo importée, muette : la voix des mots (une prise), si son fichier est là (sinon, le
+    # son de la vidéo reste).
+    voix = audio_des_mots(projet) if video is not None and video.importee and not video.son_de_la_video else None
     source = Source(
         chemin=chemin,
-        video=video,
+        video=est_video,
         largeur=resolution[0] if resolution else None,
         hauteur=resolution[1] if resolution else None,
-        frequence=frequence_exacte(infos.get("images_par_seconde")) if video else None,
-        duree_s=float(infos.get("duree_s") or transcription.duree_s or 0.0),
+        frequence=frequence_exacte(infos.get("images_par_seconde")) if est_video else None,
+        duree_s=float(infos.get("duree_s") or duree or 0.0),
         format=format_,
-        codec_video=nom_du_codec(str(infos.get("codec_video", ""))) if video else "",
-        debit_video=_entier(infos.get("debit_video")) if video else None,
+        codec_video=nom_du_codec(str(infos.get("codec_video", ""))) if est_video else "",
+        debit_video=_entier(infos.get("debit_video")) if est_video else None,
         codec_audio=nom_du_codec(str(infos.get("codec_audio", ""))),
         debit_audio=_entier(infos.get("debit_audio")),
         poids=chemin.stat().st_size if chemin.is_file() else None,
         hdr=bool(infos["hdr"]) if "hdr" in infos else None,
+        prise=prise,
+        decalage_s=decalage_des_mots(projet),
+        voix=voix if voix is not None and voix.is_file() else None,
     )
     if analyse is None:
         return source
@@ -150,7 +170,7 @@ def source_du_projet(projet: Projet, analyse: Analyse | None = None) -> Source:
     # moment exact de chaque image).
     images, son = analyse.images, analyse.son
     source = replace(source, analyse=analyse)
-    if images is not None and video:
+    if images is not None and source.video:
         source = replace(
             source,
             frequence=images.frequence,
@@ -165,7 +185,7 @@ def source_du_projet(projet: Projet, analyse: Analyse | None = None) -> Source:
         source = replace(source, codec_audio=nom_du_codec(son.codec) or source.codec_audio, debit_audio=son.debit or source.debit_audio)
     elif analyse.images is not None:
         source = replace(source, codec_audio="")  # vidéo sans son
-    if analyse.couleurs is not None and video:
+    if analyse.couleurs is not None and source.video:
         source = replace(source, couleurs=analyse.couleurs, hdr=analyse.couleurs.hdr)
     return source
 

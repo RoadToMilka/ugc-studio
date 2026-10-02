@@ -88,6 +88,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "liste_deroulante",
     "aides_v31",
     "disposition_studio",
+    "zone_source",
 )
 ELEMENTS_SIGNALES_MAX = 6
 # V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
@@ -106,7 +107,7 @@ PHRASES_INDISPENSABLES = (
     "Voix générée par l'IA : active l'étiquette",
     "Un projet regroupe",
     "Pipette : clique dans l'aperçu",
-    "Vidéo avec sous-titres : seulement",
+    "Vidéo avec sous-titres : il faut une vidéo",
     "Ces sous-titres ne viennent pas d'une prise",
     "Le format suit la vidéo",
     "Taux de départ, à vérifier",
@@ -1644,6 +1645,176 @@ def _video_hdr(atelier, capturer, capturer_image, rapport: dict) -> bool:
     return all(etat.values())
 
 
+def _zone_source(fenetre, atelier, capturer, rapport: dict) -> bool:
+    """V3.1, lot 6 : la zone « Source » de la page Sous-titres (§7.14).
+
+    - Au départ (projet de démonstration) : la vidéo et les mots du module Transcription, et la ligne
+      qui dit d'où viennent les mots.
+    - Les sous-titres de démonstration, enregistrés en fichier SRT puis importés : ils deviennent les
+      mots importés, choisis (autant de sous-titres), le module Transcription garde les siens, et « La
+      voix commence à » s'affiche (la vidéo du module, des mots d'un autre enregistrement). La fenêtre
+      « Corriger les mots » s'ouvre sur le mot demandé (sans lecture : un fichier SRT n'a pas de son).
+    - Les mots d'une prise sous la vidéo de démonstration importée, muette, la voix commençant à 1 s :
+      la fenêtre d'export prévoit la voix de la prise ; la vidéo exportée a un son AAC, silencieux
+      avant 1 s, avec la voix ensuite, qui s'arrête avec la dernière image.
+    - Retour aux sources du départ : les mêmes sous-titres qu'avant, rien de perdu."""
+    import tempfile
+    from array import array
+    from dataclasses import replace
+
+    from .exports.ffmpeg import analyser, executer, programme_ffmpeg
+    from .exports.video import SON_VOIX
+    from .sources import SOURCE_IMPORTEE, SOURCE_TRANSCRIPTION, ChoixDesSources
+    from .sous_titres import ecrire_srt
+    from .style_sous_titres import VideoApercu
+    from .transcription import Transcription, resolution_video
+    from .ui.pages.sous_titres.source import ONGLET_MOTS, ONGLET_VIDEO
+
+    projet, source = atelier._projet, atelier.source
+    page = atelier.defilement.verticalScrollBar()
+    atelier.rafraichir()  # la page telle que la voit l'utilisateur (après les exports vidéo)
+    page.setValue(0)
+    module = projet.transcription
+    depart = [s.texte for s in atelier.sous_titres]
+    etat: dict = {
+        "depart_du_module": projet.sources == ChoixDesSources()
+        and source.texte_mots.text().startswith("Les sous-titres viennent de la transcription de"),
+    }
+    mesures: dict = {"mots": source.texte_mots.text(), "video": source.texte_video.text()}
+    debordements: list[str] = []
+    try:
+        capturer(fenetre, "source-module")
+        source.onglets.setCurrentIndex(ONGLET_VIDEO)
+        capturer(fenetre, "source-module-video")
+        source.onglets.setCurrentIndex(ONGLET_MOTS)
+
+        # Les sous-titres de démonstration, en fichier SRT, importés.
+        with tempfile.TemporaryDirectory() as dossier:
+            chemin = Path(dossier) / "sous-titres-demo.srt"
+            ecrire_srt(chemin, atelier.sous_titres)
+            atelier.importer_srt_depuis(chemin)
+        importes = projet.sous_titres_importes
+        etat["srt_importe"] = (
+            projet.sources.sous_titres == SOURCE_IMPORTEE
+            and projet.transcription is module
+            and importes is not None
+            and importes.infos.get("sous_titres") == len(depart)
+            and bool(atelier.sous_titres)
+            and "sous-titres-demo.srt" in source.texte_mots.text()
+        )
+        etat["srt_voix_a_caler"] = source.ligne_decalage.isVisible()
+        mesures["srt"] = {"message": atelier.statut.text(), "sous_titres": [s.texte for s in atelier.sous_titres]}
+        capturer(fenetre, "source-srt")
+        debordements += _debordements(fenetre, "page Sous-titres, sous-titres d'un fichier SRT")
+
+        # « Corriger les mots » : la fenêtre s'affiche sans attendre de clic (elle est fermée aussitôt).
+        ouvertes: list = []
+
+        def montrer(fenetre_correction) -> bool:
+            fenetre_correction.show()
+            _laisser_afficher()
+            ouvertes.append(
+                [fenetre_correction.windowTitle(), fenetre_correction.correcteur.mot_choisi, fenetre_correction.zone_lecture.isVisible()]
+            )
+            capturer(fenetre_correction, "dialogue-corriger-mots")
+            debordements.extend(_debordements(fenetre_correction, "fenêtre « Corriger les mots »"))
+            fenetre_correction.reject()
+            return False
+
+        atelier._corriger = montrer
+        try:
+            atelier.corriger_les_mots(2)
+        finally:
+            del atelier._corriger
+        mesures["corriger"] = ouvertes
+        etat["fenetre_corriger"] = ouvertes == [["Corriger les mots", 2, False]]
+
+        # Les mots d'une prise, sous la vidéo de démonstration importée, muette ; la voix commence à 1 s.
+        prise = projet.prises[0]
+        voix = projet.chemin(prise.fichier)
+        projet.sous_titres_importes = Transcription(
+            source=prise.nom, audio=prise.fichier, duree_s=prise.duree_s, langue=projet.langue, prise=prise.identifiant,
+            mots=[replace(mot) for mot in module.mots],
+        )
+        largeur, hauteur = resolution_video(module.infos) or (0, 0)
+        atelier._definir_video_apercu(VideoApercu(module.source, 1.0, largeur, hauteur, son_de_la_video=False), choisie=True)
+        source.onglets.setCurrentIndex(ONGLET_VIDEO)
+        _laisser_afficher()
+        etat["video_importee_muette"] = (
+            projet.sources == ChoixDesSources(SOURCE_IMPORTEE, SOURCE_IMPORTEE)
+            and source.zone_son_video.isVisible()
+            and not source.son_video.isChecked()
+            and source.ligne_decalage.isVisible()
+            and source.decalage.value() == 1.0
+        )
+        capturer(fenetre, "source-video-importee")
+        debordements += _debordements(fenetre, "page Sous-titres, vidéo importée")
+
+        dialogue = atelier.dialogue_video()
+        if dialogue is None:
+            etat["export_prevoit_la_voix"] = False
+        else:
+            dialogue.show()
+            _attendre(lambda: dialogue.analyse_finie, 30)
+            plan = dialogue.plan()
+            son = next((ligne for ligne in dialogue.resume().lignes if ligne.titre == "Son"), None)
+            mesures["export_plan"] = {
+                "son": plan.son if plan else None, "voix": str(plan.voix) if plan and plan.voix else None,
+                "decalage": plan.decalage_voix if plan else None, "resume_son": [son.source, son.export] if son else None,
+            }
+            etat["export_prevoit_la_voix"] = (
+                plan is not None and plan.son == SON_VOIX and plan.voix == voix and plan.decalage_voix == 1.0
+                and son is not None and son.export.startswith("voix des sous-titres")
+            )
+            capturer(dialogue, "dialogue-export-video-voix")
+            dialogue.exporter()
+            etat["export_voix_fini"] = _attendre_sans_pause(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
+            fichier = dialogue.fichier
+            if fichier is not None and fichier.is_file():
+                analyse = analyser(fichier)
+                brut = executer(
+                    [str(programme_ffmpeg()), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(fichier),
+                     "-map", "0:a:0", "-ac", "1", "-ar", "48000", "-f", "s16le", "-"],
+                    60, binaire=True,
+                ).stdout
+                echantillons = array("h", brut[: len(brut) // 2 * 2])
+
+                def niveau(debut: float, fin: float) -> float:
+                    morceau = echantillons[round(debut * 48_000) : round(fin * 48_000)]
+                    return sum(abs(e) for e in morceau) / max(len(morceau), 1)
+
+                duree = float(analyse.images.duree) if analyse is not None and analyse.images is not None else 0.0
+                mesures["export_relu"] = {
+                    "son": analyse.son.codec if analyse is not None and analyse.son is not None else None,
+                    "duree_video_s": round(duree, 3), "duree_son_s": round(len(echantillons) / 48_000, 3),
+                    "niveau_avant_la_voix": round(niveau(0.0, 0.8)), "niveau_de_la_voix": round(niveau(1.5, 3.0)),
+                }
+                etat["export_voix_au_bon_moment"] = (
+                    analyse is not None and analyse.son is not None and analyse.son.codec == "aac"
+                    and abs(len(echantillons) / 48_000 - duree) < 0.15
+                    and niveau(0.0, 0.8) < 50 and niveau(1.5, 3.0) > 1000
+                )
+                fichier.unlink(missing_ok=True)
+            else:
+                etat["export_voix_au_bon_moment"] = False
+            dialogue.accept()
+    finally:
+        # Retour aux sources du départ.
+        atelier.choisir_les_mots(SOURCE_TRANSCRIPTION)
+        atelier.choisir_la_video(SOURCE_TRANSCRIPTION)
+        atelier._definir_video_apercu(VideoApercu())
+        projet.sous_titres_importes = None
+        atelier._services.projets.enregistrer()
+        source.onglets.setCurrentIndex(ONGLET_MOTS)
+        atelier.rafraichir()
+        page.setValue(0)
+    etat["retour_au_depart"] = projet.sources == ChoixDesSources() and [s.texte for s in atelier.sous_titres] == depart
+    etat["sans_debordement"] = not debordements
+    mesures["debordements"] = debordements
+    rapport["zone_source"] = {"etat": etat, "mesures": mesures}
+    return all(etat.values())
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -1904,6 +2075,9 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["video_avec_sous_titres"] = _video_avec_sous_titres(sous_titres, capturer, rapport)
             # V3, lot 3 : une vidéo HDR (HLG, comme un iPhone), gardée en HDR ou convertie en SDR.
             verifs["video_hdr"] = _video_hdr(sous_titres, capturer, capturer_image, rapport)
+            # V3.1, lot 6 : la zone Source (fichier SRT importé, fenêtre « Corriger les mots », mots d'une
+            # prise sous une vidéo importée muette, exportée avec la voix), puis retour au départ.
+            verifs["zone_source"] = _zone_source(fenetre, sous_titres, capturer, rapport)
             defilement = sous_titres.defilement  # la page (ses colonnes ont aussi des zones qui défilent)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()

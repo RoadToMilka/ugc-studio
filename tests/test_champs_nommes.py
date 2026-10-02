@@ -143,6 +143,7 @@ def test_noms_au_dessus_dans_l_app(app_configuree, qtbot, services, tmp_path):
     assert nom_au_dessus(voix.modele, "Modèle") and nom_au_dessus(voix.voix, "Voix")
     fenetre.afficher_module("sous-titres")
     studio = fenetre.page("sous-titres").atelier
+    studio.source.choix_mots.bouton("importee").click()  # V3.1, lot 6 : les prises, dans les mots importés
     assert nom_au_dessus(studio.prises, "Prise")
     panneau = studio.panneau
     assert nom_au_dessus(panneau.prereglage, "Préréglage")

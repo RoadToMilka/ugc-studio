@@ -419,7 +419,7 @@ class LecteurApercu(QObject):
         self._voix = None  # QMediaPlayer du son seul (prise), ou de la voix sous une vidéo muette
         self._sorties: list = []
         self._puits = None
-        self._decalage = 0.0  # moment de la vidéo où commencent les sous-titres (vidéo d'aperçu)
+        self._decalage = 0.0  # moment de la vidéo où commencent les sous-titres (« La voix commence à »)
         self._temps = 0.0
         self._duree_ms = 0
         self._boucle: tuple[float, float] | None = None

@@ -260,6 +260,8 @@ def test_texte_quand_des_mots_corriges_defont_un_ajustement():
     lignes = texte_ajustements_defaits([(4, defait), (0, vide)]).splitlines()
     assert lignes[0].endswith("ces ajustements ne tiennent plus et reviennent au découpage automatique.")
     assert lignes[2] == "• un sous-titre ajusté n'a plus aucun mot affiché."
+    # V3.1, lot 6 : des mots importés (prise, fichier SRT), corrigés dans la page Sous-titres.
+    assert texte_ajustements_defaits([(4, defait)], module=False).startswith("Des mots ont changé : ton ajustement")
 
 
 # --- Les ajustements suivent les mots corrigés dans le module Transcription ----------------------

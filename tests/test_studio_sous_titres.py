@@ -1,5 +1,5 @@
 """V2, lot 3 (§7.1, §7.3, §7.4, §7.7, §7.9) : moteur de dessin commun, aperçu fidèle et studio de la
-page Sous-titres (onglets, format suivi de la vidéo, position, vidéo d'aperçu, vidéo introuvable)."""
+page Sous-titres (onglets, format suivi de la vidéo, position, vidéo importée, vidéo introuvable)."""
 
 import json
 from dataclasses import replace
@@ -202,11 +202,15 @@ def _video(services, tmp_path, existe: bool = True) -> Transcription:
 
 
 def _prise_sans_video(services) -> Transcription:
+    """Sous-titres d'une prise de voix : des mots importés, choisis (V3.1, lot 6)."""
+    from ugc_studio.sources import SOURCE_IMPORTEE
+
     transcription = Transcription(
-        source="Prise 1", audio=FICHIER_AUDIO, duree_s=5.0, infos={"video": False}, langue="fr-FR", mots=_mots(),
+        source="Prise 1", audio="prises/prise-001.wav", duree_s=5.0, infos={"video": False}, langue="fr-FR", mots=_mots(),
         prise="abc", script="…",
     )
-    services.projets.projet.transcription = transcription
+    services.projets.projet.sous_titres_importes = transcription
+    services.projets.projet.sources.sous_titres = SOURCE_IMPORTEE
     return transcription
 
 
@@ -266,7 +270,8 @@ def test_format_suivi_de_la_video(atelier, services, tmp_path):
     # (Onglet Écran pas affiché : on vérifie ce qui est montré ou caché dedans.)
     assert not atelier.panneau.info_format.isHidden()
     assert atelier.toile.taille_video() == (1080, 1350)
-    assert atelier.panneau.zone_video.isHidden()  # le projet a sa vidéo
+    # V3.1, lot 6 : la vidéo vient de la zone Source (celle du module Transcription), plus de l'onglet Écran.
+    assert atelier.source.choix_video.valeur() == "transcription" and "pub.mp4" in atelier.source.texte_video.text()
 
 
 def test_format_personnalise_sans_video(atelier, services):
@@ -350,32 +355,54 @@ def test_video_introuvable_et_retrouvee(atelier, services, tmp_path, monkeypatch
     assert atelier.lecteur.video == str(retrouvee)
 
 
-def test_video_choisie_seulement_pour_l_apercu(atelier, services, tmp_path, monkeypatch):
+def test_video_importee_dans_la_zone_source(atelier, services, tmp_path, monkeypatch):
+    """V3.1, lot 6 : la vidéo importée (onglet « Vidéo ou audio », ex. le montage) remplace la vidéo
+    d'aperçu de l'onglet Écran : elle impose son format, la voix y commence à « La voix commence à »,
+    et « Son de la vidéo » décoché met la voix de la prise dessous."""
+    from ugc_studio.sources import SOURCE_IMPORTEE, SOURCE_TRANSCRIPTION
+    from ugc_studio.ui.pages.sous_titres.source import ONGLET_VIDEO
+
     _prise_sans_video(services)
     atelier.rafraichir()
-    panneau = atelier.panneau
-    assert not panneau.zone_video.isHidden() and panneau.bouton_retirer_video.isHidden()
+    source = atelier.source
+    source.onglets.setCurrentIndex(ONGLET_VIDEO)
+    assert source.choix_video.valeur() == SOURCE_TRANSCRIPTION and "Rien d'importé" in source.texte_video.text()
+    assert source.ligne_decalage.isHidden()  # pas de vidéo : rien à caler
+    source.choix_video.bouton(SOURCE_IMPORTEE).click()
+    assert services.projets.projet.sources.video == SOURCE_IMPORTEE
+    assert "Aucune vidéo importée" in source.texte_video.text()
+    assert not source.bouton_choisir_video.isHidden() and source.bouton_retirer_video.isHidden()
+    assert source.bouton_importer.isHidden() and source.zone_son_video.isHidden()
     montage = tmp_path / "montage.mp4"
     montage.write_bytes(b"video")
     monkeypatch.setattr(atelier, "_demander_video", lambda _titre, _proposition: montage)
-    atelier.choisir_video_apercu()
+    source.bouton_choisir_video.click()
     assert services.projets.projet.sous_titres.apercu.chemin == str(montage)
-    assert panneau.nom_video.text().startswith("montage.mp4") and not panneau.bouton_retirer_video.isHidden()
+    assert source.texte_video.text().startswith("montage.mp4") and not source.bouton_retirer_video.isHidden()
+    assert source.bouton_choisir_video.text() == "Changer de vidéo…"
     # Sa résolution (lue par Qt Multimedia dans l'app) impose son format.
     atelier._infos_video_lues({"resolution": [1080, 1350]})
     assert services.projets.projet.sous_titres.apercu.resolution == (1080, 1350)
     assert not atelier.format.isEnabled() and atelier.toile.taille_video() == (1080, 1350)
-    # La voix commence à 2 s dans le montage ; son de la prise sous la vidéo muette.
-    panneau.decalage_video.setValue(2.0)
-    panneau.son_video.setChecked(False)
+    # La voix commence à 2 s dans le montage ; la voix de la prise sous la vidéo muette.
+    assert not source.ligne_decalage.isHidden() and not source.zone_son_video.isHidden()
+    source.decalage.setValue(2.0)
+    source.son_video.setChecked(False)
     apercu = services.projets.projet.sous_titres.apercu
     assert (apercu.decalage_s, apercu.son_de_la_video) == (2.0, False)
-    # Enregistré dans le projet (format 7), retrouvé à la réouverture.
+    # Enregistré dans le projet, retrouvé à la réouverture.
     services.projets.ouvrir(services.projets.projet.dossier)
-    assert services.projets.projet.sous_titres.apercu == VideoApercu(str(montage), 2.0, 1080, 1350, False)
+    projet = services.projets.projet
+    assert projet.sous_titres.apercu == VideoApercu(str(montage), 2.0, 1080, 1350, False)
+    assert projet.sources.video == SOURCE_IMPORTEE and atelier.source.decalage.value() == 2.0
+    # Repasser au module Transcription ne perd rien : la vidéo importée attend.
+    atelier.source.choix_video.bouton(SOURCE_TRANSCRIPTION).click()
+    assert projet.sources.video == SOURCE_TRANSCRIPTION and atelier.format.isEnabled()
+    assert projet.sous_titres.apercu.chemin == str(montage)
+    atelier.source.choix_video.bouton(SOURCE_IMPORTEE).click()
     atelier.retirer_video_apercu()
-    assert services.projets.projet.sous_titres.apercu == VideoApercu()
-    assert atelier.format.isEnabled()
+    assert projet.sous_titres.apercu == VideoApercu(decalage_s=2.0)  # « La voix commence à » reste
+    assert atelier.format.isEnabled() and atelier.source.bouton_retirer_video.isHidden()
 
 
 def test_fond_zoom_et_reperes_retenus(atelier, services):

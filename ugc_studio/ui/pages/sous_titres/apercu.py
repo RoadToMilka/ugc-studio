@@ -11,6 +11,9 @@ bloc, 540 px de haut au plus ; en grande fenêtre, le bloc a la hauteur des troi
 vidéo prend la hauteur qui reste sous son titre et au-dessus des commandes (largeur_pour_hauteur :
 la largeur de la colonne qui va avec). Les commandes passent à la ligne quand la colonne est étroite.
 La disposition de la page : disposition.py.
+
+V3.1 (lot 6) : sans vidéo ni son (des sous-titres d'un fichier SRT, sans vidéo), la lecture est
+grisée ; un clic sur un sous-titre le montre toujours.
 """
 
 from __future__ import annotations
@@ -80,6 +83,7 @@ class BlocApercu(QFrame):
         lecture.addWidget(self.bouton_boucle)
         disposition.addLayout(lecture)
         self._lecture = lecture
+        self._lecture_possible, self._en_lecture = True, False
         self.definir_lecture(False)
 
         # Fond et zoom.
@@ -201,8 +205,20 @@ class BlocApercu(QFrame):
     # --- Lecture -------------------------------------------------------------------------------
 
     def definir_lecture(self, en_lecture: bool) -> None:
+        self._en_lecture = en_lecture
         self.bouton_lecture.setIcon(icone("pause" if en_lecture else "play", Couleurs.ACCENT_SURVOL, rempli=True))
-        self.bouton_lecture.setToolTip("Pause (barre Espace)" if en_lecture else "Lecture (barre Espace)")
+        if not self._lecture_possible:
+            self.bouton_lecture.setToolTip("Rien à lire : ni vidéo ni son. Clique sur un sous-titre pour le voir")
+        else:
+            self.bouton_lecture.setToolTip("Pause (barre Espace)" if en_lecture else "Lecture (barre Espace)")
+
+    def definir_lecture_possible(self, possible: bool) -> None:
+        """Ni vidéo ni son (V3.1 : des sous-titres d'un fichier SRT, sans vidéo) : ▶ et la barre de
+        position sont grisés ; un clic sur un sous-titre (liste ou frise) le montre dans l'aperçu."""
+        self._lecture_possible = possible
+        self.bouton_lecture.setEnabled(possible)
+        self.position.setEnabled(possible)
+        self.definir_lecture(self._en_lecture and possible)
 
     # --- Fond, zoom, repères -------------------------------------------------------------------
 

@@ -30,6 +30,14 @@ Format 7 (V2, lot 3) : les **sous-titres** sont rangés en trois parties (cahier
 de sécurité, marge maximum) et « apercu » (vidéo choisie seulement pour l'aperçu). Un projet d'un
 format plus ancien s'ouvre avec l'apparence de la V1 (Inter SemiBold, blanc, ombre légère), qui
 garde exactement son découpage, et ses sous-titres en bas de la zone de sécurité, centrés.
+
+Format 8 (V3.1, lot 6) : les **sources des sous-titres** (sources.py). `sous_titres_importes` : des
+mots importés dans la page Sous-titres (prise de voix ou fichier SRT), à côté de ceux du module
+Transcription (`transcription`), qui ne sont plus jamais remplacés par un import ; `sources` : la
+source choisie pour la vidéo et pour les mots. Un projet d'un format plus ancien s'ouvre tel quel :
+des sous-titres faits d'une prise deviennent les mots importés (et la transcription du module reste
+vide) ; une vidéo choisie pour l'aperçu dans l'onglet Écran devient la vidéo importée, choisie quand
+le projet n'a pas de vidéo à lui.
 """
 
 from __future__ import annotations
@@ -49,6 +57,7 @@ from .nombres import FRANCE
 from .nombres import VARIANTES as VARIANTES_NOMBRES
 from .prononciation import Prononciation, depuis_liste
 from .script import joindre_repliques
+from .sources import SOURCE_IMPORTEE, ChoixDesSources, a_une_video
 from .sous_titres import ReglagesSousTitres, avec_le_style, style_de_depart_complet
 from .stockage import ecrire_json, lire_json
 from .transcription import Remplacement, Transcription, remplacements_depuis_liste
@@ -58,7 +67,10 @@ journal = logging.getLogger(__name__)
 NOM_FICHIER = "projet.json"
 DOSSIER_PRISES = "prises"
 DOSSIER_SOURCES = "sources"  # piste son extraite de la vidéo importée (transcription, §6)
-FICHIER_AUDIO = f"{DOSSIER_SOURCES}/audio.wav"  # piste son de la transcription (source ou prise)
+FICHIER_AUDIO = f"{DOSSIER_SOURCES}/audio.wav"  # piste son de la source du module Transcription
+# Jusqu'à la 3.0.5, la piste son d'une prise sous-titrée était copiée dans FICHIER_AUDIO : des mots
+# importés qui s'en servent encore en gardent une copie quand le module Transcription en a besoin.
+FICHIER_AUDIO_IMPORTE = f"{DOSSIER_SOURCES}/audio_importe.wav"
 NB_RECENTS = 10
 
 # §5.7 — Langues proposées (codes « langue-PAYS »).
@@ -160,12 +172,16 @@ class Projet:
     repliques: list[RepliqueProjet] = field(default_factory=lambda: [RepliqueProjet()])
     prononciations: list[Prononciation] = field(default_factory=list)  # dictionnaire du projet (§5.2)
     prises: list[Prise] = field(default_factory=list)
-    transcription: Transcription | None = None  # §6
+    transcription: Transcription | None = None  # module Transcription (§6)
     remplacements: list[Remplacement] = field(default_factory=list)  # dictionnaire du projet (§6.3)
     sous_titres: ReglagesSousTitres = field(default_factory=ReglagesSousTitres)  # §7
     ecriture: EtatScript = field(default_factory=EtatScript)  # module Script (V2, §3.1)
+    # Mots importés dans la page Sous-titres (prise de voix ou fichier SRT) et source choisie pour la
+    # vidéo et pour les mots (V3.1, lot 6, sources.py).
+    sous_titres_importes: Transcription | None = None
+    sources: ChoixDesSources = field(default_factory=ChoixDesSources)
 
-    VERSION_FORMAT = 7
+    VERSION_FORMAT = 8
 
     @property
     def script(self) -> list[dict]:
@@ -194,6 +210,8 @@ class Projet:
             "remplacements": [asdict(r) for r in self.remplacements],
             "sous_titres": self.sous_titres.en_dict(),
             "ecriture": self.ecriture.en_dict(),
+            "sous_titres_importes": self.sous_titres_importes.en_dict() if self.sous_titres_importes else None,
+            "sources": self.sources.en_dict(),
         }
 
     @classmethod
@@ -219,6 +237,18 @@ class Projet:
                 continue
             prise.nom = _nom_sans_tiret(prise.nom)
             prises.append(prise)
+        transcription = _transcription(donnees.get("transcription"))
+        importes = _transcription(donnees.get("sous_titres_importes"))
+        sources = ChoixDesSources.depuis_dict(donnees.get("sources"))
+        sous_titres = ReglagesSousTitres.depuis_dict(donnees.get("sous_titres"))
+        if "sources" not in donnees:
+            transcription, importes = _sources_d_avant(transcription, sous_titres, sources)
+        if importes is not None and importes.prise and importes.audio == FICHIER_AUDIO:
+            # Sous-titres d'une prise faits avant la 3.1.0 : la piste son de la prise elle-même (la
+            # copie rangée dans FICHIER_AUDIO revient au module Transcription).
+            prise = next((p for p in prises if p.identifiant == importes.prise), None)
+            if prise is not None:
+                importes.audio = prise.fichier
         return cls(
             dossier=dossier,
             nom=donnees.get("nom") or dossier.name,
@@ -229,10 +259,12 @@ class Projet:
             repliques=repliques or [RepliqueProjet()],
             prononciations=depuis_liste(donnees.get("prononciations")),
             prises=prises,
-            transcription=_transcription(donnees.get("transcription")),
+            transcription=transcription,
             remplacements=remplacements_depuis_liste(donnees.get("remplacements")),
-            sous_titres=ReglagesSousTitres.depuis_dict(donnees.get("sous_titres")),
+            sous_titres=sous_titres,
             ecriture=EtatScript.depuis_dict(donnees.get("ecriture")),
+            sous_titres_importes=importes,
+            sources=sources,
         )
 
 
@@ -250,6 +282,35 @@ def _nom_sans_tiret(nom: str) -> str:
     actuelle (« Prise 3 (variante B) »). Un nom choisi à la main n'est jamais modifié."""
     ancien = _ANCIEN_NOM_DE_VARIANTE.fullmatch(nom)
     return nom_de_prise(int(ancien.group(1)), ancien.group(2)) if ancien else nom
+
+
+def _sources_d_avant(
+    transcription: Transcription | None, sous_titres: ReglagesSousTitres, sources: ChoixDesSources
+) -> tuple[Transcription | None, Transcription | None]:
+    """Projet du format 7 ou d'avant (V3.1, lot 6) : des sous-titres faits d'une prise deviennent les
+    mots importés, choisis (le module Transcription n'avait alors rien d'autre) ; une vidéo choisie
+    pour l'aperçu devient la vidéo importée, choisie si le projet n'a pas de vidéo à lui. Renvoie la
+    transcription du module et les mots importés."""
+    importes = None
+    if transcription is not None and transcription.prise:
+        transcription, importes = None, transcription
+        sources.sous_titres = SOURCE_IMPORTEE
+    if sous_titres.apercu.chemin and not a_une_video(transcription):
+        sources.video = SOURCE_IMPORTEE
+    return transcription, importes
+
+
+def liberer_la_piste_son(projet: Projet) -> None:
+    """Avant que le module Transcription écrive sa piste son (FICHIER_AUDIO) : des mots importés qui
+    s'en servent encore (sous-titres d'une prise faits avant la 3.1.0, prise supprimée depuis) en
+    gardent une copie à eux, FICHIER_AUDIO_IMPORTE. Rien ne se perd."""
+    importes = projet.sous_titres_importes
+    if importes is None or importes.audio != FICHIER_AUDIO:
+        return
+    actuelle = projet.chemin(FICHIER_AUDIO)
+    if actuelle.exists():
+        shutil.copyfile(actuelle, projet.chemin(FICHIER_AUDIO_IMPORTE))
+        importes.audio = FICHIER_AUDIO_IMPORTE
 
 
 def _transcription(brut) -> Transcription | None:

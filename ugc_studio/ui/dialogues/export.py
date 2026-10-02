@@ -97,14 +97,13 @@ journal = logging.getLogger(__name__)
 
 PREF_DOSSIER = "export_dossier"  # « source », « projet » ou « autre » (les deux exports)
 PREF_DOSSIER_AUTRE = "export_dossier_autre"  # le dernier dossier choisi avec « Changer… »
-PREF_FREQUENCE = "export_calque_frequence"  # projet sans vidéo : « apercu », « 30 », « 60 » ou « autre »
+PREF_FREQUENCE = "export_calque_frequence"  # projet sans vidéo : « 30 », « 60 » ou « autre »
 PREF_FREQUENCE_LIBRE = "export_calque_frequence_libre"
 PREF_CONTENEUR = "export_video_conteneur"  # « mp4 », « mov », « mkv »
 PREF_CODEC = "export_video_codec"  # « h264 », « h265 », « prores »
 PREF_DEBIT = "export_video_debit"  # « identique », « conseille », « personnalise »
 PREF_DEBIT_PERSONNALISE = "export_video_debit_personnalise"  # en Mb/s
 
-FREQUENCE_APERCU = "apercu"
 FREQUENCE_LIBRE = "autre"
 FREQUENCES_PROPOSEES = {"30": Fraction(30), "60": Fraction(60)}
 
@@ -239,7 +238,7 @@ class DialogueExport(QDialog):
         choix = {}
         dossier_source = self.source.dossier
         if dossier_source is not None and dossier_source.is_dir():
-            choix[DOSSIER_SOURCE] = "Celui de la vidéo" if (self.source.video or self.source.video_d_apercu) else "Celui de l'audio"
+            choix[DOSSIER_SOURCE] = "Celui de la vidéo" if self.source.video else "Celui de l'audio"
         choix[DOSSIER_PROJET] = "Celui du projet"
         choix[DOSSIER_AUTRE] = "Autre"
         self.choix_dossier = ChoixEnBoutons(choix, "Où ranger le fichier exporté")
@@ -341,7 +340,7 @@ class DialogueExport(QDialog):
     # --- Analyse de la vidéo par FFmpeg ---------------------------------------------------------------
 
     def _video_a_analyser(self) -> Path | None:
-        return self.source.chemin if self.source.video else self.source.video_d_apercu
+        return self.source.chemin if self.source.video else None
 
     def _lancer_l_analyse(self) -> None:
         """FFmpeg lit la vidéo (sans la décoder, une seconde ou deux) : moment exact de chaque image,
@@ -396,7 +395,7 @@ class DialogueExport(QDialog):
         self._actualiser()
 
     def _analyse_recue(self, analyse) -> None:
-        """Ce que la fenêtre fille fait de l'analyse (fréquence d'une vidéo d'aperçu, débit…)."""
+        """Ce que la fenêtre fille fait de l'analyse (débit…)."""
 
     # --- Résumé ---------------------------------------------------------------------------------
 
@@ -609,7 +608,6 @@ class DialogueExportCalque(DialogueExport):
     )
     SUFFIXE = SUFFIXE_CALQUE
     ENREGISTRE = "Calque enregistré"
-    _frequence_apercu: Fraction | None = None  # vidéo d'aperçu d'un projet sans vidéo (une fois lue)
 
     def _ajouter_les_reglages(self, reglages: QVBoxLayout) -> None:
         format_ = libelle("MOV · ProRes 4444 avec transparence, lu par Premiere Pro", "secondaire")
@@ -633,7 +631,8 @@ class DialogueExportCalque(DialogueExport):
 
     def _preparer_la_frequence(self) -> None:
         """Avec une vidéo : sa fréquence exacte, sans choix (sinon le calque se décalerait peu à peu).
-        Sans vidéo : 30 au départ, 60, une valeur libre, ou celle de la vidéo d'aperçu (une fois lue)."""
+        Sans vidéo : 30 au départ, 60, ou une valeur libre. (Jusqu'à la 3.0.5, aussi celle de la vidéo
+        d'aperçu d'une prise : V3.1, une vidéo importée est la vidéo de l'export, avec sa fréquence.)"""
         ligne = self._ligne_frequence
         if self.choix_frequence is not None:
             ligne.removeWidget(self.choix_frequence)
@@ -646,15 +645,12 @@ class DialogueExportCalque(DialogueExport):
             return
         self.texte_frequence.hide()
         ligne.setStretch(ligne.count() - 1, 1)  # les boutons restent à gauche
-        choix = {}
-        if self._frequence_apercu is not None:
-            choix[FREQUENCE_APERCU] = f"{texte_frequence(self._frequence_apercu)} (vidéo d'aperçu)"
-        choix.update({cle: cle for cle in FREQUENCES_PROPOSEES})
+        choix = {cle: cle for cle in FREQUENCES_PROPOSEES}
         choix[FREQUENCE_LIBRE] = "Autre"
         self.choix_frequence = ChoixEnBoutons(choix, "Images par seconde du calque (celles de ta séquence Premiere Pro)")
-        prefere = self._preferences.lire(PREF_FREQUENCE, FREQUENCE_APERCU)
+        prefere = self._preferences.lire(PREF_FREQUENCE, "30")
         if prefere not in choix:
-            prefere = FREQUENCE_APERCU if FREQUENCE_APERCU in choix else "30"
+            prefere = "30"
         self.choix_frequence.definir(prefere)
         self.choix_frequence.change.connect(lambda _valeur: self._actualiser())
         ligne.insertWidget(0, self.choix_frequence)
@@ -665,16 +661,9 @@ class DialogueExportCalque(DialogueExport):
             return None
         valeur = self.choix_frequence.valeur()
         self.frequence_libre.setVisible(valeur == FREQUENCE_LIBRE)
-        if valeur == FREQUENCE_APERCU and self._frequence_apercu is not None:
-            return self._frequence_apercu
         if valeur == FREQUENCE_LIBRE:
             return frequence_exacte(self.frequence_libre.value()) or FREQUENCE_SANS_VIDEO
         return FREQUENCES_PROPOSEES.get(valeur, FREQUENCE_SANS_VIDEO)
-
-    def _analyse_recue(self, analyse) -> None:
-        if not self.source.video and analyse is not None and analyse.images is not None:
-            self._frequence_apercu = analyse.images.frequence
-            self._preparer_la_frequence()
 
     def _explication_hdr(self, norme: NormeHDR) -> str:
         return (
