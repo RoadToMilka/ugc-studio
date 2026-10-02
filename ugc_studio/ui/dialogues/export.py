@@ -106,8 +106,10 @@ FREQUENCE_APERCU = "apercu"
 FREQUENCE_LIBRE = "autre"
 FREQUENCES_PROPOSEES = {"30": Fraction(30), "60": Fraction(60)}
 
+# Les noms des lignes (« Images par seconde ») restent toujours en entier ; s'il manque de la place,
+# ce sont les colonnes Source et Export qui se resserrent (texte abrégé, complet au survol).
 COLONNES_RESUME = (
-    Colonne("", texte=True),
+    Colonne(""),
     Colonne("Source", texte=True),
     Colonne("Export", texte=True, etiree=True),
 )

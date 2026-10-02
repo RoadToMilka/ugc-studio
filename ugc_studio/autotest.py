@@ -81,6 +81,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "animations",
     "ffmpeg_integre",
     "calque",
+    "video_avec_sous_titres",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -1039,7 +1040,7 @@ def _video_avec_sous_titres(atelier, capturer, rapport: dict) -> bool:
     - La fenêtre (réglages et résumé avant export, choix ProRes grisé en MP4, avertissement du MKV),
       pendant l'export (étapes) et à la fin (« Lire la vidéo »).
     - La vidéo relue par FFmpeg : H.264, autant d'images que la source, aux mêmes moments, à sa taille,
-      étiquettes BT.709 en plage limitée.
+      étiquettes de couleurs de la vidéo source (celle de démonstration : BT.601), en plage limitée.
     - Le jaune du mot actif (« Sérum ») : dans la vidéo, la couleur de l'aperçu, à quelques niveaux près.
     - Un export arrêté ne laisse rien (ni fichier, ni dossier provisoire). Les fichiers exportés sont
       ensuite effacés (rapport léger)."""
@@ -1105,7 +1106,10 @@ def _video_avec_sous_titres(atelier, capturer, rapport: dict) -> bool:
         etat["fichier_relu"] = bool(
             images and images.codec == "h264" and images.nombre == images_source.nombre and moments == moments_source
             and analyse.taille_affichee == (plan.largeur, plan.hauteur)
-            and couleurs is not None and (couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("tv", "bt709", "bt709", "bt709")
+            # Les étiquettes prévues : la norme de la vidéo (Motion JPEG : BT.601, « bt470bg »), en plage limitée.
+            and couleurs is not None
+            and (couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert)
+            == ("tv", plan.couleurs.matrice, plan.couleurs.primaires, plan.couleurs.transfert)
         )
         # Le jaune du mot actif pendant « Sérum » : celui de l'aperçu, dans la vidéo.
         serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), 0)
