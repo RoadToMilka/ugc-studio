@@ -346,9 +346,15 @@ def graphe_de_filtres(plan: PlanVideo) -> str:
       gardé, ses images ne changent pas.
     - Calque : ses couleurs (RGB) converties avec la norme de la vidéo, en plage limitée, par zscale
       (conversion_des_sous_titres) ; en HDR, au blanc de référence (conversion_vers_le_hdr).
+    - setparams : les étiquettes de couleurs posées sur les images de la vidéo, avant de poser le
+      calque (l'encodeur de FFmpeg 9 les reprend des images). Avant, et pas après : depuis FFmpeg 7.1,
+      les deux images que reçoit overlay doivent avoir la même norme (matrice) et la même plage ; une
+      vidéo sans étiquette (« inconnue ») recevait sinon un calque reconverti par FFmpeg avec une autre
+      norme (BT.601), et ses couleurs changeaient (vu sur la fabrication, lot 3, puis dans le code de
+      FFmpeg 9.0.2 : libavfilter/formats.c, ff_default_query_formats).
     - overlay : le calque par-dessus, chaque image du calque sur les images de la vidéo de son moment
-      jusqu'au suivant ; après la dernière, il reste en place (eof_action=repeat).
-    - setparams : les étiquettes de couleurs posées sur les images (FFmpeg 9 les reprend des images)."""
+      jusqu'au suivant ; après la dernière, il reste en place (eof_action=repeat). « alpha=straight » :
+      la transparence du calque est « droite » (non prémultipliée), comme dans ses PNG."""
     couleurs = plan.couleurs
     principal = f"format={plan.format_des_pixels}"
     if couleurs.hdr_converti is not None:
@@ -365,8 +371,8 @@ def graphe_de_filtres(plan: PlanVideo) -> str:
     etiquettes = etiquetage(couleurs.primaires, couleurs.transfert, couleurs.matrice)
     format_de_l_overlay = {"yuv420p": "yuv420", "yuv420p10le": "yuv420p10", "yuv422p10le": "yuv422p10"}[plan.format_des_pixels]
     return (
-        f"[0:v]{principal}[video];[1:v]{calque}[calque];"
-        f"[video][calque]overlay=format={format_de_l_overlay}:eof_action=repeat,{etiquettes}[sortie]"
+        f"[0:v]{principal},{etiquettes}[video];[1:v]{calque}[calque];"
+        f"[video][calque]overlay=format={format_de_l_overlay}:alpha=straight:eof_action=repeat[sortie]"
     )
 
 

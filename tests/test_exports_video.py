@@ -176,9 +176,9 @@ def test_commandes_h264_en_deux_passages(tmp_path):
     assert "-map [sortie] -map 0:a:0 -c:a copy" in texte and "-pass 2" in texte
     assert second[-4:] == ["+faststart", "-f", "mp4", str(plan.en_cours)]
     assert graphe_de_filtres(plan) == (
-        "[0:v]format=yuv420p[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva420p[calque];"
-        "[video][calque]overlay=format=yuv420:eof_action=repeat,"
-        "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[sortie]"
+        "[0:v]format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[video];"
+        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva420p[calque];"
+        "[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie]"
     )
 
 
@@ -206,7 +206,9 @@ def test_video_en_plage_complete_et_debut_decale(tmp_path):
     images = _images(depart=2002)
     couleurs = CouleursDeLaVideo("yuvj420p", "pc", "bt470bg", "", "")
     plan = plan_video(_source(tmp_path, images, couleurs=couleurs), MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
-    assert graphe_de_filtres(plan).startswith("[0:v]scale=in_range=pc:out_range=tv,format=yuv420p[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:")
+    graphe = graphe_de_filtres(plan)
+    assert graphe.startswith("[0:v]scale=in_range=pc:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt470bg:range=tv[video];")
+    assert "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:r=limited," in graphe  # la même norme que la vidéo
     assert decalage_du_calque(images) == ["-itsoffset", "0.066733"]
     assert decalage_du_calque(_images(depart=-2002)) == ["-itsoffset", "-0.066734"]
     assert decalage_du_calque(_images()) == []
@@ -296,10 +298,9 @@ def test_graphes_du_hdr(tmp_path):
     source = _source(tmp_path, couleurs=HLG_IPHONE)
     hdr = plan_video(source, MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
     assert graphe_de_filtres(hdr) == (
-        "[0:v]format=yuv420p10le[video];"
+        "[0:v]format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv[video];"
         "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,format=yuva420p10le[calque];"
-        "[video][calque]overlay=format=yuv420p10:eof_action=repeat,"
-        "setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv[sortie]"
+        "[video][calque]overlay=format=yuv420p10:alpha=straight:eof_action=repeat[sortie]"
     )
     pq = plan_video(_source(tmp_path, couleurs=PQ_HDR10), MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "v.mov")
     assert ":t=smpte2084:" in graphe_de_filtres(pq) and "overlay=format=yuv422p10" in graphe_de_filtres(pq)
@@ -309,10 +310,10 @@ def test_graphes_du_hdr(tmp_path):
     assert graphe_de_filtres(sdr) == (
         "[0:v]zscale=min=bt2020nc:pin=bt2020:tin=arib-std-b67:rin=limited:t=linear:npl=203,format=gbrpf32le,"
         "zscale=pin=bt2020:tin=linear:p=bt709,tonemap=tonemap=mobius:param=0.5:peak=4.926:desat=0,"
-        "zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited,format=yuv420p[video];"
+        "zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited,format=yuv420p,"
+        "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[video];"
         "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva420p[calque];"
-        "[video][calque]overlay=format=yuv420:eof_action=repeat,"
-        "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[sortie]"
+        "[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie]"
     )
     h265 = plan_video(source, MKV, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mkv", convertir_en_sdr=True)
     assert h265.bits == 8 and not h265.couleurs.hdr  # « Convertir en SDR » : 8 bits

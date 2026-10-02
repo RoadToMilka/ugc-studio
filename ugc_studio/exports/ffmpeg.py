@@ -666,13 +666,10 @@ def analyser(source: Path, ffmpeg: Path | None = None) -> Analyse | None:
 
 
 def conversion_des_sous_titres(matrice: str = "bt709") -> str:
-    """Les sous-titres (RGB, SDR) dans la norme d'une vidéo SDR (matrice, nom de FFmpeg : « bt709 »,
-    « smpte170m »…), en plage limitée, par le filtre zscale (bibliothèque zimg, comme pour le HDR) :
-    même calcul, exact, que les images aient 8 ou 16 bits par couleur. Les primaires et la courbe ne
-    changent pas (pin=p, tin=t) : seule la norme de la matrice compte ici.
-    Pourquoi pas le filtre « scale » (lots 1 et 2) : avec FFmpeg 9.0.2, ses images de 16 bits par
-    couleur (vidéos en 10 bits) sortaient avec une autre norme que celle demandée (vu sur la
-    fabrication, lot 3 : le jaune #FFD43B relu 255, 207, 49)."""
+    """Les sous-titres (dessinés en RGB, en SDR) dans la norme d'une vidéo SDR (matrice, nom de FFmpeg :
+    « bt709 », « smpte170m »…), en plage limitée, par le filtre zscale (bibliothèque zimg) : le même
+    filtre qu'en HDR, au calcul exact que les images aient 8 ou 16 bits par couleur (vérifié par les
+    tests). Les primaires et la courbe ne changent pas (pin=p, tin=t) : seule la matrice compte ici."""
     return f"zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m={matrice}:r=limited"
 
 

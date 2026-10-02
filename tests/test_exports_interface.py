@@ -325,6 +325,39 @@ def projet_video(services, tmp_path):
     return projet
 
 
+def _point_blanc(contenu: SousTitresAExporter, temps: float) -> tuple[int, int] | None:
+    """Un point au milieu d'un mot blanc (3 × 3 points blancs opaques autour), dans l'image des
+    sous-titres à ce moment, dessinée en 8 bits à la taille de la vidéo de test."""
+    from PySide6.QtGui import QImage
+
+    from ugc_studio.exports.composition import CalqueDeLaVideo
+
+    calque = CalqueDeLaVideo(contenu.reglages, LARGEUR, HAUTEUR, contenu.sous_titres, contenu.mots, False)
+    image = calque.image(calque.cle(temps), temps).convertToFormat(QImage.Format.Format_RGBA8888)
+    octets, par_ligne = bytes(image.constBits()), image.bytesPerLine()
+
+    def blanc(x: int, y: int) -> bool:
+        rouge, vert, bleu, alpha = octets[y * par_ligne + x * 4 : y * par_ligne + x * 4 + 4]
+        return alpha == 255 and min(rouge, vert, bleu) >= 250
+
+    for y in range(1, HAUTEUR - 1):
+        for x in range(1, LARGEUR - 1):
+            if all(blanc(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                return x, y
+    return None
+
+
+def _luminances(video: Path, numero: int, bits: int) -> list[int]:
+    """La luminance (Y) de chaque point de l'image `numero`, telle qu'elle est dans la vidéo (sans
+    conversion : le premier plan de l'image en 4:2:0, de 8 ou 10 bits)."""
+    format_ = "yuv420p" if bits == 8 else "yuv420p10le"
+    brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video),
+                     "-vf", f"select=eq(n\\,{numero})", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", format_, "-"], 60, binaire=True).stdout
+    if bits == 8:
+        return list(brut[: LARGEUR * HAUTEUR])
+    return [valeur for (valeur,) in struct.iter_unpack("<H", brut[: LARGEUR * HAUTEUR * 2])]
+
+
 def _dialogue_video(services, projet, qtbot):
     from ugc_studio.ui.dialogues.export import DialogueExportVideo
 
@@ -379,14 +412,16 @@ def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_v
     assert sortie.images.codec == "h264" and sortie.images.nombre == source.images.nombre == 60
     assert [m * sortie.images.base_de_temps for m in sortie.images.moments] == [m * source.images.base_de_temps for m in source.images.moments]
     assert sortie.son.codec == "aac" and (sortie.couleurs.matrice, sortie.couleurs.transfert) == ("bt709", "bt709")
-    # Pendant « sérum » (0,42 à 0,80 s) : l'image exportée diffère de la source là où sont les sous-titres.
+    # Pendant « sérum » (0,42 à 0,80 s) : un point d'un mot blanc est blanc (235 sur 255, le blanc d'une
+    # vidéo) dans l'image exportée ; le reste de l'image est celui de la vidéo.
     numero = 18  # 0,60 s
-    commande = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", "", "-vf", f"select=eq(n\\,{numero}),format=rgb24",
-                "-frames:v", "1", "-f", "rawvideo", "-"]
-    avant = executer([*commande[:6], str(projet_video.transcription.source), *commande[7:]], 60, binaire=True).stdout
-    apres = executer([*commande[:6], str(plan.sortie), *commande[7:]], 60, binaire=True).stdout
+    point = _point_blanc(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
+    assert point is not None
+    avant, apres = _luminances(Path(projet_video.transcription.source), numero, 8), _luminances(plan.sortie, numero, 8)
+    blanc = apres[point[1] * LARGEUR + point[0]]
+    assert abs(blanc - 235) <= 6, (point, blanc, avant[point[1] * LARGEUR + point[0]])  # le blanc d'une vidéo : 235
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
-    assert ecarts[-1] > 100 and ecarts[len(ecarts) // 2] < 6  # des sous-titres, et le reste de l'image intact
+    assert ecarts[len(ecarts) // 2] < 6  # le reste de l'image intact
     assert services.preferences.lire("export_video_conteneur") == "mp4" and services.preferences.lire("export_video_debit") == "identique"
 
 
@@ -567,9 +602,11 @@ def test_export_hdr_depuis_la_fenetre(app_configuree, qtbot, services, projet_hd
     assert (couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("yuv420p10le", "bt2020nc", "bt2020", "arib-std-b67")
     assert sortie.son.codec == "aac"
     numero = 18  # 0,60 s, pendant « sérum »
-    commande = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", "", "-vf", f"select=eq(n\\,{numero}),format=rgb24",
-                "-frames:v", "1", "-f", "rawvideo", "-"]
-    avant = executer([*commande[:6], str(projet_hdr.transcription.source), *commande[7:]], 60, binaire=True).stdout
-    apres = executer([*commande[:6], str(plan.sortie), *commande[7:]], 60, binaire=True).stdout
+    point = _point_blanc(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
+    assert point is not None
+    avant = _luminances(Path(projet_hdr.transcription.source), numero, 10)
+    apres = _luminances(plan.sortie, numero, 10)
+    blanc = apres[point[1] * LARGEUR + point[0]]
+    assert abs(blanc - 721) <= 8, (point, blanc, avant[point[1] * LARGEUR + point[0]])  # blanc de référence (HLG : 75 %)
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
-    assert ecarts[-1] > 100 and ecarts[len(ecarts) // 2] < 6  # des sous-titres, et le reste de l'image intact
+    assert ecarts[len(ecarts) // 2] < 24  # le reste de l'image intact (sur 1 023)
