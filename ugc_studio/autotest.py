@@ -86,8 +86,26 @@ VERIFICATIONS_OBLIGATOIRES = (
     "video_hdr",
     "disposition_v31",
     "liste_deroulante",
+    "aides_v31",
 )
 ELEMENTS_SIGNALES_MAX = 6
+# V3.1 (§9.4 ter) : les seules phrases d'aide qui restent écrites dans les modules (leur début),
+# celles qui disent quoi faire à ce moment ; toutes les autres sont dans une icône « i ». Une même
+# phrase peut s'afficher plusieurs fois (ex. sur chaque carte d'un script TikTok).
+PHRASES_INDISPENSABLES = (
+    "Vidéo (MP4, MOV, MKV…) ou audio",
+    "Clique sur un mot pour le corriger",
+    "La langue du projet est",
+    "Noms que la voix pourrait mal prononcer",
+    "Coche celles qui te plaisent",
+    "Voix générée par l'IA : active l'étiquette",
+    "Un projet regroupe",
+    "Pipette : clique dans l'aperçu",
+    "Vidéo avec sous-titres : seulement",
+    "Ces sous-titres ne viennent pas d'une prise",
+    "Le format suit la vidéo",
+    "Taux de départ, à vérifier",
+)
 
 
 def _verifier_variantes_script(dialogue) -> bool:
@@ -1655,19 +1673,35 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     "icones_i_visibles": sum(1 for b in page.findChildren(BoutonInfo) if b.isVisible()),
                 }
             fenetre.afficher_module("sous-titres")
-            frise = fenetre.page("sous-titres").atelier.cadre_frise
+            page_sous_titres = fenetre.page("sous-titres").atelier
+            frise = page_sous_titres.cadre_frise
+            page_sous_titres.defilement.ensureWidgetVisible(frise.aide)  # l'icône à l'écran, et sa bulle avec
+            _laisser_afficher()
             frise.aide.montrer()
             bulle = _attendre(lambda: QToolTip.isVisible(), 2.0)
             capturer_avec_bulle(f"bulle-{frise.titre.text().lower()}")
             QToolTip.hideText()
+            page_sous_titres.defilement.verticalScrollBar().setValue(0)
             fenetre.afficher_module("script")
             produit = fenetre.page("script").atelier.produit
             produit.bouton_lire.definir_occupe(True)
             capturer(produit.cadre, "bouton-occupe")
             occupe = produit.bouton_lire.est_occupe() and produit.bouton_lire.isEnabled()
             produit.bouton_lire.definir_occupe(False)
-            rapport["aides_v31"] = {"modules": aides, "bulle_visible": bulle, "bouton_occupe": occupe}
-            verifs["aides_v31"] = bulle and occupe and all(len(a["phrases_visibles"]) <= 2 for a in aides.values())
+            # Chaque phrase encore écrite est l'une des indispensables (comptée une fois : celle d'un script
+            # TikTok est sur chaque carte).
+            imprevues = sorted(
+                {
+                    phrase
+                    for a in aides.values()
+                    for phrase in a["phrases_visibles"]
+                    if not phrase.startswith(PHRASES_INDISPENSABLES)
+                }
+            )
+            rapport["aides_v31"] = {
+                "modules": aides, "phrases_imprevues": imprevues, "bulle_visible": bulle, "bouton_occupe": occupe
+            }
+            verifs["aides_v31"] = bulle and occupe and not imprevues
             fenetre.afficher_module("voix")
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()
