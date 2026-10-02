@@ -445,10 +445,12 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Exporter",
             (
+                "« Vidéo avec sous-titres… » : ta vidéo avec ses sous-titres incrustés, prête à publier (MP4 et "
+                "H.264 au départ). Chaque image garde son moment exact, et le son est copié tel quel.",
                 "« Calque transparent… » : les sous-titres seuls, animations comprises, sur un fond transparent "
                 "(MOV, ProRes 4444). Pose-le dans Premiere Pro sur une piste au-dessus de ton montage, au même "
                 "point de départ : il tombe juste, image par image.",
-                "Le calque est dessiné par le moteur de l'aperçu : ce que tu vois dans le studio est ce qui sort.",
+                "Les deux sont dessinés par le moteur de l'aperçu : ce que tu vois dans le studio est ce qui sort.",
                 "« Fichier SRT… » : le texte et le moment de chaque sous-titre, sans style. Premiere Pro et la "
                 "plupart des logiciels le lisent, accents compris.",
                 "Chaque export passe par sa fenêtre : réglages, résumé avant export (ta source et l'export côte à "
@@ -970,6 +972,60 @@ CLE_API = PageDeConseils(
     ),
 )
 
+EXPORT_VIDEO = PageDeConseils(
+    "Exporter la vidéo avec sous-titres",
+    (
+        Rubrique(
+            "Format et codec",
+            (
+                "MP4 et H.264 (au départ) : accepté partout, TikTok, Instagram, YouTube et Premiere Pro compris.",
+                "H.265 : la même image pour un fichier plus léger, mais un encodage plus long ; lu par les "
+                "téléphones et les ordinateurs récents.",
+                "ProRes 422 HQ (en MOV seulement) : un format de montage, sans perte visible, pour retravailler la "
+                "vidéo dans Premiere Pro. Le fichier est très lourd : pas pour publier.",
+                "MKV : pour archiver ; Premiere Pro ne le lit pas.",
+            ),
+        ),
+        Rubrique(
+            "Débit",
+            (
+                "Le débit, c'est la quantité d'information par seconde : plus il est haut, plus l'image est fidèle, "
+                "et plus le fichier est lourd.",
+                "« Identique (+ 10 %) » : celui de ta vidéo, un peu plus, car une vidéo réencodée perd toujours un "
+                "peu. C'est le choix de départ.",
+                "« Conseillé » : le double du débit conseillé par YouTube pour cette taille d'image, de quoi garder "
+                "une belle image après la recompression des plateformes. Proposé pour une vidéo en format de "
+                "montage (ProRes), qui à son propre débit donnerait un fichier énorme.",
+                "TikTok refuse les fichiers de plus de 500 Mo : le résumé te prévient si l'estimation les dépasse.",
+            ),
+        ),
+        Rubrique(
+            "Ce qui est gardé",
+            (
+                "Chaque image de ta vidéo garde son moment exact, même avec une fréquence variable (iPhone, "
+                "enregistrement d'écran) : les sous-titres sont ceux de ce moment.",
+                "Le son est copié tel quel, sans aucune perte. S'il ne peut pas aller dans le format choisi (un son "
+                "non compressé vers un MP4), il est converti en AAC à 320 kb/s, et le résumé l'indique en mauve.",
+                "Les couleurs des sous-titres sont celles de l'aperçu : elles sont converties avec la norme de ta "
+                "vidéo (BT.709 pour une vidéo HD).",
+                "Une vidéo HDR (iPhone réglé en HDR) arrivera avec la version 3.0.0 ; en attendant, exporte le "
+                "calque transparent.",
+            ),
+        ),
+        Rubrique(
+            "Pendant l'export",
+            (
+                "Trois étapes : le dessin des sous-titres, puis l'encodage en deux passages (le premier analyse ta "
+                "vidéo, le second répartit le débit là où il sert : la meilleure qualité pour le poids). Le ProRes "
+                "n'a qu'un passage.",
+                "« Arrêter » interrompt l'export : rien n'est gardé. Les fichiers provisoires vont dans le dossier "
+                "temporaire de Windows et sont effacés à la fin.",
+                "À la fin, la durée de l'export s'affiche : « Lire la vidéo » l'ouvre dans le lecteur de Windows.",
+            ),
+        ),
+    ),
+)
+
 PAGES: dict[str, PageDeConseils] = {
     "script": SCRIPT,
     "voix": VOIX,
@@ -993,4 +1049,5 @@ PAGES: dict[str, PageDeConseils] = {
     "meilleurs-scripts": MEILLEURS_SCRIPTS,
     "prereglages": PREREGLAGES,
     "export": EXPORT,
+    "export-video": EXPORT_VIDEO,
 }

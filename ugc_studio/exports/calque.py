@@ -36,6 +36,28 @@ ATTENTE_MS = 5  # FFmpeg n'a plus de place pour une image : on réessaie peu apr
 ATTENTE_FIN_MS = 50
 
 
+def cle_de_l_image(moteur: Moteur, sous_titres: list[SousTitre], debuts: list[float], mots: list[MotAffiche], temps: float) -> tuple | None:
+    """Ce qui décide de l'image à ce moment : le sous-titre et son mot actif. None : aucun
+    sous-titre. Une image en mouvement (animation, fond qui glisse) a une clé unique : deux moments
+    de même clé ont la même image (elle n'est dessinée qu'une fois)."""
+    index = sous_titre_au_temps(sous_titres, temps, debuts)
+    if index < 0:
+        return None
+    sous_titre = sous_titres[index]
+    if moteur.en_mouvement(sous_titre, mots, temps):
+        return ("en mouvement", index, temps)
+    return (index, moteur.instant(sous_titre, mots, temps).actif)
+
+
+def index_de_la_cle(cle: tuple) -> int:
+    return cle[1] if cle[0] == "en mouvement" else cle[0]
+
+
+def meme_image(cle: tuple | None, precedente: object) -> bool:
+    """La même image que la précédente (rien ne bouge) ?"""
+    return cle == precedente and (cle is None or cle[0] != "en mouvement")
+
+
 class ImagesDuCalque:
     """Les images du calque, une par moment demandé : RGBA 16 bits, transparence droite, l'image
     entière (largeur × hauteur × 8 octets)."""
@@ -54,26 +76,18 @@ class ImagesDuCalque:
         self.dessinees = 0  # images vraiment redessinées (les autres sont reprises telles quelles)
 
     def cle(self, temps: float) -> tuple | None:
-        """Ce qui décide de l'image à ce moment : le sous-titre et son mot actif. None : aucun
-        sous-titre. Une image en mouvement (animation, fond qui glisse) a une clé unique."""
-        index = sous_titre_au_temps(self._sous_titres, temps, self._debuts)
-        if index < 0:
-            return None
-        sous_titre = self._sous_titres[index]
-        if self.moteur.en_mouvement(sous_titre, self._mots, temps):
-            return ("en mouvement", index, temps)
-        return (index, self.moteur.instant(sous_titre, self._mots, temps).actif)
+        return cle_de_l_image(self.moteur, self._sous_titres, self._debuts, self._mots, temps)
 
     def image(self, temps: float) -> bytes:
         cle = self.cle(temps)
-        if cle == self._cle and (cle is None or cle[0] != "en mouvement"):
+        if meme_image(cle, self._cle):
             return self._donnees
         self._cle = cle
         self._effacer()
         if cle is None:
             self._donnees = self.vide
             return self._donnees
-        index = cle[1] if cle[0] == "en mouvement" else cle[0]
+        index = index_de_la_cle(cle)
         dessin, x, y = self.moteur.image_de_l_instant(self._sous_titres[index], self._mots, 1.0, 1.0, temps)
         self._poser(dessin.convertToFormat(QImage.Format.Format_RGBA64), x, y)
         self.dessinees += 1

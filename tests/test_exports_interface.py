@@ -6,6 +6,7 @@ import struct
 import time
 from dataclasses import replace
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 
@@ -291,3 +292,123 @@ def test_bloc_exporter_de_la_page(app_configuree, qtbot, services, projet_prise)
     dialogue = atelier.dialogue_calque()
     qtbot.addWidget(dialogue)
     assert dialogue.windowTitle() == "Exporter le calque transparent"
+
+
+# --- Vidéo avec sous-titres (V3, lot 2) ----------------------------------------------------------
+
+
+@pytest.fixture
+def projet_video(services, tmp_path):
+    """Un projet dont les sous-titres viennent d'une vraie vidéo (270 × 480 à 29,97, avec son AAC)."""
+    if FFMPEG is None:
+        pytest.skip("FFmpeg absent de cet ordinateur")
+    video = tmp_path / "Vidéos" / "Sérum Glowzy.mp4"
+    video.parent.mkdir()
+    resultat = executer(
+        [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"testsrc2=size={LARGEUR}x{HAUTEUR}:rate=30000/1001",
+         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2",
+         "-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(video)],
+        120,
+    )
+    assert resultat.returncode == 0, resultat.stderr
+    projet = services.projets.creer("Sérum Glowzy", tmp_path / "projets")
+    projet.sous_titres = _reglages()
+    projet.transcription = Transcription(
+        source=str(video), duree_s=2.0, mots=[Mot(t, d, f) for t, d, f in MOTS],
+        infos={"duree_s": 2.0, "video": True, "resolution": [LARGEUR, HAUTEUR], "images_par_seconde": 29.97, "codec_video": "H264",
+               "codec_audio": "AAC", "format": "MPEG4", "hdr": False},
+    )
+    services.projets.enregistrer()
+    return projet
+
+
+def _dialogue_video(services, projet, qtbot):
+    from ugc_studio.ui.dialogues.export import DialogueExportVideo
+
+    dialogue = DialogueExportVideo(services, projet, _contenu(projet.sous_titres))
+    qtbot.addWidget(dialogue)
+    dialogue.show()
+    qtbot.waitUntil(lambda: dialogue.analyse_finie, timeout=20_000)
+    return dialogue
+
+
+def test_fenetre_de_la_video(app_configuree, qtbot, services, projet_video):
+    """MP4 et H.264 au départ, débit identique à la source (+ 10 %) ; le ProRes seulement en MOV ; le
+    MKV signalé ; l'extension suit le format ; le résumé compare la vidéo et l'export."""
+    from ugc_studio.exports.video import DEBIT_CONSEILLE, DEBIT_IDENTIQUE, DEBIT_PERSONNALISE, H264, MKV, MOV, MP4, PRORES
+
+    dialogue = _dialogue_video(services, projet_video, qtbot)
+    assert dialogue.windowTitle() == "Exporter la vidéo avec sous-titres"
+    assert (dialogue.choix_conteneur.valeur(), dialogue.choix_codec.valeur(), dialogue.choix_debit.valeur()) == (MP4, H264, DEBIT_IDENTIQUE)
+    assert dialogue.plan().sortie.name == "Sérum Glowzy (sous-titres).mp4"
+    assert not dialogue.choix_codec.bouton(PRORES).isEnabled() and dialogue.texte_extension.text() == ".mp4"
+    lignes = [dialogue.tableau.item(rang, 0).text() for rang in range(dialogue.tableau.rowCount())]
+    assert lignes == ["Taille", "Images par seconde", "Débit vidéo", "Format et codec", "Son", "Couleurs", "Durée", "Poids", "Sous-titres"]
+    assert dialogue.tableau.item(0, 1).text() == f"{LARGEUR} × {HAUTEUR}" and dialogue.tableau.item(4, 2).text() == "copié tel quel"
+    assert dialogue.bouton_exporter.isEnabled() and not dialogue.messages_affiches()
+    dialogue.choix_conteneur.bouton(MKV).click()
+    assert dialogue.texte_extension.text() == ".mkv" and any("ne lit pas le MKV" in m for m in dialogue.messages_affiches())
+    dialogue.choix_conteneur.bouton(MOV).click()
+    dialogue.choix_codec.bouton(PRORES).click()
+    assert dialogue.choix_codec.bouton(PRORES).isEnabled() and dialogue.choix_debit.isHidden()
+    assert dialogue.texte_debit.text().startswith("ProRes 422 HQ : débit fixé par le format")
+    dialogue.choix_conteneur.bouton(MP4).click()
+    assert dialogue.choix_codec.valeur() == H264  # le ProRes ne va pas dans un MP4
+    dialogue.choix_debit.bouton(DEBIT_CONSEILLE).click()
+    assert dialogue.plan().debit == 2_000_000 and "pour la publication" in dialogue.texte_debit.text()  # 360p : 2 × 1 Mb/s
+    dialogue.choix_debit.bouton(DEBIT_PERSONNALISE).click()
+    dialogue.debit_personnalise.setValue(7.5)
+    assert dialogue.debit_personnalise.isVisible() and dialogue.plan().debit == 7_500_000
+
+
+def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_video):
+    """Une vraie vidéo, depuis la fenêtre : mêmes images aux mêmes moments, son copié, étiquettes
+    BT.709 ; les sous-titres sont dans l'image ; « Lire la vidéo » à la fin ; les choix sont retenus."""
+    dialogue = _dialogue_video(services, projet_video, qtbot)
+    plan = dialogue.plan()
+    dialogue.exporter()
+    assert dialogue.en_cours() and dialogue.bouton_arreter.isVisible() and not dialogue.reglages.isEnabled()
+    qtbot.waitUntil(lambda: not dialogue.en_cours(), timeout=120_000)
+    assert dialogue.statut.text().startswith("Vidéo enregistrée en "), dialogue.statut.text()
+    assert dialogue.fichier == plan.sortie and plan.sortie.is_file() and not plan.en_cours.exists()
+    assert dialogue.bouton_lire.isVisible() and dialogue.bouton_dossier.isVisible()
+    source, sortie = analyser(Path(projet_video.transcription.source)), analyser(plan.sortie)
+    assert sortie.images.codec == "h264" and sortie.images.nombre == source.images.nombre == 60
+    assert [m * sortie.images.base_de_temps for m in sortie.images.moments] == [m * source.images.base_de_temps for m in source.images.moments]
+    assert sortie.son.codec == "aac" and (sortie.couleurs.matrice, sortie.couleurs.transfert) == ("bt709", "bt709")
+    # Pendant « sérum » (0,42 à 0,80 s) : l'image exportée diffère de la source là où sont les sous-titres.
+    numero = 18  # 0,60 s
+    commande = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", "", "-vf", f"select=eq(n\\,{numero}),format=rgb24",
+                "-frames:v", "1", "-f", "rawvideo", "-"]
+    avant = executer([*commande[:6], str(projet_video.transcription.source), *commande[7:]], 60, binaire=True).stdout
+    apres = executer([*commande[:6], str(plan.sortie), *commande[7:]], 60, binaire=True).stdout
+    ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
+    assert ecarts[-1] > 100 and ecarts[len(ecarts) // 2] < 6  # des sous-titres, et le reste de l'image intact
+    assert services.preferences.lire("export_video_conteneur") == "mp4" and services.preferences.lire("export_video_debit") == "identique"
+
+
+def test_arreter_la_video(app_configuree, qtbot, services, projet_video):
+    """« Arrêter » : rien n'est gardé, ni la vidéo, ni son dossier provisoire."""
+    dialogue = _dialogue_video(services, projet_video, qtbot)
+    plan = dialogue.plan()
+    dialogue.exporter()
+    dossier = dialogue._export.calque_provisoire.parent
+    assert dossier.is_dir()
+    dialogue.arreter()
+    assert not dialogue.en_cours() and not plan.sortie.exists() and not plan.en_cours.exists() and not dossier.exists()
+    assert dialogue.statut.text() == "Export arrêté : rien n'a été gardé."
+
+
+def test_bouton_video_grise_sans_video(app_configuree, qtbot, services, projet_prise):
+    """Sous-titres d'une voix : « Vidéo avec sous-titres… » grisé, avec son explication."""
+    from ugc_studio.ui.pages.sous_titres import PageSousTitres
+
+    page = PageSousTitres(services)
+    qtbot.addWidget(page)
+    page.show()
+    atelier = page.atelier
+    atelier.rafraichir()
+    assert atelier.bouton_video.text() == "Vidéo avec sous-titres…" and not atelier.bouton_video.isEnabled()
+    assert atelier.info_video.isVisible() and atelier.dialogue_video() is None
+    assert atelier.bouton_calque.isEnabled()

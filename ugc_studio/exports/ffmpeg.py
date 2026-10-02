@@ -324,10 +324,20 @@ class ImagesDeLaVideo:
     octets: int = 0  # poids de l'image dans le fichier (tout le son mis à part)
     largeur: int = 0  # dimensions enregistrées (avant une éventuelle rotation)
     hauteur: int = 0
+    # Les moments tels que la vidéo les écrit (V3, lot 2) : en unités de son « unité de temps »
+    # (1/30 000 s, 1/600 s…), sans arrondi ; le premier n'est pas toujours 0.
+    base_de_temps: Fraction = Fraction(0)
+    moments: tuple[int, ...] = ()
+    duree_derniere: int = 0  # durée de la dernière image, dans la même unité
 
     @property
     def nombre(self) -> int:
         return len(self.temps)
+
+    @property
+    def debut(self) -> Fraction:
+        """Moment de la première image, en secondes (0 le plus souvent)."""
+        return self.moments[0] * self.base_de_temps if self.moments else Fraction(0)
 
     @property
     def debit(self) -> int | None:
@@ -425,14 +435,48 @@ def lire_couleurs(texte: str) -> CouleursDeLaVideo | None:
     return None
 
 
+def lire_rotation(texte: str) -> int:
+    """Rotation de la première image (vidéo de téléphone filmée debout, enregistrée « couchée ») :
+    0, 90, 180 ou 270 degrés, d'après la description de FFmpeg (« rotation of -90.00 degrees »,
+    dans les « Side data » de l'image). FFmpeg redresse lui-même les images en les lisant."""
+    dans_l_entree = dans_l_image = False
+    for ligne in texte.splitlines():
+        if ligne.startswith("Input #"):
+            dans_l_entree = True
+            continue
+        if ligne.startswith(("Output #", "Stream mapping")):
+            break
+        if not dans_l_entree:
+            continue
+        if re.match(r"\s*Stream #", ligne):
+            if dans_l_image:
+                break  # le flux suivant : la première image n'a pas de rotation
+            dans_l_image = ": Video: " in ligne and "(attached pic)" not in ligne
+            continue
+        trouve = re.search(r"rotation of (-?\d+(?:\.\d+)?) degrees", ligne) if dans_l_image else None
+        if trouve:
+            return round(float(trouve.group(1)) / 90) * 90 % 360
+    return 0
+
+
 @dataclass(frozen=True)
 class Analyse:
-    """Ce que FFmpeg lit d'une source : son image (None : un audio), son son (None : muette) et les
-    couleurs de son image."""
+    """Ce que FFmpeg lit d'une source : son image (None : un audio), son son (None : muette), les
+    couleurs de son image et sa rotation."""
 
     images: ImagesDeLaVideo | None
     son: SonDeLaVideo | None
     couleurs: CouleursDeLaVideo | None = None
+    rotation: int = 0
+
+    @property
+    def taille_affichee(self) -> tuple[int, int]:
+        """Largeur et hauteur des images telles qu'on les voit (redressées)."""
+        if self.images is None:
+            return (0, 0)
+        if self.rotation in (90, 270):
+            return (self.images.hauteur, self.images.largeur)
+        return (self.images.largeur, self.images.hauteur)
 
 
 def commande_analyse(ffmpeg: Path, source: Path) -> list[str]:
@@ -492,7 +536,7 @@ def _images(flux: dict) -> ImagesDeLaVideo | None:
     return ImagesDeLaVideo(
         tuple((m - depart) * base for m in moments), frequence, constante, duree, flux.get("codec", ""),
         sum(octets for _m, _d, octets in paquets), int(largeur) if largeur.isdigit() else 0,
-        int(hauteur) if hauteur.isdigit() else 0,
+        int(hauteur) if hauteur.isdigit() else 0, base, tuple(moments), derniere,
     )
 
 
@@ -558,7 +602,9 @@ def analyser(source: Path, ffmpeg: Path | None = None) -> Analyse | None:
     if analyse.images is None and analyse.son is None:
         journal.warning("FFmpeg ne trouve ni image ni son dans %s : %s", source, resultat.stderr[-500:])
         return None
-    return replace(analyse, couleurs=lire_couleurs(resultat.stderr)) if analyse.images is not None else analyse
+    if analyse.images is None:
+        return analyse
+    return replace(analyse, couleurs=lire_couleurs(resultat.stderr), rotation=lire_rotation(resultat.stderr))
 
 
 # --- Commandes des exports --------------------------------------------------------------------

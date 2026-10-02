@@ -1018,6 +1018,148 @@ def _calque(atelier, capturer, capturer_image, rapport: dict) -> bool:
     return all(etat.values())
 
 
+def _point_dans_le_jaune(image: QImage, jaune: tuple[int, int, int], marge: int = 3) -> tuple[int, int] | None:
+    """Un point de l'image (8 bits, transparence droite) entouré de jaune opaque sur 5 × 5 pixels : la
+    couleur y est la même après le 4:2:0 de la vidéo (pas de bord tout près)."""
+    def jaune_opaque(x: int, y: int) -> bool:
+        couleur = image.pixelColor(x, y)
+        return couleur.alpha() == 255 and all(abs(a - b) <= marge for a, b in zip((couleur.red(), couleur.green(), couleur.blue()), jaune, strict=True))
+
+    for y in range(2, image.height() - 2, 2):
+        for x in range(2, image.width() - 2, 2):
+            if jaune_opaque(x, y) and all(jaune_opaque(x + dx, y + dy) for dx in (-2, -1, 0, 1, 2) for dy in (-2, -1, 0, 1, 2)):
+                return x, y
+    return None
+
+
+def _video_avec_sous_titres(atelier, capturer, rapport: dict) -> bool:
+    """V3, lot 2 : la vidéo de démonstration avec ses sous-titres, exportée depuis sa fenêtre (MP4,
+    H.264, deux passages).
+
+    - La fenêtre (réglages et résumé avant export, choix ProRes grisé en MP4, avertissement du MKV),
+      pendant l'export (étapes) et à la fin (« Lire la vidéo »).
+    - La vidéo relue par FFmpeg : H.264, autant d'images que la source, aux mêmes moments, à sa taille,
+      étiquettes BT.709 en plage limitée.
+    - Le jaune du mot actif (« Sérum ») : dans la vidéo, la couleur de l'aperçu, à quelques niveaux près.
+    - Un export arrêté ne laisse rien (ni fichier, ni dossier provisoire). Les fichiers exportés sont
+      ensuite effacés (rapport léger)."""
+    from .exports.composition import CalqueDeLaVideo
+    from .exports.ffmpeg import analyser, executer, programme_ffmpeg
+    from .exports.video import MKV, MOV, MP4, PRORES
+
+    etat: dict = {}
+    dialogue = atelier.dialogue_video()
+    if dialogue is None:
+        rapport["video_avec_sous_titres"] = {"fenetre": False}
+        return False
+    dialogue.show()
+    etat["analyse_finie"] = _attendre(lambda: dialogue.analyse_finie, 30)
+    _laisser_afficher()
+    capturer(dialogue, "dialogue-export-video")
+    problemes = _debordements(dialogue, "fenêtre d'export de la vidéo")
+    rapport["video_debordements"] = problemes
+    etat["sans_debordement"] = not problemes
+    etat["prores_grise_en_mp4"] = dialogue.choix_conteneur.valeur() == MP4 and not dialogue.choix_codec.bouton(PRORES).isEnabled()
+    dialogue.choix_conteneur.bouton(MKV).click()
+    etat["avertissement_mkv"] = any("ne lit pas le MKV" in m for m in dialogue.messages_affiches()) and dialogue.texte_extension.text() == ".mkv"
+    dialogue.choix_conteneur.bouton(MOV).click()
+    etat["prores_possible_en_mov"] = dialogue.choix_codec.bouton(PRORES).isEnabled()
+    dialogue.choix_conteneur.bouton(MP4).click()
+    plan = dialogue.plan()
+    source = dialogue.source
+    images_source = source.analyse.images if source.analyse is not None else None
+    rapport["video_plan"] = {
+        "sortie": plan.sortie.name if plan else "", "taille": [plan.largeur, plan.hauteur] if plan else [],
+        "debit": plan.debit if plan else None, "son": plan.son if plan else None, "images": plan.nombre_images if plan else 0,
+        "messages": dialogue.messages_affiches(),
+        "resume": [[ligne.titre, ligne.source, ligne.export] for ligne in dialogue.resume().lignes],
+    }
+    etat["plan"] = bool(plan and images_source and plan.nombre_images == images_source.nombre == 74 and plan.conteneur == MP4)
+    debut = time.monotonic()
+    dialogue.exporter()
+    _attendre(lambda: dialogue.barre.avancee() > 0.3 or not dialogue.en_cours(), 30)
+    capturer(dialogue, "dialogue-export-video-avancement")
+    etat["export_fini"] = _attendre_sans_pause(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
+    rapport["video_duree_s"] = round(time.monotonic() - debut, 2)
+    rapport["video_dessin_s"] = round(dialogue.dessin_s, 2)
+    rapport["video_images_dessinees"] = dialogue.images_dessinees
+    _laisser_afficher()
+    capturer(dialogue, "dialogue-export-video-fin")
+    rapport["video_message"] = dialogue.statut.text()
+    fichier = dialogue.fichier
+    etat["fichier_ecrit"] = bool(plan) and fichier is not None and fichier.is_file() and not plan.en_cours.exists()
+    etat["lire_la_video"] = dialogue.bouton_lire.isVisible()
+    if etat["fichier_ecrit"]:
+        rapport["video_poids_mo"] = round(fichier.stat().st_size / 1024**2, 2)
+        analyse = analyser(fichier)
+        images = analyse.images if analyse else None
+        couleurs = analyse.couleurs if analyse else None
+        moments = [m * images.base_de_temps for m in images.moments] if images else []
+        moments_source = [m * images_source.base_de_temps for m in images_source.moments]
+        rapport["video_relue"] = {
+            "codec": images.codec if images else "", "images": images.nombre if images else 0,
+            "taille": list(analyse.taille_affichee) if analyse else [], "son": analyse.son is not None if analyse else None,
+            "couleurs": [couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert] if couleurs else [],
+            "memes_moments": moments == moments_source,
+        }
+        etat["fichier_relu"] = bool(
+            images and images.codec == "h264" and images.nombre == images_source.nombre and moments == moments_source
+            and analyse.taille_affichee == (plan.largeur, plan.hauteur)
+            and couleurs is not None and (couleurs.plage, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("tv", "bt709", "bt709", "bt709")
+        )
+        # Le jaune du mot actif pendant « Sérum » : celui de l'aperçu, dans la vidéo.
+        serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), 0)
+        temps = atelier.mots[serum].debut + 0.15
+        numero = min(range(images_source.nombre), key=lambda n: abs(float(moments_source[n]) - temps))
+        contenu = atelier.contenu_a_exporter()
+        calque = CalqueDeLaVideo(contenu.reglages, plan.largeur, plan.hauteur, contenu.sous_titres, contenu.mots, False)
+        temps_image = float(moments_source[numero])
+        image = calque.image(calque.cle(temps_image), temps_image)
+        actif = contenu.reglages.mots.actif.couleur  # le jaune du mot actif (« Blanc contour noir » : #FFD43B)
+        jaune = (actif.rouge, actif.vert, actif.bleu) if actif is not None else (0xFF, 0xD4, 0x3B)
+        point = _point_dans_le_jaune(image, jaune)
+        rapport["video_jaune"] = {
+            "attendu": list(jaune), "point": list(point) if point else None, "image": numero, "norme": plan.couleurs.matrice,
+        }
+        if point is not None:
+            brut = executer(
+                [str(programme_ffmpeg()), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(fichier),
+                 "-vf", f"select=eq(n\\,{numero}),scale=in_color_matrix={plan.couleurs.matrice_du_filtre}:in_range=tv,format=rgb24",
+                 "-frames:v", "1", "-f", "rawvideo", "-"],
+                60, binaire=True,
+            ).stdout
+            if len(brut) == plan.largeur * plan.hauteur * 3:
+                position = (point[1] * plan.largeur + point[0]) * 3
+                lu = tuple(brut[position : position + 3])
+                rapport["video_jaune"]["lu"] = list(lu)
+                etat["jaune_exact"] = all(abs(a - b) <= 8 for a, b in zip(lu, jaune, strict=True))
+            else:
+                etat["jaune_exact"] = False
+        else:
+            etat["jaune_exact"] = False
+        fichier.unlink(missing_ok=True)
+    dialogue.accept()
+
+    # « Arrêter » : rien n'est gardé, ni la vidéo, ni le dossier provisoire.
+    dialogue = atelier.dialogue_video()
+    dialogue.show()
+    _attendre(lambda: dialogue.analyse_finie, 30)
+    plan = dialogue.plan()
+    dialogue.exporter()
+    _attendre(lambda: dialogue.barre.avancee() > 0 or not dialogue.en_cours(), 30)
+    export = dialogue._export
+    provisoire = export.calque_provisoire.parent if export is not None and export.calque_provisoire is not None else None
+    dialogue.arreter()
+    _laisser_afficher()
+    etat["arreter_ne_garde_rien"] = (
+        plan is not None and not plan.sortie.exists() and not plan.en_cours.exists()
+        and (provisoire is None or not provisoire.exists()) and dialogue.statut.text().startswith("Export arrêté")
+    )
+    dialogue.reject()
+    rapport["video_avec_sous_titres"] = etat
+    return all(etat.values())
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -1202,6 +1344,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             # V3, lot 1 : FFmpeg intégré, puis le calque transparent de la vidéo de démonstration.
             verifs["ffmpeg_integre"] = _ffmpeg_integre(rapport)
             verifs["calque"] = _calque(sous_titres, capturer, capturer_image, rapport)
+            # V3, lot 2 : la vidéo de démonstration avec ses sous-titres.
+            verifs["video_avec_sous_titres"] = _video_avec_sous_titres(sous_titres, capturer, rapport)
             defilement = sous_titres.findChild(QScrollArea)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()
