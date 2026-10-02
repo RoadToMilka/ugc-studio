@@ -31,7 +31,7 @@ import subprocess
 import sys
 import threading
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 
@@ -351,19 +351,98 @@ class SonDeLaVideo:
 
 
 @dataclass(frozen=True)
+class CouleursDeLaVideo:
+    """Les couleurs d'une vidéo, telles que FFmpeg les décrit (« yuv420p10le(tv, bt2020nc/bt2020/
+    arib-std-b67, progressive) ») : format des pixels, plage, matrice, primaires et courbe de
+    transfert. Un champ vide : le fichier ne le précise pas."""
+
+    format_pixels: str = ""  # « yuv420p » (8 bits), « yuv420p10le » (10 bits)…
+    plage: str = ""  # « tv » : limitée (16 à 235 sur 255), celle des vidéos ; « pc » : complète
+    matrice: str = ""  # « bt709 » (vidéos HD), « bt2020nc » (HDR)…
+    primaires: str = ""
+    transfert: str = ""  # « bt709 » ; « arib-std-b67 » : HLG ; « smpte2084 » : PQ
+    bits_declares: int = 0  # « 8 bpc » : moins de bits que le format des pixels n'en a
+
+    @property
+    def bits(self) -> int:
+        """Bits par couleur (0 : inconnu)."""
+        if self.bits_declares:
+            return self.bits_declares
+        if not self.format_pixels or self.format_pixels == "none":
+            return 0
+        trouve = re.search(r"p0?(\d{2})(?:le|be)?$", self.format_pixels)
+        return int(trouve.group(1)) if trouve else 8
+
+    @property
+    def hlg(self) -> bool:
+        return self.transfert == "arib-std-b67"
+
+    @property
+    def pq(self) -> bool:
+        return self.transfert == "smpte2084"
+
+    @property
+    def hdr(self) -> bool:
+        return self.hlg or self.pq
+
+    def texte(self) -> str:
+        """« SDR, 8 bits », « HDR (HLG), 10 bits » (résumé avant export)."""
+        gamme = "HDR (HLG)" if self.hlg else "HDR (PQ)" if self.pq else "SDR"
+        return f"{gamme}, {self.bits} bits" if self.bits else gamme
+
+
+ORDRES_DES_LIGNES = {"progressive", "top first", "bottom first", "top coded first (swapped)", "bottom coded first (swapped)"}
+
+
+def lire_couleurs(texte: str) -> CouleursDeLaVideo | None:
+    """Description de la source par FFmpeg (ses messages, rubrique « Input #0 ») → les couleurs de
+    la première image (pas une pochette d'album). None : pas d'image."""
+    dans_l_entree = False
+    for ligne in texte.splitlines():
+        if ligne.startswith("Input #"):
+            dans_l_entree = True
+            continue
+        if ligne.startswith(("Output #", "Stream mapping")):
+            dans_l_entree = False
+        if not dans_l_entree or "(attached pic)" in ligne:
+            continue
+        trouve = re.match(r"\s*Stream #\d+:\d+.*?: Video: [^,]*?, (?P<format>[a-z0-9_]+)(?:\((?P<details>.*?)\))?(?:, |$)", ligne)
+        if trouve is None:
+            continue
+        valeurs = {"format_pixels": trouve.group("format")}
+        for morceau in (m.strip() for m in (trouve.group("details") or "").split(",")):
+            if morceau in ("tv", "pc"):
+                valeurs["plage"] = morceau
+            elif re.fullmatch(r"\d+ bpc", morceau):
+                valeurs["bits_declares"] = int(morceau.split()[0])
+            elif morceau.count("/") == 2:
+                valeurs["matrice"], valeurs["primaires"], valeurs["transfert"] = (
+                    "" if v == "unknown" else v for v in morceau.split("/")
+                )
+            elif morceau and morceau not in ORDRES_DES_LIGNES and "matrice" not in valeurs and not morceau.startswith(("top ", "bottom ")):
+                valeurs["matrice"] = valeurs["primaires"] = valeurs["transfert"] = morceau  # les trois pareilles : écrites une fois
+        return CouleursDeLaVideo(**valeurs)
+    return None
+
+
+@dataclass(frozen=True)
 class Analyse:
-    """Ce que FFmpeg lit d'une source : son image (None : un audio) et son son (None : muette)."""
+    """Ce que FFmpeg lit d'une source : son image (None : un audio), son son (None : muette) et les
+    couleurs de son image."""
 
     images: ImagesDeLaVideo | None
     son: SonDeLaVideo | None
+    couleurs: CouleursDeLaVideo | None = None
 
 
 def commande_analyse(ffmpeg: Path, source: Path) -> list[str]:
     """Liste des paquets de la source, sans les décoder : « -c copy » recopie chaque paquet tel quel,
     et le format « framecrc » écrit une ligne par paquet (moment, durée, poids). « 0:V:0? » : la
-    première image (pas une pochette d'album), si elle existe ; « 0:a:0? » : le premier son."""
+    première image (pas une pochette d'album), si elle existe ; « 0:a:0? » : le premier son.
+    « -loglevel info » : FFmpeg décrit aussi la source dans ses messages (couleurs de l'image) ;
+    « -nostats » : sans ses nouvelles d'avancement, inutiles ici."""
     return [
-        str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error",
+        str(ffmpeg), "-hide_banner", "-nostdin", "-nostats", "-loglevel", "info",
         "-i", str(source), "-map", "0:V:0?", "-map", "0:a:0?", "-c", "copy", "-f", "framecrc", "-",
     ]
 
@@ -479,7 +558,7 @@ def analyser(source: Path, ffmpeg: Path | None = None) -> Analyse | None:
     if analyse.images is None and analyse.son is None:
         journal.warning("FFmpeg ne trouve ni image ni son dans %s : %s", source, resultat.stderr[-500:])
         return None
-    return analyse
+    return replace(analyse, couleurs=lire_couleurs(resultat.stderr)) if analyse.images is not None else analyse
 
 
 # --- Commandes des exports --------------------------------------------------------------------

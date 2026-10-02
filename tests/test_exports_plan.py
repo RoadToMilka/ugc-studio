@@ -4,7 +4,9 @@ d'images) et le résumé avant export, sans interface."""
 from fractions import Fraction
 from pathlib import Path
 
-from ugc_studio.exports.ffmpeg import lire_analyse
+from dataclasses import replace
+
+from ugc_studio.exports.ffmpeg import CouleursDeLaVideo, lire_analyse
 from ugc_studio.exports.plan import (
     PlanCalque,
     debit_lisible,
@@ -65,6 +67,26 @@ def test_source_completee_par_ffmpeg(tmp_path):
     assert source.nombre_images == 930 and source.codec_video == "ProRes"
     assert source.codec_audio == ""  # FFmpeg n'a pas trouvé de son : vidéo muette
     assert round(source.duree_s, 3) == round(930 * 1001 / 30000, 3)
+
+
+def test_couleurs_de_la_source_lues_par_ffmpeg(tmp_path):
+    """Qt ne disait rien du HDR (projet importé avec la 2.0.0) : FFmpeg donne les couleurs, et le
+    résumé les montre ; une vidéo HDR est signalée (calque en SDR jusqu'à la 3.0.0)."""
+    infos = dict(INFOS_VIDEO)
+    del infos["hdr"]
+    projet = _projet_video(tmp_path, infos)
+    analyse = lire_analyse("#tb 0: 1/30000\n#media_type 0: video\n#codec_id 0: hevc\n0, 0, 0, 1001, 9000, 0x0\n0, 1001, 1001, 1001, 9000, 0x0\n")
+    hlg = CouleursDeLaVideo("yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67")
+    source = source_du_projet(projet, replace(analyse, couleurs=hlg))
+    assert source.couleurs == hlg and source.hdr
+    resume = resume_calque(source, plan_du_calque(source, 1080, 1920, None, tmp_path / "c.mov"), "")
+    lignes = {ligne.titre: ligne for ligne in resume.lignes}
+    assert lignes["Couleurs"].source == "HDR (HLG), 10 bits" and lignes["Couleurs"].differente
+    assert any("HDR" in texte for texte in resume.avertissements)
+    sdr = CouleursDeLaVideo("yuv420p", "tv", "bt709", "bt709", "bt709")
+    source = source_du_projet(projet, replace(analyse, couleurs=sdr))
+    assert not source.hdr and source.couleurs.texte() == "SDR, 8 bits"
+    assert source_du_projet(projet).hdr is None  # sans FFmpeg ni Qt : inconnu
 
 
 def test_source_d_une_prise(tmp_path):

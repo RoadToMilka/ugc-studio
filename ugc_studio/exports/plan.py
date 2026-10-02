@@ -28,7 +28,7 @@ from .cadence import (
     temps_de_l_image,
     texte_frequence,
 )
-from .ffmpeg import Analyse
+from .ffmpeg import Analyse, CouleursDeLaVideo
 
 SORTE_CALQUE = "calque"
 
@@ -92,6 +92,7 @@ class Source:
     debit_audio: int | None = None
     poids: int | None = None  # octets
     hdr: bool | None = None
+    couleurs: CouleursDeLaVideo | None = None  # lues par FFmpeg (format des pixels, norme, HDR)
     prise: bool = False  # sous-titres d'une prise de voix
     video_d_apercu: Path | None = None  # projet sans vidéo : celle choisie pour l'aperçu
 
@@ -160,6 +161,8 @@ def source_du_projet(projet: Projet, analyse: Analyse | None = None) -> Source:
         source = replace(source, codec_audio=nom_du_codec(son.codec) or source.codec_audio, debit_audio=son.debit or source.debit_audio)
     elif analyse.images is not None:
         source = replace(source, codec_audio="")  # vidéo sans son
+    if analyse.couleurs is not None and video:
+        source = replace(source, couleurs=analyse.couleurs, hdr=analyse.couleurs.hdr)
     return source
 
 
@@ -322,7 +325,10 @@ def resume_calque(source: Source, plan: PlanCalque, sous_titres: str, libre: int
     images_source = ""
     if source.video and source.frequence is not None:
         images_source = texte_frequence(source.frequence) + ("" if source.frequence_constante else " (variable)")
-    couleurs_source = ("HDR" if source.hdr else "SDR") if source.video and source.hdr is not None else ""
+    if source.video and source.couleurs is not None:
+        couleurs_source = source.couleurs.texte()
+    else:
+        couleurs_source = ("HDR" if source.hdr else "SDR") if source.video and source.hdr is not None else ""
     resume.lignes = [
         _ligne("Taille", taille_source or ("son seul" if not source.video else "inconnue"), f"{plan.largeur} × {plan.hauteur}", bool(taille_source)),
         _ligne(

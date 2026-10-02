@@ -31,6 +31,7 @@ from ugc_studio.exports.ffmpeg import (
     ffmpeg_a_preparer,
     infos_ffmpeg,
     lire_analyse,
+    lire_couleurs,
     lire_encodeurs,
     lire_formats_d_encodeur,
     lire_nouvelles,
@@ -123,6 +124,47 @@ def test_lectures_de_textes_de_ffmpeg():
     assert nouvelles.fini and nouvelles.temps_s == pytest.approx(13.746066)
 
 
+# Ce que FFmpeg écrit de la source (rubrique « Input #0 ») : une vidéo d'iPhone en HDR (HLG) avec une
+# pochette, une vidéo HD de Premiere Pro, une vidéo Motion JPEG (couleurs non précisées).
+MESSAGES_IPHONE = """Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'IMG_0420.MOV':
+  Duration: 00:00:12.34, start: 0.000000, bitrate: 9874 kb/s
+  Stream #0:0[0x1](und): Video: hevc (Main 10) (hvc1 / 0x31637668), yuv420p10le(tv, bt2020nc/bt2020/arib-std-b67, progressive), 1920x1080, 9800 kb/s, 29.98 fps, 30 tbr, 600 tbn (default)
+      DOVI configuration record: version: 1.0, profile: 8, level: 4, rpu flag: 1, el flag: 0, bl flag: 1, compatibility id: 4
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 160 kb/s (default)
+Output #0, framecrc, to 'pipe:':
+  Stream #0:0(und): Video: hevc (Main 10) (hvc1 / 0x31637668), yuv420p(pc, bt709, progressive), 1920x1080
+"""
+MESSAGES_PREMIERE = """Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'pub.mp4':
+  Stream #0:0[0x1](und): Video: png (png  / 0x20676E70), rgb24(pc), 1080x1080 (attached pic)
+  Stream #0:1[0x2](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, top coded first (swapped)), 1080x1920 [SAR 1:1 DAR 9:16], 12000 kb/s, 29.97 fps
+"""
+MESSAGES_MJPEG = """Input #0, avi, from 'demo.avi':
+  Stream #0:0: Video: mjpeg (Baseline) (MJPG / 0x47504A4D), yuvj420p(pc, bt470bg/unknown/unknown), 540x960, 10 fps, 10 tbr, 10 tbn
+"""
+
+
+def test_couleurs_de_la_source():
+    """Les couleurs de l'image, d'après FFmpeg : HDR (HLG) en 10 bits d'un iPhone, SDR BT.709 d'une
+    vidéo HD (la pochette est ignorée), couleurs non précisées d'un Motion JPEG."""
+    iphone = lire_couleurs(MESSAGES_IPHONE)
+    assert (iphone.format_pixels, iphone.plage, iphone.matrice, iphone.primaires, iphone.transfert) == (
+        "yuv420p10le", "tv", "bt2020nc", "bt2020", "arib-std-b67"
+    )
+    assert iphone.bits == 10 and iphone.hlg and iphone.hdr and iphone.texte() == "HDR (HLG), 10 bits"
+    premiere = lire_couleurs(MESSAGES_PREMIERE)
+    assert (premiere.format_pixels, premiere.plage, premiere.matrice, premiere.transfert) == ("yuv420p", "tv", "bt709", "bt709")
+    assert premiere.bits == 8 and not premiere.hdr and premiere.texte() == "SDR, 8 bits"
+    mjpeg = lire_couleurs(MESSAGES_MJPEG)
+    assert (mjpeg.plage, mjpeg.matrice, mjpeg.primaires, mjpeg.transfert) == ("pc", "bt470bg", "", "")
+    assert mjpeg.texte() == "SDR, 8 bits"
+    assert lire_couleurs("Input #0, wav, from 'voix.wav':\n  Stream #0:0: Audio: pcm_s16le, 48000 Hz, mono\n") is None
+    assert lire_couleurs("Stream #0:0: Video: h264, yuv420p(tv, smpte170m/smpte170m/smpte2084), 64x48") is None  # hors « Input »
+    pq = lire_couleurs("Input #0, mov, from 'a.mov':\n  Stream #0:0: Video: hevc, yuv420p10le(tv, bt2020nc/bt2020/smpte2084), 64x48\n")
+    assert pq.pq and pq.texte() == "HDR (PQ), 10 bits"
+    huit = lire_couleurs("Input #0, mov, from 'a.mov':\n  Stream #0:0: Video: prores, yuv422p10le(8 bpc, tv, bt709), 64x48\n")
+    assert huit.bits == 8
+
+
 def test_commande_du_calque():
     """Chaque option, d'après la documentation de FFmpeg 9.0.2 (rawvideo, prores_ks, scale, mov)."""
     commande = commande_calque(Path("ffmpeg.exe"), 1080, 1920, Fraction(30000, 1001), 930, Path("D:/pub (calque).mov.en-cours"))
@@ -136,6 +178,7 @@ def test_commande_du_calque():
     assert "-progress pipe:1" in texte and "-nostdin" not in commande  # l'entrée standard porte les images
     analyse = commande_analyse(Path("ffmpeg"), Path("v.mp4"))
     assert analyse[-9:] == ["-map", "0:V:0?", "-map", "0:a:0?", "-c", "copy", "-f", "framecrc", "-"]
+    assert "-loglevel info" in " ".join(analyse) and "-nostats" in analyse  # la description de la source (couleurs)
 
 
 def test_ffmpeg_designe_par_la_variable(tmp_path, monkeypatch):
@@ -251,6 +294,23 @@ def test_ffmpeg_sait_tout_faire():
     assert infos is not None and infos.version
     assert {"prores_ks", "libx264", "libx265", "ffv1", "aac"} <= infos.encodeurs
     assert infos.x265_10_bits  # utile au HDR (lot 3)
+
+
+@avec_ffmpeg
+def test_couleurs_lues_sur_de_vraies_videos(tmp_path):
+    """Avec le FFmpeg de l'app : une vidéo H.264 BT.709 (SDR, 8 bits) et une vidéo H.265 10 bits en
+    HLG (comme celles d'un iPhone), fabriquées puis analysées."""
+    sdr, hlg = tmp_path / "sdr.mp4", tmp_path / "hlg.mov"
+    commun = [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=30000/1001", "-t", "0.3"]
+    executer([*commun, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709",
+              "-colorspace", "bt709", "-color_range", "tv", str(sdr)])
+    executer([*commun, "-c:v", "libx265", "-x265-params", "log-level=error", "-pix_fmt", "yuv420p10le", "-color_primaries", "bt2020",
+              "-color_trc", "arib-std-b67", "-colorspace", "bt2020nc", "-color_range", "tv", "-tag:v", "hvc1", str(hlg)])
+    couleurs = analyser(sdr).couleurs
+    assert (couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.transfert) == ("yuv420p", "tv", "bt709", "bt709")
+    assert couleurs.texte() == "SDR, 8 bits"
+    couleurs = analyser(hlg).couleurs
+    assert couleurs.hlg and couleurs.bits == 10 and couleurs.primaires == "bt2020" and couleurs.texte() == "HDR (HLG), 10 bits"
 
 
 @avec_ffmpeg

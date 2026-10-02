@@ -135,7 +135,7 @@ class DialogueExportCalque(QDialog):
         self.etat_analyse = libelle("", "legende")
         self.etat_analyse.hide()
         contenu_zone.addWidget(self.etat_analyse)
-        self.tableau = Tableau(COLONNES_RESUME)
+        self.tableau = Tableau(COLONNES_RESUME, Hauteurs.LIGNE_RESUME)
         self.tableau.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.tableau.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         contenu_zone.addWidget(self.tableau)
@@ -190,12 +190,14 @@ class DialogueExportCalque(QDialog):
         grille = QGridLayout(zone)
         grille.setContentsMargins(0, 0, 0, 0)
         grille.setHorizontalSpacing(Espacements.L)
-        grille.setVerticalSpacing(Espacements.M)
+        grille.setVerticalSpacing(Espacements.S)
         grille.setColumnStretch(1, 1)
         rang = 0
 
         grille.addWidget(libelle("Format", "legende", retour_a_la_ligne=False), rang, 0)
-        grille.addWidget(libelle("MOV · ProRes 4444 avec transparence (format de montage d'Apple, lu par Premiere Pro)", "secondaire"), rang, 1)
+        format_ = libelle("MOV · ProRes 4444 avec transparence, lu par Premiere Pro", "secondaire")
+        format_.setToolTip("Le format de montage d'Apple : sans perte visible, il garde la transparence")
+        grille.addWidget(format_, rang, 1)
         rang += 1
 
         grille.addWidget(libelle("Images par seconde", "legende", retour_a_la_ligne=False), rang, 0, Qt.AlignmentFlag.AlignTop)
@@ -264,8 +266,10 @@ class DialogueExportCalque(QDialog):
         if self.source.video:
             self.texte_frequence.show()
             self.frequence_libre.hide()
+            ligne.setStretch(ligne.count() - 1, 0)  # le texte prend toute la ligne (sans passer à la ligne)
             return
         self.texte_frequence.hide()
+        ligne.setStretch(ligne.count() - 1, 1)  # les boutons restent à gauche
         choix = {}
         if self._frequence_apercu is not None:
             choix[FREQUENCE_APERCU] = f"{texte_frequence(self._frequence_apercu)} (vidéo d'aperçu)"
@@ -336,6 +340,7 @@ class DialogueExportCalque(QDialog):
         video = self.source.chemin if self.source.video else self.source.video_d_apercu
         if video is None or not video.is_file() or self._ffmpeg is None:
             self.analyse_finie = True
+            self.etat_analyse.hide()  # « Préparation de FFmpeg… » s'il vient d'être recopié
             self._actualiser()
             return
         self.etat_analyse.setText("FFmpeg lit ta vidéo (moment exact de chaque image, débits)…")
@@ -421,7 +426,7 @@ class DialogueExportCalque(QDialog):
                 tableau.setItem(rang, colonne, element)
         tableau.contenu_change()
         entete = tableau.horizontalHeader().sizeHint().height()
-        tableau.setFixedHeight(entete + len(resume.lignes) * Hauteurs.CONTROLE + 2 * Dimensions.BORDURE)
+        tableau.setFixedHeight(entete + len(resume.lignes) * Hauteurs.LIGNE_RESUME + 2 * Dimensions.BORDURE)
 
     def _afficher_les_messages(self, resume: Resume) -> None:
         while self.messages.count():

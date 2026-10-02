@@ -43,9 +43,10 @@ class Tableau(QTableWidget):
     """Tableau en lecture seule, une ligne choisie à la fois. Après avoir rempli les cases
     (setItem, setCellWidget), appeler contenu_change() : les largeurs sont alors recalculées."""
 
-    def __init__(self, colonnes: Sequence[Colonne]):
+    def __init__(self, colonnes: Sequence[Colonne], hauteur_ligne: int = Hauteurs.CONTROLE):
         super().__init__(0, len(colonnes))
         self.colonnes = tuple(colonnes)
+        self.hauteur_ligne = hauteur_ligne  # hauteur d'une ligne (résumé avant export : plus serrée)
         self._naturelles = [0] * len(self.colonnes)
         self.setHorizontalHeaderLabels([colonne.titre for colonne in self.colonnes])
         for index, colonne in enumerate(self.colonnes):
@@ -55,7 +56,7 @@ class Tableau(QTableWidget):
             if colonne.aide:
                 titre.setToolTip(colonne.aide)
         self.verticalHeader().hide()
-        self.verticalHeader().setDefaultSectionSize(Hauteurs.CONTROLE)
+        self.verticalHeader().setDefaultSectionSize(hauteur_ligne)
         self.setShowGrid(False)
         self.setWordWrap(False)  # une seule ligne par case (règle 1)
         self.setTextElideMode(Qt.TextElideMode.ElideRight)
@@ -108,9 +109,9 @@ class Tableau(QTableWidget):
                 default=1,
             )
             if lignes > 1:
-                self.setRowHeight(rang, max(Hauteurs.CONTROLE, lignes * interligne + 2 * Espacements.S))
+                self.setRowHeight(rang, max(self.hauteur_ligne, lignes * interligne + 2 * Espacements.S))
             else:
-                self.setRowHeight(rang, Hauteurs.CONTROLE)
+                self.setRowHeight(rang, self.hauteur_ligne)
 
     def ajuster_colonnes(self) -> None:
         """Répartit la largeur visible entre les colonnes (règles 2 et 3)."""

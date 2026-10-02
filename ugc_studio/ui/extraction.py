@@ -247,7 +247,9 @@ class LecteurInfos(QObject):
         infos = {"duree_s": round(lecteur.duration() / 1000, 3), "video": bool(lecteur.hasVideo())}
         for nom, cle in cles.items():
             valeur = _lisible(donnees.value(cle))
-            if valeur not in (None, "", 0, [0, 0]):
+            # « HDR : non » (False) est gardé : en Python, False vaut 0, et une vidéo SDR passait
+            # pour une vidéo dont on ne savait rien.
+            if isinstance(valeur, bool) or valeur not in (None, "", 0, [0, 0]):
                 infos[nom] = valeur
         return infos
 

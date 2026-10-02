@@ -123,6 +123,7 @@ class Hauteurs:
     PETIT_BOUTON = 28  # petits boutons (icônes)
     PASTILLE = 20  # pastilles d'information (ex. « Étape 2 »)
     CHOIX_LISTE = 32  # un choix dans une liste déroulante ouverte
+    LIGNE_RESUME = 30  # résumé avant export (V3) : tableau en lecture seule, lignes plus serrées
 
 
 class Typo:
