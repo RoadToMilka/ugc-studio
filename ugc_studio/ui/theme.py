@@ -226,13 +226,24 @@ class Dimensions:
     ZONE_DEFILANTE_HAUTEUR_SOUHAITEE = 160  # voir ZoneDefilante (ui/composants/defilement.py)
     DIALOGUE_HAUTEUR_MAX = 680  # une fenêtre de dialogue doit tenir sur l'écran d'un portable (768 px)
     EDITEUR_HAUTEUR_MIN = 180  # éditeur de script
-    # Studio des sous-titres (V2, lot 3) : aperçu à gauche, réglages à droite ; l'un sous l'autre
-    # quand la page a moins de STUDIO_DEUX_COLONNES_MIN de large (fenêtre étroite).
-    STUDIO_COLONNE_APERCU_LARGEUR = 400
-    STUDIO_DEUX_COLONNES_MIN = 880
-    APERCU_HAUTEUR_MAX = 540  # toile de l'aperçu : une vidéo 9:16 y fait 304 × 540
+    # Studio des sous-titres (V3.1, lot 5 ; voir ui/pages/sous_titres/disposition.py). Largeurs de la
+    # page, sans ses marges (la barre latérale et 2 × 16 px en moins : 1 270 px de page pour une
+    # fenêtre d'environ 1 500 px). Jusqu'à la 3.0.4 : aperçu de 400 px de large et réglages côte à
+    # côte à partir de 880 px, l'un sous l'autre en dessous.
+    STUDIO_DEUX_COLONNES_MIN = 880  # aperçu et apparence côte à côte (fenêtre moyenne)
+    STUDIO_TROIS_COLONNES_MIN = 1270  # aperçu, apparence et sous-titres côte à côte (grande fenêtre)
+    STUDIO_COLONNE_LARGEUR_MIN = 400  # apparence et sous-titres, en trois colonnes
+    # Hauteur des trois colonnes : au moins 640 px (sinon, fenêtre trop basse : disposition moyenne) ;
+    # au moins 760 px avec Source, Exporter et la frise visibles, sinon la bande du haut part en haut
+    # quand la page défile (les colonnes et la frise remplissent alors la fenêtre).
+    STUDIO_COLONNES_HAUTEUR_MIN = 640
+    STUDIO_COLONNES_HAUTEUR_CONFORT = 760
+    STUDIO_APERCU_LARGEUR_MAX = 560  # colonne de l'aperçu, marges comprises (vidéo 16:9 surtout)
+    STUDIO_TABLEAU_HAUTEUR_MIN = 200  # liste des sous-titres en trois colonnes (elle prend la place restante)
+    # Aperçu : la zone a exactement la taille de la vidéo affichée (V3.1 : plus de bandes sombres).
+    APERCU_HAUTEUR_MAX = 540  # fenêtre moyenne ou petite : une vidéo 9:16 y fait 304 × 540
     APERCU_HAUTEUR_MIN = 200
-    APERCU_LARGEUR_MIN = 160
+    APERCU_LARGEUR_MIN = 160  # aussi la largeur minimale de la frise
     DAMIER_CASE = 12  # côté d'une case du damier
     REPERE_EPAISSEUR = 1  # traits des repères (toujours 1 px à l'écran, quel que soit le zoom)
     REPERE_POINTILLES = (4, 4)  # zone de sécurité : 4 px de trait, 4 px d'espace
@@ -777,6 +788,19 @@ QScrollBar::add-page, QScrollBar::sub-page {
 QAbstractScrollArea::corner {
     background: transparent;
     border: none;
+}
+/* Colonnes du studio des sous-titres (V3.1, lot 5) : en grande fenêtre, chacune défile seule, avec
+   une barre fine (comme les listes), dans la marge de droite du bloc. */
+QScrollArea#colonneDefilante QScrollBar:vertical {
+    width: ${barre_fine}px;
+}
+QScrollArea#colonneDefilante QScrollBar::handle:vertical {
+    background: $poignee_fine;
+    border-radius: ${rayon_poignee_fine}px;
+    margin: ${marge_poignee_fine}px;
+}
+QScrollArea#colonneDefilante QScrollBar::handle:vertical:hover {
+    background: $poignee_fine_survol;
 }
 
 /* ---------- Menus et infobulles ---------- */

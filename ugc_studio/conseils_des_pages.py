@@ -259,7 +259,20 @@ SOUS_TITRES = PageDeConseils(
     "Sous-titres",
     (
         Rubrique(
-            "D'où viennent les mots",
+            "La page",
+            (
+                "En haut, « Source » (d'où viennent les mots) et « Exporter ». Dessous, l'aperçu, "
+                "l'apparence des sous-titres (préréglage et onglets) et la liste des sous-titres ; la frise "
+                "tout en bas.",
+                "Dans une grande fenêtre, les trois sont côte à côte et chacun défile seul : l'aperçu reste "
+                "sous tes yeux pendant que tu règles l'apparence ou que tu parcours la liste. Si la fenêtre "
+                "n'est pas très haute, fais défiler la page d'un cran : les colonnes et la frise la remplissent.",
+                "Dans une fenêtre plus petite, l'aperçu et l'apparence sont côte à côte, puis la frise et la "
+                "liste ; la page défile.",
+            ),
+        ),
+        Rubrique(
+            "Source : d'où viennent les mots",
             (
                 "Les sous-titres partent des mots de la transcription du projet, avec le moment de chaque mot.",
                 "Pour une prise du module Voix, « Créer les sous-titres » la transcrit, puis cale le texte "
@@ -272,6 +285,8 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Découpage",
             (
+                "Le découpage est en haut de la liste des sous-titres (groupe « Découpage », replié au "
+                "départ) : tu vois tout de suite ce qu'il change.",
                 "Caractères et mots par sous-titre sont deux maximums ; un mot n'est jamais coupé.",
                 "Un sous-titre se termine toujours à un changement de personne, après un silence de plus de "
                 "0,8 s et, si « Couper de préférence après la ponctuation » est cochée, après une fin de phrase.",
@@ -353,8 +368,9 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Préréglages",
             (
-                "Un préréglage garde tout le style : onglets Texte, Mots, Animations, Position et Découpage. "
-                "Ni le format ni la zone de sécurité : ils dépendent de la vidéo et de la plateforme.",
+                "Un préréglage garde tout le style : onglets Texte, Mots, Animations et Position, et le "
+                "Découpage. Ni le format ni la zone de sécurité : ils dépendent de la vidéo et de la plateforme. "
+                "Ni « Masquer les hésitations », partagé avec le module Transcription.",
                 "Choisis-en un dans la liste « Préréglage » pour l'appliquer. Dès que tu changes un réglage, "
                 "la liste affiche « (modifié) » : ton projet garde sa propre copie du style.",
                 "Le préréglage tel qu'il est enregistré sert de référence : juste après l'avoir choisi, "
@@ -371,9 +387,9 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Frise",
             (
-                "Sous l'aperçu, la frise montre toute la pub : un bloc par sous-titre (numéroté), un petit "
+                "En bas de la page, la frise montre toute la pub : un bloc par sous-titre (numéroté), un petit "
                 "trait par mot (son texte au survol), et le trait mauve du moment lu.",
-                "Un clic y place la lecture ; un clic sur un bloc le choisit, comme dans la liste en dessous.",
+                "Un clic y place la lecture ; un clic sur un bloc le choisit, comme dans la liste.",
                 "Glisse le bord commun de deux sous-titres : il saute de mot en mot, et les mots qui vont "
                 "changer de sous-titre se colorent. Au relâchement, ils passent de l'un à l'autre, avec les "
                 "règles de « Monter le premier mot » et « Descendre le dernier mot » (en rouge : la raison du "
@@ -386,6 +402,8 @@ SOUS_TITRES = PageDeConseils(
             (
                 "L'aperçu dessine les sous-titres avec le même moteur que les exports : ce que tu vois "
                 "est ce qui est exporté, à la finesse de ton écran près.",
+                "Il a la taille de ta vidéo, sans bandes autour ; dans une grande fenêtre, il prend toute la "
+                "hauteur de sa colonne.",
                 "Fond « Vidéo » : la vidéo du projet ; « Gris » : un fond neutre ; « Damier » : pour juger un "
                 "texte prévu pour le calque transparent.",
                 "« 100 % » montre un pixel de la vidéo par pixel de ton écran, pour juger la netteté ; la "

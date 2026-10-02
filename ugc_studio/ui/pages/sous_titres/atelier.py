@@ -1,25 +1,31 @@
 """Atelier des sous-titres (§7, §3.3, §8.1) : des mots horodatés au fichier SRT, dans un studio.
 
-1. Mots : ceux de la transcription du projet (vidéo transcrite dans le module Transcription), ou
-   ceux d'une prise de voix : « Créer les sous-titres » transcrit la prise puis cale les mots sur
-   son script (orthographe exacte). Les mots se corrigent dans le module Transcription.
-2. Studio (V2, lot 3) : l'aperçu fidèle à gauche (apercu.py : la vidéo, ou un fond gris ou un
-   damier, et les sous-titres dessinés par le moteur de dessin, le même que l'export de la V3), les
-   réglages à droite (reglages.py : Texte, Position, Découpage, Écran). Les sous-titres sont
-   recalculés à chaque changement ; la position (haut, centre, bas, réglage fin) ne change que
-   l'aperçu, jamais le découpage.
-3. Sous-titres : la liste ; ceux où un mot a dû être rapetissé sont signalés en orange.
-4. Réorganiser à la main (V1.1) : sur le sous-titre choisi, monter son premier mot, descendre son
-   dernier mot, le couper, le fusionner avec le suivant, ou revenir au découpage automatique. Les
-   réglages du découpage s'appliquent toujours (une action qui ne les respecte pas est refusée,
-   avec la raison) ; un réglage qui défait un ajustement demande d'abord (sous_titres_du_projet.py).
-5. Frise (V2, lot 7, composants/frise.py) : sous le studio, un bloc par sous-titre et un trait par
-   mot ; un clic place la lecture ou choisit un sous-titre (synchronisé avec la liste), le bord
-   commun de deux sous-titres se glisse de mot en mot (mêmes règles qu'au point 4), un double-clic
-   corrige les mots du sous-titre dans le module Transcription.
-6. Préréglages (V2, lot 7, prereglages.py) : en haut des réglages, le préréglage d'origine du projet
-   (« (modifié) » quand son style s'en écarte) ; en choisir un l'applique (avec la question de la
-   1.1.0 s'il défait un ajustement), « Enregistrer… » en crée un, le menu ⋯ met à jour, revient au
+Disposition (V3.1, lot 5, disposition.py) : en haut, Source à gauche et Exporter à droite ; dessous,
+l'Aperçu, l'Apparence et les Sous-titres (trois colonnes qui défilent chacune seule en grande
+fenêtre ; aperçu et apparence côte à côte, puis la liste, en fenêtre moyenne) ; la Frise en bas.
+
+1. Source (« Mots des sous-titres » jusqu'à la 3.0.4) : les mots de la transcription du projet
+   (vidéo transcrite dans le module Transcription), ou ceux d'une prise de voix : « Créer les
+   sous-titres » transcrit la prise puis cale les mots sur son script (orthographe exacte). Les mots
+   se corrigent dans le module Transcription.
+2. Aperçu (apercu.py) : la vidéo, ou un fond gris ou un damier, et les sous-titres dessinés par le
+   moteur de dessin, le même que l'export de la V3 ; la zone a la taille de la vidéo affichée.
+3. Apparence (reglages.py ; « Réglages » jusqu'à la 3.0.4) : préréglage, onglets Texte, Mots,
+   Animations, Position et Écran. Les sous-titres sont recalculés à chaque changement ; la position
+   (haut, centre, bas, réglage fin) ne change que l'aperçu, jamais le découpage.
+4. Sous-titres : le Découpage (groupe repliable, en haut depuis la V3.1), puis la liste ; ceux où un
+   mot a dû être rapetissé sont signalés en orange. Réorganiser à la main (V1.1) : sur le sous-titre
+   choisi, monter son premier mot, descendre son dernier mot, le couper, le fusionner avec le suivant,
+   ou revenir au découpage automatique. Les réglages du découpage s'appliquent toujours (une action
+   qui ne les respecte pas est refusée, avec la raison) ; un réglage qui défait un ajustement demande
+   d'abord (sous_titres_du_projet.py).
+5. Frise (V2, lot 7, composants/frise.py) : en bas, un bloc par sous-titre et un trait par mot ; un
+   clic place la lecture ou choisit un sous-titre (synchronisé avec la liste), le bord commun de deux
+   sous-titres se glisse de mot en mot (mêmes règles qu'au point 4), un double-clic corrige les mots
+   du sous-titre dans le module Transcription.
+6. Préréglages (V2, lot 7, prereglages.py) : en haut de l'apparence, le préréglage d'origine du
+   projet (« (modifié) » quand son style s'en écarte) ; en choisir un l'applique (avec la question de
+   la 1.1.0 s'il défait un ajustement), « Enregistrer… » en crée un, le menu ⋯ met à jour, revient au
    préréglage ou ouvre la fenêtre « Préréglages de sous-titres ».
 7. Exporter (V3) : la vidéo avec ses sous-titres incrustés (lot 2 ; projet avec une vidéo), le
    calque transparent (MOV, ProRes 4444) à poser sur le montage dans Premiere Pro, tous deux
@@ -81,10 +87,12 @@ from ... import taches
 from ...composants.apercu import LecteurApercu
 from ...composants.bouton import montrer_occupe
 from ...composants.choix_voix import choisir
+from ...composants.defilement import ColonneDefilante
 from ...composants.elements import (
     BoutonInfo,
     bloc,
     bouton,
+    conteneur_vertical,
     info,
     intitule,
     libelle,
@@ -113,13 +121,14 @@ from ...sous_titres_du_projet import (
 from ...theme import Couleurs, Dimensions, Espacements, qcolor
 from ..base import Page
 from ..transcription.atelier import description_source
-from .apercu import BlocApercu, DispositionStudio
+from .apercu import BlocApercu
+from .disposition import GRANDE, DispositionStudio
 from .reglages import PanneauReglages
 
 journal = logging.getLogger(__name__)
 
 TITRE = "Sous-titres"
-SOUS_TITRE = "Studio des sous-titres : aperçu sur la vidéo, réglages, découpage et export SRT."
+SOUS_TITRE = "Studio des sous-titres : aperçu sur la vidéo, apparence, découpage et export."
 # Le texte d'un sous-titre garde ses 2 lignes (sa vraie mise en page) ; les autres cases tiennent
 # sur une ligne (voir composants/tableau.py).
 COLONNES = (
@@ -140,6 +149,17 @@ def temps_lisible(secondes: float) -> str:
     return f"{int(minutes)}:{reste:05.2f}".replace(".", ",")
 
 
+def bloc_en_colonne(titre: str, contenu) -> tuple:
+    """Bloc dont le contenu défile seul en grande fenêtre (V3.1, lot 5 : Apparence, Sous-titres) : le
+    titre reste en haut, et la barre fine prend place dans la marge de droite du bloc (voir
+    ColonneDefilante). Renvoie le bloc et la zone qui défile."""
+    cadre, disposition = bloc(titre)
+    disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.S, Espacements.XL)
+    colonne = ColonneDefilante(contenu, marge_droite=Espacements.XL - Espacements.S)
+    disposition.addWidget(colonne)
+    return cadre, colonne
+
+
 def remarque(sous_titre: SousTitre) -> str:
     remarques = []
     if sous_titre.trop_large:
@@ -157,7 +177,8 @@ class AtelierSousTitres(Page):
     corriger_demande = Signal(float)
 
     def __init__(self, services: Services):
-        super().__init__(TITRE, SOUS_TITRE, conseils="sous-titres")
+        # La page remplit la hauteur de la fenêtre : en grande fenêtre, les colonnes en prennent le reste.
+        super().__init__(TITRE, SOUS_TITRE, conseils="sous-titres", remplir_la_hauteur=True)
         self._services = services
         self._projet: Projet | None = None
         self._occupe = False
@@ -173,18 +194,12 @@ class AtelierSousTitres(Page):
         self._enregistrement_position.setInterval(DELAI_ENREGISTREMENT_POSITION_MS)
         self._enregistrement_position.timeout.connect(self._services.projets.enregistrer)
 
-        self.contenu.addWidget(self._bloc_mots())
-
-        # --- Studio : aperçu et réglages ---
+        # --- Aperçu et apparence ---
         self.bloc_apercu = BlocApercu(services.preferences)
         self.toile = self.bloc_apercu.toile
         self.toile.glissable = True  # le sous-titre se glisse verticalement dans l'aperçu
-        cadre_reglages, d = bloc("Réglages")
         self.panneau = PanneauReglages()
-        d.addWidget(self.panneau)
-        self.studio = DispositionStudio(self.bloc_apercu, cadre_reglages)
-        self.contenu.addWidget(self.studio)
-        self.contenu.addWidget(self._bloc_frise())
+        self.cadre_apparence, self.colonne_apparence = bloc_en_colonne("Apparence", self.panneau)
         # Raccourcis vers les réglages (tests, autotest).
         panneau = self.panneau
         self.caracteres, self.mots_max, self.lignes, self.duree_min = panneau.caracteres, panneau.mots_max, panneau.lignes, panneau.duree_min
@@ -193,19 +208,20 @@ class AtelierSousTitres(Page):
         self.format, self.plateforme, self.marge, self.masquer = panneau.format, panneau.plateforme, panneau.marge, panneau.masquer
         self.infos_ecran = panneau.infos_ecran
 
-        # --- Sous-titres ---
-        self.cadre_sous_titres, d = bloc("Sous-titres")
-        self.resume = libelle("", "legende")
-        d.addWidget(self.resume)
-        self._zone_reorganiser(d)
-        self.tableau = self._tableau()
-        d.addWidget(self.tableau)
-        self._actualiser_reorganisation()  # aucun sous-titre choisi : actions désactivées
-        self.statut_lecture = libelle("", "secondaire")  # lecture impossible dans l'aperçu
-        self.statut_lecture.hide()
-        d.addWidget(self.statut_lecture)
-        self.contenu.addWidget(self.cadre_sous_titres)
-        self.contenu.addWidget(self._bloc_export())
+        # --- Disposition (V3.1, lot 5) : Source et Exporter en haut, les trois colonnes, la frise ---
+        self.studio = DispositionStudio(
+            self._bloc_source(),
+            self._bloc_export(),
+            self.bloc_apercu,
+            self.cadre_apparence,
+            self._bloc_sous_titres(),
+            self._bloc_frise(),
+            colonnes=(self.colonne_apparence, self.colonne_sous_titres),
+            defilement=self.defilement,
+        )
+        self.studio.mode_change.connect(self._disposition_change)
+        self._disposition_change(self.studio.mode)
+        self.contenu.addWidget(self.studio, 1)
 
         self._brancher()
         services.prereglages.abonner(self._actualiser_prereglage)  # renommé, supprimé, mis à jour…
@@ -215,17 +231,20 @@ class AtelierSousTitres(Page):
 
     # --- Construction ------------------------------------------------------------------------
 
-    def _bloc_mots(self):
-        cadre, d = bloc("Mots des sous-titres")
-        self.texte_source = libelle("", "secondaire")
-        d.addWidget(self.texte_source)
+    def _bloc_source(self):
+        """Source (V3.1, lot 5 ; « Mots des sous-titres » jusqu'à la 3.0.4) : d'où viennent les mots
+        des sous-titres, en haut à gauche de la page. « Corriger les mots » au bout de la ligne qui
+        les décrit."""
+        self.cadre_source, d = bloc("Source")
         ligne = QHBoxLayout()
+        ligne.setSpacing(Espacements.M)
+        self.texte_source = libelle("", "secondaire")
+        ligne.addWidget(self.texte_source, 1)
         self.bouton_corriger = bouton(
             "Corriger les mots", variante="contour", nom_icone="pencil", action=lambda: self.corriger_demande.emit(-1.0)
         )
         self.bouton_corriger.setToolTip("Corriger un mot ou son moment dans le module Transcription")
-        ligne.addWidget(self.bouton_corriger)
-        ligne.addStretch(1)
+        ligne.addWidget(self.bouton_corriger, 0, Qt.AlignmentFlag.AlignVCenter)
         d.addLayout(ligne)
         # La liste des prises sous son nom (V3.1), le bouton sur sa ligne ; l'explication au survol de
         # l'icône « i » après « Prise ».
@@ -264,10 +283,43 @@ class AtelierSousTitres(Page):
         self.statut = libelle("", "secondaire")
         self.statut.hide()
         d.addWidget(self.statut)
-        return cadre
+        d.addStretch(1)  # à côté d'Exporter, les deux blocs ont la même hauteur : le contenu reste en haut
+        return self.cadre_source
+
+    def _bloc_sous_titres(self):
+        """Sous-titres : le Découpage (V3.1, lot 5 : il quitte les onglets de l'apparence, replié au
+        départ), la réorganisation à la main et la liste. En grande fenêtre, le bloc défile seul et la
+        liste prend la place qui reste."""
+        contenu, d = conteneur_vertical(Espacements.M)
+        self.resume = libelle("", "legende")
+        d.addWidget(self.resume)
+        d.addWidget(self.panneau.zone_decoupage)
+        self._zone_reorganiser(d)
+        self.tableau = self._tableau()
+        d.addWidget(self.tableau, 1)
+        self._actualiser_reorganisation()  # aucun sous-titre choisi : actions désactivées
+        self.statut_lecture = libelle("", "secondaire")  # lecture impossible dans l'aperçu
+        self.statut_lecture.hide()
+        d.addWidget(self.statut_lecture)
+        self.cadre_sous_titres, self.colonne_sous_titres = bloc_en_colonne("Sous-titres", contenu)
+        return self.cadre_sous_titres
+
+    def _disposition_change(self, mode: str) -> None:
+        """Trois colonnes (grande fenêtre) : la liste prend la hauteur qui reste dans sa colonne, au
+        moins STUDIO_TABLEAU_HAUTEUR_MIN ; sinon, elle a sa hauteur habituelle (la page défile)."""
+        grande = mode == GRANDE
+        self.tableau.setMinimumHeight(Dimensions.STUDIO_TABLEAU_HAUTEUR_MIN if grande else Dimensions.TABLEAU_HAUTEUR_MIN)
+
+    def montrer(self, element) -> None:
+        """Amène un élément à l'écran : dans sa colonne si elle défile seule (grande fenêtre), puis
+        dans la page."""
+        for colonne in (self.colonne_apparence, self.colonne_sous_titres):
+            if colonne.defile and colonne.isAncestorOf(element):
+                colonne.ensureWidgetVisible(element)
+        self.defilement.ensureWidgetVisible(element)
 
     def _bloc_frise(self):
-        """Frise des sous-titres (V2, lot 7), sur toute la largeur, sous l'aperçu et les réglages."""
+        """Frise des sous-titres (V2, lot 7), sur toute la largeur, en bas de la page."""
         self.cadre_frise, d = bloc(
             "Frise",
             aide=(
@@ -316,6 +368,7 @@ class AtelierSousTitres(Page):
         self.statut_export = libelle("", "secondaire")
         self.statut_export.hide()
         d.addWidget(self.statut_export)
+        d.addStretch(1)  # à côté de Source, les deux blocs ont la même hauteur : le contenu reste en haut
         return self.cadre_export
 
     def _brancher(self) -> None:
@@ -422,11 +475,10 @@ class AtelierSousTitres(Page):
             self.rafraichir()
 
     def prendre_une_couleur(self, champ) -> None:
-        """Pipette d'un champ couleur (§7.4) : l'aperçu attend un clic. Quand la page est étroite (aperçu
-        au-dessus des réglages), elle défile jusqu'à l'aperçu."""
+        """Pipette d'un champ couleur (§7.4) : l'aperçu attend un clic. Si l'aperçu n'est pas à l'écran
+        (ex. fenêtre étroite, aperçu au-dessus de l'apparence), la page défile jusqu'à lui."""
         self.toile.commencer_pipette(champ.couleur_prise)
-        if not self.studio.deux_colonnes:
-            self.defilement.ensureWidgetVisible(self.bloc_apercu.zone)
+        self.defilement.ensureWidgetVisible(self.bloc_apercu.zone)
 
     def keyPressEvent(self, evenement) -> None:  # noqa: N802
         """Barre Espace : lecture ou pause (quand aucun bouton ni case n'a la main)."""
@@ -586,7 +638,7 @@ class AtelierSousTitres(Page):
         self.panneau.texte.taille_px.setText(f"{moteur.taille_px} px")
         self._actualiser_limites()
         self.toile.definir(moteur, self.mots)
-        self.bloc_apercu.zone.actualiser_taille()
+        self.bloc_apercu.actualiser_taille()  # format de la vidéo : la zone et la colonne de l'aperçu
         self._remplir_tableau()
         transcription = self.transcription
         self.frise.toile.definir(self.sous_titres, self.mots, (transcription.duree_s or 0.0) if transcription else 0.0)

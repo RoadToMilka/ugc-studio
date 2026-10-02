@@ -338,8 +338,10 @@ class ToileApercu(QWidget):
 
 
 class ZoneApercu(QScrollArea):
-    """La toile dans la page : sa hauteur suit le format de la vidéo (sans dépasser
-    APERCU_HAUTEUR_MAX) ; à 100 %, la toile prend la taille réelle de la vidéo et la zone défile."""
+    """La toile dans la page. V3.1 (lot 5) : la zone a exactement la taille de la vidéo affichée, sans
+    bandes sombres autour ; le bloc qui la contient la choisit (taille_pour, puis setFixedSize). À
+    100 %, la toile prend la taille réelle de la vidéo et la zone défile. Jusqu'à la 3.0.4, la zone
+    prenait toute la largeur de sa colonne, et la vidéo s'y centrait entre deux bandes sombres."""
 
     def __init__(self, toile: ToileApercu, parent: QWidget | None = None):
         super().__init__(parent)
@@ -347,25 +349,19 @@ class ZoneApercu(QScrollArea):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setWidget(toile)
-        politique = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        politique.setHeightForWidth(True)
-        self.setSizePolicy(politique)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setFixedSize(self.taille_pour(Dimensions.APERCU_HAUTEUR_MAX, Dimensions.APERCU_HAUTEUR_MAX))
         self.definir_zoom(ZOOM_AJUSTE)
 
-    def hasHeightForWidth(self) -> bool:  # noqa: N802
-        return True
-
-    def heightForWidth(self, largeur: int) -> int:  # noqa: N802
+    def taille_pour(self, largeur: int, hauteur: int) -> QSize:
+        """Taille de la vidéo entière dans largeur × hauteur (« Ajusté ») : la place est remplie dans
+        un sens, et la vidéo garde ses proportions dans l'autre. La hauteur donnée compte pour au moins
+        APERCU_HAUTEUR_MIN : en dessous, le sous-titre serait illisible."""
         largeur_video, hauteur_video = self.toile.taille_video()
-        hauteur = largeur * hauteur_video / largeur_video
-        return round(min(max(hauteur, Dimensions.APERCU_HAUTEUR_MIN), Dimensions.APERCU_HAUTEUR_MAX))
-
-    def sizeHint(self) -> QSize:  # noqa: N802
-        largeur = Dimensions.STUDIO_COLONNE_APERCU_LARGEUR
-        return QSize(largeur, self.heightForWidth(largeur))
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802
-        return QSize(Dimensions.APERCU_LARGEUR_MIN, Dimensions.APERCU_HAUTEUR_MIN)
+        hauteur = max(hauteur, Dimensions.APERCU_HAUTEUR_MIN)
+        largeur = max(largeur, 1)  # avant la mise en place, le bloc peut n'avoir encore aucune largeur
+        echelle = min(largeur / largeur_video, hauteur / hauteur_video)
+        return QSize(round(largeur_video * echelle), round(hauteur_video * echelle))
 
     @property
     def zoom(self) -> str:
@@ -389,8 +385,8 @@ class ZoneApercu(QScrollArea):
         self.toile.update()
 
     def actualiser_taille(self) -> None:
-        """Le format de la vidéo a changé : nouvelle hauteur de la zone (et taille de la toile à 100 %)."""
-        self.updateGeometry()
+        """Le format de la vidéo a changé : à 100 %, la toile prend sa nouvelle taille réelle (la taille
+        de la zone, elle, est choisie par le bloc qui la contient)."""
         if self.toile._zoom_reel:
             self.definir_zoom(ZOOM_REEL)
 

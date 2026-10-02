@@ -1,5 +1,7 @@
-"""Réglages du studio des sous-titres (V2, lot 3 ; cahier des charges §7.9) : un préréglage, puis
-six onglets.
+"""Apparence des sous-titres (V2, lot 3 ; cahier des charges §7.9 ; « Réglages » jusqu'à la 3.0.4) :
+un préréglage, puis cinq onglets. Le découpage, qui fait aussi partie d'un préréglage, est en haut du
+bloc Sous-titres depuis la V3.1 (lot 5) : ce panneau le construit (zone_decoupage) et le lit avec le
+reste, la page le place.
 
 - Préréglage (lot 7) : la liste des préréglages (choisir l'un l'applique), « (modifié) » quand le style
   du projet s'en écarte, « Enregistrer… » (nouveau préréglage) et le menu ⋯ (mettre à jour, revenir,
@@ -12,14 +14,15 @@ six onglets.
 - Animations (onglet_animations.py) : le mot qui devient actif, son retour à « déjà dit »,
   l'apparition et la disparition du sous-titre (lot 6).
 - Position : haut, centre ou bas, réglage fin, alignement ; avancé : largeur maximale des lignes.
-- Découpage : caractères, mots et lignes au plus, durée minimale, coupure sur la ponctuation ;
-  hésitations masquées (réglage partagé avec la transcription, hors du préréglage).
+- Découpage (zone_decoupage, dans le bloc Sous-titres) : caractères, mots et lignes au plus, durée
+  minimale, coupure sur la ponctuation ; hésitations masquées (réglage partagé avec la transcription,
+  hors du préréglage : le ↺ du groupe ne le touche pas).
 
 V3.1 : la référence est le préréglage du projet tel qu'il est enregistré (sans lui, le style de
-départ) ; dans chaque onglet (sauf Écran, qui dépend de la vidéo), un réglage qui s'en écarte a son
-nom en mauve, et le ↺ de son groupe apparaît à côté du titre (definir_reference). Position et
-Découpage forment chacun un groupe ; le ↺ « Revenir à 0 % » du réglage fin a disparu : celui du
-groupe Position remet la position du préréglage, réglage fin compris.
+départ) ; dans chaque onglet (sauf Écran, qui dépend de la vidéo) et dans le Découpage, un réglage
+qui s'en écarte a son nom en mauve, et le ↺ de son groupe apparaît à côté du titre
+(definir_reference). Position et Découpage forment chacun un groupe ; le ↺ « Revenir à 0 % » du
+réglage fin a disparu : celui du groupe Position remet la position du préréglage, réglage fin compris.
 - Écran : format (suivi de la vidéo quand il y en a une, sinon au choix, dont personnalisé), zone de
   sécurité, marge maximum ; pour un projet sans vidéo, la vidéo choisie seulement pour l'aperçu.
 
@@ -71,7 +74,7 @@ from .onglet_mots import OngletMots
 from .onglet_texte import RETABLIR, OngletTexte
 from .reglages_communs import grille, marque_de, marquer, meme_valeur, nombre_lisible
 
-ONGLET_TEXTE, ONGLET_MOTS, ONGLET_ANIMATIONS, ONGLET_POSITION, ONGLET_DECOUPAGE, ONGLET_ECRAN = range(6)
+ONGLET_TEXTE, ONGLET_MOTS, ONGLET_ANIMATIONS, ONGLET_POSITION, ONGLET_ECRAN = range(5)
 PAS_REGLAGE_FIN = 10  # la glissière du réglage fin compte en dixièmes de % de la hauteur
 SANS_PREREGLAGE = ""  # choix « Aucun préréglage » de la liste
 MODIFIE = " (modifié)"
@@ -103,7 +106,7 @@ class PanneauReglages(QWidget):
         disposition.addSpacing(Espacements.S)
         disposition.addWidget(self.statut_prereglage)
         disposition.addSpacing(Espacements.S)
-        self.onglets = Onglets(hauteur_selon_l_onglet=True, en_flux=True)  # six onglets : sur deux lignes si besoin
+        self.onglets = Onglets(hauteur_selon_l_onglet=True, en_flux=True)  # cinq onglets : sur deux lignes si besoin
         self.texte = OngletTexte()
         self.texte.change.connect(self.change.emit)
         self.onglets.addTab(self.texte, "Texte")
@@ -114,9 +117,10 @@ class PanneauReglages(QWidget):
         self.animations.change.connect(self.change.emit)
         self.onglets.addTab(self.animations, "Animations")
         self.onglets.addTab(self._onglet_position(), "Position")
-        self.onglets.addTab(self._onglet_decoupage(), "Découpage")
         self.onglets.addTab(self._onglet_ecran(), "Écran")
         disposition.addWidget(self.onglets)
+        # Le découpage (V3.1, lot 5) : construit ici, placé par la page en haut du bloc Sous-titres.
+        self.zone_decoupage = self._zone_decoupage()
         self._apercu = VideoApercu()
         self._resolution_imposee: tuple[int, int] | None | bool = False  # False : liste des formats pas encore remplie
         self._reference: ReglagesSousTitres | None = None  # le préréglage du projet (V3.1), donné par la page
@@ -127,7 +131,7 @@ class PanneauReglages(QWidget):
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.prereglage = liste_deroulante(
-            "Un style complet (onglets Texte, Mots, Animations, Position et Découpage) : en choisir un l'applique"
+            "Un style complet (onglets Texte, Mots, Animations et Position, et le Découpage) : en choisir un l'applique"
         )
         self.prereglage.activated.connect(lambda _index: self._prereglage_active())
         ligne.addWidget(self.prereglage, 1)
@@ -241,11 +245,12 @@ class PanneauReglages(QWidget):
         self.largeur_lignes.valueChanged.connect(lambda _valeur: self.change.emit())
         return page
 
-    def _onglet_decoupage(self) -> QWidget:
-        page, contenu = self._onglet()
-        # Un seul groupe (V3.1), avec son ↺ ; « Masquer les hésitations » reste dehors : réglage
-        # partagé avec la transcription, il ne fait pas partie d'un préréglage.
-        self.section_decoupage = SectionRepliable("Découpage", True)
+    def _zone_decoupage(self) -> QWidget:
+        """Le groupe « Découpage » (V3.1 : en haut du bloc Sous-titres, replié au départ), avec son ↺.
+        « Masquer les hésitations » y est aussi, en dernier : réglage partagé avec la transcription, il
+        ne fait pas partie d'un préréglage (son icône « i » le dit), et le ↺ ne le touche pas."""
+        zone, contenu = conteneur_vertical(Espacements.M)
+        self.section_decoupage = SectionRepliable("Découpage")
         self.section_decoupage.ajouter_retablir(self._retablir_decoupage, RETABLIR)
         groupe = self.section_decoupage.contenu
         self.caracteres = champ_entier(*LIMITES["caracteres_max"], info="Nombre maximum de caractères par sous-titre, espaces comprises")
@@ -261,10 +266,10 @@ class PanneauReglages(QWidget):
             )
         )
         groupe.addLayout(reglages)
-        zone, self.couper_ponctuation = case_a_cocher(
+        zone_ponctuation, self.couper_ponctuation = case_a_cocher(
             "Couper de préférence après la ponctuation", "Une fin de phrase termine alors toujours le sous-titre."
         )
-        groupe.addWidget(zone)
+        groupe.addWidget(zone_ponctuation)
         contenu.addWidget(self.section_decoupage)
         self._marques_decoupage = [
             (marque_de(reglages.champs["Caractères au plus"]), "caracteres_max"),
@@ -274,15 +279,15 @@ class PanneauReglages(QWidget):
             (self.couper_ponctuation, "couper_sur_ponctuation"),
         ]
         self.zone_masquer, self.masquer = case_a_cocher(
-            "Masquer les hésitations", "« euh », « hum »… (même réglage que dans le module Transcription)."
+            "Masquer les hésitations",
+            "« euh », « hum »… Même réglage que dans le module Transcription ; il ne fait pas partie d'un préréglage.",
         )
-        contenu.addWidget(self.zone_masquer)
-        contenu.addStretch(1)
+        groupe.addWidget(self.zone_masquer)
         for champ in (self.caracteres, self.mots_max, self.lignes, self.duree_min):
             champ.valueChanged.connect(lambda _valeur: self.change.emit())
         self.couper_ponctuation.toggled.connect(lambda _coche: self.change.emit())
         self.masquer.toggled.connect(lambda coche: self.masquer_change.emit(coche))
-        return page
+        return zone
 
     def _onglet_ecran(self) -> QWidget:
         page, contenu = self._onglet()
@@ -495,7 +500,7 @@ class PanneauReglages(QWidget):
         }
 
     def _actualiser_marques(self) -> None:
-        """Onglets Position et Découpage : noms en mauve et ↺ du groupe, comparés au préréglage."""
+        """Position et Découpage : noms en mauve et ↺ du groupe, comparés au préréglage."""
         reference = self._reference
         if reference is None:
             return
