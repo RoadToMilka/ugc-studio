@@ -8,7 +8,7 @@ Toutes les répliques partent ensemble dans la même génération.
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ....projets import RepliqueProjet
 from ....script import couper, est_vide
@@ -17,6 +17,7 @@ from ...composants.champ_style import ChampStyle
 from ...composants.editeur_script import EditeurScript
 from ...composants.elements import bouton, libelle, separateur
 from ...composants.menu import Menu
+from ...dialogues import messages
 from ...icones import icone_menu
 from ...theme import Couleurs, Espacements
 
@@ -166,16 +167,18 @@ class ListeRepliques(QWidget):
     def supprimer(self, carte: CarteReplique, confirmer: bool = True) -> None:
         if len(self._cartes) <= 1 or carte not in self._cartes:
             return
-        if confirmer and not est_vide(carte.editeur.segments()):
-            reponse = QMessageBox.question(
-                self,
+        if (
+            confirmer
+            and not est_vide(carte.editeur.segments())
+            and not messages.confirmer(
+                self.window(),
                 "Supprimer la réplique",
                 f"Supprimer la {carte.titre.text().lower()} et son texte ?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
+                action="Supprimer",
+                icone_action="trash",
             )
-            if reponse != QMessageBox.StandardButton.Yes:
-                return
+        ):
+            return
         self._cartes.remove(carte)
         carte.hide()
         carte.deleteLater()

@@ -4,7 +4,6 @@ Voix), avec un faux Google et une fausse boutique."""
 import json
 
 import pytest
-from PySide6.QtWidgets import QMessageBox
 
 from serveur_factice import ServeurFactice
 from ugc_studio.ecriture.page_produit import SHOPIFY
@@ -13,6 +12,7 @@ from ugc_studio.fournisseurs.texte import ResultatTexte
 from ugc_studio.projets import RepliqueProjet
 from ugc_studio.ui import taches
 from ugc_studio.ui.composants.section_repliable import SectionRepliable
+from ugc_studio.ui.dialogues import messages
 from ugc_studio.ui.fenetre_principale import FenetrePrincipale
 from ugc_studio.ui.pages.script import PageScript
 
@@ -189,9 +189,7 @@ def test_accroches_puis_deux_scripts_puis_envoi_dans_voix(app_configuree, qtbot,
     # Envoi dans Voix : le module Voix a déjà un texte, la confirmation est demandée.
     fenetre.page("voix").atelier.repliques.definir([RepliqueProjet([{"texte": "Ancien script."}])])
     questions = []
-    monkeypatch.setattr(
-        QMessageBox, "question", lambda *args, **_kw: questions.append(args[2]) or QMessageBox.StandardButton.Yes
-    )
+    monkeypatch.setattr(messages, "confirmer", lambda *args, **_kw: questions.append(args[2]) or True)
     carte.bouton_envoyer.click()
     assert questions and "Remplacer la réplique actuelle" in questions[0]
     assert fenetre.module_actuel() == "voix"

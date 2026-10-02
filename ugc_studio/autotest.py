@@ -25,6 +25,7 @@ from .conseils_des_pages import PAGES
 from .demo import SCRIPT_DEMO
 from .projets import RepliqueProjet
 from .script import normaliser
+from .ui.composants.bouton import Bouton
 from .ui.composants.bulle import bulle as la_bulle
 from .ui.composants.bulle import bulle_visible, cacher_bulle
 from .ui.composants.conseils import DialogueConseils
@@ -37,7 +38,10 @@ from .ui.dialogues.briefs import DialogueBibliothequeBriefs
 from .ui.dialogues.choix_modeles import DialogueChoixModeles
 from .ui.dialogues.comparaison import DialogueComparaison
 from .ui.dialogues.comparer_scripts import DialogueComparerScripts
+from .ui.dialogues.couleur import DialogueCouleur
 from .ui.dialogues.meilleurs_scripts import DialogueAjoutExemple, DialogueMeilleursScripts
+from .ui.dialogues.messages import DialogueMessage
+from .ui.dialogues.projet import DialogueNouveauProjet
 from .ui.dialogues.prononciation import DialoguePrononciation
 from .ui.dialogues.retouche import DialogueRetouche
 from .ui.dialogues.styles import DialogueBibliothequeStyles, DialogueStyle
@@ -52,7 +56,7 @@ from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
-from .ui.theme import Couleurs, Dimensions, Espacements, Hauteurs, Typo
+from .ui.theme import Couleurs, Dimensions, Espacements, Hauteurs, Typo, qcolor
 
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
 DELAI_MAX_MS = 240_000  # sécurité : l'autotest ne peut pas bloquer la fabrication (exports vidéo compris)
@@ -92,6 +96,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "aides_v31",
     "disposition_studio",
     "zone_source",
+    "fenetres_v32",
 )
 ELEMENTS_SIGNALES_MAX = 6
 # V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
@@ -152,6 +157,29 @@ VERIFIER_DANS_LA_FENETRE = {
     "dialogue-bibliotheque-briefs": lambda dialogue: len(dialogue.lignes()) == 2,
     "dialogue-meilleurs-scripts": lambda dialogue: len(dialogue.lignes()) == 7,  # 2 gardés et 5 fournis
 }
+
+
+def _fenetre_comme_une_page(dialogue) -> dict:
+    """V3.2, lot 3 (§9.6) : une fenêtre se présente comme une page. Le fond de l'app autour du bloc
+    (mesuré sur la capture, au milieu de la marge), le bloc à 16 px des bords, les boutons du bas
+    sous le bloc, sur le fond de l'app (et non dedans). La fenêtre des conseils n'a pas un bloc mais
+    des cartes : seul son fond est vérifié."""
+    image = dialogue.grab().toImage()
+    marge = Dimensions.ESPACE_BLOCS
+    milieu = round(marge / 2 * image.devicePixelRatio())
+    resultat = {"fond": image.pixelColor(milieu, milieu).name().upper()}
+    resultat["fond_de_l_app"] = resultat["fond"] == Couleurs.FOND.upper()
+    cadre = getattr(dialogue, "cadre", None)
+    if cadre is not None:
+        resultat["bloc"] = [cadre.x(), cadre.y()]
+        resultat["bloc_a_16_px"] = cadre.property("role") == "bloc" and (cadre.x(), cadre.y()) == (marge, marge)
+        boutons = [b for b in dialogue.findChildren(Bouton) if b.parentWidget() is dialogue and b.isVisible()]
+        resultat["boutons_du_bas"] = [b.text() for b in boutons]
+        resultat["boutons_sous_le_bloc"] = bool(boutons) and all(
+            b.geometry().top() >= cadre.geometry().bottom() + marge for b in boutons
+        )
+    resultat["ok"] = all(valeur for cle, valeur in resultat.items() if cle in ("fond_de_l_app", "bloc_a_16_px", "boutons_sous_le_bloc"))
+    return resultat
 
 
 def _laisser_afficher(secondes: float = PAUSE_AFFICHAGE_S) -> None:
@@ -2164,8 +2192,10 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             capturer_par_dessus("menu-projet", menu_projet)
             menu_projet.hide()
 
+            fenetres_v32: dict = {}
             dialogue = reglages.connexions.ajouter()
             capturer(dialogue, "dialogue-ajout-cle")
+            fenetres_v32["dialogue-ajout-cle"] = _fenetre_comme_une_page(dialogue)
             dialogue.reject()
 
             # Fenêtres de l'étape 4 : bibliothèque de styles, style, assistant, prononciation.
@@ -2217,15 +2247,44 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 ("dialogue-ajout-exemple", DialogueAjoutExemple(services.projets.projet.ecriture.brief, fenetre)),
                 ("dialogue-variantes-accroches", _variantes_d_accroches(services, atelier, fenetre)),
                 ("conseils-variantes-script", DialogueConseils(PAGES["variantes-script"], fenetre)),
+                # V3.2, lot 3 : toutes les fenêtres comme une page, questions et « Autre couleur » comprises.
+                ("dialogue-nouveau-projet", DialogueNouveauProjet(services.projets, fenetre)),
+                (
+                    "message-question",
+                    DialogueMessage(
+                        fenetre, "Supprimer la prise", "Supprimer « Prise 1 » ?",
+                        "Le fichier audio sera effacé du dossier du projet.",
+                        action="Supprimer", icone_action="trash", annuler="Annuler",
+                    ),
+                ),
+                (
+                    "message-nom",
+                    DialogueMessage(
+                        fenetre, "Renommer la clé", action="Renommer", annuler="Annuler", champ=("Nouveau nom", "Google perso")
+                    ),
+                ),
+                (
+                    "message-erreur",
+                    DialogueMessage(
+                        fenetre, "Erreur inattendue", "Une erreur inattendue s'est produite.",
+                        "Les détails sont enregistrés dans le journal d'erreurs (Réglages → Journal d'erreurs). "
+                        "L'app peut continuer à fonctionner.",
+                        autre="Ouvrir le journal", erreur=True,
+                    ),
+                ),
+                ("dialogue-autre-couleur", DialogueCouleur(qcolor(Couleurs.AVERTISSEMENT), fenetre)),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)
+                fenetres_v32[nom] = _fenetre_comme_une_page(fenetre_dialogue)
                 debordements += _debordements(fenetre_dialogue, f"fenêtre {nom}")
                 if nom in VERIFIER_DANS_LA_FENETRE:
                     lot2[nom] = VERIFIER_DANS_LA_FENETRE[nom](fenetre_dialogue)
                 fenetre_dialogue.reject()
             rapport["script_lot2"] = lot2
             verifs["script_lot2"] = all(lot2.get(nom) is True for nom in VERIFIER_DANS_LA_FENETRE)
+            rapport["fenetres_v32"] = fenetres_v32
+            verifs["fenetres_v32"] = bool(fenetres_v32) and all(f["ok"] for f in fenetres_v32.values())
 
             # Fenêtre principale à sa largeur minimale : chaque page doit y tenir sans être coupée.
             fenetre.resize(Dimensions.FENETRE_LARGEUR_MIN, fenetre.height())

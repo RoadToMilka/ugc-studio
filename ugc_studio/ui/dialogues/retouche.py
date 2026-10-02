@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLayout, QPlainTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLayout, QPlainTextEdit
 
 from ...ecriture.affichage import titre_de_retouche
 from ...ecriture.brief import DUREE_MAX, DUREE_MIN, Brief
@@ -21,6 +21,7 @@ from ...fournisseurs.capacites import modele_connu
 from ...services import Services
 from ..composants.choix_voix import choisir
 from ..composants.elements import ChampNomme, avec_aide, bouton, champ_entier, libelle, liste_deroulante
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.montant_label import MontantLabel
 from ..theme import Dimensions, Espacements
 
@@ -56,11 +57,10 @@ class DialogueRetouche(QDialog):
         self._mots_par_seconde = mots_par_seconde
         self.setWindowTitle("Retoucher le script")
 
-        disposition = QVBoxLayout(self)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self)
         # Jamais plus petite que son contenu : avec une simple largeur minimale (setMinimumWidth), Qt
         # ne protège plus la hauteur, et les champs se chevauchent sur un petit écran.
-        disposition.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             avec_aide(
@@ -118,7 +118,7 @@ class DialogueRetouche(QDialog):
         bas.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_retoucher = bouton("Retoucher", variante="principal", nom_icone="wand-sparkles", action=self.accept)
         bas.addWidget(self.bouton_retoucher)
-        disposition.addLayout(bas)
+        fenetre.addLayout(bas)  # sous le bloc, sur le fond de l'app (V3.2)
         # Hauteur : celle du contenu à cette largeur (les textes qui passent à la ligne comptent ; la
         # hauteur minimale de Qt, elle, ne les compte que sur une ligne et serrait les éléments).
         self.resize(Dimensions.DIALOGUE_LARGEUR, self.heightForWidth(Dimensions.DIALOGUE_LARGEUR))

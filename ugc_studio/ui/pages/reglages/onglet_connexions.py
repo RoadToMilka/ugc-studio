@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ....connexions import Connexion, ErreurConnexion
 from ....fournisseurs import creer_adaptateur, nom_fournisseur
@@ -15,6 +15,7 @@ from ... import taches
 from ...composants.elements import bloc, bouton, libelle, pastille, vider_disposition
 from ...composants.menu import Menu
 from ...composants.onglets import contenu_d_onglet
+from ...dialogues import messages
 from ...dialogues.cle_api import DialogueCle
 from ...icones import icone, icone_menu
 from ...theme import Couleurs, Dimensions, Espacements
@@ -183,19 +184,18 @@ class OngletConnexions(QWidget):
 
     def renommer(self, identifiant: str) -> None:
         connexion = self._services.connexions.connexion(identifiant)
-        nom, ok = QInputDialog.getText(self, "Renommer la clé", "Nouveau nom :", text=connexion.nom)
-        if ok and nom.strip():
+        nom = messages.demander_texte(self.window(), "Renommer la clé", "Nouveau nom", connexion.nom, action="Renommer")
+        if nom and nom.strip():
             self._services.connexions.renommer(identifiant, nom)
 
     def supprimer(self, identifiant: str) -> None:
         connexion = self._services.connexions.connexion(identifiant)
-        boite = QMessageBox(self.window())
-        boite.setIcon(QMessageBox.Icon.Warning)
-        boite.setWindowTitle("Supprimer la clé")
-        boite.setText(f"Supprimer la clé « {connexion.nom} » ?")
-        boite.setInformativeText("Elle sera aussi retirée du coffre-fort de Windows. Cette action est définitive.")
-        confirmer = boite.addButton("Supprimer", QMessageBox.ButtonRole.DestructiveRole)
-        boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
-        boite.exec()
-        if boite.clickedButton() is confirmer:
+        if messages.confirmer(
+            self.window(),
+            "Supprimer la clé",
+            f"Supprimer la clé « {connexion.nom} » ?",
+            "Elle sera aussi retirée du coffre-fort de Windows. Cette action est définitive.",
+            action="Supprimer",
+            icone_action="trash",
+        ):
             self._services.connexions.supprimer(identifiant)

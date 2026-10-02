@@ -13,12 +13,13 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QWidget
 
 from ...transcription import Mot, Transcription, index_au_temps
 from ..composants.conseils import entete_de_fenetre
 from ..composants.correcteur_mots import CorrecteurDeMots
 from ..composants.elements import afficher_message, bouton, glissiere, libelle, minutes_secondes
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.lecteur import Lecteur
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
@@ -43,8 +44,7 @@ class DialogueCorrigerMots(QDialog):
         self._audio = audio if audio is not None and audio.exists() else None
         self.lecteur = Lecteur(self)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -90,7 +90,7 @@ class DialogueCorrigerMots(QDialog):
         boutons.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_enregistrer = bouton("Enregistrer", variante="principal", nom_icone="check", action=self.accept)
         boutons.addWidget(self.bouton_enregistrer)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
         self.lecteur.etat_change.connect(lambda _chemin, _lecture: self._etat_lecture())
         self.lecteur.position_change.connect(self._position_lue)

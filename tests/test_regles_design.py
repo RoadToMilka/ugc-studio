@@ -130,6 +130,46 @@ def test_la_bulle_de_l_app_partout():
     assert not ecarts, "Bulle de Qt (utiliser montrer_bulle / cacher_bulle de composants/bulle.py) :\n" + "\n".join(ecarts)
 
 
+# Fenêtres toutes faites de Qt, remplacées par des fenêtres de l'app (V3.2, lot 3).
+FENETRES_DE_QT = {
+    "QMessageBox": "messages.confirmer() ou messages.prevenir() (dialogues/messages.py)",
+    "QInputDialog": "messages.demander_texte() (dialogues/messages.py)",
+    "getColor": "choisir_couleur() (dialogues/couleur.py)",
+}
+# Fenêtres organisées autrement : les conseils (des cartes qui défilent, sans bloc autour).
+FENETRES_SANS_BLOC = {"DialogueConseils"}
+
+
+def test_fenetres_comme_des_pages():
+    """V3.2 (§9.6) : chaque fenêtre se présente comme une page (composants/fenetre.py : fond de l'app,
+    contenu dans un bloc, boutons sous le bloc). Toute fenêtre de l'app (une classe QDialog) se
+    construit donc avec fenetre_en_bloc() ; les fenêtres toutes faites de Qt (QMessageBox,
+    QInputDialog, QColorDialog.getColor) ne sont plus utilisées."""
+    ecarts = []
+    for fichier in _fichiers():
+        arbre = ast.parse(fichier.read_text(encoding="utf-8"))
+        for noeud in ast.walk(arbre):
+            nom = None
+            if isinstance(noeud, ast.Name):
+                nom = noeud.id
+            elif isinstance(noeud, ast.Attribute):
+                nom = noeud.attr
+            elif isinstance(noeud, ast.alias):
+                nom = noeud.name
+            if nom in FENETRES_DE_QT:
+                ecarts.append(f"{fichier.relative_to(RACINE)}:{getattr(noeud, 'lineno', '?')} {nom} → {FENETRES_DE_QT[nom]}")
+            if (
+                isinstance(noeud, ast.ClassDef)
+                and any(isinstance(base, ast.Name) and base.id == "QDialog" for base in noeud.bases)
+                and noeud.name not in FENETRES_SANS_BLOC
+                and not any(
+                    isinstance(appel, ast.Call) and _nom_appel(appel) == "fenetre_en_bloc" for appel in ast.walk(noeud)
+                )
+            ):
+                ecarts.append(f"{fichier.relative_to(RACINE)}:{noeud.lineno} {noeud.name} : construire avec fenetre_en_bloc()")
+    assert not ecarts, "Fenêtres à faire comme une page :\n" + "\n".join(ecarts)
+
+
 CASE_TEXTE_MAX = 48  # caractères
 
 

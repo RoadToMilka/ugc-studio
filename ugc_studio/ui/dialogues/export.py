@@ -97,6 +97,7 @@ from ..composants.elements import (
     libelle,
     libelle_abrege,
 )
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.tableau import Colonne, Tableau
 from ..ouvrir import montrer_dans_l_explorateur, ouvrir_fichier
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, qcolor
@@ -160,8 +161,7 @@ class DialogueExport(QDialog):
         self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
         self.resize(Dimensions.DIALOGUE_EXPORT_LARGEUR, Dimensions.DIALOGUE_EXPORT_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         # Ce que fait l'export : au survol de l'icône « i » devant le titre (V3.1 ; après lui jusqu'à la 3.1.0).
         disposition.addLayout(entete_de_fenetre(self.TITRE, self.PAGE_CONSEILS, aide=self.INFO))
@@ -219,7 +219,7 @@ class DialogueExport(QDialog):
         self.bouton_fermer = bouton("Fermer", variante="principal", action=self.accept)
         self.bouton_fermer.hide()
         boutons.addWidget(self.bouton_fermer)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
         self._actualiser()
         self._lancer_l_analyse()

@@ -12,10 +12,11 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRegularExpression, Qt, Signal
 from PySide6.QtGui import QIcon, QPainter, QPixmap, QRegularExpressionValidator
-from PySide6.QtWidgets import QColorDialog, QHBoxLayout, QLineEdit, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QWidget
 
 from ...rendu.moteur import qcouleur
 from ...style_sous_titres import Couleur
+from ..dialogues.couleur import choisir_couleur
 from ..theme import CouleursApercu, Dimensions, Espacements, qcolor
 from .elements import bouton, champ_entier
 from .menu import Menu
@@ -120,8 +121,9 @@ class ChampCouleur(QWidget):
         self.appliquer(Couleur(couleur.rouge, couleur.vert, couleur.bleu, float(valeur)))
 
     def _autre_couleur(self) -> None:
-        choisie = QColorDialog.getColor(qcouleur(self._couleur, opaque=True), self.window(), "Autre couleur")
-        if choisie.isValid():
+        """« Autre couleur… » : une fenêtre de l'app (V3.2, voir dialogues/couleur.py)."""
+        choisie = choisir_couleur(qcouleur(self._couleur, opaque=True), self.window())
+        if choisie is not None and choisie.isValid():
             self.appliquer(Couleur(choisie.red(), choisie.green(), choisie.blue(), self._couleur.opacite))
 
     def couleur_prise(self, rouge: int, vert: int, bleu: int) -> None:

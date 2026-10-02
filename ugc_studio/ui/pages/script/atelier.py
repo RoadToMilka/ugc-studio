@@ -18,7 +18,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QHBoxLayout, QInputDialog, QMessageBox, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QWidget
 
 from ....ecriture.brief import Brief
 from ....ecriture.briefs import nom_propose
@@ -68,6 +68,7 @@ from ...composants.elements import (
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues import messages
 from ...dialogues.briefs import DialogueBibliothequeBriefs
 from ...dialogues.comparer_scripts import DialogueComparerScripts
 from ...dialogues.meilleurs_scripts import DialogueMeilleursScripts
@@ -600,22 +601,23 @@ class AtelierScript(Page):
         if self._projet is None:
             return
         etat = self._projet.ecriture
-        nom, ok = QInputDialog.getText(
-            self, "Enregistrer le brief", "Nom du brief :", text=nom_propose(etat.brief, self._projet.nom)
+        nom = messages.demander_texte(
+            self.window(),
+            "Enregistrer le brief",
+            "Nom du brief",
+            nom_propose(etat.brief, self._projet.nom),
+            action="Enregistrer",
         )
-        nom = " ".join(nom.split())
-        if not ok or not nom:
+        nom = " ".join((nom or "").split())
+        if not nom:
             return
-        if self._services.briefs.existe(nom):
-            reponse = QMessageBox.question(
-                self,
-                "Enregistrer le brief",
-                f"Un brief s'appelle déjà « {nom} » : le remplacer ?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reponse != QMessageBox.StandardButton.Yes:
-                return
+        if self._services.briefs.existe(nom) and not messages.confirmer(
+            self.window(),
+            "Enregistrer le brief",
+            f"Un brief s'appelle déjà « {nom} » : le remplacer ?",
+            action="Remplacer",
+        ):
+            return
         enregistre = self._services.briefs.enregistrer(nom, etat.brief, etat.adresse, etat.page, etat.fiche)
         self._afficher(f"Brief enregistré dans ta bibliothèque : « {enregistre.nom} ».", "succes")
 
@@ -982,17 +984,15 @@ class AtelierScript(Page):
     def supprimer_script(self, script: ScriptEcrit, confirmer: bool = True) -> None:
         if self._projet is None or script not in self._projet.ecriture.scripts:
             return
-        if confirmer:
-            reponse = QMessageBox.question(
-                self,
-                "Supprimer le script",
-                f"Supprimer le {script.nom()[:1].lower()}{script.nom()[1:]} ? (S'il a été gardé comme exemple, "
-                "l'exemple reste.)",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reponse != QMessageBox.StandardButton.Yes:
-                return
+        if confirmer and not messages.confirmer(
+            self.window(),
+            "Supprimer le script",
+            f"Supprimer le {script.nom()[:1].lower()}{script.nom()[1:]} ?",
+            "S'il a été gardé comme exemple, l'exemple reste.",
+            action="Supprimer",
+            icone_action="trash",
+        ):
+            return
         self._projet.ecriture.scripts.remove(script)
         self._afficher_scripts()
         self._enregistrer()

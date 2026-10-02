@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QFileDialog, QMenu, QMessageBox, QWidget
+from PySide6.QtWidgets import QFileDialog, QMenu, QWidget
 
 from ..chemins import dossier_projets_defaut
 from ..projets import ErreurProjet
 from ..services import Services
+from .dialogues import messages
 from .dialogues.projet import DialogueNouveauProjet
 from .icones import icone_menu
 from .ouvrir import ouvrir_dossier
@@ -32,7 +33,7 @@ def ouvrir_projet(parent: QWidget, services: Services, dossier: Path | None = No
     try:
         services.projets.ouvrir(dossier)
     except ErreurProjet as erreur:
-        QMessageBox.warning(parent.window(), "Ouvrir un projet", str(erreur))
+        messages.prevenir(parent.window(), "Ouvrir un projet", str(erreur), erreur=True)
 
 
 def remplir_menu_projet(menu: QMenu, parent: QWidget, services: Services) -> None:

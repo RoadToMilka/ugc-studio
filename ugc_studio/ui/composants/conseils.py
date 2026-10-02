@@ -20,7 +20,7 @@ from ...sous_titres import typographie
 from ..theme import Dimensions, Espacements
 from .bouton import Bouton
 from .defilement import zone_defilante
-from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide, titre_avec
+from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide, marge_haute_titre, titre_avec
 
 TEXTE_BOUTON = "Conseils"
 
@@ -54,7 +54,9 @@ class _Conseil(QWidget):
 class DialogueConseils(QDialog):
     """Fenêtre des conseils d'un module ou d'une fenêtre : des rubriques, chacune dans une carte (V3.1,
     §9.4 quater) : fond et contour d'un bloc, coins arrondis de 12 px, son titre en haut, ses conseils
-    dessous, 12 px entre deux cartes. On voit d'un coup d'œil où commence et finit chaque sujet."""
+    dessous, 12 px entre deux cartes. On voit d'un coup d'œil où commence et finit chaque sujet.
+    V3.2 : la fenêtre a le fond de l'app (et non plus celui des menus), 16 px autour, comme une page :
+    les cartes s'en détachent comme les blocs des pages."""
 
     def __init__(self, page: PageDeConseils, parent: QWidget | None = None):
         super().__init__(parent)
@@ -66,10 +68,12 @@ class DialogueConseils(QDialog):
 
         # Les cartes défilent jusqu'au bord droit de la fenêtre : la barre de défilement prend place
         # dans la marge de droite, comme dans les pages (les cartes ne bougent pas quand elle apparaît).
-        marges = (Espacements.XL, 0, Espacements.XL, 0)
+        # 16 px autour, comme les blocs d'une page (24 px jusqu'à la 3.1.2).
+        marge = Dimensions.ESPACE_BLOCS
+        marges = (marge, 0, marge, 0)
         disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(0, Espacements.XL, 0, Espacements.XL)
-        disposition.setSpacing(Espacements.M)
+        disposition.setContentsMargins(0, marge, 0, marge)
+        disposition.setSpacing(marge)
         haut = QHBoxLayout()
         haut.setContentsMargins(*marges)
         haut.addWidget(libelle(titre, "titre-bloc"))
@@ -82,7 +86,8 @@ class DialogueConseils(QDialog):
             carte = QFrame()
             carte.setProperty("role", "bloc")
             partie = QVBoxLayout(carte)
-            partie.setContentsMargins(Espacements.L, Espacements.L, Espacements.L, Espacements.L)
+            # Le haut des majuscules du titre à 16 px du bord, comme à gauche (V3.2, voir marge_haute_titre).
+            partie.setContentsMargins(Espacements.L, marge_haute_titre(Espacements.L), Espacements.L, Espacements.L)
             partie.setSpacing(Espacements.S)
             partie.addWidget(libelle(_francais(rubrique.titre), "intitule"))
             for conseil in rubrique.conseils:

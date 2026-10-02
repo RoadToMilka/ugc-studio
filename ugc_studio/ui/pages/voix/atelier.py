@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QVBoxLayout
 
 from ....estimation import estimer_repliques
 from ....fournisseurs.base import Adaptateur
@@ -62,6 +62,7 @@ from ...composants.lecteur_flux import LecteurFlux
 from ...composants.montant_label import MontantLabel
 from ...composants.palette_balises import PaletteBalises
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues import messages
 from ...dialogues.comparaison import DialogueComparaison
 from ...dialogues.prononciation import DialoguePrononciation
 from ...dialogues.styles import DialogueBibliothequeStyles
@@ -298,14 +299,12 @@ class AtelierVoix(Page):
         actuelles = [r for r in self.repliques.repliques() if not est_vide(r.script)]
         if confirmer and actuelles:
             quoi = "la réplique actuelle" if len(actuelles) == 1 else f"les {len(actuelles)} répliques actuelles"
-            reponse = QMessageBox.question(
-                self,
+            if not messages.confirmer(
+                self.window(),
                 "Envoyer dans Voix",
                 f"Remplacer {quoi} du module Voix par ce script ?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reponse != QMessageBox.StandardButton.Yes:
+                action="Remplacer",
+            ):
                 return False
         self._chargement = True
         self.repliques.definir(repliques)

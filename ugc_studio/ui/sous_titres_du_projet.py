@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from PySide6.QtWidgets import QMessageBox, QWidget
+from PySide6.QtWidgets import QWidget
 
 from ..alignement import marquer_les_accentues
 from ..projets import Projet
@@ -42,6 +42,7 @@ from ..sous_titres import (
 )
 from ..stt import hesitations, langue_de
 from ..transcription import Transcription, resolution_video
+from .dialogues import messages
 
 
 @dataclass
@@ -149,32 +150,29 @@ def ajustements_defaits_par(
 
 
 def demander(parent: QWidget | None, texte: str, plusieurs: bool) -> bool:
-    """« Garder le réglage actuel » (False) ou « Appliquer et défaire cet ajustement » (True)."""
-    boite = QMessageBox(parent)
-    boite.setIcon(QMessageBox.Icon.Question)
-    boite.setWindowTitle("Changer ce réglage ?")
-    boite.setText(texte)
+    """« Garder le réglage actuel » (False) ou « Appliquer et défaire cet ajustement » (True). La
+    touche Entrée et la touche Échap gardent le réglage actuel (V3.2 : fenêtre de l'app, voir
+    dialogues/messages.py)."""
     if plusieurs:
-        boite.setInformativeText(
+        precision = (
             "« Garder le réglage actuel » : rien ne change ; tu peux modifier ces sous-titres, puis changer "
             "le réglage. « Appliquer et défaire ces ajustements » : le réglage change, et ces sous-titres "
             "reviennent au découpage automatique."
         )
     else:
-        boite.setInformativeText(
+        precision = (
             "« Garder le réglage actuel » : rien ne change ; tu peux modifier ce sous-titre, puis changer "
             "le réglage. « Appliquer et défaire cet ajustement » : le réglage change, et ce sous-titre "
             "revient au découpage automatique."
         )
-    garder = boite.addButton("Garder le réglage actuel", QMessageBox.ButtonRole.RejectRole)
-    appliquer = boite.addButton(
-        "Appliquer et défaire ces ajustements" if plusieurs else "Appliquer et défaire cet ajustement",
-        QMessageBox.ButtonRole.AcceptRole,
+    return messages.confirmer(
+        parent,
+        "Changer ce réglage ?",
+        texte,
+        precision,
+        action="Appliquer et défaire ces ajustements" if plusieurs else "Appliquer et défaire cet ajustement",
+        annuler="Garder le réglage actuel",
     )
-    boite.setDefaultButton(garder)
-    boite.setEscapeButton(garder)
-    boite.exec()
-    return boite.clickedButton() is appliquer
 
 
 def confirmer_reglage(

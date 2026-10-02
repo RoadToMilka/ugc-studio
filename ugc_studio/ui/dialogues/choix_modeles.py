@@ -20,6 +20,7 @@ from ...services import Services
 from ..composants.bouton import activer_avec_entree
 from ..composants.defilement import zone_defilante
 from ..composants.elements import avec_aide, bouton, conteneur_vertical, info, libelle
+from ..composants.fenetre import fenetre_en_bloc
 from ..theme import Dimensions, Espacements
 
 
@@ -81,8 +82,7 @@ class DialogueChoixModeles(QDialog):
         self.setWindowTitle("Choisir les modèles")
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=False)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             avec_aide(
@@ -138,7 +138,7 @@ class DialogueChoixModeles(QDialog):
         enregistrer = bouton("Enregistrer", variante="principal", nom_icone="check", action=self.accept)
         activer_avec_entree(enregistrer, self)
         boutons.addWidget(enregistrer)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
     def lignes(self) -> list[LigneChoix]:
         return list(self._lignes)

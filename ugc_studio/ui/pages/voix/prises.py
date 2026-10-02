@@ -12,8 +12,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
-    QInputDialog,
-    QMessageBox,
     QVBoxLayout,
     QWidget,
 )
@@ -30,6 +28,7 @@ from ...composants.etoiles import boutons_etoiles
 from ...composants.lecteur import Lecteur
 from ...composants.menu import Menu
 from ...composants.montant_label import MontantLabel
+from ...dialogues import messages
 from ...icones import icone, icone_menu
 from ...ouvrir import ouvrir_dossier
 from ...theme import Couleurs, Dimensions, Espacements
@@ -212,8 +211,8 @@ class ListePrises(QWidget):
 
     def renommer(self, identifiant: str) -> None:
         prise = self._services.projets.prise(identifiant)
-        nom, ok = QInputDialog.getText(self, "Renommer la prise", "Nouveau nom :", text=prise.nom)
-        if ok and nom.strip():
+        nom = messages.demander_texte(self.window(), "Renommer la prise", "Nouveau nom", prise.nom, action="Renommer")
+        if nom and nom.strip():
             self._services.projets.modifier_prise(identifiant, nom=" ".join(nom.split()))
             self.rafraichir()
 
@@ -237,22 +236,21 @@ class ListePrises(QWidget):
 
         def echec(erreur: Exception) -> None:
             montrer_occupe(bouton_actions, False)
-            QMessageBox.warning(self.window(), "Export MP3", f"L'export MP3 a échoué : {erreur}")
+            messages.prevenir(self.window(), "Export MP3", f"L'export MP3 a échoué : {erreur}", erreur=True)
 
         montrer_occupe(bouton_actions, True)
         taches.lancer(lambda: exporter_mp3(source, destination), fin, echec)
 
     def supprimer(self, identifiant: str) -> None:
         prise = self._services.projets.prise(identifiant)
-        boite = QMessageBox(self.window())
-        boite.setIcon(QMessageBox.Icon.Warning)
-        boite.setWindowTitle("Supprimer la prise")
-        boite.setText(f"Supprimer « {prise.nom} » ?")
-        boite.setInformativeText("Le fichier audio sera effacé du dossier du projet.")
-        confirmer = boite.addButton("Supprimer", QMessageBox.ButtonRole.DestructiveRole)
-        boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
-        boite.exec()
-        if boite.clickedButton() is confirmer:
+        if messages.confirmer(
+            self.window(),
+            "Supprimer la prise",
+            f"Supprimer « {prise.nom} » ?",
+            "Le fichier audio sera effacé du dossier du projet.",
+            action="Supprimer",
+            icone_action="trash",
+        ):
             if self.lecteur.chemin == str(self.chemin(prise)):
                 self.lecteur.arreter()
             self._services.projets.supprimer_prise(identifiant)

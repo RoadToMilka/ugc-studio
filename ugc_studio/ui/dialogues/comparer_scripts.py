@@ -20,6 +20,7 @@ from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import ZoneDefilante
 from ..composants.editeur_script import EditeurScript
 from ..composants.elements import bouton, info, libelle, liste_deroulante, vider_disposition
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.montant_label import MontantLabel
 from ..theme import Dimensions, Espacements
 
@@ -145,8 +146,7 @@ class DialogueComparerScripts(QDialog):
         self.setWindowTitle("Comparer les scripts")
         self.resize(Dimensions.DIALOGUE_COMPARER_SCRIPTS_LARGEUR, Dimensions.DIALOGUE_SCRIPTS_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(entete_de_fenetre("Comparer les scripts", "comparaison-scripts"))
         disposition.addWidget(
@@ -178,7 +178,7 @@ class DialogueComparerScripts(QDialog):
         bas = QHBoxLayout()
         bas.addStretch(1)
         bas.addWidget(bouton("Fermer", action=self.reject))
-        disposition.addLayout(bas)
+        fenetre.addLayout(bas)  # sous le bloc, sur le fond de l'app (V3.2)
 
     def colonnes(self) -> list[ColonneComparee]:
         return list(self._colonnes)
