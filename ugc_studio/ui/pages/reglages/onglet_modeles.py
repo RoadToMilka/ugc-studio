@@ -90,11 +90,13 @@ class OngletModeles(QWidget):
         d.addWidget(info("Les prix des fournisseurs sont en dollars ; l'app affiche les coûts en euros.", "secondaire"))
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
-        ligne.addWidget(libelle("1 $ =", retour_a_la_ligne=False))
+        # « 1 $ = … € » se lit d'un trait : les mots restent de part et d'autre du champ, en 12 px
+        # comme le nom des autres champs (V3.1).
+        ligne.addWidget(libelle("1 $ =", "legende", retour_a_la_ligne=False))
         self.champ_taux = champ_nombre(_texte(services.prix.taux_usd_eur))
         self.champ_taux.editingFinished.connect(self._taux_saisi)
         ligne.addWidget(self.champ_taux)
-        ligne.addWidget(libelle("€", retour_a_la_ligne=False))
+        ligne.addWidget(libelle("€", "legende", retour_a_la_ligne=False))
         ligne.addSpacing(Espacements.M)
         self.bouton_bce = bouton(
             "Récupérer le taux du jour (BCE)", variante="contour", nom_icone="refresh-cw", action=self.taux_du_jour

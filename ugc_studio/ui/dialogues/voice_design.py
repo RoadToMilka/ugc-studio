@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QFrame, QGridLayout, QHBoxLayout, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLineEdit, QVBoxLayout
 
 from ...fournisseurs.capacites import MODELES_CONNUS, Capacite
 from ...fournisseurs.voix import RequeteVoiceDesign, VoixBibliotheque
@@ -22,10 +22,10 @@ from .. import taches
 from ..composants.champ_style import ChampDescription
 from ..composants.choix_voix import propose
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, conteneur_vertical, info, libelle, liste_deroulante
+from ..composants.elements import TOUTE_LA_RANGEE, bouton, champs_en_colonnes, conteneur_vertical, info, libelle, liste_deroulante
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
-from ..theme import Dimensions, Espacements, Hauteurs
+from ..theme import Dimensions, Espacements
 
 
 class LigneVersion(QFrame):
@@ -89,9 +89,6 @@ class DialogueVoiceDesign(QDialog):
 
         gauche = QVBoxLayout()
         gauche.setSpacing(Espacements.M)
-        formulaire = QGridLayout()
-        formulaire.setHorizontalSpacing(Espacements.M)
-        formulaire.setVerticalSpacing(Espacements.S)
         self.nom = QLineEdit()
         self.nom.setPlaceholderText("ex. Léa, créatrice UGC")
         self.langue = liste_deroulante()
@@ -108,21 +105,18 @@ class DialogueVoiceDesign(QDialog):
         self.modele.setCurrentIndex(max(0, self.modele.findData(modele)))
         self.description = ChampDescription(services)
         self.description.assistant_utilise.connect(self._assistant_utilise)
-        for rang, (titre, element) in enumerate(
-            (
-                ("Nom", self.nom),
-                ("Langue", self.langue),
-                ("Genre", self.genre),
-                ("Modèle", self.modele),
-                ("Description", self.description),
+        # Champs sous leur nom (V3.1), deux par rangée ; la description prend toute la rangée.
+        gauche.addLayout(
+            champs_en_colonnes(
+                (
+                    ("Nom", self.nom),
+                    ("Langue", self.langue),
+                    ("Genre", self.genre),
+                    ("Modèle", self.modele),
+                    ("Description", self.description, TOUTE_LA_RANGEE),
+                )
             )
-        ):
-            etiquette = libelle(titre, "legende", retour_a_la_ligne=False)
-            etiquette.setFixedHeight(Hauteurs.CONTROLE)
-            formulaire.addWidget(etiquette, rang, 0, Qt.AlignmentFlag.AlignTop)
-            formulaire.addWidget(element, rang, 1, Qt.AlignmentFlag.AlignTop)
-        formulaire.setColumnStretch(1, 1)
-        gauche.addLayout(formulaire)
+        )
 
         self.titre_versions = libelle("Versions créées", "intitule")
         self.titre_versions.hide()

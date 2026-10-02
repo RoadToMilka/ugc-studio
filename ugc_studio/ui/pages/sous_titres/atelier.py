@@ -35,7 +35,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QInputDialog, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QGridLayout, QHBoxLayout, QInputDialog, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
 
 from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
@@ -223,15 +223,19 @@ class AtelierSousTitres(Page):
                 "legende",
             )
         )
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.S)
+        # La liste des prises sous son nom (V3.1), le bouton sur sa ligne.
+        ligne = QGridLayout()
+        ligne.setHorizontalSpacing(Espacements.S)
+        ligne.setVerticalSpacing(Espacements.XS)
         self.prises = liste_deroulante("Prise dont créer les sous-titres")
         self.prises.currentIndexChanged.connect(lambda _index: self._mettre_a_jour_estimation())
-        ligne.addWidget(self.prises, 1)
+        ligne.addWidget(libelle("Prise", "legende", retour_a_la_ligne=False), 0, 0)
+        ligne.addWidget(self.prises, 1, 0)
         self.bouton_creer = bouton(
             "Créer les sous-titres", variante="principal", nom_icone="captions", action=self.creer_depuis_la_prise_choisie
         )
-        ligne.addWidget(self.bouton_creer)
+        ligne.addWidget(self.bouton_creer, 1, 1)
+        ligne.setColumnStretch(0, 1)
         d.addLayout(ligne)
         estimation = QHBoxLayout()
         estimation.setSpacing(Espacements.XS)

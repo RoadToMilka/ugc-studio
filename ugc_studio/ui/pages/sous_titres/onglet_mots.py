@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QCheckBox, QVBoxLayout, QWidget
 
 from ....style_sous_titres import (
     ACCENTUES,
@@ -40,11 +40,11 @@ from ....style_sous_titres import (
 from ...composants.champ_couleur import ChampCouleur
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
-from ...composants.elements import bouton, case_a_cocher, champ_decimal, champ_entier, info, libelle, liste_deroulante
+from ...composants.elements import ChampNomme, bouton, case_a_cocher, champ_decimal, champ_entier, info, liste_deroulante
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements
 from .onglet_texte import HAUTEUR_PAR_DEFAUT, ChampExact, ChampPixels
-from .reglages_communs import nombre_lisible
+from .reglages_communs import GrilleDeReglages, nombre_lisible
 
 PERSONNALISE = "personnalise"
 EXPLICATIONS = {
@@ -56,40 +56,47 @@ EXPLICATIONS = {
 
 
 class GrilleEtat:
-    """Grille de réglages d'un état : libellé, champ, et bouton ↺ « comme le texte » pour les
-    réglages changés (leur libellé passe en mauve)."""
+    """Réglages d'un état, sous leur nom, côte à côte (voir GrilleDeReglages), avec un bouton ↺
+    « comme le texte » à côté du champ d'un réglage changé ; son nom passe en mauve (le texte de sa
+    case à cocher, pour un effet qu'on coche). Le bouton garde sa place même caché : les réglages ne
+    bougent pas quand il apparaît."""
 
     def __init__(self, contenu: QVBoxLayout, infobulle_remise: str = "Comme le texte"):
         self.infobulle_remise = infobulle_remise
-        self.disposition = QGridLayout()
-        self.disposition.setHorizontalSpacing(Espacements.M)
-        self.disposition.setVerticalSpacing(Espacements.S)
-        self.disposition.setColumnStretch(1, 1)
+        self.disposition = GrilleDeReglages()
         contenu.addLayout(self.disposition)
-        self.marques: dict[str, tuple] = {}  # attribut de l'état → (libellé, bouton ↺)
+        self.marques: dict[str, tuple] = {}  # attribut de l'état → (nom ou case à cocher, bouton ↺)
 
-    def ligne(self, titre: str, element, attribut: str | None = None, retablir=None):
-        rang = self.disposition.rowCount()
-        etiquette = libelle(titre, "legende", retour_a_la_ligne=False)
-        self.disposition.addWidget(etiquette, rang, 0)
-        if isinstance(element, QWidget):
-            self.disposition.addWidget(element, rang, 1, Qt.AlignmentFlag.AlignLeft)
-        else:
-            self.disposition.addLayout(element, rang, 1, Qt.AlignmentFlag.AlignLeft)
+    def ligne(self, titre: str | None, element, attribut: str | None = None, retablir=None) -> ChampNomme:
+        """Un réglage sous son nom ; sans nom (une case à cocher, qui se nomme elle-même), il prend une
+        rangée à lui seul."""
+        remise = None
         if attribut is not None:
             remise = bouton("", variante="icone", nom_icone="rotate-ccw", action=retablir)
             remise.setToolTip(self.infobulle_remise)
-            self.disposition.addWidget(remise, rang, 2)
-            self.marques[attribut] = (etiquette, remise)
-        return etiquette
+            garder_la_place = remise.sizePolicy()
+            garder_la_place.setRetainSizeWhenHidden(True)
+            remise.setSizePolicy(garder_la_place)
+        champ = self.disposition.ajouter(titre, element, a_cote=remise)
+        if attribut is not None:
+            marque = champ.nom if champ.nom is not None else element.findChild(QCheckBox)
+            self.marques[attribut] = (marque, remise)
+        return champ
 
     def marquer(self, attribut: str, change: bool) -> None:
-        etiquette, remise = self.marques[attribut]
-        role = "legende-modifiee" if change else "legende"
-        if etiquette.property("role") != role:
-            etiquette.setProperty("role", role)
-            etiquette.style().unpolish(etiquette)
-            etiquette.style().polish(etiquette)
+        marque, remise = self.marques[attribut]
+        if isinstance(marque, QCheckBox):
+            nouveau, ancien = change, marque.property("modifie") is True
+            if nouveau != ancien:
+                marque.setProperty("modifie", nouveau)
+                marque.style().unpolish(marque)
+                marque.style().polish(marque)
+        else:
+            role = "legende-modifiee" if change else "legende"
+            if marque.property("role") != role:
+                marque.setProperty("role", role)
+                marque.style().unpolish(marque)
+                marque.style().polish(marque)
         remise.setVisible(change)
 
 
@@ -110,20 +117,15 @@ class OngletMots(QWidget):
         disposition.setSpacing(Espacements.M)
 
         # Raccourci et état réglé.
-        haut = QGridLayout()
-        haut.setHorizontalSpacing(Espacements.M)
-        haut.setVerticalSpacing(Espacements.S)
         self.raccourci = liste_deroulante("Remplit les réglages des états ; tout reste modifiable ensuite")
         for code, nom in RACCOURCIS.items():
             self.raccourci.addItem(nom, code)
         self.raccourci.activated.connect(lambda _index: self._raccourci_choisi())
-        haut.addWidget(libelle("Raccourci", "legende", retour_a_la_ligne=False), 0, 0)
-        haut.addWidget(self.raccourci, 0, 1, Qt.AlignmentFlag.AlignLeft)
         self.etat = ChoixEnBoutons(ETATS, "L'état dont tu règles l'apparence")
         self.etat.change.connect(self._etat_choisi)
-        haut.addWidget(libelle("État", "legende", retour_a_la_ligne=False), 1, 0)
-        haut.addWidget(self.etat, 1, 1, Qt.AlignmentFlag.AlignLeft)
-        haut.setColumnStretch(1, 1)
+        haut = GrilleDeReglages()
+        haut.ajouter("Raccourci", self.raccourci)
+        haut.ajouter("État", self.etat)
         disposition.addLayout(haut)
         self.explication = info()
         disposition.addWidget(self.explication)
@@ -148,7 +150,7 @@ class OngletMots(QWidget):
         grille = self._grille(etat)
         zone_visible, self.visible = case_a_cocher("Mot visible")
         self.visible.toggled.connect(lambda coche: self._modifier(visible=coche))
-        grille.ligne("Visibilité", zone_visible, "visible", lambda: self._modifier(visible=True))
+        grille.ligne(None, zone_visible, "visible", lambda: self._modifier(visible=True))
         self.opacite = ChampExact(champ_decimal(0.0, 100.0, 5.0, 0, " %", "Opacité des mots de cet état"))
         self.opacite.champ.valueChanged.connect(lambda _valeur: self._modifier(opacite_pct=self.opacite.valeur()))
         grille.ligne("Opacité", self.opacite.champ, "opacite_pct", lambda: self._modifier(opacite_pct=None))
@@ -171,12 +173,9 @@ class OngletMots(QWidget):
         self.avance = champ_entier(*Mots.LIMITES["avance_ms"], " ms", "Positif : les mots s'allument plus tôt ; négatif : plus tard")
         self.avance.setSingleStep(10)
         self.avance.valueChanged.connect(self._avance_changee)
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.M)
-        ligne.addWidget(libelle("Avance de l'allumage", "legende", retour_a_la_ligne=False))
-        ligne.addWidget(self.avance)
-        ligne.addStretch(1)
-        avances.contenu.addLayout(ligne)
+        avance = GrilleDeReglages()
+        avance.ajouter("Avance de l'allumage", self.avance)
+        avances.contenu.addLayout(avance)
         avances.contenu.addWidget(
             info("Si les mots s'allument un peu tard ou un peu tôt à ton goût. Le moment des mots, lui, ne change pas.")
         )
@@ -210,49 +209,51 @@ class OngletMots(QWidget):
         grille.ligne("Couleur", self.couleur, "couleur", lambda: self._modifier(couleur=None))
         zone, self.degrade = case_a_cocher("Dégradé de deux couleurs")
         self.degrade.toggled.connect(lambda _coche: self._modifier(degrade=self._degrade()))
-        grille.ligne("Dégradé", zone, "degrade", lambda: self._modifier(degrade=None))
+        grille.ligne(None, zone, "degrade", lambda: self._modifier(degrade=None))
         self.couleur_2 = self._couleur("Seconde couleur du dégradé", lambda: self._modifier(degrade=self._degrade()))
-        grille.ligne("Seconde couleur", self.couleur_2)
         self.direction = ChoixEnBoutons(DIRECTIONS, "Sens du dégradé, sur chaque ligne")
         self.direction.change.connect(lambda _valeur: self._modifier(degrade=self._degrade()))
-        grille.ligne("Sens", self.direction)
+        self._champs_degrade = (grille.ligne("Seconde couleur", self.couleur_2), grille.ligne("Sens", self.direction))
 
     def _groupe_contour(self, contenu: QVBoxLayout) -> None:
         grille = self._grille(contenu)
         zone, self.contour = case_a_cocher("Contour autour des lettres")
         self.contour.toggled.connect(lambda _coche: self._modifier(contour=self._contour()))
-        grille.ligne("Contour", zone, "contour", lambda: self._modifier(contour=None))
+        grille.ligne(None, zone, "contour", lambda: self._modifier(contour=None))
         self.contour_couleur = self._couleur("Couleur du contour", lambda: self._modifier(contour=self._contour()))
-        grille.ligne("Couleur", self.contour_couleur)
         self.contour_epaisseur = self._pixels(Contour.LIMITES["epaisseur_pct"], "Épaisseur du contour", lambda: self._modifier(contour=self._contour()))
-        grille.ligne("Épaisseur", self.contour_epaisseur.champ)
+        self._champs_contour = (grille.ligne("Couleur", self.contour_couleur), grille.ligne("Épaisseur", self.contour_epaisseur.champ))
 
     def _groupe_lueur(self, contenu: QVBoxLayout) -> None:
         grille = self._grille(contenu)
         zone, self.lueur = case_a_cocher("Lueur autour des lettres")
         self.lueur.toggled.connect(lambda _coche: self._modifier(lueur=self._lueur()))
-        grille.ligne("Lueur", zone, "lueur", lambda: self._modifier(lueur=None))
+        grille.ligne(None, zone, "lueur", lambda: self._modifier(lueur=None))
         self.lueur_couleur = self._couleur("Couleur de la lueur", lambda: self._modifier(lueur=self._lueur()))
-        grille.ligne("Couleur", self.lueur_couleur)
         self.lueur_taille = self._pixels(Lueur.LIMITES["taille_pct"], "Taille de la lueur", lambda: self._modifier(lueur=self._lueur()))
-        grille.ligne("Taille", self.lueur_taille.champ)
         self.lueur_intensite = ChampExact(champ_decimal(*Lueur.LIMITES["intensite_pct"], 5, 0, " %", "Intensité de la lueur"))
         self.lueur_intensite.champ.valueChanged.connect(lambda _valeur: self._modifier(lueur=self._lueur()))
-        grille.ligne("Intensité", self.lueur_intensite.champ)
+        self._champs_lueur = (
+            grille.ligne("Couleur", self.lueur_couleur),
+            grille.ligne("Taille", self.lueur_taille.champ),
+            grille.ligne("Intensité", self.lueur_intensite.champ),
+        )
 
     def _groupe_fond(self, contenu: QVBoxLayout) -> None:
         grille = self._grille(contenu)
         zone, self.fond = case_a_cocher("Fond derrière le mot")
         self.fond.toggled.connect(lambda _coche: self._modifier(fond=self._fond()))
-        grille.ligne("Fond", zone, "fond", lambda: self._modifier(fond=None))
+        grille.ligne(None, zone, "fond", lambda: self._modifier(fond=None))
         self.fond_couleur = self._couleur("Couleur du fond", lambda: self._modifier(fond=self._fond()))
-        grille.ligne("Couleur", self.fond_couleur)
         self.fond_marge_x = self._pixels(FondMot.LIMITES["marge_x_pct"], "Marge à gauche et à droite du mot", lambda: self._modifier(fond=self._fond()))
-        grille.ligne("Marge horizontale", self.fond_marge_x.champ)
         self.fond_marge_y = self._pixels(FondMot.LIMITES["marge_y_pct"], "Marge en haut et en bas du mot", lambda: self._modifier(fond=self._fond()))
-        grille.ligne("Marge verticale", self.fond_marge_y.champ)
         self.fond_arrondi = self._pixels(FondMot.LIMITES["arrondi_pct"], "Arrondi des coins", lambda: self._modifier(fond=self._fond()))
-        grille.ligne("Arrondi", self.fond_arrondi.champ)
+        self._champs_fond = (
+            grille.ligne("Couleur", self.fond_couleur),
+            grille.ligne("Marge horizontale", self.fond_marge_x.champ),
+            grille.ligne("Marge verticale", self.fond_marge_y.champ),
+            grille.ligne("Arrondi", self.fond_arrondi.champ),
+        )
         # Mot actif seulement : le fond glisse d'un mot à l'autre.
         self.zone_glisse = SectionRepliable("Réglages avancés")
         zone, self.fond_glisse = case_a_cocher("Le fond glisse d'un mot à l'autre")
@@ -261,29 +262,28 @@ class OngletMots(QWidget):
         self.fond_duree = champ_entier(*FondMot.LIMITES["duree_glisse_ms"], " ms", "Durée du glissement")
         self.fond_duree.setSingleStep(10)
         self.fond_duree.valueChanged.connect(lambda _valeur: self._modifier(fond=self._fond()))
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.M)
-        ligne.addWidget(libelle("Durée", "legende", retour_a_la_ligne=False))
-        ligne.addWidget(self.fond_duree)
-        ligne.addStretch(1)
-        self.zone_glisse.contenu.addLayout(ligne)
+        glissement = GrilleDeReglages()
+        self._champ_fond_duree = glissement.ajouter("Durée", self.fond_duree)
+        self.zone_glisse.contenu.addLayout(glissement)
         contenu.addWidget(self.zone_glisse)
 
     def _groupe_soulignement(self, contenu: QVBoxLayout) -> None:
         grille = self._grille(contenu)
         zone, self.souligne = case_a_cocher("Trait sous le mot")
         self.souligne.toggled.connect(lambda _coche: self._modifier(soulignement=self._soulignement()))
-        grille.ligne("Soulignement", zone, "soulignement", lambda: self._modifier(soulignement=None))
+        grille.ligne(None, zone, "soulignement", lambda: self._modifier(soulignement=None))
         self.souligne_couleur = self._couleur("Couleur du trait", lambda: self._modifier(soulignement=self._soulignement()))
-        grille.ligne("Couleur", self.souligne_couleur)
         self.souligne_epaisseur = self._pixels(
             Soulignement.LIMITES["epaisseur_pct"], "Épaisseur du trait", lambda: self._modifier(soulignement=self._soulignement())
         )
-        grille.ligne("Épaisseur", self.souligne_epaisseur.champ)
         self.souligne_distance = self._pixels(
             Soulignement.LIMITES["distance_pct"], "Distance sous la ligne de base", lambda: self._modifier(soulignement=self._soulignement())
         )
-        grille.ligne("Distance", self.souligne_distance.champ)
+        self._champs_souligne = (
+            grille.ligne("Couleur", self.souligne_couleur),
+            grille.ligne("Épaisseur", self.souligne_epaisseur.champ),
+            grille.ligne("Distance", self.souligne_distance.champ),
+        )
 
     def _groupe_taille(self, contenu: QVBoxLayout) -> None:
         grille = self._grille(contenu)
@@ -458,17 +458,17 @@ class OngletMots(QWidget):
         for grille in self.grilles:
             for attribut in grille.marques:
                 grille.marquer(attribut, changes[attribut])
-        # Réglages d'un effet décoché : grisés (comme dans l'onglet Texte).
+        # Réglages d'un effet décoché : grisés, noms compris (comme dans l'onglet Texte).
         for case, champs in (
-            (self.degrade, (self.couleur_2, self.direction)),
-            (self.contour, (self.contour_couleur, self.contour_epaisseur.champ)),
-            (self.lueur, (self.lueur_couleur, self.lueur_taille.champ, self.lueur_intensite.champ)),
-            (self.fond, (self.fond_couleur, self.fond_marge_x.champ, self.fond_marge_y.champ, self.fond_arrondi.champ, self.zone_glisse)),
-            (self.souligne, (self.souligne_couleur, self.souligne_epaisseur.champ, self.souligne_distance.champ)),
+            (self.degrade, self._champs_degrade),
+            (self.contour, self._champs_contour),
+            (self.lueur, self._champs_lueur),
+            (self.fond, (*self._champs_fond, self.zone_glisse)),
+            (self.souligne, self._champs_souligne),
         ):
             for champ in champs:
                 champ.setEnabled(case.isChecked())
-        self.fond_duree.setEnabled(self.fond.isChecked() and self.fond_glisse.isChecked())
+        self._champ_fond_duree.setEnabled(self.fond.isChecked() and self.fond_glisse.isChecked())
         resumes = {
             "Remplissage": "comme le texte" if not (changes["couleur"] or changes["degrade"]) else (etat.couleur or texte.couleur).code,
             "Contour": "comme le texte" if not changes["contour"] else ("aucun" if not contour.actif else contour.couleur.code),

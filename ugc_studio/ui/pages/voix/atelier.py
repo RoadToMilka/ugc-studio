@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QMessageBox, QVBoxLayout
 
 from ....estimation import estimer_repliques
 from ....fournisseurs.base import Adaptateur
@@ -45,7 +45,7 @@ from ...composants.choix_voix import (
     selectionner_voix,
 )
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
+from ...composants.elements import ChampNomme, bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
 from ...composants.lecteur import Lecteur
 from ...composants.lecteur_flux import LecteurFlux
 from ...composants.montant_label import MontantLabel
@@ -103,34 +103,35 @@ class AtelierVoix(Page):
 
         # --- Voix et modèle ---
         cadre, d = bloc("Voix et modèle")
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.S)
+        # Les deux listes sous leur nom (V3.1) ; les boutons de la voix sur la ligne des listes.
+        ligne = QGridLayout()
+        ligne.setHorizontalSpacing(Espacements.S)
+        ligne.setVerticalSpacing(Espacements.XS)
         self.modele = liste_deroulante()
         self.modele.currentIndexChanged.connect(self._reglage_change)
         self.modele.currentIndexChanged.connect(lambda _index: self._declarer_modele())
-        ligne.addWidget(self.modele, 1)
+        ligne.addWidget(libelle("Modèle", "legende", retour_a_la_ligne=False), 0, 0)
+        ligne.addWidget(self.modele, 1, 0)
         self.voix = liste_deroulante()
         self.voix.setToolTip("Tes favoris ★ et tes voix créées d'abord, puis les 30 voix de base")
         self.voix.currentIndexChanged.connect(self._voix_changee)
-        ligne.addWidget(self.voix, 1)
+        ligne.addWidget(libelle("Voix", "legende", retour_a_la_ligne=False), 0, 1)
+        ligne.addWidget(self.voix, 1, 1)
         self.bouton_bibliotheque_voix = bouton(
             "", variante="icone", nom_icone="library", action=self.ouvrir_bibliotheque_voix
         )
         self.bouton_bibliotheque_voix.setToolTip("Bibliothèque de voix : toutes les voix de Google, favoris, Voice Design")
-        ligne.addWidget(self.bouton_bibliotheque_voix)
+        ligne.addWidget(self.bouton_bibliotheque_voix, 1, 2)
         self.bouton_extrait = bouton("Écouter", nom_icone="play", action=self.ecouter_extrait)
         self.bouton_extrait.setToolTip("Joue un extrait de cette voix (préparé une seule fois, puis gardé).")
-        ligne.addWidget(self.bouton_extrait)
+        ligne.addWidget(self.bouton_extrait, 1, 3)
+        ligne.setColumnStretch(0, 1)
+        ligne.setColumnStretch(1, 1)
         d.addLayout(ligne)
         self.info_modeles = libelle("", "avertissement")
         self.info_modeles.hide()
         d.addWidget(self.info_modeles)
         # Nombres dits à la belge ou à la suisse (V2, lot 2) : projets en français seulement.
-        self.zone_nombres = QWidget()
-        ligne_nombres = QHBoxLayout(self.zone_nombres)
-        ligne_nombres.setContentsMargins(0, 0, 0, 0)
-        ligne_nombres.setSpacing(Espacements.M)
-        ligne_nombres.addWidget(libelle("Nombres dits", retour_a_la_ligne=False))
         self.nombres = liste_deroulante(
             "Façon dont la voix dit les prix et les nombres (septante, nonante…). Le script et les "
             "sous-titres gardent les chiffres."
@@ -138,8 +139,7 @@ class AtelierVoix(Page):
         for code, nom in VARIANTES_NOMBRES.items():
             self.nombres.addItem(nom, code)
         self.nombres.currentIndexChanged.connect(self._reglage_change)
-        ligne_nombres.addWidget(self.nombres)
-        ligne_nombres.addStretch(1)
+        self.zone_nombres = ChampNomme("Nombres dits", self.nombres)  # sous son nom, en 12 px (V3.1)
         d.addWidget(self.zone_nombres)
         # Script écrit pour une femme, voix masculine (ou l'inverse) : avertissement (V2, §10.11).
         self.info_genre = libelle("", "legende-avertissement")

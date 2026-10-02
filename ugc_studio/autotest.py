@@ -84,6 +84,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "video_avec_sous_titres",
     "video_hdr",
     "disposition_v31",
+    "liste_deroulante",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -1567,15 +1568,24 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     barre.setValue(min(position, barre.maximum()))
                     capturer(fenetre, f"voix-{numero}")
                 barre.setValue(0)
-            # Liste déroulante ouverte (V1.1, lot 4) : le choix actuel reste dans le champ, les autres
-            # choix s'ouvrent dessous (favoris, voix créées, voix de base, séparés d'une ligne).
+            # Liste déroulante ouverte (V3.1, lot 2) : 8 px sous le champ (ou au-dessus), coins arrondis,
+            # tous les choix (favoris, voix créées, voix de base, séparés d'une ligne), l'actuel en mauve.
             atelier.voix.showPopup()
             capturer_avec_liste(atelier.voix, "liste-deroulante-ouverte")
+            conteneur = atelier.voix.view().window()
+            haut_liste = conteneur.mapToGlobal(QPoint(0, 0)).y()
+            haut_champ = atelier.voix.mapToGlobal(QPoint(0, 0)).y()
+            dessous = haut_liste >= haut_champ
+            ecart = haut_liste - (haut_champ + atelier.voix.height()) if dessous else haut_champ - (haut_liste + conteneur.height())
             rapport["liste_ouverte"] = {
-                "choix_actuel_cache": atelier.voix.view().isRowHidden(atelier.voix.currentIndex()),
-                "sous_le_champ": atelier.voix.view().window().mapToGlobal(QPoint(0, 0)).y()
-                - atelier.voix.mapToGlobal(QPoint(0, atelier.voix.height())).y(),
+                "choix_actuel_visible": not atelier.voix.view().isRowHidden(atelier.voix.currentIndex()),
+                "ouverte_vers": "le bas" if dessous else "le haut",
+                "ecart_avec_le_champ": ecart,
+                "coins_arrondis": conteneur.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground),
             }
+            verifs["liste_deroulante"] = (
+                rapport["liste_ouverte"]["choix_actuel_visible"] and ecart == Dimensions.ECART_LISTE and rapport["liste_ouverte"]["coins_arrondis"]
+            )
             atelier.voix.hidePopup()
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()

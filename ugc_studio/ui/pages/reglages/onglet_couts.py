@@ -11,7 +11,7 @@ from ....couts import AppelApi, filtrer, totaux
 from ....fournisseurs.capacites import modele_connu
 from ....montants import nombre_lisible
 from ....services import Services
-from ...composants.elements import bloc, info, libelle, liste_deroulante
+from ...composants.elements import ChampNomme, bloc, info, libelle, liste_deroulante
 from ...composants.montant_label import ROLE_MONTANT, DelegueMontant, MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...theme import Dimensions, Espacements, Typo
@@ -59,9 +59,9 @@ class OngletCouts(QWidget):
         disposition.setContentsMargins(0, Dimensions.ESPACE_BLOCS, 0, 0)
         disposition.setSpacing(Dimensions.ESPACE_BLOCS)
 
-        # Filtres
+        # Filtres, chacun sous son nom (V3.1)
         filtres = QHBoxLayout()
-        filtres.setSpacing(Espacements.S)
+        filtres.setSpacing(Espacements.L)
         self.periode = liste_deroulante()
         for texte, valeur in (
             ("Aujourd'hui", "jour"),
@@ -74,9 +74,9 @@ class OngletCouts(QWidget):
         self.periode.setCurrentIndex(1)
         self.projet = liste_deroulante()
         self.modele = liste_deroulante()
-        for liste in (self.periode, self.projet, self.modele):
+        for nom, liste in (("Période", self.periode), ("Projet", self.projet), ("Modèle", self.modele)):
             liste.currentIndexChanged.connect(self.rafraichir)
-            filtres.addWidget(liste)
+            filtres.addWidget(ChampNomme(nom, liste))
         filtres.addStretch(1)
         disposition.addLayout(filtres)
 

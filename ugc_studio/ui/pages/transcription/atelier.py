@@ -21,7 +21,6 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLineEdit,
@@ -67,6 +66,7 @@ from ...composants.elements import (
     bloc,
     bouton,
     case_a_cocher,
+    champs_en_colonnes,
     glissiere,
     info,
     libelle,
@@ -182,21 +182,14 @@ class AtelierTranscription(Page):
 
         # --- Options ---
         cadre, d = bloc("Options")
-        grille = QGridLayout()
-        grille.setHorizontalSpacing(Espacements.M)
-        grille.setVerticalSpacing(Espacements.S)
         self.modele = liste_deroulante("Modèle de transcription")
         self.modele.currentIndexChanged.connect(lambda _index: self._modele_change())
         self.langue = liste_deroulante("Langue parlée dans la source")
         self.langue.addItem("Détection automatique", AUTO)
         for code, nom in LANGUES.items():
             self.langue.addItem(nom, code)
-        for rang, (titre, element) in enumerate((("Modèle", self.modele), ("Langue", self.langue))):
-            etiquette = libelle(titre, "legende", retour_a_la_ligne=False)
-            grille.addWidget(etiquette, rang, 0)
-            grille.addWidget(element, rang, 1)
-        grille.setColumnStretch(1, 1)
-        d.addLayout(grille)
+        # Sous leur nom, côte à côte (V3.1), comme les champs du brief du module Script.
+        d.addLayout(champs_en_colonnes((("Modèle", self.modele), ("Langue", self.langue))))
         self.zone_separation, self.separation = case_a_cocher(
             "Séparer les voix", "Chaque mot reçoit la personne qui parle (fiable jusqu'à 2 personnes)."
         )

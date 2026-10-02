@@ -32,6 +32,7 @@ from ..composants.choix_voix import choisir
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
 from ..composants.elements import (
+    ChampNomme,
     bouton,
     champ_entier,
     conteneur_vertical,
@@ -104,15 +105,11 @@ class LigneExemple(QFrame):
             textes.addWidget(libelle(f"Pourquoi il marche : {exemple.pourquoi}", "legende"))
         self.note: QLineEdit | None = None
         if not exemple.fourni:
-            ligne_note = QHBoxLayout()
-            ligne_note.setSpacing(Espacements.M)
-            ligne_note.addWidget(libelle("Ta note", "legende", retour_a_la_ligne=False))
             self.note = QLineEdit(exemple.note)
             self.note.setPlaceholderText("lue par le modèle (ex. CPA 9 €, meilleur ROAS)")
             self.note.setToolTip("Le modèle lit cette note avec l'exemple : dis-lui pourquoi ce script a marché")
             self.note.editingFinished.connect(lambda: dialogue.noter(exemple, self.note.text()))
-            ligne_note.addWidget(self.note, 1)
-            textes.addLayout(ligne_note)
+            textes.addWidget(ChampNomme("Ta note", self.note, etire=True))  # sous son nom (V3.1)
         disposition.addLayout(textes, 1)
         plus = bouton("", variante="icone", nom_icone="ellipsis")
         plus.setToolTip("Plus d'actions")

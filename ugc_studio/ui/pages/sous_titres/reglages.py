@@ -44,6 +44,7 @@ from ....style_sous_titres import ALIGNEMENTS, POSITIONS, Position, VideoApercu
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
 from ...composants.elements import (
+    ChampNomme,
     bouton,
     case_a_cocher,
     champ_decimal,
@@ -88,7 +89,8 @@ class PanneauReglages(QWidget):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
-        disposition.addLayout(self._ligne_prereglage())
+        # « Préréglage » au-dessus de sa liste (V3.1), comme le nom de chaque champ.
+        disposition.addWidget(ChampNomme("Préréglage", self._ligne_prereglage(), etire=True))
         self.statut_prereglage = libelle("", "secondaire")  # « Préréglage appliqué »… (vide : caché)
         self.statut_prereglage.hide()
         disposition.addSpacing(Espacements.S)
@@ -116,7 +118,6 @@ class PanneauReglages(QWidget):
     def _ligne_prereglage(self) -> QHBoxLayout:
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
-        ligne.addWidget(libelle("Préréglage", "legende", retour_a_la_ligne=False))
         self.prereglage = liste_deroulante(
             "Un style complet (onglets Texte, Mots, Animations, Position et Découpage) : en choisir un l'applique"
         )
@@ -354,9 +355,9 @@ class PanneauReglages(QWidget):
         self.change.emit()
 
     def _montrer_taille_perso(self, visible: bool) -> None:
-        """La ligne « Taille » (libellé et champs) : seulement pour le format personnalisé."""
+        """Le réglage « Taille » (nom et champs) : seulement pour le format personnalisé."""
         self.zone_perso.setVisible(visible)
-        self.grille_ecran.itemAtPosition(1, 0).widget().setVisible(visible)
+        self.grille_ecran.champs["Taille"].setVisible(visible)
 
     # --- Lecture et écriture des réglages --------------------------------------------------------
 

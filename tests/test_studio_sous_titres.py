@@ -271,15 +271,15 @@ def test_format_personnalise_sans_video(atelier, services):
     _prise_sans_video(services)
     atelier.rafraichir()
     assert atelier.format.isEnabled() and atelier.format.currentData() == "9:16"
-    libelle_taille = atelier.panneau.grille_ecran.itemAtPosition(1, 0).widget()
-    assert libelle_taille.text() == "Taille"
-    assert atelier.panneau.zone_perso.isHidden() and libelle_taille.isHidden()  # pas de libellé seul
+    taille = atelier.panneau.grille_ecran.champs["Taille"]  # le réglage, sous son nom (V3.1)
+    assert taille.nom.text() == "Taille"
+    assert atelier.panneau.zone_perso.isHidden() and taille.isHidden()  # pas de nom seul
     atelier.panneau.largeur_perso.setValue(1201)
     atelier.panneau.hauteur_perso.setValue(1500)
     atelier.format.setCurrentIndex(atelier.format.findData("personnalise"))
     reglages = services.projets.projet.sous_titres
     assert (reglages.format, reglages.largeur_perso, reglages.hauteur_perso) == ("personnalise", 1202, 1500)
-    assert not atelier.panneau.zone_perso.isHidden() and not libelle_taille.isHidden()
+    assert not atelier.panneau.zone_perso.isHidden() and not taille.isHidden()
     assert atelier.toile.taille_video() == (1202, 1500)
     assert "Vidéo 1202 × 1500" in atelier.infos_ecran.text()
 
