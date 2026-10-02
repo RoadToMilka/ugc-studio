@@ -568,7 +568,11 @@ def analyser(source: Path, ffmpeg: Path | None = None) -> Analyse | None:
 # BT.709, en « plage limitée » (16 à 235 sur 255, celle des vidéos), et le fichier le dit (étiquettes
 # de couleurs) : Premiere Pro et les lecteurs les reconvertissent donc avec la même norme. Sans ces
 # précisions, FFmpeg prendrait une autre norme et les couleurs changeraient un peu.
+# Depuis FFmpeg 8, l'encodeur reprend les étiquettes portées par les images : les options
+# « -color_primaries » et « -color_trc » seules ne suffisent plus (vérifié dans le code de FFmpeg
+# 9.0.2, fftools/ffmpeg_enc.c, et par les tests). Le filtre setparams les pose donc sur les images.
 CONVERSION_BT709 = "scale=out_color_matrix=bt709:out_range=tv"
+ETIQUETAGE_BT709 = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"
 ETIQUETTES_BT709 = ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"]
 
 
@@ -583,6 +587,7 @@ def commande_calque(
     - ProRes 4444 (encodeur prores_ks, profil « 4444 ») : le format de montage d'Apple qui garde la
       transparence ; « yuva444p10le » : couleurs en 10 bits sans réduction de leur finesse (4:4:4),
       plus la transparence (le « a ») ; « -alpha_bits 16 » : transparence gardée sur 16 bits.
+    - « setparams » : les étiquettes BT.709 posées sur les images (voir ETIQUETAGE_BT709).
     - « -vendor apl0 » : le fichier se présente comme un ProRes d'Apple (certains logiciels le
       demandent), comme le recommande le guide ProRes de l'Academy Software Foundation.
     - « -qscale:v 1 » : la compression la plus fine, partout. Sans lui, prores_ks cherche pour chaque
@@ -597,7 +602,7 @@ def commande_calque(
         "-progress", "pipe:1", "-stats_period", PERIODE_DES_NOUVELLES_S,
         "-f", "rawvideo", "-pixel_format", FORMAT_DES_IMAGES, "-video_size", f"{largeur}x{hauteur}",
         "-framerate", texte_ffmpeg(frequence), "-i", "pipe:0",
-        "-vf", f"{CONVERSION_BT709},format=yuva444p10le",
+        "-vf", f"{CONVERSION_BT709},format=yuva444p10le,{ETIQUETAGE_BT709}",
         "-c:v", "prores_ks", "-profile:v", "4444", "-alpha_bits", "16", "-vendor", "apl0", "-qscale:v", "1",
         *ETIQUETTES_BT709,
         "-frames:v", str(nombre_images), "-an",

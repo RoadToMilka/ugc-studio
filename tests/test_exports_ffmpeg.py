@@ -171,7 +171,7 @@ def test_commande_du_calque():
     texte = " ".join(commande)
     assert commande[0] == "ffmpeg.exe" and commande[-1] == str(Path("D:/pub (calque).mov.en-cours"))
     assert "-f rawvideo -pixel_format rgba64le -video_size 1080x1920 -framerate 30000/1001 -i pipe:0" in texte
-    assert "-vf scale=out_color_matrix=bt709:out_range=tv,format=yuva444p10le" in texte
+    assert "-vf scale=out_color_matrix=bt709:out_range=tv,format=yuva444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv" in texte
     assert "-c:v prores_ks -profile:v 4444 -alpha_bits 16 -vendor apl0 -qscale:v 1" in texte  # compression la plus fine, sans recherche
     assert "-color_primaries bt709 -color_trc bt709 -colorspace bt709 -color_range tv" in texte
     assert "-frames:v 930 -an -f mov" in texte
@@ -302,15 +302,19 @@ def test_couleurs_lues_sur_de_vraies_videos(tmp_path):
     HLG (comme celles d'un iPhone), fabriquées puis analysées."""
     sdr, hlg = tmp_path / "sdr.mp4", tmp_path / "hlg.mov"
     commun = [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=64x48:rate=30000/1001", "-t", "0.3"]
-    executer([*commun, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709",
-              "-colorspace", "bt709", "-color_range", "tv", str(sdr)])
-    executer([*commun, "-c:v", "libx265", "-x265-params", "log-level=error", "-pix_fmt", "yuv420p10le", "-color_primaries", "bt2020",
-              "-color_trc", "arib-std-b67", "-colorspace", "bt2020nc", "-color_range", "tv", "-tag:v", "hvc1", str(hlg)])
+    # Les étiquettes de couleurs sont posées sur les images (setparams) : depuis FFmpeg 8, l'encodeur les y prend.
+    executer([*commun, "-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv",
+              "-c:v", "libx264", "-pix_fmt", "yuv420p", str(sdr)])
+    executer([*commun, "-vf", "setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv",
+              "-c:v", "libx265", "-x265-params", "log-level=error", "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1", str(hlg)])
+    description = [ligne for ligne in executer(commande_analyse(FFMPEG, sdr)).stderr.splitlines() if "Video:" in ligne]
     couleurs = analyser(sdr).couleurs
-    assert (couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.transfert) == ("yuv420p", "tv", "bt709", "bt709")
+    assert (couleurs.format_pixels, couleurs.plage, couleurs.matrice, couleurs.transfert) == ("yuv420p", "tv", "bt709", "bt709"), description
     assert couleurs.texte() == "SDR, 8 bits"
+    description = [ligne for ligne in executer(commande_analyse(FFMPEG, hlg)).stderr.splitlines() if "Video:" in ligne]
     couleurs = analyser(hlg).couleurs
-    assert couleurs.hlg and couleurs.bits == 10 and couleurs.primaires == "bt2020" and couleurs.texte() == "HDR (HLG), 10 bits"
+    assert couleurs.hlg and couleurs.bits == 10 and couleurs.primaires == "bt2020", description
+    assert couleurs.texte() == "HDR (HLG), 10 bits"
 
 
 @avec_ffmpeg
@@ -332,6 +336,11 @@ def test_calque_prores_4444_ecrit_puis_relu(tmp_path):
     assert analyse.images.codec == "prores" and analyse.images.nombre == nombre
     assert analyse.images.frequence == Fraction(30000, 1001) and analyse.son is None
     assert (analyse.images.largeur, analyse.images.hauteur) == (LARGEUR, HAUTEUR)
+    # Étiquettes BT.709 écrites dans le fichier (norme, primaires, courbe), 4:4:4 avec transparence. La
+    # plage n'a pas de place dans un ProRes (toujours limitée) : FFmpeg ne la relit pas.
+    couleurs = analyse.couleurs
+    assert (couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("bt709", "bt709", "bt709"), couleurs
+    assert couleurs.format_pixels.startswith("yuva444p")
 
     lue = executer(commande_lire_une_image(FFMPEG, sortie, 2), binaire=True).stdout
     assert len(lue) == LARGEUR * HAUTEUR * 8 and FORMAT_DES_IMAGES == "rgba64le"

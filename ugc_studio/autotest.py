@@ -957,14 +957,17 @@ def _calque(atelier, capturer, capturer_image, rapport: dict) -> bool:
         rapport["calque_poids_max_mo"] = round(plan.poids_max / 1024**2, 2)
         analyse = analyser(fichier)
         images = analyse.images if analyse else None
+        couleurs = analyse.couleurs if analyse else None
         rapport["calque_relu"] = {
             "codec": images.codec if images else "", "images": images.nombre if images else 0,
             "frequence": str(images.frequence) if images else "", "taille": [images.largeur, images.hauteur] if images else [],
             "son": analyse.son is not None if analyse else None,
+            "couleurs": [couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert] if couleurs else [],
         }
         etat["fichier_relu"] = bool(
             images and images.codec == "prores" and images.nombre == plan.nombre_images and images.frequence == plan.frequence
             and (images.largeur, images.hauteur) == (plan.largeur, plan.hauteur) and analyse.son is None
+            and couleurs is not None and (couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("bt709", "bt709", "bt709")
         )
         # Une image pendant « Sérum » : relue, envoyée, et celle de l'aperçu.
         serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), 0)
