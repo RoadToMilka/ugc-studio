@@ -5,6 +5,11 @@ UGC Studio utilise FFmpeg pour écrire les fichiers vidéo de ses exports (calqu
 avec sous-titres). FFmpeg est un programme à part, fourni avec l'app : il est lancé par UGC Studio
 pendant un export, sans fenêtre.
 
+Il voyage compressé dans le fichier UGC-Studio.exe. Au tout premier export, l'app le recopie (une
+seule fois, après avoir vérifié son empreinte) dans :
+%LOCALAPPDATA%\UGC Studio\ffmpeg\9.0.2\ffmpeg.exe
+Ce dossier peut être effacé sans risque : l'app le recrée au prochain export.
+
 Version : FFmpeg 9.0.2, version « essentials » de gyan.dev (https://www.gyan.dev/ffmpeg/builds/),
 l'une des deux sources de versions Windows indiquées par https://ffmpeg.org/download.html.
 

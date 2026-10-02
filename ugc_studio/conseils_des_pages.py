@@ -496,6 +496,8 @@ EXPORT = PageDeConseils(
             (
                 "Les images sont dessinées puis encodées par FFmpeg, intégré à l'app : la barre d'avancement et "
                 "le temps restant te disent où il en est.",
+                "Au tout premier export, FFmpeg est d'abord préparé (quelques secondes, une seule fois) : il "
+                "est rangé avec l'app sur ton ordinateur (100 Mo), dans « AppData\\Local\\UGC Studio ».",
                 "« Arrêter » interrompt l'export : rien n'est gardé. Le fichier ne prend son nom qu'une fois "
                 "terminé (avant, il s'appelle « … .mov.en-cours »).",
                 "Le dossier choisi (celui de la vidéo, celui du projet ou un autre) est retenu pour la prochaine "

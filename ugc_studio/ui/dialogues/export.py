@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...exports.cadence import FREQUENCE_MAX, FREQUENCE_MIN, FREQUENCE_SANS_VIDEO, frequence_exacte, texte_frequence
-from ...exports.ffmpeg import analyser, programme_ffmpeg
+from ...exports.ffmpeg import analyser, ffmpeg_a_preparer, preparer_ffmpeg, programme_ffmpeg
 from ...exports.plan import (
     DOSSIER_AUTRE,
     DOSSIER_PROJET,
@@ -99,7 +99,9 @@ class DialogueExportCalque(QDialog):
         super().__init__(parent)
         self._services, self._projet, self._contenu = services, projet, contenu
         self._preferences = services.preferences
-        self._ffmpeg = programme_ffmpeg()
+        self._ffmpeg = programme_ffmpeg()  # None au premier export d'une version : FFmpeg est à recopier
+        self._ffmpeg_en_preparation = False
+        self._erreur_ffmpeg = ""
         self.source: Source = source_du_projet(projet)
         self.analyse_finie = False
         self._frequence_apercu: Fraction | None = None  # vidéo d'aperçu d'un projet sans vidéo
@@ -107,6 +109,8 @@ class DialogueExportCalque(QDialog):
         self._export = None  # ExportDuCalque en cours
         self._debut_export: float | None = None
         self.fichier: Path | None = None  # le calque écrit
+        self.dessin_s = 0.0  # export fini : temps passé à dessiner les images (autotest, journal)
+        self.images_dessinees = 0
         self._ouvert = True
         self.setWindowTitle("Exporter le calque transparent")
         self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
@@ -318,7 +322,17 @@ class DialogueExportCalque(QDialog):
 
     def _lancer_l_analyse(self) -> None:
         """FFmpeg lit la vidéo (sans la décoder, une seconde ou deux) : moment exact de chaque image,
-        vrais débits, nom exact des codecs. En attendant, « Exporter » attend."""
+        vrais débits, nom exact des codecs. En attendant, « Exporter » attend.
+
+        Au tout premier export (et après un changement de version de FFmpeg), FFmpeg est d'abord
+        recopié depuis le .exe (une seconde ou deux, dans une tâche de fond : la fenêtre répond)."""
+        if self._ffmpeg is None and not self._erreur_ffmpeg and ffmpeg_a_preparer():
+            self._ffmpeg_en_preparation = True
+            self.etat_analyse.setText("Préparation de FFmpeg (la première fois seulement, quelques secondes)…")
+            self.etat_analyse.show()
+            self._actualiser()  # pas de message « FFmpeg introuvable » pendant la préparation
+            taches.lancer(preparer_ffmpeg, self._ffmpeg_prepare, self._ffmpeg_en_echec)
+            return
         video = self.source.chemin if self.source.video else self.source.video_d_apercu
         if video is None or not video.is_file() or self._ffmpeg is None:
             self.analyse_finie = True
@@ -328,6 +342,24 @@ class DialogueExportCalque(QDialog):
         self.etat_analyse.show()
         ffmpeg = self._ffmpeg
         taches.lancer(lambda: analyser(video, ffmpeg), self._analyse_lue, lambda _erreur: self._analyse_lue(None))
+
+    def _ffmpeg_prepare(self, chemin: Path) -> None:
+        self._ffmpeg_en_preparation = False
+        if not self._ouvert:
+            return
+        self._ffmpeg = chemin
+        self._lancer_l_analyse()
+
+    def _ffmpeg_en_echec(self, erreur: Exception) -> None:
+        self._ffmpeg_en_preparation = False
+        # Une erreur de Windows (disque plein…) : son texte seul, dans la langue de Windows, sans son code.
+        texte = erreur.strerror if isinstance(erreur, OSError) and erreur.strerror else str(erreur)
+        self._erreur_ffmpeg = texte.strip().rstrip(".") or type(erreur).__name__
+        if not self._ouvert:
+            return
+        self.analyse_finie = True
+        self.etat_analyse.hide()
+        self._actualiser()
 
     def _analyse_lue(self, analyse) -> None:
         if not self._ouvert:
@@ -352,7 +384,9 @@ class DialogueExportCalque(QDialog):
         plan = self.plan()
         sous_titres = texte_des_sous_titres(len(self._contenu.sous_titres), self._contenu.style)
         resume = resume_calque(self.source, plan, sous_titres, place_libre(plan.sortie.parent))
-        if self._ffmpeg is None:
+        if self._erreur_ffmpeg:
+            resume.erreurs.append(f"FFmpeg n'a pas pu être préparé : {self._erreur_ffmpeg}. L'export est impossible.")
+        elif self._ffmpeg is None and not self._ffmpeg_en_preparation:
             resume.erreurs.append("FFmpeg est introuvable : l'export est impossible (il devrait être intégré à l'app).")
         if not self._contenu.sous_titres:
             resume.erreurs.append("Pas de sous-titres à exporter.")
@@ -459,7 +493,10 @@ class DialogueExportCalque(QDialog):
             self.reste.setText(f"Environ {duree_d_export_lisible(ecoule / fait * (total - fait))} restantes")
 
     def _termine(self, fichier: Path) -> None:
-        duree = self._export.duree_s if self._export is not None else 0.0
+        export = self._export
+        duree = export.duree_s if export is not None else 0.0
+        if export is not None:
+            self.dessin_s, self.images_dessinees = export.dessin_s, export.images_dessinees
         self._export = None
         self.fichier = fichier
         self._pendant_l_export(False)

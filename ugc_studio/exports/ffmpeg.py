@@ -1,9 +1,14 @@
 """FFmpeg (V3, §2) : le programme qui écrit les fichiers vidéo des exports.
 
-- Où le trouver : dans le .exe, FFmpeg est rangé avec les ressources de l'app (ressources/ffmpeg),
-  placé là par la fabrication automatique (outils/preparer_ffmpeg.py : version 9.0.2 « essentials »
-  de gyan.dev, empreinte SHA-256 vérifiée). Pour les tests, la variable UGC_STUDIO_FFMPEG peut
-  désigner un autre FFmpeg ; en développement hors Windows, celui de l'ordinateur sert.
+- Où le trouver : la fabrication automatique prépare FFmpeg (outils/preparer_ffmpeg.py : version
+  9.0.2 « essentials » de gyan.dev, empreinte SHA-256 vérifiée). Dans le .exe, il voyage compressé
+  dans une « ressource » Windows : des données rangées dans le fichier du programme, que Windows ne
+  lit que si on les demande. Au premier export (une fois par version de l'app), il est recopié dans
+  %LOCALAPPDATA%\\UGC Studio\\ffmpeg\\<version>\\, puis repris de là.
+  Pourquoi pas avec les autres ressources ? Le .exe recopie ses ressources dans un dossier
+  temporaire à chaque démarrage : avec FFmpeg (100 Mo), l'app démarrait 2,4 s plus lentement.
+  Hors du .exe (tests, développement), FFmpeg est dans ressources/ffmpeg ; la variable
+  UGC_STUDIO_FFMPEG peut en désigner un autre ; hors Windows, celui de l'ordinateur sert.
 - Comment l'app s'en sert : comme un programme à part, lancé sans fenêtre noire. Il reçoit les
   images des sous-titres par un « tuyau » (son entrée standard) et dit où il en est par un autre
   (option -progress). L'app peut l'arrêter à tout moment.
@@ -14,7 +19,10 @@
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import logging
+import lzma
 import os
 import queue
 import re
@@ -27,14 +35,23 @@ from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 
-from ..chemins import dossier_ressources
+from ..chemins import dossier_programmes, dossier_ressources
 from .cadence import texte_ffmpeg
 
 journal = logging.getLogger(__name__)
 
 VARIABLE_FFMPEG = "UGC_STUDIO_FFMPEG"  # tests : un autre FFmpeg que celui de l'app
-DOSSIER_FFMPEG = "ffmpeg"  # dans les ressources de l'app
+DOSSIER_FFMPEG = "ffmpeg"  # dans les ressources de l'app, et dans %LOCALAPPDATA%\UGC Studio
 VERSION_INTEGREE = "9.0.2"  # celle que la fabrication automatique place dans le .exe
+# ffmpeg.exe de cette version (archive de gyan.dev) : taille et empreinte SHA-256, vérifiées par la
+# fabrication et à chaque recopie depuis le .exe. Changer de version de FFmpeg : ces trois valeurs,
+# et l'empreinte de l'archive dans outils/preparer_ffmpeg.py.
+TAILLE_DU_PROGRAMME = 105_423_872
+EMPREINTE_DU_PROGRAMME = "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec"
+# La ressource Windows du .exe qui contient FFmpeg, compressé au format xz.
+TYPE_DE_RESSOURCE = 10  # RT_RCDATA : des données brutes
+NOM_DE_RESSOURCE = "FFMPEG"
+MORCEAU_RECOPIE = 1024 * 1024  # FFmpeg est décompressé et écrit par morceaux (peu de mémoire)
 LIGNES_D_ERREUR_GARDEES = 40
 IMAGES_EN_ATTENTE_MAX = 4  # images prêtes mais pas encore lues par FFmpeg (mémoire : ≈ 66 Mo en 1080 × 1920)
 PERIODE_DES_NOUVELLES_S = "0.25"  # FFmpeg dit où il en est 4 fois par seconde
@@ -50,15 +67,155 @@ def nom_du_programme() -> str:
 
 
 def programme_integre() -> Path:
-    """Emplacement de FFmpeg dans l'app (le .exe, ou le code source après outils/preparer_ffmpeg.py)."""
+    """Emplacement de FFmpeg à côté du code (tests et développement, après outils/preparer_ffmpeg.py)."""
     return dossier_ressources() / DOSSIER_FFMPEG / nom_du_programme()
 
 
+def copie_de_ffmpeg() -> Path:
+    """Où FFmpeg est recopié depuis le .exe : un dossier par version, à côté des données de l'app."""
+    return dossier_programmes() / DOSSIER_FFMPEG / VERSION_INTEGREE / nom_du_programme()
+
+
+@functools.cache
+def _ressource() -> tuple[int, int] | None:
+    """Adresse et taille de FFmpeg compressé dans la ressource du .exe (None : pas dans un .exe, ou
+    ressource absente). FindResource, LoadResource et LockResource (fonctions de Windows) donnent
+    l'adresse des données dans le programme déjà ouvert : rien n'est lu du disque avant qu'on y
+    touche, et rien ne change pendant que l'app tourne (d'où la mémoire de la réponse)."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    noyau = ctypes.WinDLL("kernel32", use_last_error=True)
+    noyau.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+    noyau.GetModuleHandleW.restype = wintypes.HMODULE
+    noyau.FindResourceW.argtypes = [wintypes.HMODULE, wintypes.LPCWSTR, wintypes.LPCWSTR]
+    noyau.FindResourceW.restype = wintypes.HANDLE
+    noyau.SizeofResource.argtypes = [wintypes.HMODULE, wintypes.HANDLE]
+    noyau.SizeofResource.restype = wintypes.DWORD
+    noyau.LoadResource.argtypes = [wintypes.HMODULE, wintypes.HANDLE]
+    noyau.LoadResource.restype = wintypes.HGLOBAL
+    noyau.LockResource.argtypes = [wintypes.HGLOBAL]
+    noyau.LockResource.restype = ctypes.c_void_p
+    module = noyau.GetModuleHandleW(None)  # le .exe lui-même
+    # Un type de ressource numéroté se donne comme une « adresse » égale à son numéro (MAKEINTRESOURCE).
+    trouvee = noyau.FindResourceW(module, NOM_DE_RESSOURCE, wintypes.LPCWSTR(TYPE_DE_RESSOURCE))
+    if not trouvee:
+        return None
+    taille = noyau.SizeofResource(module, trouvee)
+    chargee = noyau.LoadResource(module, trouvee)
+    adresse = noyau.LockResource(chargee) if chargee else None
+    if not taille or not adresse:
+        return None
+    return adresse, taille
+
+
+def _lire_la_ressource() -> bytes | None:
+    """FFmpeg compressé (format xz), copié depuis la ressource du .exe."""
+    trouvee = _ressource()
+    if trouvee is None:
+        return None
+    import ctypes
+
+    adresse, taille = trouvee
+    return ctypes.string_at(adresse, taille)
+
+
+def ffmpeg_dans_le_exe() -> bool:
+    """Vrai dans le .exe fabriqué avec FFmpeg dans sa ressource."""
+    return _ressource() is not None
+
+
+def _copie_prete(chemin: Path) -> bool:
+    try:
+        return chemin.is_file() and chemin.stat().st_size == TAILLE_DU_PROGRAMME
+    except OSError:
+        return False
+
+
+def ffmpeg_a_preparer() -> bool:
+    """Vrai au premier export d'une version de l'app : FFmpeg est à recopier depuis le .exe."""
+    return not os.environ.get(VARIABLE_FFMPEG) and ffmpeg_dans_le_exe() and not _copie_prete(copie_de_ffmpeg())
+
+
+class ErreurFFmpeg(Exception):
+    """FFmpeg n'a pas pu être préparé (message clair, montré dans la fenêtre d'export)."""
+
+
+def ecrire_le_programme(compresse: bytes, destination: Path, taille: int, empreinte: str) -> None:
+    """Décompresse FFmpeg (format xz) dans `destination`, en vérifiant sa taille et son empreinte.
+
+    Il s'écrit d'abord sous un nom provisoire, propre à ce lancement de l'app (deux fenêtres de l'app
+    ne se gênent pas), et ne prend son vrai nom qu'une fois vérifié : un FFmpeg incomplet ou abîmé
+    n'est jamais lancé."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    provisoire = destination.with_name(f"{destination.name}.{os.getpid()}.en-cours")
+    calcul, ecrits = hashlib.sha256(), 0
+    decompresseur = lzma.LZMADecompressor()
+    try:
+        with provisoire.open("wb") as fichier:
+            vue = memoryview(compresse)
+            for debut in range(0, len(vue), MORCEAU_RECOPIE):
+                if decompresseur.eof:
+                    break  # le programme est entier : ce qui suivrait ne sert pas (vérifié plus bas)
+                morceau = decompresseur.decompress(vue[debut : debut + MORCEAU_RECOPIE])
+                calcul.update(morceau)
+                fichier.write(morceau)
+                ecrits += len(morceau)
+        if not decompresseur.eof or ecrits != taille or calcul.hexdigest() != empreinte:
+            raise ErreurFFmpeg("la copie de FFmpeg contenue dans l'app est abîmée (empreinte inattendue)")
+        os.replace(provisoire, destination)
+    except lzma.LZMAError as erreur:
+        raise ErreurFFmpeg(f"la copie de FFmpeg contenue dans l'app est illisible ({erreur})") from erreur
+    except OSError:
+        if _copie_prete(destination):
+            return  # une autre fenêtre de l'app vient de le recopier (et s'en sert peut-être déjà)
+        raise
+    finally:
+        provisoire.unlink(missing_ok=True)
+
+
+def _ranger_les_anciennes_versions() -> None:
+    """Les copies de FFmpeg des versions précédentes de l'app (100 Mo chacune) sont effacées."""
+    dossier = dossier_programmes() / DOSSIER_FFMPEG
+    for ancienne in dossier.iterdir() if dossier.is_dir() else ():
+        if ancienne.is_dir() and ancienne.name != VERSION_INTEGREE:
+            shutil.rmtree(ancienne, ignore_errors=True)  # encore utilisée par une autre fenêtre : effacée la prochaine fois
+
+
+_preparation = threading.Lock()
+
+
+def preparer_ffmpeg() -> Path:
+    """FFmpeg prêt à servir : recopié depuis le .exe s'il ne l'est pas encore (une seconde ou deux,
+    une fois par version de l'app). Hors du .exe : celui que trouve programme_ffmpeg().
+    Lance ErreurFFmpeg (ou OSError : disque plein…) s'il n'a pas pu être préparé."""
+    with _preparation:
+        if not ffmpeg_a_preparer():
+            chemin = programme_ffmpeg()
+            if chemin is None:
+                raise ErreurFFmpeg("FFmpeg est introuvable (il devrait être intégré à l'app)")
+            return chemin
+        compresse = _lire_la_ressource()
+        if compresse is None:
+            raise ErreurFFmpeg("FFmpeg est introuvable dans l'app")
+        destination = copie_de_ffmpeg()
+        journal.info("Recopie de FFmpeg %s depuis l'app : %s", VERSION_INTEGREE, destination)
+        ecrire_le_programme(compresse, destination, TAILLE_DU_PROGRAMME, EMPREINTE_DU_PROGRAMME)
+        _ranger_les_anciennes_versions()
+        return destination
+
+
 def programme_ffmpeg() -> Path | None:
-    """FFmpeg à utiliser, ou None s'il est introuvable (ne devrait pas arriver dans le .exe)."""
+    """FFmpeg à utiliser, ou None s'il est introuvable, ou pas encore recopié depuis le .exe (voir
+    ffmpeg_a_preparer et preparer_ffmpeg)."""
     force = os.environ.get(VARIABLE_FFMPEG)
     if force:
         return Path(force) if Path(force).is_file() else None
+    if ffmpeg_dans_le_exe():
+        copie = copie_de_ffmpeg()
+        return copie if _copie_prete(copie) else None
     integre = programme_integre()
     if integre.is_file():
         return integre
@@ -349,6 +506,11 @@ def commande_calque(
       plus la transparence (le « a ») ; « -alpha_bits 16 » : transparence gardée sur 16 bits.
     - « -vendor apl0 » : le fichier se présente comme un ProRes d'Apple (certains logiciels le
       demandent), comme le recommande le guide ProRes de l'Academy Software Foundation.
+    - « -qscale:v 1 » : la compression la plus fine, partout. Sans lui, prores_ks cherche pour chaque
+      bande d'image la compression qui tient dans le débit visé ; pour des sous-titres (aplats,
+      bords nets, fond transparent), il choisit de toute façon la plus fine : mêmes images à l'octet
+      près dans nos essais, mais 3 fois plus lent. La documentation de FFmpeg 9.0.2 conseille de fixer
+      ce réglage pour aller vite (« Speed considerations »).
     - « -frames:v » : exactement le nombre d'images prévu ; « -an » : pas de son.
     - « -progress pipe:1 » : FFmpeg dit où il en est (images écrites), 4 fois par seconde."""
     return [
@@ -357,7 +519,7 @@ def commande_calque(
         "-f", "rawvideo", "-pixel_format", FORMAT_DES_IMAGES, "-video_size", f"{largeur}x{hauteur}",
         "-framerate", texte_ffmpeg(frequence), "-i", "pipe:0",
         "-vf", f"{CONVERSION_BT709},format=yuva444p10le",
-        "-c:v", "prores_ks", "-profile:v", "4444", "-alpha_bits", "16", "-vendor", "apl0",
+        "-c:v", "prores_ks", "-profile:v", "4444", "-alpha_bits", "16", "-vendor", "apl0", "-qscale:v", "1",
         *ETIQUETTES_BT709,
         "-frames:v", str(nombre_images), "-an",
         "-f", "mov", str(sortie),

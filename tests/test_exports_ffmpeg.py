@@ -5,7 +5,10 @@ intégré à l'app sur la fabrication Windows, celui de l'ordinateur ailleurs), 
 écrits puis relus : ProRes 4444 avec transparence, couleurs et transparence comparées pixel par pixel.
 """
 
+import hashlib
+import lzma
 import struct
+import sys
 import time
 from fractions import Fraction
 from pathlib import Path
@@ -15,19 +18,24 @@ import pytest
 from ugc_studio.exports import ffmpeg as module_ffmpeg
 from ugc_studio.exports.ffmpeg import (
     FORMAT_DES_IMAGES,
+    ErreurFFmpeg,
     Nouvelles,
     Processus,
     analyser,
     commande_analyse,
     commande_calque,
     commande_lire_une_image,
+    copie_de_ffmpeg,
+    ecrire_le_programme,
     executer,
+    ffmpeg_a_preparer,
     infos_ffmpeg,
     lire_analyse,
     lire_encodeurs,
     lire_formats_d_encodeur,
     lire_nouvelles,
     lire_version,
+    preparer_ffmpeg,
     programme_ffmpeg,
 )
 
@@ -122,7 +130,7 @@ def test_commande_du_calque():
     assert commande[0] == "ffmpeg.exe" and commande[-1] == str(Path("D:/pub (calque).mov.en-cours"))
     assert "-f rawvideo -pixel_format rgba64le -video_size 1080x1920 -framerate 30000/1001 -i pipe:0" in texte
     assert "-vf scale=out_color_matrix=bt709:out_range=tv,format=yuva444p10le" in texte
-    assert "-c:v prores_ks -profile:v 4444 -alpha_bits 16 -vendor apl0" in texte
+    assert "-c:v prores_ks -profile:v 4444 -alpha_bits 16 -vendor apl0 -qscale:v 1" in texte  # compression la plus fine, sans recherche
     assert "-color_primaries bt709 -color_trc bt709 -colorspace bt709 -color_range tv" in texte
     assert "-frames:v 930 -an -f mov" in texte
     assert "-progress pipe:1" in texte and "-nostdin" not in commande  # l'entrée standard porte les images
@@ -137,6 +145,75 @@ def test_ffmpeg_designe_par_la_variable(tmp_path, monkeypatch):
     assert programme_ffmpeg() == faux
     monkeypatch.setenv(module_ffmpeg.VARIABLE_FFMPEG, str(tmp_path / "absent.exe"))
     assert programme_ffmpeg() is None
+
+
+# --- FFmpeg recopié depuis le .exe au premier export ----------------------------------------------
+
+FAUX_PROGRAMME = bytes(range(256)) * 20_000  # 5 Mo : plusieurs morceaux de 1 Mo à décompresser
+
+
+def _faux_exe(monkeypatch, tmp_path, compresse: bytes | None):
+    """Comme dans le .exe : FFmpeg compressé dans la ressource, recopié dans le dossier des programmes."""
+    monkeypatch.delenv(module_ffmpeg.VARIABLE_FFMPEG, raising=False)
+    monkeypatch.setenv("UGC_STUDIO_DOSSIER_PROGRAMMES", str(tmp_path / "programmes"))
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(module_ffmpeg, "_ressource", lambda: (0, len(compresse)) if compresse is not None else None)
+    monkeypatch.setattr(module_ffmpeg, "_lire_la_ressource", lambda: compresse)
+    monkeypatch.setattr(module_ffmpeg, "TAILLE_DU_PROGRAMME", len(FAUX_PROGRAMME))
+    monkeypatch.setattr(module_ffmpeg, "EMPREINTE_DU_PROGRAMME", hashlib.sha256(FAUX_PROGRAMME).hexdigest())
+
+
+def test_ffmpeg_recopie_une_fois_depuis_le_exe(tmp_path, monkeypatch):
+    """Premier export : FFmpeg est à recopier (programme_ffmpeg ne le donne pas encore) ; une fois
+    recopié et vérifié, il est repris tel quel, et les copies des anciennes versions sont effacées."""
+    _faux_exe(monkeypatch, tmp_path, lzma.compress(FAUX_PROGRAMME))
+    ancienne = tmp_path / "programmes" / "ffmpeg" / "8.0" / "ffmpeg.exe"
+    ancienne.parent.mkdir(parents=True)
+    ancienne.write_bytes(b"ancien")
+    copie = copie_de_ffmpeg()
+    assert copie == tmp_path / "programmes" / "ffmpeg" / module_ffmpeg.VERSION_INTEGREE / copie.name
+    assert ffmpeg_a_preparer() and programme_ffmpeg() is None
+    assert preparer_ffmpeg() == copie and copie.read_bytes() == FAUX_PROGRAMME
+    assert not ffmpeg_a_preparer() and programme_ffmpeg() == copie
+    assert not ancienne.parent.exists()
+    assert [f.name for f in copie.parent.iterdir()] == [copie.name]  # aucun fichier provisoire laissé
+    monkeypatch.setattr(module_ffmpeg, "_lire_la_ressource", lambda: pytest.fail("déjà recopié : rien à relire"))
+    assert preparer_ffmpeg() == copie
+
+
+def test_ffmpeg_abime_jamais_lance(tmp_path, monkeypatch):
+    """Une copie qui ne redonne pas exactement FFmpeg (empreinte, fin manquante, données illisibles)
+    est refusée, et rien ne reste sous le vrai nom."""
+    compresse = lzma.compress(FAUX_PROGRAMME)
+    for abime, motif in (
+        (lzma.compress(FAUX_PROGRAMME[:-1] + b"x"), "abîmée"),
+        (compresse[: len(compresse) // 2], "abîmée"),
+        (b"pas du xz" * 100, "illisible"),
+    ):
+        _faux_exe(monkeypatch, tmp_path, abime)
+        with pytest.raises(ErreurFFmpeg, match=motif):
+            preparer_ffmpeg()
+        assert not copie_de_ffmpeg().exists() and list(copie_de_ffmpeg().parent.iterdir()) == []
+        assert programme_ffmpeg() is None and ffmpeg_a_preparer()
+
+
+def test_ffmpeg_absent_du_exe(tmp_path, monkeypatch):
+    _faux_exe(monkeypatch, tmp_path, None)
+    monkeypatch.setattr(module_ffmpeg, "programme_integre", lambda: tmp_path / "absent" / "ffmpeg.exe")
+    assert not ffmpeg_a_preparer() and programme_ffmpeg() is None
+    with pytest.raises(ErreurFFmpeg, match="introuvable"):
+        preparer_ffmpeg()
+
+
+def test_ecrire_le_programme_deja_la(tmp_path):
+    """Une autre fenêtre de l'app l'a déjà recopié (et s'en sert peut-être : impossible de le remplacer) :
+    la copie existante, de la bonne taille, sert."""
+    destination = tmp_path / "ffmpeg.exe"
+    empreinte = hashlib.sha256(FAUX_PROGRAMME).hexdigest()
+    ecrire_le_programme(lzma.compress(FAUX_PROGRAMME), destination, len(FAUX_PROGRAMME), empreinte)
+    assert destination.read_bytes() == FAUX_PROGRAMME
+    ecrire_le_programme(lzma.compress(FAUX_PROGRAMME), destination, len(FAUX_PROGRAMME), empreinte)
+    assert sorted(f.name for f in tmp_path.iterdir()) == ["ffmpeg.exe"]
 
 
 # --- Avec un vrai FFmpeg -----------------------------------------------------------------------

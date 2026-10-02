@@ -124,6 +124,7 @@ class ExportDuCalque(QObject):
         self._fin_envoyee = False
         self.debut: float | None = None
         self.duree_s: float | None = None  # durée de l'export, une fois fini
+        self.dessin_s = 0.0  # temps passé à dessiner les images (le reste : FFmpeg qui encode)
         self._minuterie = QTimer(self)
         self._minuterie.setSingleShot(True)
         self._minuterie.timeout.connect(self._travailler)
@@ -131,6 +132,11 @@ class ExportDuCalque(QObject):
     @property
     def en_cours(self) -> bool:
         return self._processus is not None
+
+    @property
+    def images_dessinees(self) -> int:
+        """Images vraiment redessinées (les autres, identiques à la précédente, sont reprises)."""
+        return self._images.dessinees
 
     def demarrer(self) -> None:
         plan = self.plan
@@ -162,7 +168,10 @@ class ExportDuCalque(QObject):
                     return
                 if not processus.peut_recevoir():
                     break
-                processus.envoyer(self._images.image(plan.temps(self._numero)))
+                avant = time.monotonic()
+                image = self._images.image(plan.temps(self._numero))
+                self.dessin_s += time.monotonic() - avant
+                processus.envoyer(image)
                 self._numero += 1
             self.avance.emit(self._numero, plan.nombre_images)
             if self._numero >= plan.nombre_images:
@@ -190,7 +199,10 @@ class ExportDuCalque(QObject):
                     f"Premiere Pro ?). Il est gardé sous le nom « {plan.en_cours.name} »."
                 )
                 return
-            journal.info("Calque écrit en %.1f s : %s (%d images redessinées)", self.duree_s, plan.sortie, self._images.dessinees)
+            journal.info(
+                "Calque écrit en %.1f s (dessin : %.1f s) : %s (%d images redessinées sur %d)",
+                self.duree_s, self.dessin_s, plan.sortie, self._images.dessinees, plan.nombre_images,
+            )
             self.termine.emit(plan.sortie)
             return
         journal.warning("Export du calque en échec (code %s) : %s", code, " | ".join(processus.erreurs()))

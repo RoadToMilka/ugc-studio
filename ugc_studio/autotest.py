@@ -321,6 +321,27 @@ def _attendre(condition, secondes: float = DELAI_DECODAGE_S) -> bool:
     return bool(condition())
 
 
+def _attendre_sans_pause(condition, secondes: float) -> bool:
+    """Comme _attendre, mais la boucle de Qt tourne comme dans l'app, sans les petites pauses de
+    _attendre : un export (dessiné par tranches dans la tâche principale) y va à sa vraie vitesse."""
+    from PySide6.QtCore import QEventLoop
+
+    if condition():
+        return True
+    boucle = QEventLoop()
+    verification = QTimer()
+    verification.timeout.connect(lambda: boucle.quit() if condition() else None)
+    verification.start(50)
+    limite = QTimer()
+    limite.setSingleShot(True)
+    limite.timeout.connect(boucle.quit)
+    limite.start(round(secondes * 1000))
+    boucle.exec()
+    verification.stop()
+    limite.stop()
+    return bool(condition())
+
+
 def _verifier_lecture_video(atelier) -> dict:
     """V2, lot 3 : le .exe lit-il une vidéo, image par image ? La vidéo de démonstration (AVI Motion
     JPEG, rendu/video_test.py) : première image reçue (taille, couleur du haut), puis 1,5 s de
@@ -795,22 +816,62 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
 
 def _ffmpeg_integre(rapport: dict) -> bool:
     """V3, lot 1 : FFmpeg est bien dans le .exe, à sa version (9.0.2 de gyan.dev), avec les encodeurs
-    des exports (ProRes, x264, x265, FFV1, AAC) ; x265 sait encoder en 10 bits (HDR, lot 3)."""
-    from .exports.ffmpeg import VERSION_INTEGREE, infos_ffmpeg, programme_ffmpeg, programme_integre
+    des exports (ProRes, x264, x265, FFV1, AAC) ; x265 sait encoder en 10 bits (HDR, lot 3).
 
-    chemin = programme_ffmpeg()
+    Dans le .exe, FFmpeg voyage dans une ressource Windows, pas avec les fichiers recopiés à chaque
+    démarrage : sa copie (dossier temporaire de l'autotest) est effacée, puis refaite comme au premier
+    export (durée mesurée, empreinte vérifiée)."""
+    import hashlib
+    import shutil
+
+    from .exports.ffmpeg import (
+        EMPREINTE_DU_PROGRAMME,
+        VERSION_INTEGREE,
+        copie_de_ffmpeg,
+        ffmpeg_a_preparer,
+        ffmpeg_dans_le_exe,
+        infos_ffmpeg,
+        preparer_ffmpeg,
+        programme_ffmpeg,
+        programme_integre,
+    )
+
+    gele = bool(getattr(sys, "frozen", False))
+    dans_le_exe = ffmpeg_dans_le_exe()
+    etat: dict = {"dans_le_exe": dans_le_exe, "pas_recopie_au_demarrage": not programme_integre().exists()}
+    if dans_le_exe:
+        shutil.rmtree(copie_de_ffmpeg().parent, ignore_errors=True)
+        etat["a_preparer"] = ffmpeg_a_preparer() and programme_ffmpeg() is None
+        debut = time.monotonic()
+        try:
+            chemin = preparer_ffmpeg()
+        except Exception as erreur:  # noqa: BLE001 (le rapport dit pourquoi)
+            etat["erreur"] = str(erreur)
+            chemin = None
+        etat["preparation_s"] = round(time.monotonic() - debut, 2)
+        etat["empreinte_verifiee"] = bool(
+            chemin and hashlib.sha256(chemin.read_bytes()).hexdigest() == EMPREINTE_DU_PROGRAMME
+        )
+        etat["pret_ensuite"] = not ffmpeg_a_preparer() and programme_ffmpeg() == chemin == copie_de_ffmpeg()
+    else:
+        chemin = programme_ffmpeg()
     infos = infos_ffmpeg(chemin) if chemin is not None else None
     voulus = ("prores_ks", "libx264", "libx265", "ffv1", "aac")
     rapport["ffmpeg"] = {
         "chemin": str(chemin),
-        "integre": chemin == programme_integre(),
+        **etat,
         "version": infos.version if infos else "",
         "encodeurs": {nom: nom in infos.encodeurs for nom in voulus} if infos else {},
         "x265_10_bits": bool(infos and infos.x265_10_bits),
         "poids_mo": round(chemin.stat().st_size / 1024**2, 1) if chemin is not None and chemin.is_file() else None,
     }
+    bon_endroit = (
+        dans_le_exe and etat["pas_recopie_au_demarrage"] and etat["a_preparer"] and etat["empreinte_verifiee"] and etat["pret_ensuite"]
+        if gele
+        else chemin == programme_integre()
+    )
     return bool(
-        infos and chemin == programme_integre() and infos.version.startswith(VERSION_INTEGREE)
+        infos and bon_endroit and infos.version.startswith(VERSION_INTEGREE)
         and all(nom in infos.encodeurs for nom in voulus) and infos.x265_10_bits
     )
 
@@ -882,8 +943,10 @@ def _calque(atelier, capturer, capturer_image, rapport: dict) -> bool:
     dialogue.exporter()
     _attendre(lambda: dialogue.barre.avancee() > 0.05 or not dialogue.en_cours(), 30)
     capturer(dialogue, "dialogue-export-calque-avancement")
-    etat["export_fini"] = _attendre(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
+    etat["export_fini"] = _attendre_sans_pause(lambda: not dialogue.en_cours(), DELAI_EXPORT_S)
     rapport["calque_duree_s"] = round(time.monotonic() - debut, 2)
+    rapport["calque_dessin_s"] = round(dialogue.dessin_s, 2)  # temps passé à dessiner les images (le reste : FFmpeg)
+    rapport["calque_images_dessinees"] = dialogue.images_dessinees
     _laisser_afficher()
     capturer(dialogue, "dialogue-export-calque-fin")
     rapport["calque_message"] = dialogue.statut.text()

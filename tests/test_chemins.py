@@ -40,3 +40,18 @@ def test_chaque_icone_utilisee_existe():
     assert {"scroll-text", "globe", "pen-line", "send"} <= noms
     manquants = sorted(n for n in noms if not (chemins.dossier_ressources() / "icones" / f"{n}.svg").is_file())
     assert not manquants, f"Icônes sans fichier : {manquants}"
+
+
+def test_dossier_des_programmes(dossier_donnees_temporaire, monkeypatch, tmp_path):
+    """FFmpeg recopié depuis le .exe (V3) : dans %LOCALAPPDATA%\\UGC Studio (pas avec les données, qui
+    peuvent suivre l'utilisateur d'un ordinateur à l'autre) ; tests : avec leurs données ; autotest :
+    là où il le demande, hors de son rapport."""
+    monkeypatch.delenv(chemins.VARIABLE_DOSSIER_PROGRAMMES, raising=False)
+    assert chemins.dossier_programmes() == dossier_donnees_temporaire / "programmes"
+    monkeypatch.setenv(chemins.VARIABLE_DOSSIER_PROGRAMMES, str(tmp_path / "autotest"))
+    assert chemins.dossier_programmes() == tmp_path / "autotest" and (tmp_path / "autotest").is_dir()
+    monkeypatch.delenv(chemins.VARIABLE_DOSSIER_PROGRAMMES)
+    monkeypatch.delenv(chemins.VARIABLE_DOSSIER_DONNEES)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    monkeypatch.setattr(chemins.sys, "platform", "win32")
+    assert chemins.dossier_programmes() == tmp_path / "Local" / "UGC Studio"

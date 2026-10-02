@@ -57,13 +57,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path rapport | Out-Null
           python -m pip freeze | Out-File -Encoding utf8 rapport/versions.txt
 
-      # FFmpeg (V3, exports vidéo) : la version 9.0.2 « essentials » de gyan.dev, figée. Son archive
-      # est gardée en cache d'une fabrication à l'autre (la clé change avec sa version et son empreinte).
+      # FFmpeg (V3, exports vidéo) : la version 9.0.2 « essentials » de gyan.dev, figée. Son archive,
+      # et sa copie compressée pour le .exe (xz), sont gardées en cache d'une fabrication à l'autre (la
+      # clé change avec sa version, son empreinte et la façon de le compresser).
       - name: Garder l'archive de FFmpeg (cache)
         uses: actions/cache@v6
         with:
           path: outils/cache
-          key: ffmpeg-9.0.2-essentials-60f467265b1e
+          key: ffmpeg-9.0.2-essentials-60f467265b1e-xz6
 
       - name: Préparer FFmpeg 9.0.2 (empreinte vérifiée)
         run: |
@@ -110,9 +111,10 @@ jobs:
           $p = Start-Process -FilePath "dist/UGC-Studio.exe" -ArgumentList @("--autotest", "`"$dossier`"", "--captures-taille-fixe") -Wait -PassThru
           if ($p.ExitCode -ne 0) { Write-Warning "Captures incomplètes (code $($p.ExitCode))" }
 
-      # Temps de démarrage (V3) : FFmpeg, intégré au .exe, est décompressé à chaque lancement. Le .exe
-      # de la version 2.0.0 (sans FFmpeg) et celui-ci sont lancés tour à tour, jusqu'à l'apparition de
-      # leur fenêtre ; le premier lancement de chacun ne compte pas (l'antivirus de Windows l'examine).
+      # Temps de démarrage (V3) : FFmpeg est dans le .exe, mais dans une ressource que le démarrage ne
+      # recopie pas (il l'est au premier export). Le .exe de la version 2.0.0 (sans FFmpeg) et celui-ci
+      # sont lancés tour à tour, jusqu'à l'apparition de leur fenêtre ; le premier lancement de chacun
+      # ne compte pas (l'antivirus de Windows l'examine).
       - name: Mesurer le démarrage (2.0.0 et cette version)
         timeout-minutes: 6
         continue-on-error: true

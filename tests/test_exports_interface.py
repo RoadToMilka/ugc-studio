@@ -178,6 +178,45 @@ def test_fenetre_du_calque_d_une_prise(app_configuree, qtbot, services, projet_p
     assert not dialogue.bouton_exporter.isEnabled() and "Donne un nom au fichier." in dialogue.messages_affiches()
 
 
+def test_premier_export_prepare_ffmpeg(app_configuree, qtbot, services, projet_prise, monkeypatch):
+    """Premier export d'une version : FFmpeg est recopié depuis le .exe dans une tâche de fond. La
+    fenêtre le dit, « Exporter » attend, et aucun message « introuvable » ne s'affiche entre-temps ;
+    une préparation impossible le dit en rouge."""
+    from ugc_studio.ui.dialogues import export as module_export
+    from ugc_studio.ui.dialogues.export import DialogueExportCalque
+
+    prepare = []
+
+    def preparer():
+        time.sleep(0.3)  # le temps de voir la fenêtre pendant la préparation
+        prepare.append(True)
+        return FFMPEG
+
+    monkeypatch.setattr(module_export, "programme_ffmpeg", lambda: None)
+    monkeypatch.setattr(module_export, "ffmpeg_a_preparer", lambda: not prepare)
+    monkeypatch.setattr(module_export, "preparer_ffmpeg", preparer)
+    dialogue = DialogueExportCalque(services, projet_prise, _contenu(projet_prise.sous_titres))
+    qtbot.addWidget(dialogue)
+    dialogue.show()
+    assert dialogue.etat_analyse.text().startswith("Préparation de FFmpeg") and not dialogue.bouton_exporter.isEnabled()
+    assert not any("FFmpeg" in message for message in dialogue.messages_affiches())
+    qtbot.waitUntil(lambda: dialogue.analyse_finie, timeout=20_000)
+    assert prepare and dialogue._ffmpeg == FFMPEG and dialogue.etat_analyse.isHidden()
+    assert dialogue.bouton_exporter.isEnabled() == (FFMPEG is not None)
+
+    def echoue():
+        raise OSError("Il n'y a pas assez d'espace sur le disque")
+
+    prepare.clear()
+    monkeypatch.setattr(module_export, "preparer_ffmpeg", echoue)
+    dialogue = DialogueExportCalque(services, projet_prise, _contenu(projet_prise.sous_titres))
+    qtbot.addWidget(dialogue)
+    dialogue.show()
+    qtbot.waitUntil(lambda: dialogue.analyse_finie, timeout=20_000)
+    assert not dialogue.bouton_exporter.isEnabled()
+    assert "FFmpeg n'a pas pu être préparé : Il n'y a pas assez d'espace sur le disque. L'export est impossible." in dialogue.messages_affiches()
+
+
 @avec_ffmpeg
 def test_export_du_calque_puis_relu(app_configuree, qtbot, services, projet_prise, tmp_path):
     """Un vrai calque, depuis la fenêtre : le fichier a les images prévues, à la bonne fréquence, et
