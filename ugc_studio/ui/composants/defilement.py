@@ -10,7 +10,16 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt
 from PySide6.QtGui import QLinearGradient, QPainter
-from PySide6.QtWidgets import QAbstractScrollArea, QDialog, QFrame, QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QAbstractScrollArea,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..theme import Couleurs, Dimensions, Espacements, qcolor
 
@@ -166,3 +175,101 @@ def zone_defilante(
         disposition.addLayout(ligne)
         disposition.addStretch(1)
     return zone, contenu
+
+
+class ColonneDefilante(QScrollArea):
+    """Contenu d'un bloc qui défile seul, ou pas (V3.1, lot 5 : colonnes Apparence et Sous-titres du
+    studio des sous-titres).
+
+    - Avec `definir_defilement(True)` (grande fenêtre), la zone prend la hauteur que le bloc lui
+      laisse et son contenu défile dedans, avec une barre fine et les fondus. Quand il reste de la
+      place, le contenu s'étire : un élément ajouté avec un facteur d'étirement la prend (ex. la liste
+      des sous-titres).
+    - Avec `definir_defilement(False)`, la zone prend toute la hauteur de son contenu, comme si elle
+      n'était pas là : c'est la page qui défile.
+
+    La barre prend place dans la marge de droite du bloc, comme celle des pages (lot 1) : le bloc ne
+    garde que `Espacements.S` de marge à droite, et le contenu `marge_droite` de plus quand la barre
+    est cachée, `marge_droite` moins la barre quand elle est visible. Le contenu garde donc la même
+    largeur : rien ne passe à la ligne quand la barre apparaît."""
+
+    def __init__(self, contenu: QWidget, marge_droite: int = 0, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("colonneDefilante")  # barre fine : voir la feuille de style
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        interieur = QWidget()
+        self._disposition = QVBoxLayout(interieur)
+        self._disposition.setContentsMargins(0, 0, marge_droite, 0)
+        self._disposition.setSpacing(0)
+        self._disposition.addWidget(contenu)
+        self.setWidget(interieur)
+        # Comme zone_defilante : le fond reste celui du bloc.
+        interieur.setAutoFillBackground(False)
+        self.viewport().setAutoFillBackground(False)
+        self.contenu = contenu
+        self._marge_droite = marge_droite
+        self.fondus = Fondus(self, Couleurs.SURFACE)  # le fond d'un bloc
+        self._defile = True
+        self.verticalScrollBar().rangeChanged.connect(self._placer_la_barre)
+        self.definir_defilement(False)
+
+    @property
+    def defile(self) -> bool:
+        return self._defile
+
+    def definir_defilement(self, defile: bool) -> None:
+        if defile == self._defile:
+            return
+        self._defile = defile
+        self.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded if defile else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        politique = QSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding if defile else QSizePolicy.Policy.Preferred
+        )
+        politique.setHeightForWidth(not defile)
+        self.setSizePolicy(politique)
+        if not defile:
+            self.verticalScrollBar().setValue(0)
+        self._placer_la_barre()
+        self.updateGeometry()
+
+    def _placer_la_barre(self, *_bornes) -> None:
+        barre = self.verticalScrollBar()
+        visible = self._defile and barre.maximum() > barre.minimum()
+        reste = max(0, self._marge_droite - Dimensions.BARRE_DEFILEMENT_FINE) if visible else self._marge_droite
+        if self._disposition.contentsMargins().right() != reste:
+            self._disposition.setContentsMargins(0, 0, reste, 0)
+
+    # --- Taille : toute la hauteur du contenu quand la zone ne défile pas ------------------------
+
+    def eventFilter(self, objet, evenement) -> bool:  # noqa: N802 — nom imposé par Qt
+        # QScrollArea surveille déjà son contenu (setWidget) : quand la disposition du contenu change
+        # (groupe ouvert, onglet, texte plus long…), la zone qui ne défile pas change de hauteur avec
+        # lui. Sans cela, le bloc qui la contient garderait l'ancienne hauteur (contenu coupé).
+        if objet is self.widget() and evenement.type() == QEvent.Type.LayoutRequest and not self._defile:
+            self.updateGeometry()
+        return super().eventFilter(objet, evenement)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 — nom imposé par Qt
+        return not self._defile
+
+    def heightForWidth(self, largeur: int) -> int:  # noqa: N802
+        interieur = self.widget()
+        if interieur.hasHeightForWidth():
+            return interieur.heightForWidth(largeur)
+        return interieur.sizeHint().height()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        taille = self.widget().sizeHint()
+        if self._defile:
+            return QSize(taille.width(), min(taille.height(), Dimensions.ZONE_DEFILANTE_HAUTEUR_SOUHAITEE))
+        return taille
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        minimum = self.widget().minimumSizeHint()
+        # Qui défile : sa hauteur est celle que le bloc lui laisse ; sinon, toute celle du contenu
+        # (donnée par heightForWidth à la disposition qui la contient).
+        return QSize(minimum.width(), 0 if self._defile else minimum.height())

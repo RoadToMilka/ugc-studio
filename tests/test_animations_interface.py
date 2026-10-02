@@ -163,7 +163,7 @@ def test_studio_avec_l_onglet_animations(app_configuree, qtbot, services, tmp_pa
     atelier = page.atelier
     atelier.rafraichir()
     onglets = atelier.panneau.onglets
-    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Découpage", "Écran"]
+    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Écran"]
     animations = atelier.panneau.animations
     animations.type.setCurrentIndex(animations.type.findData("pop"))
     assert services.projets.projet.sous_titres.animations.mot.type == "pop"

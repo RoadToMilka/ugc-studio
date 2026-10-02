@@ -87,8 +87,13 @@ VERIFICATIONS_OBLIGATOIRES = (
     "disposition_v31",
     "liste_deroulante",
     "aides_v31",
+    "disposition_studio",
 )
 ELEMENTS_SIGNALES_MAX = 6
+# V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
+# des tâches et le titre de Windows en moins), puis sur un grand écran (1440 px).
+GRANDE_FENETRE = (1920, 1010)
+TRES_GRANDE_FENETRE = (2560, 1400)
 # V3.1 (§9.4 ter) : les seules phrases d'aide qui restent écrites dans les modules (leur début),
 # celles qui disent quoi faire à ce moment ; toutes les autres sont dans une icône « i ». Une même
 # phrase peut s'afficher plusieurs fois (ex. sur chaque carte d'un script TikTok).
@@ -504,17 +509,18 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
 
     bloc, panneau, toile = atelier.bloc_apercu, atelier.panneau, atelier.toile
     depart = atelier.reglages_du_projet()
-    rapport["studio_deux_colonnes"] = atelier.studio.deux_colonnes
+    rapport["studio_disposition"] = atelier.studio.mode
     largeur, limite = atelier.studio.width(), atelier.studio.largeur_deux_colonnes()
     rapport["studio_largeur_deux_colonnes"] = limite
     if largeur < limite:
-        colonnes_ok = not atelier.studio.deux_colonnes
+        colonnes_ok = not atelier.studio.cote_a_cote
     elif largeur >= limite + Dimensions.BARRE_DEFILEMENT + Espacements.S:
-        colonnes_ok = atelier.studio.deux_colonnes
+        colonnes_ok = atelier.studio.cote_a_cote
     else:
         colonnes_ok = True  # entre les deux : la disposition d'avant est gardée (voir DispositionStudio)
     etat = {
-        # Deux colonnes dans une fenêtre large, l'une sous l'autre dans une fenêtre étroite (écran de la fabrication).
+        # Aperçu et apparence côte à côte dans une fenêtre large, l'un sous l'autre dans une fenêtre
+        # étroite (écran de la fabrication).
         "colonnes_selon_la_largeur": colonnes_ok,
         "sous_titre_affiche": toile.sous_titre is not None,
         "taille_video": list(toile.taille_video()),
@@ -548,6 +554,111 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     _remettre_les_reglages(atelier, depart)
     etat["retour_au_depart"] = atelier.reglages_du_projet() == depart
     rapport["studio"] = etat
+    return all(etat.values())
+
+
+def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
+    """V3.1, lot 5 : la page Sous-titres selon la taille de la fenêtre.
+
+    - Taille de départ : la zone de l'aperçu a exactement la taille de la vidéo affichée (plus de
+      bandes sombres) ; Source à gauche d'Exporter dès 880 px de page.
+    - Grande fenêtre (1920 × 1010) : trois colonnes, Aperçu | Apparence | Sous-titres, à la même
+      hauteur, la frise dessous sur toute la largeur, Source et Exporter au-dessus ; l'apparence
+      défile seule (l'aperçu ne bouge pas) ; la page défile au plus de la hauteur de la bande du haut.
+    - Très grande fenêtre (2560 × 1400) : tout se voit sans faire défiler la page, et la vidéo dépasse
+      540 px de haut.
+    Sur l'écran de la fabrication (1024 × 768), la fenêtre ne peut pas grandir autant : ces deux
+    mesures-là sont notées « non mesurée » (les captures sans écran, elles, les font)."""
+    from .ui.pages.sous_titres.disposition import GRANDE
+
+    studio, apercu, toile = atelier.studio, atelier.bloc_apercu, atelier.toile
+    page = atelier.defilement.verticalScrollBar()
+    depart = fenetre.size()
+
+    def position(element) -> QPoint:
+        return element.mapTo(fenetre, QPoint(0, 0))
+
+    def a_la_taille_de_la_video() -> bool:
+        video, zone = toile.rect_video(), apercu.zone
+        return abs(zone.width() - video.width()) <= 1 and abs(zone.height() - video.height()) <= 1
+
+    def agrandir(taille: tuple[int, int]) -> bool:
+        fenetre.resize(*taille)
+        _laisser_afficher()
+        _laisser_afficher()  # la disposition s'adapte en deux temps (largeur, puis hauteur des colonnes)
+        page.setValue(0)
+        _laisser_afficher()
+        return fenetre.width() >= taille[0] and fenetre.height() >= taille[1]
+
+    page.setValue(0)
+    _laisser_afficher()
+    source, export = atelier.cadre_source, atelier.cadre_export
+    etat: dict = {"apercu_a_la_taille_de_la_video": a_la_taille_de_la_video()}
+    if studio.width() >= Dimensions.STUDIO_DEUX_COLONNES_MIN:
+        etat["source_a_gauche_d_exporter"] = (
+            position(source).y() == position(export).y() and position(source).x() < position(export).x()
+        )
+    mesures: dict = {"depart": {"disposition": studio.mode, "zone": [apercu.zone.width(), apercu.zone.height()]}}
+    debordements: list[str] = []
+
+    if agrandir(GRANDE_FENETRE):
+        colonnes = (apercu, atelier.cadre_apparence, atelier.cadre_sous_titres)
+        hauts = [position(colonne).y() for colonne in colonnes]
+        gauches = [position(colonne).x() for colonne in colonnes]
+        frise = atelier.cadre_frise
+        etat["trois_colonnes"] = (
+            studio.mode == GRANDE
+            and gauches[0] < gauches[1] < gauches[2]
+            and len(set(hauts)) == 1
+            and len({colonne.height() for colonne in colonnes}) == 1
+        )
+        etat["frise_dessous_sur_toute_la_largeur"] = (
+            position(frise).y() >= hauts[0] + apercu.height() and frise.width() == studio.width()
+        )
+        etat["source_et_exporter_au_dessus"] = position(source).y() == position(export).y() < hauts[0]
+        etat["grande_apercu_a_la_taille_de_la_video"] = a_la_taille_de_la_video()
+        # La page défile au plus de la hauteur de la bande du haut (fenêtre pas assez haute pour tout
+        # montrer avec des colonnes confortables) : les colonnes et la frise remplissent alors la fenêtre.
+        bande = hauts[0] - position(source).y()
+        etat["page_defile_au_plus_de_la_bande"] = page.maximum() == 0 or abs(page.maximum() - bande) <= 2
+        capturer(fenetre, "sous-titres-grande-fenetre")
+        debordements += _debordements(fenetre, "page Sous-titres en grande fenêtre")
+        # L'apparence défile seule : l'aperçu reste où il est.
+        colonne = atelier.colonne_apparence
+        barre, avant = colonne.verticalScrollBar(), position(apercu.zone)
+        barre.setValue(barre.maximum())
+        _laisser_afficher()
+        etat["apparence_defile_seule"] = colonne.defile and barre.maximum() > 0 and position(apercu.zone) == avant
+        page.setValue(page.maximum())
+        _laisser_afficher()
+        capturer(fenetre, "sous-titres-grande-fenetre-bas")
+        barre.setValue(0)
+        mesures["grande"] = {
+            "zone": [apercu.zone.width(), apercu.zone.height()],
+            "colonnes": [[colonne.x(), colonne.width(), colonne.height()] for colonne in colonnes],
+            "defilement_page": page.maximum(),
+            "bande": bande,
+        }
+    else:
+        mesures["grande"] = f"non mesurée : fenêtre de {fenetre.width()} × {fenetre.height()} au plus sur cet écran"
+
+    if agrandir(TRES_GRANDE_FENETRE):
+        etat["tres_grande_tout_visible"] = studio.mode == GRANDE and page.maximum() == 0
+        etat["tres_grande_video_plus_haute"] = apercu.zone.height() > Dimensions.APERCU_HAUTEUR_MAX and a_la_taille_de_la_video()
+        capturer(fenetre, "sous-titres-tres-grande-fenetre")
+        debordements += _debordements(fenetre, "page Sous-titres en très grande fenêtre")
+        mesures["tres_grande"] = {"zone": [apercu.zone.width(), apercu.zone.height()], "defilement_page": page.maximum()}
+    else:
+        mesures["tres_grande"] = f"non mesurée : fenêtre de {fenetre.width()} × {fenetre.height()} au plus sur cet écran"
+
+    fenetre.resize(depart)
+    _laisser_afficher()
+    _laisser_afficher()
+    page.setValue(0)
+    etat["retour_a_la_taille_de_depart"] = studio.mode == mesures["depart"]["disposition"]
+    etat["sans_debordement"] = not debordements
+    mesures["debordements"] = debordements
+    rapport["disposition_studio"] = {"etat": etat, "mesures": mesures}
     return all(etat.values())
 
 
@@ -812,7 +923,7 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
       début."""
     from .prereglages import DEFAUT_FOURNI, modifie
     from .ui.dialogues.prereglages import DialoguePrereglages
-    from .ui.pages.sous_titres.reglages import ONGLET_DECOUPAGE, ONGLET_TEXTE
+    from .ui.pages.sous_titres.reglages import ONGLET_TEXTE
 
     services, panneau, toile, lecteur = atelier._services, atelier.panneau, atelier.toile, atelier.lecteur
     frise = atelier.frise.toile
@@ -873,26 +984,31 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
         capturer_image(_image_du_sous_titre(toile), f"prereglage-{numero}-{nom}")
     rapport["prereglages_appliques"] = appliques
     etat["prereglages_appliques"] = len(appliques) == 7 and all(appliques)
-    # Un réglage changé (V3.1) : « (modifié) », son nom en mauve, le ↺ de son groupe (et lui seul).
-    panneau.onglets.setCurrentIndex(ONGLET_DECOUPAGE)
+    # Un réglage changé (V3.1) : « (modifié) », son nom en mauve, le ↺ de son groupe (et lui seul). Le
+    # découpage est en haut du bloc Sous-titres (lot 5), replié au départ.
+    decoupage = panneau.section_decoupage
+    etat["decoupage_dans_sous_titres"] = atelier.cadre_sous_titres.isAncestorOf(decoupage) and not decoupage.est_ouverte()
+    decoupage.ouvrir()
     panneau.caracteres.setValue(panneau.caracteres.value() + 1)
     _laisser_afficher()
     nom = panneau._marques_decoupage[0][0]
     etat["modifie_affiche"] = panneau.prereglage.currentText().endswith("(modifié)")
     etat["nom_en_mauve"] = nom.property("role") == "legende-modifiee"
-    etat["retablir_du_groupe_seul"] = not panneau.section_decoupage.retablir.isHidden() and all(
-        groupe.retablir.isHidden() for groupe in groupes if groupe is not panneau.section_decoupage
+    etat["retablir_du_groupe_seul"] = not decoupage.retablir.isHidden() and all(
+        groupe.retablir.isHidden() for groupe in groupes if groupe is not decoupage
     )
-    atelier.defilement.ensureWidgetVisible(panneau.prereglage)  # la ligne « Préréglage » sur la capture
+    capturer(atelier.cadre_sous_titres, "studio-decoupage-modifie")
+    atelier.montrer(panneau.prereglage)  # la ligne « Préréglage (modifié) » sur la capture
     _laisser_afficher()
     capturer(atelier.window(), "studio-prereglage-modifie")
-    panneau.section_decoupage.retablir.click()
+    decoupage.retablir.click()
     _laisser_afficher()
     etat["retablir_remet_le_prereglage"] = (
         not panneau.prereglage.currentText().endswith("(modifié)")
-        and panneau.section_decoupage.retablir.isHidden()
+        and decoupage.retablir.isHidden()
         and nom.property("role") == "legende"
     )
+    decoupage.ouvrir(False)
     # Onglet Texte : une taille changée, le ↺ à côté de « Taille et casse » (capture du panneau).
     panneau.onglets.setCurrentIndex(ONGLET_TEXTE)
     taille = panneau.texte.sections["Taille et casse"]
@@ -1780,6 +1896,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["mots_du_studio"] = _mots_du_studio(sous_titres, capturer, capturer_image, rapport)
             verifs["animations"] = _animations(sous_titres, capturer, capturer_image, rapport)
             verifs["frise_et_prereglages"] = _frise_et_prereglages(sous_titres, capturer, capturer_image, rapport)
+            verifs["disposition_studio"] = _disposition_du_studio(fenetre, sous_titres, capturer, rapport)
             # V3, lot 1 : FFmpeg intégré, puis le calque transparent de la vidéo de démonstration.
             verifs["ffmpeg_integre"] = _ffmpeg_integre(rapport)
             verifs["calque"] = _calque(sous_titres, capturer, capturer_image, rapport)
@@ -1787,7 +1904,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["video_avec_sous_titres"] = _video_avec_sous_titres(sous_titres, capturer, rapport)
             # V3, lot 3 : une vidéo HDR (HLG, comme un iPhone), gardée en HDR ou convertie en SDR.
             verifs["video_hdr"] = _video_hdr(sous_titres, capturer, capturer_image, rapport)
-            defilement = sous_titres.findChild(QScrollArea)
+            defilement = sous_titres.defilement  # la page (ses colonnes ont aussi des zones qui défilent)
             if defilement is not None:
                 barre = defilement.verticalScrollBar()
                 for numero, position in enumerate(range(barre.pageStep(), barre.maximum() + barre.pageStep(), barre.pageStep()), 2):
@@ -1922,7 +2039,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     capturer(fenetre, "reglages-couts-etroit")  # tableau à la plus petite largeur
             reglages.onglets.setCurrentIndex(0)
             fenetre.afficher_module("sous-titres")
-            defilement = sous_titres.findChild(QScrollArea)
+            defilement = sous_titres.defilement  # la page (ses colonnes ont aussi des zones qui défilent)
             if defilement is not None:
                 defilement.ensureWidgetVisible(sous_titres.tableau)
                 capturer(fenetre, "sous-titres-etroit")

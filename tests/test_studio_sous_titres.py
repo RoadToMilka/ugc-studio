@@ -211,12 +211,14 @@ def _prise_sans_video(services) -> Transcription:
 
 
 def test_studio_avec_ses_onglets(atelier, services, tmp_path):
+    from ugc_studio.ui.pages.sous_titres.disposition import MOYENNE
+
     _video(services, tmp_path)
     atelier.rafraichir()
     onglets = atelier.panneau.onglets
-    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Découpage", "Écran"]
+    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Écran"]
     assert atelier.toile.sous_titre is atelier.sous_titres[0]  # le premier sous-titre est montré
-    assert atelier.studio.deux_colonnes
+    assert atelier.studio.mode == MOYENNE  # aperçu et apparence côte à côte, la liste dessous
 
 
 def test_onglets_a_la_hauteur_de_l_onglet_affiche(app_configuree, qtbot):
@@ -390,12 +392,14 @@ def test_fond_zoom_et_reperes_retenus(atelier, services):
 
 
 def test_studio_sur_une_colonne_quand_la_fenetre_est_etroite(atelier, services, tmp_path, qtbot):
+    from ugc_studio.ui.pages.sous_titres.disposition import PETITE
+
     _video(services, tmp_path)
     atelier.rafraichir()
     page = atelier.parentWidget()
     page.resize(700, 900)
     qtbot.waitUntil(
-        lambda: not atelier.studio.deux_colonnes and atelier.bloc_apercu.width() >= atelier.studio.width() - 1, timeout=2000
+        lambda: atelier.studio.mode == PETITE and atelier.bloc_apercu.width() >= atelier.studio.width() - 1, timeout=2000
     )
 
 

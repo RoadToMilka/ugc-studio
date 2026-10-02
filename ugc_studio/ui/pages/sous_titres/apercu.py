@@ -5,14 +5,18 @@ barre de position, temps, boucle sur le sous-titre choisi, fond (vidéo, gris ou
 (« Ajusté » ou « 100 % ») et repères (zone de sécurité, marge maximum, grille). Le fond, le zoom, les
 repères et la boucle sont retenus d'une fois sur l'autre (préférences de l'app).
 
-Le studio : l'aperçu à gauche et les réglages à droite ; l'un sous l'autre quand la fenêtre est
-étroite (DispositionStudio).
+V3.1 (lot 5) : la zone de l'aperçu a exactement la taille de la vidéo affichée, centrée dans le bloc
+(plus de bandes sombres de chaque côté). En fenêtre moyenne ou petite, la vidéo prend la largeur du
+bloc, 540 px de haut au plus ; en grande fenêtre, le bloc a la hauteur des trois colonnes, et la
+vidéo prend la hauteur qui reste sous son titre et au-dessus des commandes (largeur_pour_hauteur :
+la largeur de la colonne qui va avec). Les commandes passent à la ligne quand la colonne est étroite.
+La disposition de la page : disposition.py.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QSize
-from PySide6.QtWidgets import QBoxLayout, QFrame, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ....preferences import Preferences
 from ...composants.apercu import FOND_GRIS, FOND_VIDEO, FONDS, ZOOM_AJUSTE, ZOOMS, ToileApercu, ZoneApercu
@@ -37,7 +41,9 @@ class BlocApercu(QFrame):
 
         self.toile = ToileApercu()
         self.zone = ZoneApercu(self.toile)
-        disposition.addWidget(self.zone)
+        disposition.addWidget(self.zone, 0, Qt.AlignmentFlag.AlignHCenter)  # à la taille de la vidéo, centrée
+        self._hauteur_imposee: int | None = None  # grande fenêtre : la hauteur des colonnes
+        self._largeur_voulue: int | None = None  # grande fenêtre : la largeur qui va avec
         self.info_pipette = info("Pipette : clique dans l'aperçu sur la couleur à prendre (Échap : annuler).")
         self.info_pipette.hide()
         self.toile.pipette_change.connect(self.info_pipette.setVisible)
@@ -73,6 +79,7 @@ class BlocApercu(QFrame):
         self.bouton_boucle.setToolTip("Rejouer en boucle le sous-titre choisi")
         lecture.addWidget(self.bouton_boucle)
         disposition.addLayout(lecture)
+        self._lecture = lecture
         self.definir_lecture(False)
 
         # Fond et zoom.
@@ -88,6 +95,7 @@ class BlocApercu(QFrame):
             rangee.addWidget(choix)
             options.addWidget(groupe)
         disposition.addLayout(options)
+        self._options = options
 
         # Repères.
         reperes = DispositionFlux(espacement=Espacements.M)
@@ -99,6 +107,7 @@ class BlocApercu(QFrame):
         zone, self.repere_grille = case_a_cocher("Grille")
         reperes.addWidget(zone)
         disposition.addLayout(reperes)
+        self._reperes = reperes
         disposition.addStretch(1)  # deux colonnes de hauteurs différentes : la place en trop va en bas
 
         self._lire_preferences()
@@ -108,9 +117,86 @@ class BlocApercu(QFrame):
             case.toggled.connect(lambda _coche: self._appliquer_options())
         self.bouton_boucle.toggled.connect(lambda _coche: self._retenir())
 
+    # --- Taille : la zone à la taille de la vidéo (V3.1, lot 5) -----------------------------------
+
+    def largeur_min(self) -> int:
+        """Largeur du bloc sous laquelle les commandes ne tiennent plus (la plus longue rangée qui ne
+        passe pas à la ligne : « Fond » et ses trois choix)."""
+        commandes = max(
+            self._lecture.minimumSize().width(), self._options.minimumSize().width(), self._reperes.minimumSize().width()
+        )
+        marges = self.layout().contentsMargins()
+        return commandes + marges.left() + marges.right()
+
+    def _bornee(self, largeur_video: int) -> int:
+        """La largeur du bloc pour une vidéo de cette largeur : au moins celle des commandes, au plus
+        STUDIO_APERCU_LARGEUR_MAX (une vidéo 16:9 laisse ainsi de la place aux autres colonnes)."""
+        marges = self.layout().contentsMargins()
+        largeur = largeur_video + marges.left() + marges.right()
+        return max(self.largeur_min(), min(largeur, Dimensions.STUDIO_APERCU_LARGEUR_MAX))
+
+    def largeur_naturelle(self) -> int:
+        """Fenêtre moyenne : la largeur de la colonne de l'aperçu, celle de la vidéo à 540 px de haut
+        au plus (304 px pour une vidéo 9:16)."""
+        largeur_video, hauteur_video = self.toile.taille_video()
+        return self._bornee(round(Dimensions.APERCU_HAUTEUR_MAX * largeur_video / hauteur_video))
+
+    def _hauteur_sans_la_video(self, largeur: int) -> int:
+        """Hauteur du bloc sans la vidéo, pour cette largeur : titre, commandes (qui passent à la
+        ligne si besoin), marges et espaces."""
+        hauteur = self.heightForWidth(largeur)  # -1 si rien ne dépend de la largeur
+        return (hauteur if hauteur >= 0 else self.sizeHint().height()) - self.zone.height()
+
+    def largeur_pour_hauteur(self, hauteur: int) -> int:
+        """Grande fenêtre : la largeur du bloc pour que la vidéo, entière, prenne la hauteur qui reste
+        quand le bloc a cette hauteur. Les commandes passent à la ligne selon la largeur : le calcul
+        est refait une fois avec la largeur trouvée."""
+        largeur_video, hauteur_video = self.toile.taille_video()
+        largeur = self.largeur_min()
+        for _passage in range(2):
+            reste = max(Dimensions.APERCU_HAUTEUR_MIN, hauteur - self._hauteur_sans_la_video(largeur))
+            largeur = self._bornee(round(reste * largeur_video / hauteur_video))
+        return largeur
+
+    def definir_hauteur_imposee(self, hauteur: int | None) -> None:
+        """Grande fenêtre : le bloc a cette hauteur (celle des colonnes), et la vidéo prend la place qui
+        reste. None : la vidéo prend la largeur du bloc, 540 px de haut au plus."""
+        if hauteur != self._hauteur_imposee:
+            self._hauteur_imposee = hauteur
+            self.ajuster_la_zone()
+
+    def ajuster_la_zone(self) -> None:
+        """La zone prend la taille de la vidéo affichée, entière, dans la place du bloc."""
+        marges = self.layout().contentsMargins()
+        largeur = self.width() - marges.left() - marges.right()
+        if self._hauteur_imposee is None:
+            hauteur = Dimensions.APERCU_HAUTEUR_MAX
+        else:
+            hauteur = self._hauteur_imposee - self._hauteur_sans_la_video(self.width())
+        taille = self.zone.taille_pour(largeur, hauteur)
+        if taille != self.zone.size():
+            self.zone.setFixedSize(taille)
+
+    def actualiser_taille(self) -> None:
+        """Le format de la vidéo a changé : nouvelle taille de la zone (et de la toile à 100 %)."""
+        self.zone.actualiser_taille()
+        self.ajuster_la_zone()
+        self.updateGeometry()  # la colonne de l'aperçu change de largeur
+
+    def resizeEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        super().resizeEvent(evenement)
+        self.ajuster_la_zone()
+
+    def definir_largeur_voulue(self, largeur: int | None) -> None:
+        """La largeur de la colonne de l'aperçu, choisie par la disposition de la page (grande
+        fenêtre : largeur_pour_hauteur) ; None : largeur_naturelle."""
+        if largeur != self._largeur_voulue:
+            self._largeur_voulue = largeur
+            self.updateGeometry()
+
     def sizeHint(self) -> QSize:  # noqa: N802
-        """Largeur de la colonne de l'aperçu, quand le studio a deux colonnes."""
-        return QSize(Dimensions.STUDIO_COLONNE_APERCU_LARGEUR, super().sizeHint().height())
+        """À côté de l'apparence, la colonne de l'aperçu prend cette largeur (taille fixe dans ce sens)."""
+        return QSize(self._largeur_voulue or self.largeur_naturelle(), super().sizeHint().height())
 
     # --- Lecture -------------------------------------------------------------------------------
 
@@ -169,66 +255,3 @@ class BlocApercu(QFrame):
             self._preferences.enregistrer()
         except OSError:
             pass  # une préférence d'affichage non retenue n'empêche rien
-
-
-class DispositionStudio(QWidget):
-    """L'aperçu à gauche (largeur fixe) et les réglages à droite ; l'un sous l'autre quand la page a
-    moins de STUDIO_DEUX_COLONNES_MIN pixels de large, ou moins que ce que demandent les deux colonnes
-    (un onglet des réglages peut demander plus de place : voir largeur_deux_colonnes)."""
-
-    def __init__(self, apercu: QWidget, reglages: QWidget, parent: QWidget | None = None):
-        super().__init__(parent)
-        self._apercu, self._reglages = apercu, reglages
-        self._disposition = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
-        self._disposition.setContentsMargins(0, 0, 0, 0)
-        self._disposition.setSpacing(Dimensions.ESPACE_BLOCS)  # comme entre deux blocs l'un sous l'autre (V3.1)
-        self._disposition.addWidget(apercu, 0)
-        self._disposition.addWidget(reglages, 1)
-        self._deux_colonnes: bool | None = None
-        self._adapter(Dimensions.STUDIO_DEUX_COLONNES_MIN)
-
-    @property
-    def deux_colonnes(self) -> bool:
-        return bool(self._deux_colonnes)
-
-    def largeur_deux_colonnes(self) -> int:
-        """Largeur qu'il faut pour deux colonnes : la colonne de l'aperçu, l'espace entre les deux, et
-        le minimum des réglages (il dépend de l'onglet affiché et des groupes ouverts). Sans cette
-        vérification, des réglages plus larges que leur colonne garderaient le studio sur deux colonnes
-        trop larges pour la page : son bord droit serait coupé."""
-        besoin = self._apercu.sizeHint().width() + self._disposition.spacing() + self._reglages.minimumSizeHint().width()
-        return max(Dimensions.STUDIO_DEUX_COLONNES_MIN, besoin)
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802
-        """Largeur minimale : celle d'une seule colonne. Sans cela, sur deux colonnes, le studio ne
-        pourrait pas devenir plus étroit que ses deux colonnes : il n'y aurait jamais assez peu de place
-        pour passer sur une colonne, et le bord droit de la page serait coupé."""
-        largeur = max(self._apercu.minimumSizeHint().width(), self._reglages.minimumSizeHint().width())
-        return QSize(largeur, super().minimumSizeHint().height())
-
-    def resizeEvent(self, evenement) -> None:  # noqa: N802
-        self._adapter(evenement.size().width())
-        super().resizeEvent(evenement)
-
-    def event(self, evenement) -> bool:
-        if evenement.type() == QEvent.Type.LayoutRequest:
-            self._adapter(self.width())  # les réglages demandent une autre place (onglet, groupe ouvert)
-        return super().event(evenement)
-
-    def _adapter(self, largeur: int) -> None:
-        limite = self.largeur_deux_colonnes()
-        if self._deux_colonnes:
-            deux = largeur >= limite
-        else:
-            # Pour repasser sur deux colonnes, il faut un peu plus de place : sans cette marge, la barre de
-            # défilement de la page (qui apparaît ou disparaît selon la disposition) ferait changer la
-            # disposition en boucle autour de la limite.
-            marge = 0 if self._deux_colonnes is None else Dimensions.BARRE_DEFILEMENT + Espacements.S
-            deux = largeur >= limite + marge
-        if deux == self._deux_colonnes:
-            return
-        self._deux_colonnes = deux
-        self._disposition.setDirection(QBoxLayout.Direction.LeftToRight if deux else QBoxLayout.Direction.TopToBottom)
-        # Deux colonnes : l'aperçu garde sa largeur (BlocApercu.sizeHint) ; l'un sous l'autre : toute la largeur.
-        politique = QSizePolicy.Policy.Fixed if deux else QSizePolicy.Policy.Preferred
-        self._apercu.setSizePolicy(politique, QSizePolicy.Policy.Preferred)

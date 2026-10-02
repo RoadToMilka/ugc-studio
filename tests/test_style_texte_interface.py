@@ -410,10 +410,10 @@ def test_studio_sur_une_colonne_quand_les_reglages_ne_tiennent_pas(atelier, qtbo
 
     studio = atelier.studio
     limite = studio.largeur_deux_colonnes()
-    assert limite >= Dimensions.STUDIO_DEUX_COLONNES_MIN and studio.deux_colonnes
+    assert limite >= Dimensions.STUDIO_DEUX_COLONNES_MIN and studio.cote_a_cote
     page = atelier.parentWidget()
     ecart = page.width() - studio.width()
     page.resize(limite + ecart - 30, 900)
-    qtbot.waitUntil(lambda: not studio.deux_colonnes, timeout=2000)
+    qtbot.waitUntil(lambda: not studio.cote_a_cote, timeout=2000)
     zone = atelier.defilement
     qtbot.waitUntil(lambda: zone.widget().width() <= zone.viewport().width(), timeout=2000)
