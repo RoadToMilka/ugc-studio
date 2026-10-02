@@ -12,12 +12,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRegularExpression, Qt, Signal
 from PySide6.QtGui import QIcon, QPainter, QPixmap, QRegularExpressionValidator
-from PySide6.QtWidgets import QColorDialog, QHBoxLayout, QLineEdit, QMenu, QWidget
+from PySide6.QtWidgets import QColorDialog, QHBoxLayout, QLineEdit, QWidget
 
 from ...rendu.moteur import qcouleur
 from ...style_sous_titres import Couleur
 from ..theme import CouleursApercu, Dimensions, Espacements, qcolor
 from .elements import bouton, champ_entier
+from .menu import Menu
 
 # Couleurs proposées dans le menu de la pastille (celles des styles proposés, annexe B du document V2).
 PASTILLES = (
@@ -62,7 +63,7 @@ class ChampCouleur(QWidget):
         disposition.setSpacing(Espacements.S)
         self.pastille = bouton("", variante="icone")
         self.pastille.setToolTip("Couleurs proposées, autre couleur, pipette")
-        self.menu = QMenu(self.pastille)
+        self.menu = Menu(self.pastille)
         for nom, couleur in PASTILLES:
             action = self.menu.addAction(icone_de_couleur(couleur, Dimensions.ICONE_PETITE), nom)
             action.triggered.connect(lambda _coche=False, c=couleur: self.appliquer(Couleur(c.rouge, c.vert, c.bleu, self._couleur.opacite)))

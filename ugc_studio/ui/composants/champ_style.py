@@ -24,7 +24,7 @@ from .. import taches
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..theme import Dimensions, Espacements
 from .bouton import montrer_occupe
-from .elements import bouton, libelle, vider_disposition
+from .elements import afficher_message, bouton, libelle, vider_disposition
 
 
 class ChampConsigne(QWidget):
@@ -209,11 +209,7 @@ class ChampConsigne(QWidget):
         taches.lancer(lambda: traduire_en_anglais(adaptateur, texte), fin, echec)
 
     def _afficher_message(self, message: str, role: str) -> None:
-        self.message.setText(message)
-        self.message.setProperty("role", role)
-        self.message.style().unpolish(self.message)
-        self.message.style().polish(self.message)
-        self.message.show()
+        afficher_message(self.message, message, role)  # une erreur s'efface après 8 s (V3.2)
 
 
 class ChampStyle(ChampConsigne):

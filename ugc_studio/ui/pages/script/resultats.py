@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QCheckBox, QFrame, QHBoxLayout, QMenu, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ....ecriture.affichage import date_lisible, nom_angle, ordre_d_affichage, texte_d_origine, texte_du_point
 from ....ecriture.brief import RESEAUX
@@ -35,6 +35,7 @@ from ...composants.elements import (
     vider_disposition,
 )
 from ...composants.etoiles import boutons_etoiles
+from ...composants.menu import Menu
 from ...composants.montant_label import MontantLabel
 from ...icones import icone_menu
 from ...theme import Couleurs, Espacements, Hauteurs
@@ -182,7 +183,7 @@ class CarteScript(QFrame):
             entete.addWidget(MontantLabel(script.cout_eur))
         plus = bouton("", variante="icone", nom_icone="ellipsis")
         plus.setToolTip("Plus d'actions : dupliquer, garder comme exemple, supprimer…")
-        menu = QMenu(plus)
+        menu = Menu(plus)
         menu.addAction(icone_menu("copy-plus"), "Dupliquer").triggered.connect(lambda: self.dupliquer.emit(self.script))
         self.action_garder = menu.addAction(icone_menu("bookmark-plus"), "Garder comme exemple")
         self.action_garder.setToolTip("Le modèle s'en inspirera (ton, rythme) pour les prochains scripts")

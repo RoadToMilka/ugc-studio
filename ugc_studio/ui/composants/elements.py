@@ -7,10 +7,9 @@ Le style lui-même est dans theme.py : ici, on se contente d'indiquer le « rôl
 from __future__ import annotations
 
 import math
-import textwrap
 from collections.abc import Callable
 
-from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt
+from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QFontMetrics, QFontMetricsF, QIcon, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
@@ -28,8 +27,8 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyleOptionButton,
     QStyleOptionComboBox,
+    QStyleOptionSlider,
     QStylePainter,
-    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -37,8 +36,9 @@ from PySide6.QtWidgets import (
 from ...sous_titres import typographie
 from ..icones import icone
 from ..polices import police
-from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
+from ..theme import Couleurs, Dimensions, Durees, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .bouton import Bouton, dessiner_texte_centre_a_l_oeil
+from .bulle import PROPRIETE_MAISON, cacher_bulle, montrer_bulle, texte_en_lignes
 from .liste_deroulante import DelegueChoix, VueChoix, preparer_la_liste
 
 
@@ -318,11 +318,17 @@ class Info(QWidget):
 
     Le même emplacement peut aussi montrer une donnée ou un message d'état (« Mot 3 sur 120 »,
     « Récupération… », une erreur) : afficher_etat() l'écrit alors sans ampoule, car ce n'est pas une
-    aide ; setText() remet l'info avec son ampoule."""
+    aide ; setText() remet l'info avec son ampoule. Une erreur s'efface après 8 s, comme tous les
+    messages après une action (V3.2) : ce qui était affiché avant elle revient (sans rien, l'Info se
+    cache)."""
 
     def __init__(self, texte: str = "", role: str = "legende", largeur_ampoule: int = Dimensions.ICONE_PETITE):
         super().__init__()
         self._role = role
+        self._avant_l_erreur = (texte, role, True)  # ce qui revient quand une erreur s'efface
+        self._fin_de_l_erreur = QTimer(self)
+        self._fin_de_l_erreur.setSingleShot(True)
+        self._fin_de_l_erreur.timeout.connect(self._effacer_l_erreur)
         disposition = QHBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(Espacements.S)
@@ -349,13 +355,24 @@ class Info(QWidget):
 
     def afficher_etat(self, texte: str, erreur: bool = False) -> None:
         """Affiche une donnée ou un message d'état à la place de l'info, sans ampoule.
-        `erreur=True` : message d'erreur, en rouge (à la taille de l'info)."""
+        `erreur=True` : message d'erreur, en rouge (à la taille de l'info), qui s'efface après 8 s."""
         role = self._role
         if erreur:
             role = "legende-erreur" if self._role == "legende" else "erreur"
-        self._afficher(texte, role, avec_ampoule=False)
+        self._afficher(texte, role, avec_ampoule=False, erreur=erreur)
 
-    def _afficher(self, texte: str, role: str, avec_ampoule: bool) -> None:
+    def _effacer_l_erreur(self) -> None:
+        texte, role, avec_ampoule = self._avant_l_erreur
+        self._afficher(texte, role, avec_ampoule)
+        if not texte:
+            self.hide()
+
+    def _afficher(self, texte: str, role: str, avec_ampoule: bool, erreur: bool = False) -> None:
+        if erreur and texte:
+            self._fin_de_l_erreur.start(Durees.MESSAGE_MS)
+        else:
+            self._fin_de_l_erreur.stop()
+            self._avant_l_erreur = (texte, role, avec_ampoule)
         self.etiquette.setText(texte)
         if self.etiquette.property("role") != role:
             self.etiquette.setProperty("role", role)
@@ -372,15 +389,40 @@ def info(texte: str = "", role: str = "legende") -> Info:
     return Info(texte, role)
 
 
-def texte_en_lignes(texte: str) -> str:
-    """Le texte d'une bulle, coupé en lignes d'environ 60 caractères (sans couper un mot, ni après une
-    espace insécable) : une longue explication se lit sur quelques lignes plutôt que sur toute la
-    largeur de l'écran. Les retours à la ligne voulus (une ligne par état, des paragraphes) sont gardés."""
-    return "\n".join(
-        textwrap.fill(ligne, Dimensions.BULLE_CARACTERES, break_long_words=False, break_on_hyphens=False)
-        for ligne in texte.split("\n")
-    )
+# Messages qui s'effacent seuls (V3.2) : réussi (vert), erreur (rouge), à vérifier (orange).
+ROLES_EPHEMERES = ("succes", "erreur", "avertissement", "legende-erreur", "legende-avertissement")
 
+
+def afficher_message(etiquette: QLabel, texte: str, role: str, cacher_vide: bool = True) -> None:
+    """Message d'état après une action, dans `etiquette` (V3.2, §9.4 ter) : le texte, dans le style du
+    rôle (« succes » vert, « erreur » rouge, « avertissement » orange, « secondaire » gris…).
+
+    Un message vert, rouge ou orange s'efface tout seul après 8 s (Durees.MESSAGE_MS), le même délai
+    partout dans l'app ; un message gris (un travail en cours, une donnée) reste jusqu'au suivant.
+    `cacher_vide` : sans texte, l'étiquette disparaît (sinon elle reste, vide, à sa place)."""
+    etiquette.setText(texte)
+    if etiquette.property("role") != role:
+        etiquette.setProperty("role", role)
+        etiquette.style().unpolish(etiquette)  # applique le nouveau style
+        etiquette.style().polish(etiquette)
+    if cacher_vide:
+        etiquette.setVisible(bool(texte))
+    minuterie = getattr(etiquette, "_fin_du_message", None)
+    if texte and role in ROLES_EPHEMERES:
+        if minuterie is None:
+            minuterie = QTimer(etiquette)
+            minuterie.setSingleShot(True)
+            minuterie.timeout.connect(lambda: _effacer_le_message(etiquette, cacher_vide))
+            etiquette._fin_du_message = minuterie
+        minuterie.start(Durees.MESSAGE_MS)
+    elif minuterie is not None:
+        minuterie.stop()
+
+
+def _effacer_le_message(etiquette: QLabel, cacher_vide: bool) -> None:
+    etiquette.clear()
+    if cacher_vide:
+        etiquette.hide()
 
 class BoutonInfo(QWidget):
     """Icône « i » (V3.1, §9.4 ter), posée devant le texte qu'elle explique (V3.2 : un titre, le nom
@@ -401,6 +443,7 @@ class BoutonInfo(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setCursor(Qt.CursorShape.WhatsThisCursor)
         self.setAccessibleDescription(texte)
+        self.setProperty(PROPRIETE_MAISON, True)  # elle montre sa bulle elle-même, dès le survol
 
     def text(self) -> str:
         return self._texte
@@ -410,11 +453,11 @@ class BoutonInfo(QWidget):
         self.setAccessibleDescription(texte)
 
     def montrer(self) -> None:
-        """Affiche l'explication dans une bulle, sous l'icône (espaces insécables à la française : un
-        « : » ne commence jamais une ligne de la bulle)."""
+        """Affiche l'explication dans la bulle de l'app, sous l'icône (espaces insécables à la
+        française : un « : » ne commence jamais une ligne de la bulle)."""
         if self._texte:
             position = self.mapToGlobal(QPoint(0, self.height() + Espacements.XS))
-            QToolTip.showText(position, texte_en_lignes(typographie(self._texte, "fr")), self)
+            montrer_bulle(texte_en_lignes(typographie(self._texte, "fr")), position, self, sous_le_curseur=False)
 
     def event(self, evenement) -> bool:
         # L'infobulle habituelle de Qt (après un temps d'arrêt, aussi sur une icône grisée) : la même
@@ -431,7 +474,7 @@ class BoutonInfo(QWidget):
 
     def leaveEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
         self._redessiner()
-        QToolTip.hideText()
+        cacher_bulle(self)
         super().leaveEvent(evenement)
 
     def _redessiner(self) -> None:
@@ -540,6 +583,7 @@ class ListeDeroulante(_SansMolette, QComboBox):
         self.setItemDelegate(DelegueChoix(self))
         self.setMaxVisibleItems(Dimensions.LISTE_CHOIX_VISIBLES)
         preparer_la_liste(self)
+        self.setProperty(PROPRIETE_MAISON, True)  # sa bulle donne aussi le texte abrégé (voir event)
 
     # --- Champ fermé : texte abrégé par « … » ----------------------------------------------------
 
@@ -579,17 +623,47 @@ class ListeDeroulante(_SansMolette, QComboBox):
         peintre.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, option)
 
     def event(self, evenement) -> bool:
-        if evenement.type() == QEvent.Type.ToolTip and not self.isEditable():
-            texte = self.currentText()
-            if texte and self.texte_affiche() != texte:
-                aide = self.toolTip()
-                QToolTip.showText(evenement.globalPos(), f"{texte}\n{aide}" if aide else texte, self)
-                return True
+        if evenement.type() == QEvent.Type.ToolTip:
+            # La bulle de l'app : le texte complet s'il est abrégé, puis l'infobulle de la liste.
+            texte, aide = self.currentText(), self.toolTip()
+            abrege = not self.isEditable() and texte and self.texte_affiche() != texte
+            bulle = "\n".join(t for t in ((texte if abrege else ""), aide) if t)
+            if not bulle:
+                evenement.ignore()  # rien à dire ici : l'élément parent peut avoir son infobulle
+                return False
+            montrer_bulle(bulle, evenement.globalPos(), self)
+            return True
         return super().event(evenement)
 
 
 class Glissiere(_SansMolette, QSlider):
-    pass
+    """Barre de position d'un lecteur (vidéo, audio). V3.2 : un clic n'importe où sur la barre y place
+    la lecture tout de suite (avant, un clic avançait ou reculait d'un pas) ; on peut ensuite glisser
+    sans relâcher. Les lecteurs écoutent `sliderMoved` : il est émis pour ce clic aussi."""
+
+    def mousePressEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        if evenement.button() == Qt.MouseButton.LeftButton and self.maximum() > self.minimum():
+            option = QStyleOptionSlider()
+            self.initStyleOption(option)
+            style = self.style()
+            poignee = style.subControlRect(QStyle.ComplexControl.CC_Slider, option, QStyle.SubControl.SC_SliderHandle, self)
+            point = evenement.position().toPoint()
+            if not poignee.contains(point):
+                rainure = style.subControlRect(QStyle.ComplexControl.CC_Slider, option, QStyle.SubControl.SC_SliderGroove, self)
+                if self.orientation() == Qt.Orientation.Horizontal:
+                    debut, longueur, ici = rainure.x(), rainure.width() - poignee.width(), point.x() - poignee.width() // 2
+                else:
+                    debut, longueur, ici = rainure.y(), rainure.height() - poignee.height(), point.y() - poignee.height() // 2
+                valeur = QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), ici - debut, max(1, longueur), option.upsideDown)
+                self.setSliderDown(True)  # comme une poignée saisie : sliderMoved est émis
+                self.setSliderPosition(valeur)
+        # La poignée est maintenant sous la souris : Qt la saisit, pour glisser sans relâcher.
+        super().mousePressEvent(evenement)
+
+    def mouseReleaseEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        super().mouseReleaseEvent(evenement)
+        if self.isSliderDown() and not evenement.buttons():
+            self.setSliderDown(False)  # jamais « saisie » une fois la souris relâchée
 
 
 class ChampEntier(_SansMolette, QSpinBox):

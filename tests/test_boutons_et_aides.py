@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QStyle,
     QStyleOptionButton,
-    QToolTip,
     QWidget,
 )
 
@@ -23,6 +22,7 @@ from ugc_studio.conseils_des_pages import PAGES
 from ugc_studio.sous_titres import typographie
 from ugc_studio.style_sous_titres import CASSES
 from ugc_studio.ui import taches
+from ugc_studio.ui.composants.bulle import bulle, bulle_visible, cacher_bulle, texte_de_la_bulle
 from ugc_studio.ui.composants.bouton import Bouton, BoutonOccupe, montrer_occupe
 from ugc_studio.ui.composants.conseils import DialogueConseils, entete_de_fenetre
 from ugc_studio.ui.composants.elements import (
@@ -130,12 +130,14 @@ def test_bouton_info(app_configuree, qtbot):
     attendu = texte_en_lignes(typographie(texte, "fr"))  # espace insécable avant « : »
     assert " :" in attendu
     aide.montrer()
-    qtbot.waitUntil(lambda: QToolTip.isVisible() and QToolTip.text() == attendu, timeout=2000)
-    QToolTip.hideText()
+    qtbot.waitUntil(lambda: bulle_visible() and texte_de_la_bulle() == attendu, timeout=2000)
+    # Sous l'icône, à 4 px (V3.2 : la bulle de l'app, plus celle de Qt).
+    assert bulle().pos() == aide.mapToGlobal(QPoint(0, aide.height() + Espacements.XS))
+    cacher_bulle()
     centre = QPoint(aide.width() // 2, aide.height() // 2)
     assert QApplication.sendEvent(aide, QHelpEvent(QEvent.Type.ToolTip, centre, aide.mapToGlobal(centre)))
-    qtbot.waitUntil(lambda: QToolTip.isVisible() and QToolTip.text() == attendu, timeout=2000)
-    QToolTip.hideText()
+    qtbot.waitUntil(lambda: bulle_visible() and texte_de_la_bulle() == attendu, timeout=2000)
+    cacher_bulle()
     aide.setText("Autre explication.")
     assert aide.text() == "Autre explication."
 

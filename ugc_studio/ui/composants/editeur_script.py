@@ -29,13 +29,14 @@ from PySide6.QtGui import (
     QTextCursor,
     QTextFormat,
 )
-from PySide6.QtWidgets import QTextEdit, QToolTip
+from PySide6.QtWidgets import QTextEdit
 
 from ...balises import famille_de, info_balise, nom_affiche
 from ...script import depuis_texte, normaliser, texte_pour_api
 from ..polices import police
 from ..theme import Couleurs, CouleursBalises, Dimensions, Hauteurs, Opacites, Typo, qcolor
 from .bouton import dessiner_texte_centre_a_l_oeil
+from .bulle import PROPRIETE_MAISON, cacher_bulle, montrer_bulle
 
 CARACTERE_OBJET = "￼"  # caractère « objet » (remplacé à l'écran par le dessin du badge)
 TYPE_BALISE = int(QTextFormat.ObjectTypes.UserObject.value) + 1
@@ -100,6 +101,7 @@ class EditeurScript(QTextEdit):
         barre de défilement dans une page qui défile déjà."""
         super().__init__(parent)
         self.setAcceptRichText(False)
+        self.setProperty(PROPRIETE_MAISON, True)  # la bulle d'un badge : la balise expliquée (viewportEvent)
         self._hauteur_auto = hauteur_auto
         self._hauteur_min = Dimensions.EDITEUR_REPLIQUE_HAUTEUR_MIN if hauteur_auto else Dimensions.EDITEUR_HAUTEUR_MIN
         self.setMinimumHeight(self._hauteur_min)
@@ -197,9 +199,9 @@ class EditeurScript(QTextEdit):
         if evenement.type() == QEvent.Type.ToolTip:
             balise = self.balise_sous(evenement.pos())
             if balise:
-                QToolTip.showText(evenement.globalPos(), info_balise(balise), self.viewport())
+                montrer_bulle(info_balise(balise), evenement.globalPos(), self.viewport())
             else:
-                QToolTip.hideText()
+                cacher_bulle(self.viewport())
                 evenement.ignore()
             return True
         return super().viewportEvent(evenement)

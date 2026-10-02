@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
     QHBoxLayout,
-    QMenu,
     QSizePolicy,
     QVBoxLayout,
 )
@@ -26,6 +25,7 @@ from ..polices import police
 from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .bouton import Bouton, dessiner_icone_et_texte
 from .elements import libelle
+from .menu import Menu
 
 TEXTE_SANS_PROJET = "Aucun projet ouvert"
 AIDE_PROJET = "Nouveau projet, ouvrir un projet, projets récents…"
@@ -157,7 +157,7 @@ class BarreLaterale(QFrame):
         ligne_projet.setContentsMargins(Espacements.M, 0, Espacements.M, 0)
         self.bouton_projet = Bouton(TEXTE_SANS_PROJET, "projet", "chevron-down")
         self.bouton_projet.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.menu_projet = QMenu(self.bouton_projet)
+        self.menu_projet = Menu(self.bouton_projet)
         self.bouton_projet.setMenu(self.menu_projet)
         ligne_projet.addWidget(self.bouton_projet)
         disposition.addWidget(haut)

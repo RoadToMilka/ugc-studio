@@ -31,7 +31,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRectF, QSize, Qt, QVariantAnimation
+from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, QVariantAnimation
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QAbstractButton, QMenu, QSizePolicy, QWidget
 from shiboken6 import isValid
@@ -39,6 +39,7 @@ from shiboken6 import isValid
 from ..icones import icone
 from ..polices import police
 from ..theme import Arrondis, Couleurs, Dimensions, Durees, Espacements, Hauteurs, Opacites, Typo, qcolor
+from .menu import position_du_menu
 
 VARIANTES = ("normal", "principal", "contour", "icone", "projet")
 _TOUCHES_ENTREE = (Qt.Key.Key_Return, Qt.Key.Key_Enter)
@@ -248,11 +249,12 @@ class Bouton(QAbstractButton):
         return self._menu
 
     def showMenu(self) -> None:  # noqa: N802
-        """Ouvre le menu sous le bouton ; le bouton reste enfoncé tant que le menu est ouvert."""
+        """Ouvre le menu 8 px sous le bouton (au-dessus s'il manque de la place en bas, V3.2 : comme
+        une liste déroulante) ; le bouton reste enfoncé tant que le menu est ouvert."""
         if self._menu is None:
             return
         self.setDown(True)
-        self._menu.exec(self.mapToGlobal(QPoint(0, self.height())))
+        self._menu.exec(position_du_menu(self, self._menu))
         if isValid(self):  # le bouton a pu disparaître pendant ce temps (ex. prise supprimée)
             self.setDown(False)
             self.update()

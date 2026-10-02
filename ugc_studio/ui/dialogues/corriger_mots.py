@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QWidget
 from ...transcription import Mot, Transcription, index_au_temps
 from ..composants.conseils import entete_de_fenetre
 from ..composants.correcteur_mots import CorrecteurDeMots
-from ..composants.elements import bouton, glissiere, libelle, minutes_secondes
+from ..composants.elements import afficher_message, bouton, glissiere, libelle, minutes_secondes
 from ..composants.lecteur import Lecteur
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
@@ -103,11 +103,7 @@ class DialogueCorrigerMots(QDialog):
         self.correcteur.afficher(self.mots, self._hesitations, self._masquer, self._duree)
 
     def _statut(self, message: str, role: str) -> None:
-        self.statut.setText(message)
-        self.statut.setVisible(bool(message))
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        afficher_message(self.statut, message, role)  # vert ou rouge : effacé après 8 s (V3.2)
 
     def _corrige(self, message: str) -> None:
         self.modifie = True

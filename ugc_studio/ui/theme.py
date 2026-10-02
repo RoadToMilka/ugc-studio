@@ -95,9 +95,17 @@ class Opacites:
 
 
 class Durees:
-    """Durées des animations de l'interface (millisecondes)."""
+    """Durées de l'interface (millisecondes)."""
 
     ROUE_TOUR_MS = 900  # un tour du cercle qui tourne dans un bouton pendant un travail (V3.1)
+    # Messages après une action (V3.2) : un message vert (réussi), rouge (erreur) ou orange (à
+    # vérifier) s'efface après 8 s, le même délai partout : le temps de lire une phrase de deux lignes
+    # sans se presser (environ 200 mots par minute), sans qu'il reste affiché pour rien.
+    MESSAGE_MS = 8000
+    # Bulle d'aide (V3.2) : comme celle de Qt, 10 s, et 40 ms de plus par caractère au-delà de 100.
+    BULLE_MS = 10000
+    BULLE_MS_PAR_CARACTERE = 40
+    BULLE_CARACTERES_SANS_SURPLUS = 100
 
 
 class Espacements:
@@ -185,6 +193,8 @@ class Dimensions:
     ICONE_INFO = 14
     ECART_INFO = Espacements.S
     BULLE_CARACTERES = 60
+    # Bulle d'aide (V3.2) : sous le curseur de la souris (la hauteur de sa flèche), comme celle de Qt.
+    BULLE_SOUS_LE_CURSEUR = 20
     # Nom d'un champ au-dessus du champ (V3.2) : 8 px visibles entre le bas des lettres du nom et le
     # champ (7 px jusqu'à la 3.1.0). Sous la ligne de base du nom (texte de 12 px), sa police garde
     # 3 px pour les lettres qui descendent (p, q…) : il reste 5 px à mettre entre les deux.
@@ -357,7 +367,7 @@ def palette():
         role.BrightText: Couleurs.TEXTE,
         role.Highlight: Couleurs.ACCENT,
         role.HighlightedText: Couleurs.TEXTE,
-        role.ToolTipBase: Couleurs.SURFACE_ELEVEE,
+        role.ToolTipBase: Couleurs.SURFACE,
         role.ToolTipText: Couleurs.TEXTE,
         role.Link: Couleurs.ACCENT_SURVOL,
         role.LinkVisited: Couleurs.ACCENT,
@@ -827,32 +837,45 @@ QScrollArea#colonneDefilante QScrollBar::handle:vertical:hover {
 }
 
 /* ---------- Menus et infobulles ---------- */
+/* Menus (V3.2) : comme une liste déroulante ouverte, choix survolé sur un fond gris arrondi. Les
+   menus de l'app (composants/menu.py, propriété « arrondi ») dessinent eux-mêmes leur fond et leur
+   bordure, coins arrondis ; la feuille de style leur laisse une bordure transparente de même
+   épaisseur, pour que leurs choix tombent au même endroit. */
 QMenu {
     background: $surface_elevee;
     border: ${bordure}px solid $couleur_bordure;
     padding: ${esp_xs}px;
 }
+QMenu[arrondi="true"] {
+    background: transparent;
+    border: ${bordure}px solid transparent;
+}
 QMenu::item {
     padding: ${esp_s}px ${esp_m}px ${esp_s}px ${marge_gauche_menu}px;
-    border-radius: ${arrondi_controle}px;
+    border-radius: ${arrondi_petit}px;
     background: transparent;
 }
 QMenu::icon {
     left: ${esp_m}px;
 }
 QMenu::item:selected {
-    background: $teinte;
+    background: $couleur_bordure;
+}
+QMenu::item:disabled {
+    color: $texte_desactive;
 }
 QMenu::separator {
     height: ${bordure}px;
     background: $couleur_bordure;
     margin: ${esp_xs}px ${esp_s}px;
 }
+/* Bulles d'aide (V3.2) : celle de l'app (composants/bulle.py) remplace celle de Qt, qui n'apparaît
+   plus ; au cas où, elle aurait les mêmes couleurs et les mêmes marges. */
 QToolTip {
-    background: $surface_elevee;
+    background: $surface;
     color: $texte;
     border: ${bordure}px solid $couleur_bordure;
-    padding: ${esp_xs}px ${esp_s}px;
+    padding: ${esp_l}px;
 }
 """
 )

@@ -23,7 +23,15 @@ from ..composants.bouton import montrer_occupe
 from ..composants.champ_style import ChampDescription
 from ..composants.choix_voix import propose
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import TOUTE_LA_RANGEE, bouton, champs_en_colonnes, conteneur_vertical, libelle, liste_deroulante
+from ..composants.elements import (
+    TOUTE_LA_RANGEE,
+    afficher_message,
+    bouton,
+    champs_en_colonnes,
+    conteneur_vertical,
+    libelle,
+    liste_deroulante,
+)
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
 from ..theme import Dimensions, Espacements
@@ -142,10 +150,8 @@ class DialogueVoiceDesign(QDialog):
     # --- Actions -----------------------------------------------------------------------------
 
     def _afficher(self, message: str, role: str = "secondaire") -> None:
-        self.statut.setText(message)
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        # Vert ou rouge : effacé après 8 s (V3.2) ; la ligne garde sa place à côté des boutons.
+        afficher_message(self.statut, message, role, cacher_vide=False)
 
     def _assistant_utilise(self, dialogue) -> None:
         """L'assistant connaît le genre choisi : on le reporte dans le champ Genre."""

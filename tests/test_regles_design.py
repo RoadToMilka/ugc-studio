@@ -90,6 +90,8 @@ CREES_PAR_ELEMENTS = {
     "QDoubleSpinBox": "champ_decimal()",
     # Onglets standard de Qt : trait mauve qui effaçait la ligne de séparation, réglage difficile.
     "QTabWidget": "Onglets() (composants/onglets.py)",
+    # V3.2 : coins arrondis lissés, sans l'ombre carrée de Windows, comme une liste ouverte.
+    "QMenu": "Menu() (composants/menu.py)",
 }
 
 
@@ -110,6 +112,22 @@ def test_elements_crees_avec_les_fonctions_de_l_app():
         if isinstance(noeud, ast.Call) and _nom_appel(noeud) in CREES_PAR_ELEMENTS
     ]
     assert not ecarts, "Éléments à créer avec les fonctions de elements.py :\n" + "\n".join(ecarts)
+
+
+def test_la_bulle_de_l_app_partout():
+    """V3.2 : la bulle d'aide de l'app (composants/bulle.py : coins arrondis, fond des blocs, 16 px
+    autour du texte) remplace celle de Qt partout : plus aucun QToolTip.showText() dans l'app."""
+    ecarts = [
+        f"{fichier.relative_to(RACINE)}:{noeud.lineno}"
+        for fichier in _fichiers()
+        for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8")))
+        if isinstance(noeud, ast.Call)
+        and isinstance(noeud.func, ast.Attribute)
+        and noeud.func.attr in ("showText", "hideText")
+        and isinstance(noeud.func.value, ast.Name)
+        and noeud.func.value.id == "QToolTip"
+    ]
+    assert not ecarts, "Bulle de Qt (utiliser montrer_bulle / cacher_bulle de composants/bulle.py) :\n" + "\n".join(ecarts)
 
 
 CASE_TEXTE_MAX = 48  # caractères

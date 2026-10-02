@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMenu, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
 
 from ....connexions import Connexion, ErreurConnexion
 from ....fournisseurs import creer_adaptateur, nom_fournisseur
@@ -13,10 +13,11 @@ from ....fournisseurs.base import ResultatTest
 from ....services import Services
 from ... import taches
 from ...composants.elements import bloc, bouton, libelle, pastille, vider_disposition
+from ...composants.menu import Menu
+from ...composants.onglets import contenu_d_onglet
 from ...dialogues.cle_api import DialogueCle
 from ...icones import icone, icone_menu
 from ...theme import Couleurs, Dimensions, Espacements
-from ...composants.onglets import contenu_d_onglet
 
 
 def date_lisible(texte_iso: str) -> str:
@@ -28,7 +29,9 @@ def date_lisible(texte_iso: str) -> str:
 
 
 class LigneConnexion(QFrame):
-    """Une clé : voyant, nom, fournisseur, aperçu, résultat du dernier test, actions."""
+    """Une clé : voyant et nom, fournisseur et aperçu, résultat du dernier test, actions. V3.2 : le
+    voyant est au début du nom (« ● Google perso »), et les lignes dessous commencent au même bord
+    gauche que lui (jusqu'à la 3.1.1, le voyant avait sa propre colonne, à gauche des textes)."""
 
     def __init__(self, onglet: OngletConnexions, connexion: Connexion, test_en_cours: bool):
         super().__init__()
@@ -38,17 +41,17 @@ class LigneConnexion(QFrame):
         disposition.setContentsMargins(0, Espacements.M, 0, Espacements.M)
         disposition.setSpacing(Espacements.M)
 
-        # Voyant : vert si le dernier test a réussi, rouge s'il a échoué, gris sinon.
-        test = connexion.dernier_test
-        role_voyant = "discret" if test is None else ("succes" if test.ok else "erreur")
-        self.voyant = libelle("●", role_voyant, retour_a_la_ligne=False)
-        disposition.addWidget(self.voyant)
-
         textes = QVBoxLayout()
         textes.setSpacing(Espacements.XS)
         ligne_nom = QHBoxLayout()
         ligne_nom.setSpacing(Espacements.S)
-        ligne_nom.addWidget(libelle(connexion.nom, "titre-bloc", retour_a_la_ligne=False))
+        # Voyant, au début du nom : vert si le dernier test a réussi, rouge s'il a échoué, gris sinon.
+        test = connexion.dernier_test
+        role_voyant = "discret" if test is None else ("succes" if test.ok else "erreur")
+        self.voyant = libelle("●", role_voyant, retour_a_la_ligne=False)
+        ligne_nom.addWidget(self.voyant)
+        self.nom = libelle(connexion.nom, "titre-bloc", retour_a_la_ligne=False)
+        ligne_nom.addWidget(self.nom)
         if connexion.par_defaut:
             ligne_nom.addWidget(pastille("Par défaut"))
         ligne_nom.addStretch(1)
@@ -75,7 +78,7 @@ class LigneConnexion(QFrame):
         plus.setIcon(icone("ellipsis", Couleurs.TEXTE_SECONDAIRE))
         plus.setIconSize(QSize(Dimensions.ICONE, Dimensions.ICONE))
         plus.setToolTip("Plus d'actions")
-        menu = QMenu(plus)
+        menu = Menu(plus)
         action_defaut = menu.addAction(icone_menu("star"), "Définir par défaut")
         action_defaut.setEnabled(not connexion.par_defaut)
         action_defaut.triggered.connect(lambda: onglet.definir_par_defaut(connexion.identifiant))

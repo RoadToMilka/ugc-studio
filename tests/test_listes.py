@@ -7,11 +7,11 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyleOptionComboBox,
     QStyleOptionViewItem,
-    QToolTip,
     QVBoxLayout,
     QWidget,
 )
 
+from ugc_studio.ui.composants.bulle import cacher_bulle, texte_de_la_bulle
 from ugc_studio.ui.composants.elements import liste_deroulante
 from ugc_studio.ui.composants.liste_deroulante import DelegueChoix, VueChoix
 from ugc_studio.ui.theme import Couleurs, Dimensions, Hauteurs
@@ -104,8 +104,8 @@ def test_texte_trop_long_abrege_dans_le_champ(app_configuree, qtbot):
     # Au survol : le texte complet.
     centre = QPoint(liste.width() // 2, liste.height() // 2)
     QApplication.sendEvent(liste, QHelpEvent(QEvent.Type.ToolTip, centre, liste.mapToGlobal(centre)))
-    assert QToolTip.text() == LONG
-    QToolTip.hideText()
+    assert texte_de_la_bulle().replace("\n", " ") == LONG  # la bulle de l'app (V3.2), en lignes courtes
+    cacher_bulle()
     liste.setCurrentIndex(1)
     assert liste.texte_affiche() == "Choix 0"  # texte court : rien n'est abrégé
 

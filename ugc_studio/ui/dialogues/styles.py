@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLineEdit,
-    QMenu,
     QMessageBox,
     QVBoxLayout,
 )
@@ -33,6 +32,7 @@ from ..composants.choix_voix import propose
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
     TOUTE_LA_RANGEE,
+    afficher_message,
     bouton,
     champs_en_colonnes,
     conteneur_vertical,
@@ -43,6 +43,7 @@ from ..composants.elements import (
 )
 from ..icones import icone_menu
 from ..composants.defilement import zone_defilante
+from ..composants.menu import Menu
 from ..theme import Couleurs, Dimensions, Espacements
 
 
@@ -182,8 +183,7 @@ class DialogueStyle(QDialog):
             self._services.styles.enregistrer_style(style)
             self.accept()
             return
-        self.statut.setText(erreur)
-        self.statut.show()
+        afficher_message(self.statut, erreur, "erreur")  # effacé après 8 s (V3.2)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -214,7 +214,7 @@ class LigneStyle(QFrame):
             disposition.addWidget(self.bouton_appliquer, 0, Qt.AlignmentFlag.AlignVCenter)
         plus = bouton("", variante="icone", nom_icone="ellipsis")
         plus.setToolTip("Plus d'actions")
-        menu = QMenu(plus)
+        menu = Menu(plus)
         menu.addAction(icone_menu("square-pen"), "Modifier…").triggered.connect(
             lambda: dialogue.modifier(style.identifiant)
         )

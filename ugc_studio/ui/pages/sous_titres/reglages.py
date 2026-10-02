@@ -33,7 +33,7 @@ Ce panneau ne fait que montrer et lire les réglages : la page (atelier.py) les 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QMenu, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from ....sous_titres import (
     COTE_MAX,
@@ -63,6 +63,7 @@ from ...composants.elements import (
     libelle,
     liste_deroulante,
 )
+from ...composants.menu import Menu
 from ...composants.onglets import Onglets
 from ...composants.section_repliable import SectionRepliable
 from ...icones import icone_menu
@@ -136,7 +137,7 @@ class PanneauReglages(QWidget):
         ligne.addWidget(self.bouton_enregistrer_prereglage)
         self.bouton_plus_prereglage = bouton("", variante="icone", nom_icone="ellipsis")
         self.bouton_plus_prereglage.setToolTip("Plus d'actions sur les préréglages")
-        menu = QMenu(self.bouton_plus_prereglage)
+        menu = Menu(self.bouton_plus_prereglage)
         self.action_mettre_a_jour = menu.addAction(icone_menu("save"), "Mettre à jour ce préréglage")
         self.action_mettre_a_jour.triggered.connect(lambda: self.mettre_a_jour_prereglage_demande.emit())
         self.action_revenir = menu.addAction(icone_menu("rotate-ccw"), "Revenir au préréglage")

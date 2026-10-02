@@ -271,7 +271,7 @@ class OngletModeles(QWidget):
         # « … » quand la fenêtre est étroite, texte complet au survol). L'identifiant technique
         # (« gemini-3.8-flash-tts ») ferait doublon avec le nom : il reste lisible au survol du nom.
         nom = QVBoxLayout()
-        nom.setSpacing(0)
+        nom.setSpacing(Espacements.XS)  # V3.2 : 4 px, comme sous le nom d'une clé (Connexions API) ; 0 avant
         titre = libelle_abrege(connu.nom if connu else identifiant)
         titre.definir_aide(f"Identifiant du modèle chez Google : {identifiant}")
         nom.addWidget(titre)

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QMenu, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
 
 from ...chemins import dossier_documents
 from ...prereglages import EXTENSION, ErreurPrereglage, Prereglage, appliquer
@@ -28,8 +28,17 @@ from ...sous_titres import ReglagesSousTitres, creer_sous_titres, ecran, resolut
 from ...transcription import Mot
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
-from ..composants.elements import Pastille, bouton, libelle, libelle_abrege, pastille, vider_disposition
+from ..composants.elements import (
+    Pastille,
+    afficher_message,
+    bouton,
+    libelle,
+    libelle_abrege,
+    pastille,
+    vider_disposition,
+)
 from ..composants.flux import DispositionFlux
+from ..composants.menu import Menu
 from ..icones import icone_menu
 from ..theme import Arrondis, Couleurs, CouleursApercu, Dimensions, Espacements, Hauteurs, qcolor
 
@@ -138,7 +147,7 @@ class CartePrereglage(QFrame):
         actions.addStretch(1)
         plus = bouton("", variante="icone", nom_icone="ellipsis")
         plus.setToolTip("Plus d'actions")
-        menu = QMenu(plus)
+        menu = Menu(plus)
         menu.addAction(icone_menu("copy"), "Dupliquer").triggered.connect(lambda: dialogue.dupliquer(prereglage.identifiant))
         menu.addAction(icone_menu("square-pen"), "Renommer…").triggered.connect(lambda: dialogue.renommer(prereglage.identifiant))
         menu.addAction(icone_menu("download"), "Exporter…").triggered.connect(lambda: dialogue.exporter(prereglage.identifiant))
@@ -268,11 +277,7 @@ class DialoguePrereglages(QDialog):
             carte.vignette.definir_temps(temps)
 
     def _afficher(self, message: str, role: str = "succes") -> None:
-        self.statut.setText(message)
-        self.statut.setVisible(bool(message))
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        afficher_message(self.statut, message, role)  # vert, rouge ou orange : effacé après 8 s (V3.2)
 
     # --- Questions (remplacées dans les tests) -------------------------------------------------
 

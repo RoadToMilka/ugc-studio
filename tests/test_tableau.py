@@ -3,8 +3,9 @@ d'abord, barre horizontale en dernier recours, texte complet au survol."""
 
 from PySide6.QtCore import QEvent
 from PySide6.QtGui import QHelpEvent
-from PySide6.QtWidgets import QApplication, QTableWidgetItem, QToolTip
+from PySide6.QtWidgets import QApplication, QTableWidgetItem
 
+from ugc_studio.ui.composants.bulle import cacher_bulle, texte_de_la_bulle
 from ugc_studio.ui.composants.tableau import Colonne, Tableau
 from ugc_studio.ui.theme import Dimensions, Hauteurs
 
@@ -71,8 +72,8 @@ def test_texte_complet_au_survol(app_configuree, qtbot):
     centre = tableau.visualRect(index).center()
     evenement = QHelpEvent(QEvent.Type.ToolTip, centre, tableau.viewport().mapToGlobal(centre))
     QApplication.sendEvent(tableau.viewport(), evenement)
-    assert QToolTip.text() == "Brosse lissante chauffante pour cheveux"
-    QToolTip.hideText()
+    assert texte_de_la_bulle() == "Brosse lissante chauffante pour cheveux"  # la bulle de l'app (V3.2)
+    cacher_bulle()
 
 
 def test_montants_jamais_coupes(app_configuree, qtbot):

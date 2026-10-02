@@ -23,11 +23,12 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QFontMetricsF, QPainter, QPen
-from PySide6.QtWidgets import QScrollBar, QSizePolicy, QToolTip, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QScrollBar, QSizePolicy, QVBoxLayout, QWidget
 
 from ...sous_titres import ESPACE_INSECABLE, MotAffiche, SousTitre
 from ..polices import police
 from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Opacites, Typo, qcolor
+from .bulle import cacher_bulle, montrer_bulle
 from .elements import minutes_secondes
 
 PAS_DES_GRADUATIONS_S = (1, 2, 5, 10, 15, 30, 60, 120, 300)
@@ -328,7 +329,7 @@ class ToileFrise(QWidget):
 
     def leaveEvent(self, evenement) -> None:  # noqa: N802
         self._bulle = ""
-        QToolTip.hideText()
+        cacher_bulle(self)
         super().leaveEvent(evenement)
 
     def wheelEvent(self, evenement) -> None:  # noqa: N802
@@ -351,9 +352,9 @@ class ToileFrise(QWidget):
             return
         self._bulle = texte
         if texte:
-            QToolTip.showText(evenement.globalPosition().toPoint(), texte, self)
+            montrer_bulle(texte, evenement.globalPosition().toPoint(), self)
         else:
-            QToolTip.hideText()
+            cacher_bulle(self)
 
     # --- Dessin -----------------------------------------------------------------------------
 

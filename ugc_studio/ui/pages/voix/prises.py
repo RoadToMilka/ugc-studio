@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QInputDialog,
-    QMenu,
     QMessageBox,
     QVBoxLayout,
     QWidget,
@@ -29,6 +28,7 @@ from ...composants.bouton import montrer_occupe
 from ...composants.elements import bouton, glissiere, libelle, minutes_secondes, pastille, vider_disposition
 from ...composants.etoiles import boutons_etoiles
 from ...composants.lecteur import Lecteur
+from ...composants.menu import Menu
 from ...composants.montant_label import MontantLabel
 from ...icones import icone, icone_menu
 from ...ouvrir import ouvrir_dossier
@@ -98,7 +98,7 @@ class LignePrise(QFrame):
             disposition.addWidget(MontantLabel(prise.cout_eur))
 
         plus = bouton_icone("ellipsis", "Plus d'actions")
-        menu = QMenu(plus)
+        menu = Menu(plus)
         menu.addAction(icone_menu("captions"), "Créer les sous-titres de cette prise").triggered.connect(
             lambda: liste.sous_titres_demandes.emit(prise.identifiant)
         )

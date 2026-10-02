@@ -29,6 +29,7 @@ from ...composants.choix import ChoixEnBoutons
 from ...composants.elements import (
     BoutonInfo,
     ChampNomme,
+    afficher_message,
     bouton,
     case_a_cocher,
     champ_decimal,
@@ -282,9 +283,6 @@ class BlocSource(QFrame):
         self.ligne_decalage.setVisible(etat.voix_a_caler)
 
     def afficher_statut(self, message: str, role: str) -> None:
-        """Message d'état sous le bloc ; sans message, la ligne disparaît."""
-        self.statut.setText(message)
-        self.statut.setVisible(bool(message))
-        self.statut.setProperty("role", role)
-        self.statut.style().unpolish(self.statut)
-        self.statut.style().polish(self.statut)
+        """Message d'état sous le bloc ; sans message, la ligne disparaît. Vert, rouge ou orange :
+        effacé après 8 s (V3.2)."""
+        afficher_message(self.statut, message, role)
