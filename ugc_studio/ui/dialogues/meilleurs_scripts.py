@@ -74,7 +74,7 @@ def details_de_l_exemple(exemple: ExempleScript) -> str:
 def _avec_titre(titre: str, element) -> QVBoxLayout:
     """Un champ sous son nom (comme dans le brief du module Script)."""
     colonne = QVBoxLayout()
-    colonne.setSpacing(Espacements.XS)
+    colonne.setSpacing(Dimensions.ECART_NOM_CHAMP)
     colonne.addWidget(libelle(titre, "legende", retour_a_la_ligne=False))
     colonne.addWidget(element)
     return colonne

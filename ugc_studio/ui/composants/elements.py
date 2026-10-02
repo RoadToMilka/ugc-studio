@@ -11,7 +11,7 @@ import textwrap
 from collections.abc import Callable
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QFontMetricsF, QIcon, QPainter, QPalette, QPen
+from PySide6.QtGui import QFontMetrics, QFontMetricsF, QIcon, QPainter, QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QCheckBox,
@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QSpinBox,
     QStyle,
+    QStyleOptionButton,
     QStyleOptionComboBox,
     QStylePainter,
     QToolTip,
@@ -39,6 +40,16 @@ from ..polices import police
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .bouton import Bouton, dessiner_texte_centre_a_l_oeil
 from .liste_deroulante import DelegueChoix, VueChoix, preparer_la_liste
+
+
+# Entre un titre et ce qu'il précise (V3.2) : une puce, « Voix • Sérum Glowzy », « Voix • Conseils »
+# (une barre oblique « / » jusqu'à la 3.1.0 ; elle garde son sens de « sur » : « 0:03 / 0:07 »).
+SEPARATEUR_DE_TITRE = " • "
+
+
+def titre_avec(titre: str, precision: str) -> str:
+    """« Voix • Sérum Glowzy » : un titre (le module, la fenêtre…), puis ce qu'il précise."""
+    return f"{titre}{SEPARATEUR_DE_TITRE}{precision}"
 
 
 def libelle(
@@ -129,9 +140,10 @@ def libelle_abrege(texte: str, role: str | None = None) -> EtiquetteAbregee:
 
 
 class ChampNomme(QWidget):
-    """Un champ sous son nom (V3.1, §9.4 ter) : le nom en petit (12 px, gris), 4 px au-dessus du
-    champ, comme dans le brief du module Script. Le même partout dans l'app : un nom à gauche du
-    champ prenait une colonne de plus, et l'œil devait faire l'aller-retour.
+    """Un champ sous son nom (V3.1, §9.4 ter) : le nom en petit (12 px, gris), 8 px visibles au-dessus
+    du champ (V3.2, voir Dimensions.ECART_NOM_CHAMP), comme dans le brief du module Script. Le même
+    partout dans l'app : un nom à gauche du champ prenait une colonne de plus, et l'œil devait faire
+    l'aller-retour.
 
     - `element` : le champ (ou une rangée : un champ et son unité, une liste et sa durée…) ;
     - `a_cote` : un petit bouton posé à droite du champ (ex. ↺) ;
@@ -150,9 +162,10 @@ class ChampNomme(QWidget):
         super().__init__(parent)
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
-        disposition.setSpacing(Espacements.XS)
+        disposition.setSpacing(Dimensions.ECART_NOM_CHAMP)
         self.nom = libelle(nom, "legende", retour_a_la_ligne=False) if nom else None
-        # `aide` : une icône « i » juste après le nom, qui explique le réglage au survol (V3.1).
+        # `aide` : une icône « i » devant le nom, qui explique le réglage au survol (V3.1 ; après le
+        # nom jusqu'à la 3.1.0).
         self.aide = BoutonInfo(aide) if aide and nom else None
         if self.aide is not None:
             disposition.addLayout(ligne_avec_aide(self.nom, self.aide))
@@ -217,6 +230,26 @@ def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
     for numero in range(colonnes):
         grille.setColumnStretch(numero, 1)
     return grille
+
+
+def noms_de_colonnes(noms, largeur_fin: int = 0) -> QHBoxLayout:
+    """Les noms des colonnes d'une liste de champs (ex. « Mot tel qu'écrit dans le script », « Se
+    prononce »), chacun au-dessus de sa colonne : colonnes de même largeur, 8 px entre elles, puis
+    8 px et `largeur_fin` px pour les colonnes des petits boutons au bout de chaque ligne (▶,
+    corbeille ; 8 px entre deux de ces colonnes, compris dans `largeur_fin`). À placer
+    Dimensions.ECART_NOM_CHAMP au-dessus de la grille des champs (V3.2) : 8 px visibles sous les noms,
+    comme sous le nom d'un champ, alors que deux lignes de champs restent à 8 px l'une de l'autre."""
+    ligne = QHBoxLayout()
+    ligne.setContentsMargins(0, 0, 0, 0)
+    ligne.setSpacing(Espacements.S)
+    for nom in noms:
+        etiquette = libelle(nom, "legende")
+        # La largeur vient des colonnes, pas du texte (qui passe à la ligne s'il le faut).
+        etiquette.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        ligne.addWidget(etiquette, 1, Qt.AlignmentFlag.AlignBottom)
+    if largeur_fin:
+        ligne.addSpacing(Espacements.S + largeur_fin)
+    return ligne
 
 
 def minutes_secondes(secondes: float) -> str:
@@ -350,11 +383,12 @@ def texte_en_lignes(texte: str) -> str:
 
 
 class BoutonInfo(QWidget):
-    """Icône « i » (V3.1, §9.4 ter), posée juste après le texte qu'elle explique (un titre, le nom
-    d'un champ, le texte d'une case à cocher) : au survol, l'explication s'affiche tout de suite dans
-    une bulle ; un clic la montre aussi. Elle remplace les phrases d'aide qui n'ont pas besoin d'être
-    lues pour savoir quoi faire : l'interface reste légère, l'explication reste à portée de souris.
-    text() et setText() comme une étiquette (le texte peut changer, ex. la vidéo HDR d'un export)."""
+    """Icône « i » (V3.1, §9.4 ter), posée devant le texte qu'elle explique (V3.2 : un titre, le nom
+    d'un champ ; sur une case à cocher, entre la case et son texte ; après un bouton) : au survol,
+    l'explication s'affiche tout de suite dans une bulle ; un clic la montre aussi. Elle remplace les
+    phrases d'aide qui n'ont pas besoin d'être lues pour savoir quoi faire : l'interface reste légère,
+    l'explication reste à portée de souris. text() et setText() comme une étiquette (le texte peut
+    changer, ex. la vidéo HDR d'un export)."""
 
     def __init__(self, texte: str = "", parent: QWidget | None = None):
         super().__init__(parent)
@@ -391,14 +425,21 @@ class BoutonInfo(QWidget):
         return super().event(evenement)
 
     def enterEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
-        self.update()
+        self._redessiner()
         self.montrer()  # tout de suite, sans le délai habituel des infobulles
         super().enterEvent(evenement)
 
     def leaveEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
-        self.update()
+        self._redessiner()
         QToolTip.hideText()
         super().leaveEvent(evenement)
+
+    def _redessiner(self) -> None:
+        """L'icône change de couleur au survol ; ce qui la porte aussi (une case à cocher, le titre
+        d'une section : ils ne s'éclairent pas quand la souris est sur l'icône)."""
+        self.update()
+        if self.parentWidget() is not None:
+            self.parentWidget().update()
 
     def mousePressEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
         self.montrer()
@@ -411,14 +452,18 @@ class BoutonInfo(QWidget):
         peintre.end()
 
 
-def ligne_avec_aide(element: QWidget, aide: BoutonInfo | None, fin: bool = True) -> QHBoxLayout:
-    """Une ligne : `element` (un texte), son icône « i » 4 px après, centrée sur la hauteur du texte,
-    puis la place qui reste (sauf `fin=False`, pour ajouter d'autres éléments à droite)."""
+def ligne_avec_aide(element: QWidget, aide: BoutonInfo | None, fin: bool = True, apres: bool = False) -> QHBoxLayout:
+    """Une ligne : l'icône « i », puis `element` (un titre, le nom d'un champ) 8 px après elle (V3.2 :
+    l'icône est au début du texte qu'elle explique), centrée sur la hauteur du texte ; puis la place
+    qui reste (sauf `fin=False`, pour ajouter d'autres éléments à droite). `apres=True` : l'icône
+    reste après l'élément, 8 px après lui (après un bouton : « Choisir les modèles… (i) »)."""
     ligne = QHBoxLayout()
     ligne.setContentsMargins(0, 0, 0, 0)
     ligne.setSpacing(Dimensions.ECART_INFO)
+    if aide is not None and not apres:
+        ligne.addWidget(aide, 0, Qt.AlignmentFlag.AlignVCenter)
     ligne.addWidget(element)
-    if aide is not None:
+    if aide is not None and apres:
         ligne.addWidget(aide, 0, Qt.AlignmentFlag.AlignVCenter)
     if fin:
         ligne.addStretch(1)
@@ -427,7 +472,7 @@ def ligne_avec_aide(element: QWidget, aide: BoutonInfo | None, fin: bool = True)
 
 
 def avec_aide(element: QWidget, aide: str | None) -> QWidget | QHBoxLayout:
-    """`element` (un texte) suivi de son icône « i » si `aide` : une ligne (voir ligne_avec_aide),
+    """`element` (un texte) précédé de son icône « i » si `aide` : une ligne (voir ligne_avec_aide),
     dont l'icône est dans `.aide`. Sans aide : l'élément seul."""
     if not aide:
         return element
@@ -435,7 +480,7 @@ def avec_aide(element: QWidget, aide: str | None) -> QWidget | QHBoxLayout:
 
 
 def intitule(texte: str, aide: str | None = None) -> QWidget:
-    """Petit titre dans un bloc (« Balises », « Réorganiser à la main »…), suivi de son icône « i »
+    """Petit titre dans un bloc (« Balises », « Réorganiser à la main »…), précédé de son icône « i »
     quand il a une explication. Renvoie un élément à placer (l'étiquette est dans `.etiquette`,
     l'icône dans `.aide`)."""
     zone = QWidget()
@@ -579,19 +624,67 @@ def glissiere() -> QSlider:
     return barre
 
 
+class CaseACocher(QCheckBox):
+    """Case à cocher dont l'icône « i » se place entre la case et son texte (V3.2) : la case, 8 px,
+    l'icône, 8 px, le texte. L'icône est posée sur la case à cocher elle-même : le texte reste le sien
+    (un clic dessus coche la case, il passe en mauve quand un effet est changé…) ; la feuille de style
+    lui laisse la place entre la case et le texte (propriété « aide », voir theme.py). Un clic sur
+    l'icône montre l'explication, sans cocher la case."""
+
+    def __init__(self, texte: str, explication: str | None = None, parent: QWidget | None = None):
+        super().__init__(texte, parent)
+        self.aide = BoutonInfo(explication, self) if explication else None
+        if self.aide is not None:
+            self.setProperty("aide", True)
+
+    def _placer_l_aide(self) -> None:
+        """L'icône 8 px après la case, centrée sur elle (la case est centrée sur la ligne du texte)."""
+        if self.aide is None:
+            return
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        case = self.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, self)
+        haut = case.top() + (case.height() - self.aide.height()) // 2
+        self.aide.move(case.right() + 1 + Dimensions.ECART_INFO, haut)
+
+    def resizeEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        super().resizeEvent(evenement)
+        self._placer_l_aide()
+
+    def changeEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        super().changeEvent(evenement)
+        if evenement.type() == QEvent.Type.StyleChange:
+            self._placer_l_aide()
+
+    def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        # Comme QCheckBox.paintEvent(), mais la case ne s'éclaire pas quand la souris est sur l'icône :
+        # un clic sur l'icône ne coche pas la case.
+        peintre = QStylePainter(self)
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        survol = QStyle.StateFlag.State_MouseOver
+        if self.aide is not None and self.aide.underMouse() and option.state & survol:
+            option.state ^= survol
+        peintre.drawControl(QStyle.ControlElement.CE_CheckBox, option)
+
+
 def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, QCheckBox]:
-    """Case à cocher au texte court, avec son explication dans une icône « i » juste après le texte
-    (V3.1 : l'explication se lit au survol, au lieu d'une phrase toujours affichée dessous). Renvoie
-    la zone à placer dans la page et la case elle-même ; l'icône est dans `zone.aide` (None sans
-    explication). Pour griser la case, griser la zone (l'icône l'est alors aussi).
+    """Case à cocher au texte court, avec son explication dans une icône « i » entre la case et le
+    texte (V3.2 ; après le texte jusqu'à la 3.1.0 ; V3.1 : l'explication se lit au survol, au lieu
+    d'une phrase toujours affichée dessous). Renvoie la zone à placer dans la page et la case
+    elle-même ; l'icône est dans `zone.aide` (None sans explication). Pour griser la case, griser la
+    zone (l'icône l'est alors aussi).
 
     Pourquoi un texte court ? Le texte d'une case à cocher ne passe jamais à la ligne : une longue
     phrase imposerait sa largeur à toute la page, qui déborderait à droite dans une fenêtre étroite.
     (Un test vérifie que le texte des cases reste court.)"""
     zone = QWidget()
-    case = QCheckBox(texte)
-    zone.aide = BoutonInfo(explication) if explication else None
-    zone.setLayout(ligne_avec_aide(case, zone.aide))
+    case = CaseACocher(texte, explication)
+    zone.aide = case.aide
+    disposition = QHBoxLayout(zone)
+    disposition.setContentsMargins(0, 0, 0, 0)
+    disposition.addWidget(case)
+    disposition.addStretch(1)
     return zone, case
 
 
@@ -628,18 +721,30 @@ def champ_decimal(
     return champ
 
 
+def marge_haute_titre(marges: int = Espacements.XL, hauteur_ligne: int = 0) -> int:
+    """Marge du haut d'un bloc qui commence par son titre (V3.2) : le haut des majuscules du titre à
+    `marges` px du bord du bloc, autant qu'à gauche (la police du titre garde 4 px au-dessus des
+    majuscules, voir Dimensions.RESERVE_TITRE_BLOC). `hauteur_ligne` : la hauteur de la ligne du
+    titre quand il la partage avec des boutons, centrés sur lui (ex. « Brief » et ses boutons de
+    32 px) : la marge a alors de quoi garder le titre à la même place, les boutons un peu plus haut."""
+    hauteur_titre = QFontMetrics(police(Typo.TITRE_BLOC, Typo.GRAISSE_FORTE)).height()
+    decalage = max(0, (hauteur_ligne - hauteur_titre) // 2)  # le titre est centré dans sa ligne
+    return max(0, marges - Dimensions.RESERVE_TITRE_BLOC - decalage)
+
+
 def bloc(titre: str | None = None, marges: int = Espacements.XL, aide: str | None = None) -> tuple[QFrame, QVBoxLayout]:
     """Bloc (panneau arrondi sur fond « surface »). Renvoie le bloc et sa disposition verticale.
-    `aide` : explication du bloc, dans une icône « i » juste après le titre (V3.1) ; le titre est
-    dans `cadre.titre`, l'icône dans `cadre.aide`."""
+    `aide` : explication du bloc, dans une icône « i » devant le titre (V3.1 ; après lui jusqu'à la
+    3.1.0) ; le titre est dans `cadre.titre`, l'icône dans `cadre.aide`. Avec un titre, la marge du
+    haut le place à `marges` px du bord, comme à gauche (voir marge_haute_titre)."""
     cadre = QFrame()
     cadre.setProperty("role", "bloc")
     disposition = QVBoxLayout(cadre)
-    disposition.setContentsMargins(marges, marges, marges, marges)
+    disposition.setContentsMargins(marges, marge_haute_titre(marges) if titre else marges, marges, marges)
     disposition.setSpacing(Espacements.M)
     cadre.titre = cadre.aide = None
     if titre:
-        # Avec une icône, le titre garde sa largeur (l'icône le suit) ; seul, il peut passer à la ligne.
+        # Avec une icône, le titre garde sa largeur (l'icône le précède) ; seul, il peut passer à la ligne.
         cadre.titre = libelle(titre, "titre-bloc", retour_a_la_ligne=not aide)
         if aide:
             cadre.aide = BoutonInfo(aide)

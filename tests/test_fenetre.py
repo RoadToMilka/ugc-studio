@@ -92,7 +92,7 @@ def test_creer_les_sous_titres_depuis_une_prise(app_configuree, qtbot, tmp_path,
     fenetre = _fenetre(qtbot)
     services = fenetre.services
     services.projets.creer("Sérum", tmp_path)
-    assert fenetre.windowTitle() == "UGC Studio / Sérum"  # barre de titre : l'app, puis le projet
+    assert fenetre.windowTitle() == "UGC Studio • Sérum"  # barre de titre : l'app, puis le projet
     prise = services.projets.ajouter_prise(
         wav_depuis_pcm(b"\x00\x00" * 24_000), modele="m", voix="Kore", style="", texte_api="Bonjour",
         script=[{"texte": "Bonjour"}], duree_s=1.0,
@@ -146,7 +146,7 @@ def test_le_bandeau_montre_le_titre_du_module(app_configuree, qtbot, tmp_path):
     assert (entete.titre.text(), entete.sous_titre.text()) == ("Voix", "Voix off générée par IA (TTS).")
     fenetre.services.projets.creer("Sérum", tmp_path)
     entete = fenetre.entete.entete_affichee()
-    assert entete is fenetre.page("voix").atelier.entete and entete.titre.text() == "Voix / Sérum"
+    assert entete is fenetre.page("voix").atelier.entete and entete.titre.text() == "Voix • Sérum"
     fenetre.afficher_module("reglages")
     assert fenetre.entete.entete_affichee().titre.text() == "Réglages"
     # Le titre ne prend plus de place en haut des pages : il est dans le bandeau.

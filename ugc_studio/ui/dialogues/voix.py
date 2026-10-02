@@ -284,7 +284,7 @@ class DialogueBibliothequeVoix(QDialog):
         textes = QVBoxLayout()
         textes.setSpacing(0)
         self.compteur = libelle("", "intitule", retour_a_la_ligne=False)
-        # D'où viennent ces voix : au survol de l'icône « i » après le compteur (V3.1).
+        # D'où viennent ces voix : au survol de l'icône « i » devant le compteur (V3.1 ; après lui jusqu'à la 3.1.0).
         textes.addLayout(
             ligne_avec_aide(
                 self.compteur, BoutonInfo("Voix créées avec Voice Design, ici ou dans Google AI Studio (même projet Google).")

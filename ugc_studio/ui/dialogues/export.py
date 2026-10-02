@@ -161,7 +161,7 @@ class DialogueExport(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        # Ce que fait l'export : au survol de l'icône « i » après le titre (V3.1).
+        # Ce que fait l'export : au survol de l'icône « i » devant le titre (V3.1 ; après lui jusqu'à la 3.1.0).
         disposition.addLayout(entete_de_fenetre(self.TITRE, self.PAGE_CONSEILS, aide=self.INFO))
         zone, contenu_zone = zone_defilante()
         contenu_zone.setSpacing(Espacements.L)

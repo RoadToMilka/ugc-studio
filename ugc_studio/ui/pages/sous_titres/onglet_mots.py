@@ -57,7 +57,7 @@ EXPLICATIONS = {
     "dits": "Les mots déjà dits.",
     ACCENTUES: "Les mots mis en valeur dans le script d'une prise (bouton « Accentuer » du module Voix).",
 }
-# V3.1 : les quatre états expliqués au survol de l'icône « i » après « État » (une ligne chacun),
+# V3.1 : les quatre états expliqués au survol de l'icône « i » devant « État » (une ligne chacun),
 # au lieu d'une phrase sous les boutons qui changeait avec l'état choisi.
 AIDE_ETATS = "\n".join(f"{ETATS[code]} : {EXPLICATIONS[code][0].lower()}{EXPLICATIONS[code][1:]}" for code in ETATS)
 

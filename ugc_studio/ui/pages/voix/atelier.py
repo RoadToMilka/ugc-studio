@@ -46,7 +46,16 @@ from ...composants.choix_voix import (
 )
 from ...composants.editeur_script import EditeurScript
 from ...composants.bouton import montrer_occupe
-from ...composants.elements import ChampNomme, bloc, bouton, intitule, libelle, liste_deroulante, minutes_secondes
+from ...composants.elements import (
+    ChampNomme,
+    bloc,
+    bouton,
+    intitule,
+    libelle,
+    liste_deroulante,
+    minutes_secondes,
+    titre_avec,
+)
 from ...composants.lecteur import Lecteur
 from ...composants.lecteur_flux import LecteurFlux
 from ...composants.montant_label import MontantLabel
@@ -58,7 +67,7 @@ from ...dialogues.styles import DialogueBibliothequeStyles
 from ...dialogues.variantes import DialogueVariantes
 from ...dialogues.voix import DialogueBibliothequeVoix
 from ...extraits import EcouteVoix, fichier_prononciation
-from ...theme import Espacements
+from ...theme import Dimensions, Espacements
 from ..base import Page
 from .prises import ListePrises
 from .repliques import CarteReplique, ListeRepliques
@@ -107,7 +116,7 @@ class AtelierVoix(Page):
         # Les deux listes sous leur nom (V3.1) ; les boutons de la voix sur la ligne des listes.
         ligne = QGridLayout()
         ligne.setHorizontalSpacing(Espacements.S)
-        ligne.setVerticalSpacing(Espacements.XS)
+        ligne.setVerticalSpacing(Dimensions.ECART_NOM_CHAMP)  # 8 px visibles sous les noms (V3.2)
         self.modele = liste_deroulante()
         self.modele.currentIndexChanged.connect(self._reglage_change)
         self.modele.currentIndexChanged.connect(lambda _index: self._declarer_modele())
@@ -259,7 +268,7 @@ class AtelierVoix(Page):
             self._declarer_modele()
             return
         self._chargement = True
-        self.titre.setText(f"Voix / {projet.nom}")
+        self.titre.setText(titre_avec("Voix", projet.nom))
         # Le modèle du projet est toujours proposé, même s'il n'est plus chargé : il est alors
         # rechargé (voir modeles_charges.py), sans rien changer dans le projet.
         remplir_modeles_voix(self.modele, self._services, projet.voix.modele)

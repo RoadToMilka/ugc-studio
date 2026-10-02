@@ -68,7 +68,7 @@ def test_le_bouton_ouvre_les_conseils(fenetre, qtbot, monkeypatch):
     qtbot.mouseClick(bouton, Qt.MouseButton.LeftButton)
     (dialogue,) = ouvertes
     assert dialogue.page is PAGES["transcription"]
-    assert dialogue.windowTitle() == "Transcription / Conseils"
+    assert dialogue.windowTitle() == "Transcription • Conseils"
     assert dialogue.parent() is fenetre
 
 

@@ -163,8 +163,9 @@ def _textes_hors_interface(arbre: ast.AST) -> set[int]:
 
 def test_aucun_tiret_long_dans_les_textes_de_l_interface():
     """En français, le tiret long (« — ») ne sert pas de séparateur (décision du 30/09/2026) :
-    l'interface met « / » entre un module et un projet (« Voix / Sérum Glowzy »), et ailleurs la
-    ponctuation qui convient à l'endroit : parenthèses, point médian « · », deux-points, virgule."""
+    l'interface met une puce « • » entre un module et un projet (« Voix • Sérum Glowzy », V3.2 ; « / »
+    avant), et ailleurs la ponctuation qui convient à l'endroit : parenthèses, point médian « · »,
+    deux-points, virgule."""
     ecarts = []
     for fichier in sorted(RACINE.rglob("*.py")):
         arbre = ast.parse(fichier.read_text(encoding="utf-8"))

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QLabel, QLineEdit, QStyle, QStyleOptionButton, QVB
 
 from ugc_studio.ui.composants.elements import (
     TOUTE_LA_RANGEE,
+    BoutonInfo,
     ChampNomme,
     case_a_cocher,
     champ_entier,
@@ -33,14 +34,18 @@ def _montrer(qtbot, contenu, largeur: int) -> QWidget:
 
 
 def test_le_nom_au_dessus_du_champ(app_configuree, qtbot):
-    """Comme dans le brief du module Script : le nom en 12 px gris, 4 px au-dessus du champ."""
+    """Comme dans le brief du module Script : le nom en 12 px gris au-dessus du champ, 8 px visibles
+    entre le bas de ses lettres et le champ (V3.2 ; 7 px jusqu'à la 3.1.0)."""
     champ = QLineEdit()
     nomme = ChampNomme("Couleur", champ)
     _fenetre = _montrer(qtbot, nomme, 300)  # garder la fenêtre : sinon Python la détruit
     assert nomme.nom.text() == "Couleur" and nomme.nom.property("role") == "legende"
     assert nomme.nom.font().pixelSize() == Typo.LEGENDE
     bas_du_nom = nomme.nom.mapTo(nomme, QPoint(0, nomme.nom.height())).y()
-    assert champ.mapTo(nomme, QPoint(0, 0)).y() - bas_du_nom == Espacements.XS
+    assert champ.mapTo(nomme, QPoint(0, 0)).y() - bas_du_nom == Dimensions.ECART_NOM_CHAMP
+    # Ce que l'œil voit : du bas des lettres (la ligne de base du nom) au haut du champ, 8 px.
+    ligne_de_base = nomme.nom.mapTo(nomme, QPoint(0, 0)).y() + (nomme.nom.height() + nomme.nom.fontMetrics().ascent() - nomme.nom.fontMetrics().descent()) // 2
+    assert champ.mapTo(nomme, QPoint(0, 0)).y() - ligne_de_base == Espacements.S
     assert nomme.nom.mapTo(nomme, QPoint(0, 0)).x() == champ.mapTo(nomme, QPoint(0, 0)).x()  # alignés à gauche
     nomme.setEnabled(False)  # griser le champ grise aussi son nom
     assert not champ.isEnabled() and not nomme.nom.isEnabled()
@@ -133,7 +138,14 @@ def test_noms_au_dessus_dans_l_app(app_configuree, qtbot, services, tmp_path):
         (nom,) = noms
         haut_du_champ = champ.mapToGlobal(QPoint(0, 0))
         bas_du_nom = nom.mapToGlobal(QPoint(0, nom.height()))
-        return bas_du_nom.y() <= haut_du_champ.y() and abs(nom.mapToGlobal(QPoint(0, 0)).x() - haut_du_champ.x()) <= 1
+        # Le nom commence au bord du champ ; avec une icône « i », c'est elle qui y commence, le nom
+        # 8 px après elle (V3.2).
+        debut = nom.mapToGlobal(QPoint(0, 0)).x()
+        aides = [a for a in nom.parentWidget().findChildren(BoutonInfo) if abs(a.mapToGlobal(QPoint(0, 0)).y() - nom.mapToGlobal(QPoint(0, 0)).y()) <= nom.height()]
+        aides = [a for a in aides if 0 < debut - (a.mapToGlobal(QPoint(0, 0)).x() + a.width()) <= Dimensions.ECART_INFO]
+        if aides:
+            debut = aides[0].mapToGlobal(QPoint(0, 0)).x()
+        return bas_du_nom.y() <= haut_du_champ.y() and abs(debut - haut_du_champ.x()) <= 1
 
     fenetre.afficher_module("transcription")
     transcription = fenetre.page("transcription").atelier

@@ -55,7 +55,7 @@ from ....services import Services
 from ....vitesses import Vitesse
 from ... import taches
 from ...composants.bouton import Bouton, BoutonOccupe, montrer_occupe
-from ...composants.elements import BoutonInfo, bloc, bouton, libelle, ligne_avec_aide
+from ...composants.elements import BoutonInfo, bloc, bouton, libelle, ligne_avec_aide, marge_haute_titre, titre_avec
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
@@ -66,7 +66,7 @@ from ...dialogues.prononciation import DialoguePrononciation
 from ...dialogues.retouche import DialogueRetouche
 from ...dialogues.variantes_script import DialogueVariantesScript
 from ...extraits import EcouteVoix, fichier_prononciation
-from ...theme import Espacements, Typo
+from ...theme import Espacements, Hauteurs, Typo
 from ..base import Page
 from .formulaire import AIDE_BRIEF, FormulaireBrief
 from .produit import BlocProduit, etat_de_la_page
@@ -135,6 +135,10 @@ class AtelierScript(Page):
 
         # --- Brief (avec la bibliothèque de briefs), puis les actions ---
         cadre, d = bloc()
+        # Le titre à 24 px du haut, comme dans les autres blocs (V3.2) : ses boutons, centrés sur lui,
+        # sont un peu plus haut.
+        haut = marge_haute_titre(hauteur_ligne=Hauteurs.CONTROLE)
+        d.setContentsMargins(Espacements.XL, haut, Espacements.XL, Espacements.XL)
         entete = QHBoxLayout()
         entete.setSpacing(Espacements.S)
         # « Brief », et ce qu'il faut y mettre au survol de l'icône « i » (V3.1).
@@ -235,7 +239,7 @@ class AtelierScript(Page):
         if not etat.scripts and etat.page is None:
             self._options_retenues(etat.brief)
         self._genre_d_apres_la_voix(projet)
-        self.titre.setText(f"{TITRE} / {projet.nom}")
+        self.titre.setText(titre_avec(TITRE, projet.nom))
         self.produit.definir(etat.adresse, etat.page, etat.fiche)
         self.formulaire.definir(etat.brief)
         self.formulaire.definir_langue_projet(projet.langue)

@@ -106,7 +106,7 @@ class ChampBrief(QWidget):
         self._chargement = False
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
-        disposition.setSpacing(Espacements.XS)
+        disposition.setSpacing(Dimensions.ECART_NOM_CHAMP)  # 8 px visibles sous le nom (V3.2)
         entete = QHBoxLayout()
         entete.setSpacing(Espacements.S)
         entete.addWidget(libelle(titre, "legende", retour_a_la_ligne=False))
@@ -164,7 +164,7 @@ def _grille() -> QGridLayout:
 
 def _avec_titre(titre: str, element: QWidget) -> QVBoxLayout:
     colonne = QVBoxLayout()
-    colonne.setSpacing(Espacements.XS)
+    colonne.setSpacing(Dimensions.ECART_NOM_CHAMP)
     colonne.addWidget(libelle(titre, "legende", retour_a_la_ligne=False))
     colonne.addWidget(element)
     return colonne
@@ -267,7 +267,7 @@ class FormulaireBrief(QWidget):
                 entete.addWidget(self.marque_genre)
                 entete.addStretch(1)
                 colonne_genre = QVBoxLayout()
-                colonne_genre.setSpacing(Espacements.XS)
+                colonne_genre.setSpacing(Dimensions.ECART_NOM_CHAMP)
                 colonne_genre.addLayout(entete)
                 colonne_genre.addWidget(self.genre)
                 grille.addLayout(colonne_genre, 0, 0)

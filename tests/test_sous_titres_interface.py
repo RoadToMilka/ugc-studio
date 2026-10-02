@@ -103,7 +103,7 @@ def test_page_sans_puis_avec_projet(app_configuree, qtbot, services, tmp_path):
     services.projets.creer("Sérum", tmp_path)
     assert page.currentWidget() is page.atelier
     atelier = page.atelier
-    assert atelier.titre.text() == "Sous-titres / Sérum"
+    assert atelier.titre.text() == "Sous-titres • Sérum"
     assert not atelier.cadre_sous_titres.isVisible() and not atelier.bouton_creer.isEnabled()
     assert "Pas encore de mots" in atelier.texte_source.text()
 

@@ -129,7 +129,7 @@ class OngletModeles(QWidget):
         contenu.addWidget(cadre)
 
         # --- Modèles ---
-        # V3.1 : les explications au survol des icônes « i » (après le titre, après « Choisir les
+        # V3.1 : les explications au survol des icônes « i » (devant le titre, après « Choisir les
         # modèles… ») au lieu de trois paragraphes toujours affichés.
         cadre, d = bloc(
             "Modèles et prix",
@@ -151,8 +151,8 @@ class OngletModeles(QWidget):
                 "modèles… » en ajoute ou en retire. Un modèle utilisé (colonne « Utilisé dans ») ne peut "
                 "pas être retiré."
             ),
+            apres=True,  # après un bouton, l'icône reste après lui, 8 px après (V3.2)
         )
-        choisir.setSpacing(Espacements.S)  # après un bouton, l'écart habituel entre deux éléments
         d.addLayout(choisir)
         self._grille = QGridLayout()
         self._grille.setHorizontalSpacing(Espacements.L)

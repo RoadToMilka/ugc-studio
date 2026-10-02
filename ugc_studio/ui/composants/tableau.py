@@ -43,7 +43,7 @@ class Tableau(QTableWidget):
     """Tableau en lecture seule, une ligne choisie à la fois. Après avoir rempli les cases
     (setItem, setCellWidget), appeler contenu_change() : les largeurs sont alors recalculées."""
 
-    def __init__(self, colonnes: Sequence[Colonne], hauteur_ligne: int = Hauteurs.CONTROLE):
+    def __init__(self, colonnes: Sequence[Colonne], hauteur_ligne: int = Hauteurs.LIGNE_TABLEAU):
         super().__init__(0, len(colonnes))
         self.colonnes = tuple(colonnes)
         self.hauteur_ligne = hauteur_ligne  # hauteur d'une ligne (résumé avant export : plus serrée)

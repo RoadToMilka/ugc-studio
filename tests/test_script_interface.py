@@ -84,7 +84,7 @@ def test_sans_projet_puis_avec(app_configuree, qtbot, services, tmp_path):
     assert page.currentWidget() is page.sans_projet
     services.projets.creer("Brosse", tmp_path)
     assert page.currentWidget() is page.atelier
-    assert page.atelier.titre.text() == "Script / Brosse"
+    assert page.atelier.titre.text() == "Script • Brosse"
     assert page.atelier.bouton_ecrire.text() == "Écrire le script"
 
 

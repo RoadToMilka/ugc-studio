@@ -13,10 +13,10 @@ from ...services import Services
 from ...transcription import Remplacement, nettoyer_remplacements
 from ..composants.bouton import activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, info, libelle
+from ..composants.elements import bouton, info, noms_de_colonnes
 from ..composants.onglets import Onglets
 from ..composants.defilement import zone_defilante
-from ..theme import Dimensions, Espacements
+from ..theme import Dimensions, Espacements, Hauteurs
 
 
 class TableauRemplacements(QWidget):
@@ -28,14 +28,17 @@ class TableauRemplacements(QWidget):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, Espacements.M, 0, 0)
         disposition.setSpacing(Espacements.S)
+        # Les noms des colonnes au-dessus de la grille des champs : 8 px visibles sous eux (V3.2).
+        colonnes = QVBoxLayout()
+        colonnes.setSpacing(Dimensions.ECART_NOM_CHAMP)
+        colonnes.addLayout(noms_de_colonnes(("Tel que transcrit (un ou plusieurs mots)", "Remplacer par"), Hauteurs.PETIT_BOUTON))
         self._grille = QGridLayout()
         self._grille.setHorizontalSpacing(Espacements.S)
         self._grille.setVerticalSpacing(Espacements.S)
-        self._grille.addWidget(libelle("Tel que transcrit (un ou plusieurs mots)", "legende"), 0, 0)
-        self._grille.addWidget(libelle("Remplacer par", "legende"), 0, 1)
         self._grille.setColumnStretch(0, 1)
         self._grille.setColumnStretch(1, 1)
-        disposition.addLayout(self._grille)
+        colonnes.addLayout(self._grille)
+        disposition.addLayout(colonnes)
         ajouter = QHBoxLayout()
         ajouter.addWidget(bouton("Ajouter un remplacement", variante="contour", nom_icone="plus", action=self.ajouter))
         ajouter.addStretch(1)
@@ -47,7 +50,7 @@ class TableauRemplacements(QWidget):
             self.ajouter()
 
     def ajouter(self, entree: Remplacement | None = None) -> None:
-        rang = len(self._lignes) + 1
+        rang = self._grille.rowCount()  # toujours une nouvelle ligne, à la fin (même après un retrait)
         cherche = QLineEdit(entree.cherche if entree else "")
         cherche.setPlaceholderText("ex. sérum anti rides")
         remplace = QLineEdit(entree.remplace if entree else "")

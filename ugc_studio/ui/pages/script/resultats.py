@@ -24,11 +24,20 @@ from ....ecriture.variantes import ACCROCHES
 from ....estimation import MOTS_PAR_SECONDE
 from ....fournisseurs.capacites import modele_connu
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import BoutonInfo, bouton, info, libelle, ligne_avec_aide, pastille, vider_disposition
+from ...composants.elements import (
+    BoutonInfo,
+    bouton,
+    info,
+    libelle,
+    ligne_avec_aide,
+    marge_haute_titre,
+    pastille,
+    vider_disposition,
+)
 from ...composants.etoiles import boutons_etoiles
 from ...composants.montant_label import MontantLabel
 from ...icones import icone_menu
-from ...theme import Couleurs, Espacements
+from ...theme import Couleurs, Espacements, Hauteurs
 
 
 class LigneAccroche(QFrame):
@@ -84,7 +93,7 @@ class ListeAccroches(QWidget):
         self.cadre = QFrame()
         self.cadre.setProperty("role", "bloc")
         interieur = QVBoxLayout(self.cadre)
-        interieur.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        interieur.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.XL, Espacements.XL)
         interieur.setSpacing(Espacements.M)
         # V3.1 : ce qu'il faut faire reste écrit ; le reste de l'explication passe dans l'icône « i ».
         interieur.addLayout(
@@ -150,7 +159,9 @@ class CarteScript(QFrame):
         self.script = script
         self._mots_par_seconde = mots_par_seconde
         disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        # Le titre à 24 px du haut, comme à gauche (V3.2) ; le ⋯ de sa ligne est centré sur lui.
+        haut = marge_haute_titre(hauteur_ligne=Hauteurs.PETIT_BOUTON)
+        disposition.setContentsMargins(Espacements.XL, haut, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
 
         entete = QHBoxLayout()
