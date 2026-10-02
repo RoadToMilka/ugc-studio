@@ -255,7 +255,7 @@ def test_export_du_calque_puis_relu(app_configuree, qtbot, services, projet_pris
 @avec_ffmpeg
 def test_arreter_le_calque(app_configuree, qtbot, services, projet_prise):
     """« Arrêter » : rien n'est gardé, ni le fichier, ni son nom provisoire."""
-    projet_prise.transcription.duree_s = 120.0  # 3 600 images : le temps d'arrêter
+    projet_prise.sous_titres_importes.duree_s = 120.0  # 3 600 images : le temps d'arrêter
     dialogue = _dialogue(services, projet_prise, qtbot)
     plan = dialogue.plan()
     dialogue.exporter()
@@ -268,7 +268,7 @@ def test_arreter_le_calque(app_configuree, qtbot, services, projet_prise):
 def test_fermer_pendant_l_export_l_arrete(app_configuree, qtbot, services, projet_prise):
     if FFMPEG is None:
         pytest.skip("FFmpeg absent de cet ordinateur")
-    projet_prise.transcription.duree_s = 120.0
+    projet_prise.sous_titres_importes.duree_s = 120.0
     dialogue = _dialogue(services, projet_prise, qtbot)
     plan = dialogue.plan()
     dialogue.exporter()
