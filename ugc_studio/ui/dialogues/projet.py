@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit
 
 from ...chemins import dossier_projets_defaut
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES, ErreurProjet, GestionnaireProjets, Projet
 from ..composants.bouton import activer_avec_entree
 from ..composants.elements import ChampNomme, afficher_message, avec_aide, bouton, libelle, liste_deroulante
+from ..composants.fenetre import fenetre_en_bloc
 from ..theme import Dimensions, Espacements
 
 
@@ -22,8 +23,7 @@ class DialogueNouveauProjet(QDialog):
         self.setWindowTitle("Nouveau projet")
         self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=False)
         disposition.setSpacing(Espacements.M)
         # Ce qu'est un projet : au survol de l'icône « i » devant le titre (V3.1 ; après lui jusqu'à la 3.1.0).
         disposition.addLayout(
@@ -56,13 +56,13 @@ class DialogueNouveauProjet(QDialog):
         disposition.addWidget(self.statut)
 
         boutons = QHBoxLayout()
+        boutons.setSpacing(Espacements.S)  # 8 px entre les boutons, comme dans les autres fenêtres
         boutons.addStretch(1)
         boutons.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_creer = bouton("Créer le projet", variante="principal", nom_icone="folder-plus", action=self.valider)
         activer_avec_entree(self.bouton_creer, self)  # la touche Entrée valide
         boutons.addWidget(self.bouton_creer)
-        disposition.addSpacing(Espacements.S)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
         self.nom.setFocus()
 
     def _choisir_dossier(self) -> None:

@@ -52,6 +52,7 @@ from ..composants.choix_voix import choisir, remplir_modeles_voix, remplir_voix
 from ..composants.editeur_script import EditeurScript
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import BoutonInfo, ChampNomme, bouton, libelle, liste_deroulante, vider_disposition
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.menu import Menu
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
@@ -112,8 +113,7 @@ class DialogueVariantes(QDialog):
         self.setWindowTitle("Variantes A/B")
         self.resize(Dimensions.DIALOGUE_VARIANTES_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -144,7 +144,7 @@ class DialogueVariantes(QDialog):
         bas.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_generer = bouton("", variante="principal", nom_icone="audio-lines", action=self.accept)
         bas.addWidget(self.bouton_generer)
-        disposition.addLayout(bas)
+        fenetre.addLayout(bas)  # sous le bloc, sur le fond de l'app (V3.2)
 
         self._construire_tableau()
         if variantes:

@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLineEdit,
-    QMessageBox,
     QVBoxLayout,
 )
 
@@ -43,8 +42,10 @@ from ..composants.elements import (
 )
 from ..icones import icone_menu
 from ..composants.defilement import zone_defilante
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.menu import Menu
 from ..theme import Couleurs, Dimensions, Espacements
+from . import messages
 
 
 def description(style: Style) -> str:
@@ -91,8 +92,7 @@ class DialogueStyle(QDialog):
         self.setWindowTitle(titre)
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(entete_de_fenetre(titre, "style"))
 
@@ -147,7 +147,7 @@ class DialogueStyle(QDialog):
         self.bouton_enregistrer = bouton("Enregistrer le style", variante="principal", nom_icone="check", action=self.valider)
         activer_avec_entree(self.bouton_enregistrer, self)
         boutons.addWidget(self.bouton_enregistrer)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
     @staticmethod
     def _choisir(liste: QComboBox, valeur: str) -> None:
@@ -250,8 +250,7 @@ class DialogueBibliothequeStyles(QDialog):
         self.setWindowTitle("Bibliothèque de styles")
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         explication = "Tes styles enregistrés, rangés par catégorie."
         if cible:
@@ -273,7 +272,7 @@ class DialogueBibliothequeStyles(QDialog):
             )
         boutons.addStretch(1)
         boutons.addWidget(bouton("Fermer", action=self.reject))
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
         self._lignes: list[LigneStyle] = []
         services.styles.abonner(self.rafraichir)
@@ -338,13 +337,12 @@ class DialogueBibliothequeStyles(QDialog):
         style = self._services.styles.style(identifiant)
         if style is None:
             return
-        reponse = QMessageBox.question(
+        if messages.confirmer(
             self,
             "Supprimer le style",
             f"Supprimer le style « {style.nom} » de la bibliothèque ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reponse == QMessageBox.StandardButton.Yes:
+            action="Supprimer",
+            icone_action="trash",
+        ):
             self._services.styles.supprimer(identifiant)
 

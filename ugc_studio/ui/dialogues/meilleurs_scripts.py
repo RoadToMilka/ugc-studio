@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLayout,
     QLineEdit,
-    QMessageBox,
     QPlainTextEdit,
     QVBoxLayout,
 )
@@ -42,9 +41,11 @@ from ..composants.elements import (
     separateur,
     vider_disposition,
 )
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.menu import Menu
 from ..icones import icone_menu
 from ..theme import Couleurs, Dimensions, Espacements
+from . import messages
 
 TUTOIEMENTS_EXEMPLE = {"tu": "Tutoiement", "vous": "Vouvoiement"}
 
@@ -131,8 +132,7 @@ class DialogueMeilleursScripts(QDialog):
         self.setWindowTitle("Mes meilleurs scripts")
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -158,7 +158,7 @@ class DialogueMeilleursScripts(QDialog):
         boutons.addWidget(self.bouton_remettre)
         boutons.addStretch(1)
         boutons.addWidget(bouton("Fermer", action=self.reject))
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
         self._lignes: list[LigneExemple] = []
         self.rafraichir()
 
@@ -197,17 +197,12 @@ class DialogueMeilleursScripts(QDialog):
 
     def retirer(self, exemple: ExempleScript) -> None:
         if exemple.fourni:
-            question = f"Retirer « {exemple.titre} » des exemples ? « Remettre les exemples fournis » le fera revenir."
+            question = f"Retirer « {exemple.titre} » des exemples ?"
+            precision = "« Remettre les exemples fournis » le fera revenir."
         else:
-            question = f"Retirer « {exemple.titre} » de tes exemples ? Le modèle ne s'en inspirera plus."
-        reponse = QMessageBox.question(
-            self,
-            "Retirer l'exemple",
-            question,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reponse == QMessageBox.StandardButton.Yes:
+            question = f"Retirer « {exemple.titre} » de tes exemples ?"
+            precision = "Le modèle ne s'en inspirera plus."
+        if messages.confirmer(self, "Retirer l'exemple", question, precision, action="Retirer", icone_action="trash"):
             self._services.exemples.retirer(exemple.identifiant)
             self.rafraichir()
 
@@ -231,11 +226,10 @@ class DialogueAjoutExemple(QDialog):
         self.exemple: ExempleScript | None = None
         self.setWindowTitle("Ajouter un script qui a marché")
 
-        disposition = QVBoxLayout(self)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self)
         # La fenêtre ne devient jamais plus petite que son contenu (sinon les champs se chevauchent
         # sur un petit écran) ; voir la même règle dans retouche.py.
-        disposition.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Ajouter un script qui a marché", "titre-bloc"))
         disposition.addWidget(
@@ -296,7 +290,7 @@ class DialogueAjoutExemple(QDialog):
         boutons.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_ajouter = bouton("Ajouter", variante="principal", nom_icone="plus", action=self.valider)
         boutons.addWidget(self.bouton_ajouter)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
         # Hauteur : celle du contenu à cette largeur (les textes qui passent à la ligne comptent ; la
         # hauteur minimale de Qt, elle, ne les compte que sur une ligne et serrait les éléments).
         self.resize(Dimensions.DIALOGUE_LARGEUR, self.heightForWidth(Dimensions.DIALOGUE_LARGEUR))

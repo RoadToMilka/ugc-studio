@@ -6,12 +6,13 @@ rôle ; l'app assemble une description de 1 à 2 phrases **en anglais**, avec sa
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QDialog, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QDialog, QHBoxLayout
 
 from ...voice_design import ACCENTS, AGES, GENRES, PERSONAS, TEXTURES, TIMBRES, assembler_description, code_genre
 from ..composants.bouton import activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, champs_en_colonnes, libelle, liste_deroulante
+from ..composants.fenetre import fenetre_en_bloc
 from ..theme import Dimensions, Espacements
 
 AUCUN = "Aucun choix"
@@ -32,8 +33,7 @@ class DialogueAssistantVoix(QDialog):
         self.setWindowTitle("Assistant de description")
         self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -79,8 +79,7 @@ class DialogueAssistantVoix(QDialog):
         )
         activer_avec_entree(self.bouton_utiliser, self)
         boutons.addWidget(self.bouton_utiliser)
-        disposition.addSpacing(Espacements.S)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
         self._apercu()
 
     def resultat(self) -> tuple[str, str]:

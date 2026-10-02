@@ -292,10 +292,10 @@ def test_enregistrer_et_mettre_a_jour_un_prereglage(atelier, services, monkeypat
     # « Mettre à jour » : le préréglage prend le style du projet, après confirmation.
     panneau.caracteres.setValue(32)
     assert panneau.prereglage.currentText() == "Mon style (modifié)" and _retablir_visibles(panneau) == ["Découpage"]
-    monkeypatch.setattr(atelier, "_confirmer", lambda _boite, _oui: False)
+    monkeypatch.setattr(atelier, "_confirmer", lambda _titre, _question, _precision, _action: False)
     panneau.mettre_a_jour_prereglage_demande.emit()
     assert panneau.prereglage.currentText() == "Mon style (modifié)"
-    monkeypatch.setattr(atelier, "_confirmer", lambda _boite, _oui: True)
+    monkeypatch.setattr(atelier, "_confirmer", lambda _titre, _question, _precision, _action: True)
     panneau.mettre_a_jour_prereglage_demande.emit()
     assert panneau.prereglage.currentText() == "Mon style" and _retablir_visibles(panneau) == []
     assert services.prereglages.prereglage(cree.identifiant).style["decoupage"]["caracteres_max"] == 32
@@ -344,7 +344,7 @@ def test_fenetre_des_prereglages(app_configuree, qtbot, services, tmp_path, monk
     pleine = vignette.grab().toImage()
     assert vignette.sous_titres and vide != pleine
     # Actions du menu ⋯ (questions remplacées).
-    monkeypatch.setattr(fenetre, "_demander_nom", lambda _titre, _nom: "Karaoké fort")
+    monkeypatch.setattr(fenetre, "_demander_nom", lambda _titre, _nom, **_options: "Karaoké fort")
     monkeypatch.setattr(fenetre, "_confirmer", lambda _titre, _question, _action: True)
     karaoke = fenetre.cartes[3].prereglage.identifiant
     fenetre.dupliquer(karaoke)

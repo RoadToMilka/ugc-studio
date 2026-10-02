@@ -27,8 +27,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
-    QInputDialog,
-    QMessageBox,
     QPlainTextEdit,
     QVBoxLayout,
 )
@@ -79,6 +77,7 @@ from ...composants.elements import (
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues import messages
 from ...dialogues.remplacements import DialogueRemplacements
 from ...extraction import EXTENSIONS_ACCEPTEES, FILTRE_FICHIERS, ExtracteurAudio, LecteurInfos
 from ...icones import icone
@@ -480,21 +479,19 @@ class AtelierTranscription(Page):
         return True
 
     def _confirmer_remplacement(self) -> bool:
-        boite = QMessageBox(self.window())
-        boite.setIcon(QMessageBox.Icon.Question)
-        boite.setWindowTitle("Nouvelle source")
-        boite.setText("Remplacer la transcription actuelle ?")
         transcription = self.transcription
         ajustes = (
             " Les sous-titres réorganisés à la main reviendront au découpage automatique."
             if transcription is not None and transcription.ajustements_sous_titres
             else ""
         )
-        boite.setInformativeText(f"La nouvelle source devra être transcrite à son tour.{ajustes}")
-        remplacer = boite.addButton("Remplacer", QMessageBox.ButtonRole.AcceptRole)
-        boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
-        boite.exec()
-        return boite.clickedButton() is remplacer
+        return messages.confirmer(
+            self.window(),
+            "Nouvelle source",
+            "Remplacer la transcription actuelle ?",
+            f"La nouvelle source devra être transcrite à son tour.{ajustes}",
+            action="Remplacer",
+        )
 
     def _progression_extraction(self, part: float) -> None:
         if self._source_en_cours is not None:
@@ -672,13 +669,15 @@ class AtelierTranscription(Page):
         langue = langue_de(self.transcription, self._projet)
         code = langue.split("-")[0]
         actuelles = sorted(self._hesitations())
-        texte, ok = QInputDialog.getText(
-            self,
+        texte = messages.demander_texte(
+            self.window(),
             "Hésitations",
-            f"Hésitations en {LANGUES.get(langue, langue).split(' (')[0].lower()} (séparées par des virgules) :",
-            text=", ".join(actuelles),
+            f"Hésitations en {LANGUES.get(langue, langue).split(' (')[0].lower()}",
+            ", ".join(actuelles),
+            action="Enregistrer",
+            precision="Sépare les mots par des virgules.",
         )
-        if not ok:
+        if texte is None:
             return
         personnalisees = dict(self._services.preferences.lire(PREFERENCE_HESITATIONS, {}) or {})
         personnalisees[code] = [m.strip() for m in texte.split(",") if m.strip()]

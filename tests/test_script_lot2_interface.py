@@ -5,8 +5,6 @@ belge ou à la suisse, accroches envoyées en variantes de voix. Avec un faux Go
 import json
 
 import pytest
-from PySide6.QtWidgets import QInputDialog, QMessageBox
-
 from ugc_studio.ecriture.brief import Brief
 from ugc_studio.ecriture.controles import controler
 from ugc_studio.ecriture.exemples import EXEMPLES_FOURNIS
@@ -17,6 +15,7 @@ from ugc_studio.fournisseurs.base import Adaptateur
 from ugc_studio.fournisseurs.texte import ResultatTexte
 from ugc_studio.nombres import BELGIQUE, FRANCE
 from ugc_studio.ui.dialogues import briefs as dialogue_briefs
+from ugc_studio.ui.dialogues import messages
 from ugc_studio.ui.dialogues import retouche as dialogue_retouche
 from ugc_studio.ui.dialogues import variantes as dialogue_variantes
 from ugc_studio.ui.dialogues.comparer_scripts import DialogueComparerScripts, choix_par_defaut
@@ -252,15 +251,16 @@ def test_enregistrer_puis_charger_un_brief(page, qtbot, services, tmp_path, monk
     etat = services.projets.projet.ecriture
     etat.brief.produit, etat.brief.reseau = "Culotte Léa", "meta"
     etat.page = PageLue("https://x.fr/products/lea", "shopify", "2026-10-01T10:00:00+02:00", "Données…", nom="Léa")
-    monkeypatch.setattr(QInputDialog, "getText", lambda *_a, **_k: ("Léa, Facebook", True))
+    monkeypatch.setattr(messages, "demander_texte", lambda *_a, **_k: "Léa, Facebook")
     atelier.enregistrer_brief()
     assert [b.nom for b in services.briefs.briefs()] == ["Léa, Facebook"]
     assert "Léa, Facebook" in atelier.statut.text()
-    # Même nom : confirmation, puis remplacement.
+    # Même nom : confirmation (« Remplacer »), puis remplacement.
     questions = []
-    monkeypatch.setattr(QMessageBox, "question", lambda *a, **_k: questions.append(a[2]) or QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(messages, "confirmer", lambda *a, **k: questions.append((a[2], k["action"])) or True)
     atelier.enregistrer_brief()
-    assert questions and "le remplacer" in questions[0] and len(services.briefs.briefs()) == 1
+    assert questions and "le remplacer" in questions[0][0] and questions[0][1] == "Remplacer"
+    assert len(services.briefs.briefs()) == 1
 
     # Nouveau projet : le brief se charge (avec la page lue), les options d'écriture restent.
     services.projets.creer("Autre", tmp_path)
@@ -301,7 +301,7 @@ def test_mes_meilleurs_scripts(app_configuree, qtbot, services, monkeypatch):
     ligne.note.editingFinished.emit()
     assert services.exemples.gardes()[0].note == "CPA 7 €"
 
-    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(messages, "confirmer", lambda *_a, **_k: True)
     fourni = next(l for l in dialogue.lignes() if l.exemple.fourni)
     dialogue.retirer(fourni.exemple)
     assert len(dialogue.lignes()) == 5 and not dialogue.bouton_remettre.isHidden()
@@ -340,7 +340,7 @@ def test_nombres_dits_dans_le_module_voix(app_configuree, qtbot, services, tmp_p
         repliques=[RepliqueEcrite(["accroche"], [{"texte": "Elle est à 29,90 € seulement."}])],
     )
     projet.ecriture.ajouter(script)
-    monkeypatch.setattr(QMessageBox, "question", lambda *_a, **_k: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(messages, "confirmer", lambda *_a, **_k: True)
     assert fenetre.envoyer_dans_voix(script)
     assert projet.voix.nombres == BELGIQUE and voix.nombres.currentData() == BELGIQUE
     assert "à la belge" in voix.statut.text()

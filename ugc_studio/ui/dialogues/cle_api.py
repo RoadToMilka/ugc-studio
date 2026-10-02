@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices, QStandardItemModel
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QLineEdit
 
 from ...connexions import Connexion, ErreurConnexion, GestionnaireConnexions, nettoyer_cle
 from ...fournisseurs import ADAPTATEURS, FOURNISSEURS_PREVUS, creer_adaptateur
@@ -20,7 +20,8 @@ from ...fournisseurs.base import Adaptateur, ResultatTest
 from .. import taches
 from ..composants.bouton import activer_avec_entree, montrer_occupe
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import afficher_message, bouton, info, libelle, liste_deroulante
+from ..composants.elements import ChampNomme, afficher_message, bouton, info, libelle, liste_deroulante
+from ..composants.fenetre import fenetre_en_bloc
 from ..icones import icone
 from ..theme import Couleurs, Dimensions, Espacements
 
@@ -48,8 +49,7 @@ class DialogueCle(QDialog):
         self.setWindowTitle("Remplacer la clé" if remplacement else "Ajouter une clé API")
         self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         titre = f"Remplacer la clé « {a_remplacer.nom} »" if remplacement else "Ajouter une clé API"
         disposition.addLayout(entete_de_fenetre(titre, "cle-api"))
@@ -111,8 +111,7 @@ class DialogueCle(QDialog):
         self.bouton_valider = bouton("Tester et enregistrer", variante="principal", nom_icone="key-round", action=self.valider)
         activer_avec_entree(self.bouton_valider, self)  # la touche Entrée valide
         boutons.addWidget(self.bouton_valider)
-        disposition.addSpacing(Espacements.S)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
         (self.cle if remplacement else self.nom).setFocus()
 
@@ -120,11 +119,12 @@ class DialogueCle(QDialog):
 
     @staticmethod
     def _ajouter_champ(disposition, titre, champ, visible=True) -> None:
-        etiquette = libelle(titre, "legende")
-        disposition.addWidget(etiquette)
-        disposition.addWidget(champ)
-        etiquette.setVisible(visible)
+        """Un champ sous son nom, 8 px visibles au-dessus (V3.2), comme partout ; caché avec son nom
+        (ex. le fournisseur d'une clé qu'on remplace)."""
+        nomme = ChampNomme(titre, champ, etire=True)
+        nomme.setVisible(visible)
         champ.setVisible(visible)
+        disposition.addWidget(nomme)
 
     def _fournisseur_choisi(self) -> str:
         return self.fournisseur.currentData()

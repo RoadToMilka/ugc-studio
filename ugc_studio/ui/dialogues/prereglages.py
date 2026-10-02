@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QInputDialog, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ...chemins import dossier_documents
 from ...prereglages import EXTENSION, ErreurPrereglage, Prereglage, appliquer
@@ -37,10 +37,12 @@ from ..composants.elements import (
     pastille,
     vider_disposition,
 )
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.flux import DispositionFlux
 from ..composants.menu import Menu
 from ..icones import icone_menu
 from ..theme import Arrondis, Couleurs, CouleursApercu, Dimensions, Espacements, Hauteurs, qcolor
+from . import messages
 
 # Exemple rejoué en boucle par les vignettes : (mot, début, fin), en secondes.
 EXEMPLE = (
@@ -184,8 +186,7 @@ class DialoguePrereglages(QDialog):
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
         self.resize(Dimensions.DIALOGUE_PREREGLAGES_LARGEUR, Dimensions.DIALOGUE_PREREGLAGES_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -219,7 +220,7 @@ class DialoguePrereglages(QDialog):
         boutons.addWidget(self.bouton_retablir)
         boutons.addStretch(1)
         boutons.addWidget(bouton("Fermer", action=self.reject))
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
         self.cartes: list[CartePrereglage] = []
         self._horloge = QElapsedTimer()
@@ -281,19 +282,13 @@ class DialoguePrereglages(QDialog):
 
     # --- Questions (remplacées dans les tests) -------------------------------------------------
 
-    def _demander_nom(self, titre: str, nom: str) -> str | None:
-        texte, ok = QInputDialog.getText(self, titre, "Nom du préréglage :", text=nom)
-        return texte if ok and texte.strip() else None
+    def _demander_nom(self, titre: str, nom: str, action: str = "Créer") -> str | None:
+        texte = messages.demander_texte(self, titre, "Nom du préréglage", nom, action=action)
+        return texte if texte and texte.strip() else None
 
     def _confirmer(self, titre: str, question: str, action: str) -> bool:
-        boite = QMessageBox(self)
-        boite.setIcon(QMessageBox.Icon.Question)
-        boite.setWindowTitle(titre)
-        boite.setText(question)
-        oui = boite.addButton(action, QMessageBox.ButtonRole.AcceptRole)
-        boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
-        boite.exec()
-        return boite.clickedButton() is oui
+        icone_action = "trash" if action == "Supprimer" else None
+        return messages.confirmer(self, titre, question, action=action, icone_action=icone_action)
 
     def _fichier_a_importer(self) -> Path | None:
         choix, _ = QFileDialog.getOpenFileName(self, "Importer des préréglages", str(dossier_documents()), FILTRE)
@@ -334,7 +329,7 @@ class DialoguePrereglages(QDialog):
         prereglage = bibliotheque.prereglage(identifiant)
         if prereglage is None:
             return
-        nom = self._demander_nom("Renommer le préréglage", prereglage.nom)
+        nom = self._demander_nom("Renommer le préréglage", prereglage.nom, action="Renommer")
         if nom is None:
             return
         try:

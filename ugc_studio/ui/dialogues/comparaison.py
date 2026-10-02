@@ -30,6 +30,7 @@ from ..composants.elements import (
 from ..composants.etoiles import boutons_etoiles
 from ..icones import icone
 from ..composants.defilement import zone_defilante
+from ..composants.fenetre import fenetre_en_bloc
 from ..theme import Couleurs, Dimensions, Espacements
 
 EXTRAIT_TEXTE = 40  # caractères montrés d'un texte de réplique modifié
@@ -104,8 +105,7 @@ class DialogueComparaison(QDialog):
         self.setWindowTitle("Comparer les variantes")
         self.resize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -147,7 +147,7 @@ class DialogueComparaison(QDialog):
         self.statut = libelle("", "secondaire")
         bas.addWidget(self.statut, 1)
         bas.addWidget(bouton("Fermer", action=self.accept))
-        disposition.addLayout(bas)
+        fenetre.addLayout(bas)  # sous le bloc, sur le fond de l'app (V3.2)
 
         self._remplir()
         self._etat_change()

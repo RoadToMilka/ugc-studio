@@ -12,7 +12,7 @@ import traceback
 from collections.abc import Callable
 
 from PySide6.QtCore import QtMsgType, qInstallMessageHandler
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication
 
 journal = logging.getLogger("ugc_studio")
 
@@ -59,18 +59,18 @@ def installer_gestion_erreurs(ouvrir_journal: Callable[[], None], mode_autotest:
             return
         fenetre_ouverte = True
         try:
-            boite = QMessageBox(app.activeWindow())
-            boite.setIcon(QMessageBox.Icon.Critical)
-            boite.setWindowTitle("Erreur inattendue")
-            boite.setText("Une erreur inattendue s'est produite.")
-            boite.setInformativeText(
-                "Les détails sont enregistrés dans le journal d'erreurs "
-                "(Réglages → Journal d'erreurs). L'app peut continuer à fonctionner."
-            )
-            bouton_journal = boite.addButton("Ouvrir le journal", QMessageBox.ButtonRole.ActionRole)
-            boite.addButton(QMessageBox.StandardButton.Ok)
-            boite.exec()
-            if boite.clickedButton() is bouton_journal:
+            # Une fenêtre de l'app (V3.2), importée ici : ce fichier est chargé avant l'interface.
+            from .dialogues import messages
+
+            if messages.prevenir(
+                app.activeWindow(),
+                "Erreur inattendue",
+                "Une erreur inattendue s'est produite.",
+                "Les détails sont enregistrés dans le journal d'erreurs (Réglages → Journal d'erreurs). "
+                "L'app peut continuer à fonctionner.",
+                erreur=True,
+                autre="Ouvrir le journal",
+            ):
                 ouvrir_journal()
         finally:
             fenetre_ouverte = False

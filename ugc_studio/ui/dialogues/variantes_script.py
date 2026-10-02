@@ -38,6 +38,7 @@ from ..composants.choix_voix import choisir
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import ZoneDefilante
 from ..composants.elements import BoutonInfo, ChampNomme, bouton, champ_entier, libelle, liste_deroulante, vider_disposition
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
 from ..theme import Dimensions, Espacements, Hauteurs
@@ -106,8 +107,7 @@ class DialogueVariantesScript(QDialog):
         self.setWindowTitle("Variantes de script")
         self.resize(Dimensions.DIALOGUE_VARIANTES_LARGEUR, Dimensions.DIALOGUE_SCRIPTS_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -139,7 +139,7 @@ class DialogueVariantesScript(QDialog):
         bas.addWidget(bouton("Annuler", action=self.reject))
         self.bouton_ecrire = bouton("", variante="principal", nom_icone="pen-line", action=self.accept)
         bas.addWidget(self.bouton_ecrire)
-        disposition.addLayout(bas)
+        fenetre.addLayout(bas)  # sous le bloc, sur le fond de l'app (V3.2)
 
         self._construire_tableau()
 

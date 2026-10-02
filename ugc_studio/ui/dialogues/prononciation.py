@@ -17,6 +17,7 @@ from ...services import Services
 from ..composants.bouton import Bouton, activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, noms_de_colonnes
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.onglets import Onglets
 from ..composants.defilement import zone_defilante
 from ..theme import Dimensions, Espacements, Hauteurs
@@ -107,8 +108,7 @@ class DialoguePrononciation(QDialog):
         self.setWindowTitle("Dictionnaire de prononciation")
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -152,7 +152,7 @@ class DialoguePrononciation(QDialog):
         self.bouton_enregistrer = bouton("Enregistrer", variante="principal", nom_icone="check", action=self.valider)
         activer_avec_entree(self.bouton_enregistrer, self)
         boutons.addWidget(self.bouton_enregistrer)
-        disposition.addLayout(boutons)
+        fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
 
     def valider(self) -> None:
         projet = self._services.projets.projet

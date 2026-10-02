@@ -44,7 +44,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush
-from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QTableWidgetItem, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QTableWidgetItem, QVBoxLayout
 
 from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
@@ -122,6 +122,7 @@ from ...composants.frise import FriseSousTitres
 from ...composants.menu import Menu
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues import messages
 from ...dialogues.corriger_mots import DialogueCorrigerMots
 from ...dialogues.export import DialogueExportCalque, DialogueExportVideo
 from ...dialogues.prereglages import DialoguePrereglages
@@ -1086,8 +1087,8 @@ class AtelierSousTitres(Page):
 
     def _demander_nom(self, titre: str, nom: str) -> str | None:
         """Nom d'un nouveau préréglage (remplacé dans les tests)."""
-        texte, ok = QInputDialog.getText(self.window(), titre, "Nom du préréglage :", text=nom)
-        return texte if ok and texte.strip() else None
+        texte = messages.demander_texte(self.window(), titre, "Nom du préréglage", nom, action="Enregistrer")
+        return texte if texte and texte.strip() else None
 
     def appliquer_prereglage(self, identifiant: str) -> None:
         """Le style du préréglage remplace celui du projet (format, plateforme et vidéo importée ne
@@ -1134,14 +1135,12 @@ class AtelierSousTitres(Page):
         origine = bibliotheque.prereglage(reglages.prereglage)
         if origine is None:
             return
-        boite = QMessageBox(self.window())
-        boite.setIcon(QMessageBox.Icon.Question)
-        boite.setWindowTitle("Mettre à jour le préréglage")
-        boite.setText(f"Mettre à jour « {origine.nom} » avec le style de ce projet ?")
-        boite.setInformativeText("Les projets déjà faits gardent leur propre copie du style : ils ne changent pas.")
-        oui = boite.addButton("Mettre à jour", QMessageBox.ButtonRole.AcceptRole)
-        boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
-        if not self._confirmer(boite, oui):
+        if not self._confirmer(
+            "Mettre à jour le préréglage",
+            f"Mettre à jour « {origine.nom} » avec le style de ce projet ?",
+            "Les projets déjà faits gardent leur propre copie du style : ils ne changent pas.",
+            "Mettre à jour",
+        ):
             return
         bibliotheque.mettre_a_jour(origine.identifiant, style_du_projet(reglages))
         self._projet.sous_titres = replace(reglages, prereglage_nom=origine.nom)
@@ -1149,11 +1148,9 @@ class AtelierSousTitres(Page):
         self._actualiser_prereglage()
         self._statut_prereglage(f"« {origine.nom} » mis à jour.")
 
-    @staticmethod
-    def _confirmer(boite: QMessageBox, oui) -> bool:
-        """Pose la question (remplacé dans les tests)."""
-        boite.exec()
-        return boite.clickedButton() is oui
+    def _confirmer(self, titre: str, question: str, precision: str, action: str) -> bool:
+        """Pose la question (remplacée dans les tests)."""
+        return messages.confirmer(self.window(), titre, question, precision, action=action)
 
     def gerer_prereglages(self) -> None:
         """Menu ⋯ : la fenêtre « Préréglages de sous-titres » ; « Appliquer » y met un préréglage sur le projet."""
@@ -1483,23 +1480,19 @@ class AtelierSousTitres(Page):
 
     def _confirmer_remplacement(self, actuelle: Transcription) -> bool:
         """Un nouvel import (prise ou fichier SRT) remplace l'import précédent, qui a des retouches."""
-        boite = QMessageBox(self.window())
-        boite.setIcon(QMessageBox.Icon.Question)
-        boite.setWindowTitle("Importer des sous-titres")
-        boite.setText("Remplacer les mots importés ?")
         retouches = []
         if actuelle.corrigee:
             retouches.append("des mots corrigés")
         if actuelle.ajustements_sous_titres:
             retouches.append("des sous-titres réorganisés à la main")
-        boite.setInformativeText(
+        return messages.confirmer(
+            self.window(),
+            "Importer des sous-titres",
+            "Remplacer les mots importés ?",
             f"Les mots importés de « {Path(actuelle.source).name or actuelle.source} » ont des retouches "
-            f"({' et '.join(retouches)}) : elles seront perdues. Les mots du module Transcription, eux, ne changent pas."
+            f"({' et '.join(retouches)}) : elles seront perdues. Les mots du module Transcription, eux, ne changent pas.",
+            action="Remplacer",
         )
-        remplacer = boite.addButton("Remplacer", QMessageBox.ButtonRole.AcceptRole)
-        boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
-        boite.exec()
-        return boite.clickedButton() is remplacer
 
     def _occuper(self, occupe: bool) -> None:
         """Pendant la création des sous-titres d'une prise : le cercle tourne dans « Créer les

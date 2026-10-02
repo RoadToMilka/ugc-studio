@@ -19,9 +19,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QInputDialog,
     QLineEdit,
-    QMessageBox,
     QVBoxLayout,
     QWidget,
 )
@@ -56,6 +54,7 @@ from ..composants.elements import (
     liste_deroulante,
     vider_disposition,
 )
+from ..composants.fenetre import fenetre_en_bloc
 from ..composants.lecteur import Lecteur
 from ..composants.menu import Menu
 from ..composants.onglets import Onglets
@@ -64,6 +63,7 @@ from ..extraits import EcouteVoix
 from ..icones import icone, icone_menu
 from ..composants.defilement import zone_defilante
 from ..theme import Couleurs, Dimensions, Espacements
+from . import messages
 
 LIGNES_PAR_PAGE = 20  # voix affichées d'un coup ; « Afficher 20 voix de plus » ajoute les suivantes
 DELAI_RECHERCHE_MS = 300  # la recherche attend une courte pause dans la frappe avant de filtrer
@@ -172,8 +172,7 @@ class DialogueBibliothequeVoix(QDialog):
         self.setWindowTitle("Bibliothèque de voix")
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(entete_de_fenetre("Bibliothèque de voix", "bibliotheque-voix"))
         self.onglets = Onglets()
@@ -186,7 +185,7 @@ class DialogueBibliothequeVoix(QDialog):
         self.statut = libelle("", "secondaire")
         bas.addWidget(self.statut, 1)
         bas.addWidget(bouton("Fermer", action=self.reject))
-        disposition.addLayout(bas)
+        fenetre.addLayout(bas)  # sous le bloc, sur le fond de l'app (V3.2)
 
         # Chaque liste ne se reconstruit que quand ce qu'elle montre change (un favori ne
         # reconstruit rien : seule l'étoile de sa ligne change).
@@ -496,24 +495,30 @@ class DialogueBibliothequeVoix(QDialog):
             self.choisir(dialogue.voix_creee)
 
     def renommer(self, voix: VoixBibliotheque) -> None:
-        nom, ok = QInputDialog.getText(
-            self, "Renommer la voix", "Nouveau nom (dans l'app) :", text=self.services.voix.nom(voix.identifiant)
+        nom = messages.demander_texte(
+            self,
+            "Renommer la voix",
+            "Nouveau nom",
+            self.services.voix.nom(voix.identifiant),
+            action="Renommer",
+            precision=(
+                "Ce nom n'est gardé que dans l'app (Google ne permet pas de renommer une voix). "
+                "Champ vide : la voix reprend son nom d'origine."
+            ),
         )
-        if ok:
+        if nom is not None:
             self.services.voix.renommer(voix.identifiant, nom)
 
     def supprimer(self, voix: VoixBibliotheque, confirmer: bool = True) -> None:
-        if confirmer:
-            reponse = QMessageBox.question(
-                self,
-                "Supprimer la voix",
-                f"Supprimer la voix « {self.services.voix.nom(voix.identifiant)} » chez Google ? "
-                "Les prises déjà générées avec elle sont gardées.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reponse != QMessageBox.StandardButton.Yes:
-                return
+        if confirmer and not messages.confirmer(
+            self,
+            "Supprimer la voix",
+            f"Supprimer la voix « {self.services.voix.nom(voix.identifiant)} » chez Google ?",
+            "Les prises déjà générées avec elle sont gardées.",
+            action="Supprimer",
+            icone_action="trash",
+        ):
+            return
         try:
             adaptateur = adaptateur_par_defaut(self.services)
         except Exception as erreur:  # noqa: BLE001 — message clair affiché

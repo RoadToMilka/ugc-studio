@@ -32,6 +32,7 @@ from ..composants.elements import (
     libelle,
     liste_deroulante,
 )
+from ..composants.fenetre import fenetre_en_bloc
 from ..connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
 from ..extraits import EcouteVoix
 from ..theme import Dimensions, Espacements
@@ -85,8 +86,7 @@ class DialogueVoiceDesign(QDialog):
         self.setWindowTitle("Créer une voix")
         self.setMinimumSize(Dimensions.DIALOGUE_LARGE_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        fenetre, self.cadre, disposition = fenetre_en_bloc(self, titre_avec_boutons=True)
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(
             entete_de_fenetre(
@@ -145,7 +145,7 @@ class DialogueVoiceDesign(QDialog):
         bas.addWidget(bouton("Fermer", action=self.reject))
         self.bouton_creer = bouton("Créer la voix", variante="principal", nom_icone="plus", action=self.creer)
         bas.addWidget(self.bouton_creer)
-        disposition.addLayout(bas)
+        fenetre.addLayout(bas)  # sous le bloc, sur le fond de l'app (V3.2)
 
     # --- Actions -----------------------------------------------------------------------------
 
