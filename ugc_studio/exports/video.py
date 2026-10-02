@@ -45,6 +45,7 @@ from .ffmpeg import (
     conversion_vers_le_hdr,
     etiquetage,
     norme_hdr,
+    vers_le_format,
 )
 from .plan import (
     SUFFIXE_EN_COURS,
@@ -345,7 +346,8 @@ def graphe_de_filtres(plan: PlanVideo) -> str:
       (8 ou 10 bits, 4:2:0 ou 4:2:2). FFmpeg la redresse lui-même si elle est « couchée ». En HDR
       gardé, ses images ne changent pas.
     - Calque : ses couleurs (RGB) converties avec la norme de la vidéo, en plage limitée, par zscale
-      (conversion_des_sous_titres) ; en HDR, au blanc de référence (conversion_vers_le_hdr).
+      (conversion_des_sous_titres) ; en HDR, au blanc de référence (conversion_vers_le_hdr). En 4:2:0,
+      zscale travaille en un seul morceau (vers_le_format : défaut de FFmpeg 8.1 et plus).
     - setparams : les étiquettes de couleurs posées sur les images de la vidéo, avant de poser le
       calque (l'encodeur de FFmpeg 9 les reprend des images). Avant, et pas après : depuis FFmpeg 7.1,
       les deux images que reçoit overlay doivent avoir la même norme (matrice) et la même plage ; une
@@ -367,7 +369,7 @@ def graphe_de_filtres(plan: PlanVideo) -> str:
         conversion = conversion_vers_le_hdr(NormeHDR(couleurs.matrice, couleurs.primaires, couleurs.transfert))
     else:
         conversion = conversion_des_sous_titres(couleurs.matrice)
-    calque = f"{conversion},format={plan.format_du_calque}"
+    calque = vers_le_format(conversion, plan.format_du_calque)
     etiquettes = etiquetage(couleurs.primaires, couleurs.transfert, couleurs.matrice)
     format_de_l_overlay = {"yuv420p": "yuv420", "yuv420p10le": "yuv420p10", "yuv422p10le": "yuv422p10"}[plan.format_des_pixels]
     return (

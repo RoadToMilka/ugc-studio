@@ -431,36 +431,31 @@ def test_calque_hdr_ecrit_puis_relu(tmp_path):
 
 
 @avec_ffmpeg
-def test_norme_bt709_en_8_et_16_bits(record_property):
+def test_norme_bt709_en_8_et_16_bits():
     """Le jaune #FFD43B, en RGB de 8 et de 16 bits par couleur, converti en YUV 10 bits (BT.709, plage
-    limitée) puis relu en RGB : exact avec zscale (celui des exports, lot 3) dans les deux sens. Pour
-    mémoire, le rapport des tests (tests.xml) garde aussi ce que donne le filtre « scale »."""
-    import json
-
+    limitée) puis relu en RGB : exact avec zscale (celui des exports, lot 3), dans les deux sens. Le
+    filtre « scale », utilisé avant, s'en écartait de 2 à 3 niveaux sur 255 avec des images de 16 bits
+    (mesuré sur la fabrication, FFmpeg 9.0.2)."""
     largeur, hauteur = 16, 8
-    resultats = {}
     for bits in (8, 16):
         if bits == 16:
             pixel, format_rgb = struct.pack("<4H", 0xFFFF, 0xD4D4, 0x3B3B, 0xFFFF), "rgba64le"
         else:
             pixel, format_rgb = bytes((255, 212, 59, 255)), "rgba"
-        for encodeur, conversion in (("zscale", module_ffmpeg.conversion_des_sous_titres()), ("scale", "scale=out_color_matrix=bt709:out_range=tv")):
-            yuv = subprocess.run(
-                [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", format_rgb,
-                 "-video_size", f"{largeur}x{hauteur}", "-i", "pipe:0", "-vf", f"{conversion},format=yuva422p10le", "-f", "rawvideo", "-"],
-                input=pixel * largeur * hauteur, capture_output=True, timeout=60,
-            ).stdout
-            for decodeur, lecture in (("zscale", f"{module_ffmpeg.lecture_en_rgb()},format=gbrp"), ("scale", "scale=in_color_matrix=bt709:in_range=tv")):
-                rgb = subprocess.run(
-                    [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", "yuva422p10le",
-                     "-video_size", f"{largeur}x{hauteur}", "-i", "pipe:0", "-vf", f"{lecture},format=rgb24", "-f", "rawvideo", "-"],
-                    input=yuv, capture_output=True, timeout=60,
-                ).stdout
-                resultats[f"{bits} bits, {encodeur} puis {decodeur}"] = list(rgb[3 * 20 : 3 * 20 + 3])
-    record_property("jaune_relu", json.dumps(resultats, ensure_ascii=False))
-    for bits in (8, 16):
-        jaune = resultats[f"{bits} bits, zscale puis zscale"]
-        assert all(abs(a - b) <= 1 for a, b in zip(jaune, (255, 212, 59), strict=True)), resultats
+        yuv = subprocess.run(
+            [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", format_rgb,
+             "-video_size", f"{largeur}x{hauteur}", "-i", "pipe:0",
+             "-vf", module_ffmpeg.vers_le_format(module_ffmpeg.conversion_des_sous_titres(), "yuva422p10le"), "-f", "rawvideo", "-"],
+            input=pixel * largeur * hauteur, capture_output=True, timeout=60,
+        ).stdout
+        rgb = subprocess.run(
+            [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "rawvideo", "-pixel_format", "yuva422p10le",
+             "-video_size", f"{largeur}x{hauteur}", "-i", "pipe:0", "-vf", f"{module_ffmpeg.lecture_en_rgb()},format=gbrp,format=rgb24",
+             "-f", "rawvideo", "-"],
+            input=yuv, capture_output=True, timeout=60,
+        ).stdout
+        jaune = list(rgb[3 * 20 : 3 * 20 + 3])
+        assert all(abs(a - b) <= 1 for a, b in zip(jaune, (255, 212, 59), strict=True)), (bits, jaune)
 
 
 @avec_ffmpeg

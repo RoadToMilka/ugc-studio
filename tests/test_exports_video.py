@@ -177,7 +177,7 @@ def test_commandes_h264_en_deux_passages(tmp_path):
     assert second[-4:] == ["+faststart", "-f", "mp4", str(plan.en_cours)]
     assert graphe_de_filtres(plan) == (
         "[0:v]format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[video];"
-        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva420p[calque];"
+        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited:threads=1,format=yuva420p[calque];"
         "[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie]"
     )
 
@@ -208,7 +208,7 @@ def test_video_en_plage_complete_et_debut_decale(tmp_path):
     plan = plan_video(_source(tmp_path, images, couleurs=couleurs), MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
     graphe = graphe_de_filtres(plan)
     assert graphe.startswith("[0:v]scale=in_range=pc:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt470bg:range=tv[video];")
-    assert "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:r=limited," in graphe  # la même norme que la vidéo
+    assert "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:r=limited:threads=1," in graphe  # la même norme que la vidéo
     assert decalage_du_calque(images) == ["-itsoffset", "0.066733"]
     assert decalage_du_calque(_images(depart=-2002)) == ["-itsoffset", "-0.066734"]
     assert decalage_du_calque(_images()) == []
@@ -299,11 +299,12 @@ def test_graphes_du_hdr(tmp_path):
     hdr = plan_video(source, MP4, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4")
     assert graphe_de_filtres(hdr) == (
         "[0:v]format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv[video];"
-        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,format=yuva420p10le[calque];"
+        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203:threads=1,format=yuva420p10le[calque];"
         "[video][calque]overlay=format=yuv420p10:alpha=straight:eof_action=repeat[sortie]"
     )
     pq = plan_video(_source(tmp_path, couleurs=PQ_HDR10), MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "v.mov")
     assert ":t=smpte2084:" in graphe_de_filtres(pq) and "overlay=format=yuv422p10" in graphe_de_filtres(pq)
+    assert "threads" not in graphe_de_filtres(pq)  # en 4:2:2, zscale peut découper l'image (pas de défaut)
     sdr = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "v.mp4", convertir_en_sdr=True)
     assert (sdr.codec, sdr.bits, sdr.format_des_pixels) == (H264, 8, "yuv420p") and not sdr.calque_16_bits
     assert sdr.debit == 16_000_000  # le débit conseillé du SDR
@@ -312,7 +313,7 @@ def test_graphes_du_hdr(tmp_path):
         "zscale=pin=bt2020:tin=linear:p=bt709,tonemap=tonemap=mobius:param=0.5:peak=4.926:desat=0,"
         "zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited,format=yuv420p,"
         "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[video];"
-        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva420p[calque];"
+        "[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited:threads=1,format=yuva420p[calque];"
         "[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie]"
     )
     h265 = plan_video(source, MKV, H265, DEBIT_CONSEILLE, 0, tmp_path / "v.mkv", convertir_en_sdr=True)
@@ -702,63 +703,61 @@ def test_export_dolby_vision_reel(tmp_path):
         assert abs(_yuv10(plan.en_cours, 20, 48, 128) - 721) <= 4  # sous-titres au blanc de référence
 
 
-def _png8(largeur: int, hauteur: int, carre, phys: bool) -> bytes:
-    """Un PNG RGBA de 8 bits : transparent, avec un carré blanc opaque ; avec ou sans le morceau
-    « pHYs » (densité des points) qu'écrit Qt."""
+def _png_carre_blanc(largeur: int, hauteur: int, carre: tuple[int, int, int, int]) -> bytes:
+    """Un PNG RGBA de 8 bits : transparent, avec un carré blanc opaque (gauche, haut, droite, bas)."""
     vide, blanc = bytes(4), bytes((255, 255, 255, 255))
-    lignes = [b"\0" + b"".join(blanc if carre and carre[0] <= x < carre[2] and carre[1] <= y < carre[3] else vide
-                                for x in range(largeur)) for y in range(hauteur)]
+    lignes = [b"\0" + b"".join(blanc if carre[0] <= x < carre[2] and carre[1] <= y < carre[3] else vide for x in range(largeur))
+              for y in range(hauteur)]
 
     def morceau(nom: bytes, donnees: bytes) -> bytes:
         return struct.pack(">I", len(donnees)) + nom + donnees + struct.pack(">I", zlib.crc32(nom + donnees))
 
-    morceaux = morceau(b"IHDR", struct.pack(">IIBBBBB", largeur, hauteur, 8, 6, 0, 0, 0))
-    if phys:
-        morceaux += morceau(b"pHYs", struct.pack(">IIB", 3780, 3780, 1))
-    return b"\x89PNG\r\n\x1a\n" + morceaux + morceau(b"IDAT", zlib.compress(b"".join(lignes))) + morceau(b"IEND", b"")
+    entete = struct.pack(">IIBBBBB", largeur, hauteur, 8, 6, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + morceau(b"IHDR", entete) + morceau(b"IDAT", zlib.compress(b"".join(lignes))) + morceau(b"IEND", b"")
+
+
+def _luminances(video: Path, largeur: int, hauteur: int, bits: int) -> list[int]:
+    """La luminance (Y) de chaque point de la première image, telle qu'elle est dans la vidéo."""
+    format_ = "yuv420p" if bits == 8 else "yuv420p10le"
+    brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video), "-frames:v", "1",
+                     "-f", "rawvideo", "-pix_fmt", format_, "-"], 60, binaire=True).stdout
+    if bits == 8:
+        return list(brut[: largeur * hauteur])
+    return [valeur for (valeur,) in struct.iter_unpack("<H", brut[: largeur * hauteur * 2])]
 
 
 @avec_ffmpeg
-def test_calques_de_toutes_les_formes(tmp_path, record_property):
-    """Diagnostic (lot 3) : un carré blanc au milieu du calque, des images 5 à 24, sur une vidéo SDR
-    BT.709 ; le calque fait d'un PNG par image ou de trois, avec ou sans « pHYs » (comme ceux de Qt),
-    converti par zscale (l'app) ou par scale. Le carré doit être dans la vidéo exportée (Y = 235)."""
-    import json
-
-    largeur, hauteur = 96, 64
-    source_chemin = tmp_path / "source.mp4"
-    _ffmpeg("-f", "lavfi", "-i", f"testsrc2=size={largeur}x{hauteur}:rate=30000/1001", "-t", "1",
-            "-vf", "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source_chemin))
-    source = _source_reelle(source_chemin)
-    images = source.analyse.images
-    resultats = {}
-    for phys in (False, True):
-        for forme in ("une par image", "trois"):
-            for conversion in ("zscale", "scale"):
-                plan = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / f"{phys}-{forme}-{conversion}.mp4")
-                calque = tmp_path / "calque.mov"
-                ecriture = EcritureMovPng(calque, largeur, hauteur, images.base_de_temps.denominator)
-                for n, moment in enumerate(images.moments):
-                    duree = (images.moments[n + 1] - moment) if n + 1 < len(images.moments) else images.duree_derniere
-                    if forme == "une par image" or n in (0, 5, 25):
-                        ecriture.ajouter(_png8(largeur, hauteur, (20, 20, 60, 50) if 5 <= n < 25 else None, phys), duree)
-                    else:
-                        ecriture.prolonger(duree)
-                ecriture.fermer()
-                for passage in range(1, plan.passages + 1):
-                    commande = commande_video(FFMPEG, plan, calque, passage, tmp_path / "passages")
-                    if conversion == "scale":
-                        graphe = commande[commande.index("-filter_complex") + 1]
-                        commande[commande.index("-filter_complex") + 1] = graphe.replace(
-                            "zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited", "scale=out_color_matrix=bt709:out_range=tv")
-                    resultat = executer(commande, 300)
-                    assert resultat.returncode == 0, resultat.stderr
-                brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(plan.en_cours),
-                                 "-vf", "select=eq(n\\,15)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "yuv420p", "-"], 60, binaire=True).stdout
-                resultats[f"pHYs {phys}, {forme}, {conversion}"] = brut[35 * largeur + 40]
-    record_property("carre_blanc", json.dumps(resultats, ensure_ascii=False))
-    assert all(abs(valeur - 235) <= 4 for valeur in resultats.values()), resultats
+def test_sous_titres_du_bas_d_une_image_haute(tmp_path):
+    """Défaut de zscale (FFmpeg 8.1 et plus, voir vers_le_format) : sur une image haute, découpée en
+    bandes, la transparence des bandes du bas était rangée trop haut en 4:2:0 ; des sous-titres du bas
+    disparaissaient (vu sur la fabrication, lot 3). Une vidéo grise de 96 × 512, un carré blanc sur les
+    lignes 440 à 470 : en H.264 (SDR) comme en H.265 HLG (10 bits), il est là, et rien d'autre ne change."""
+    largeur, hauteur, carre = 96, 512, (30, 440, 60, 470)
+    sdr = "format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"
+    hlg = ("zscale=rin=limited:pin=bt709:tin=bt709:min=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,"
+           "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv")
+    for nom, filtres, encodeur, codec, bits, blanc, ecart_du_blanc, ecart_ailleurs in (
+        ("sdr", sdr, ["libx264"], H264, 8, 235, 3, 4),
+        ("hlg", hlg, ["libx265", "-x265-params", "log-level=error"], H265, 10, 721, 8, 16),
+    ):
+        source_chemin = tmp_path / f"{nom}.mov"
+        _ffmpeg("-f", "lavfi", "-i", f"color=c=0x808080:size={largeur}x{hauteur}:rate=30", "-t", "0.2",
+                "-vf", filtres, "-c:v", *encodeur, str(source_chemin))
+        source = _source_reelle(source_chemin)
+        plan = plan_video(source, MP4, codec, DEBIT_CONSEILLE, 0, tmp_path / f"{nom} (sous-titres).mp4")
+        assert plan.bits == bits
+        images = plan.images
+        ecriture = EcritureMovPng(tmp_path / "calque.mov", largeur, hauteur, images.base_de_temps.denominator)
+        ecriture.ajouter(_png_carre_blanc(largeur, hauteur, carre), images.moments[-1] - images.moments[0] + images.duree_derniere)
+        ecriture.fermer()
+        _exporter(plan, tmp_path / "calque.mov", tmp_path)
+        avant, apres = _luminances(source_chemin, largeur, hauteur, bits), _luminances(plan.en_cours, largeur, hauteur, bits)
+        assert abs(apres[455 * largeur + 45] - blanc) <= ecart_du_blanc, (nom, apres[455 * largeur + 45])  # le carré, à sa place
+        ailleurs = [
+            abs(a - b) for n, (a, b) in enumerate(zip(avant, apres, strict=True))
+            if not (carre[0] - 8 <= n % largeur < carre[2] + 8 and carre[1] - 8 <= n // largeur < carre[3] + 8)
+        ]
+        assert max(ailleurs) <= ecart_ailleurs, (nom, max(ailleurs))  # pas de bande sombre plus haut
 
 
 def test_rien_d_inutile_dans_les_commandes(tmp_path):

@@ -397,42 +397,12 @@ def test_fenetre_de_la_video(app_configuree, qtbot, services, projet_video):
     assert dialogue.debit_personnalise.isVisible() and dialogue.plan().debit == 7_500_000
 
 
-def _diagnostic_du_calque(calque: Path, temps_relatif: float, point: tuple[int, int], sortie: Path) -> dict:
-    """Pour comprendre un sous-titre absent : l'image du calque provisoire à ce moment (transparence et
-    couleur au point), et la luminance du point dans chaque image de la vidéo exportée."""
-    import subprocess
-
-    moments = subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-i", str(calque), "-fps_mode", "passthrough", "-f", "framecrc", "-"],
-                             capture_output=True, text=True, timeout=60).stdout
-    pts = [int(ligne.split(",")[2]) for ligne in moments.splitlines() if ligne and ligne[0].isdigit()]
-    base = next((ligne.split(":")[1].strip() for ligne in moments.splitlines() if ligne.startswith("#tb 0")), "")
-    brut = subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-i", str(calque), "-fps_mode", "passthrough",
-                           "-f", "rawvideo", "-pix_fmt", "rgba", "-"], capture_output=True, timeout=60).stdout
-    taille = LARGEUR * HAUTEUR * 4
-    numerateur, _, denominateur = base.partition("/")
-    secondes = [p * int(numerateur or 1) / int(denominateur or 1) for p in pts]
-    avant = [i for i, s in enumerate(secondes) if s <= temps_relatif + 1e-6]
-    image = avant[-1] if avant else 0
-    debut = image * taille + (point[1] * LARGEUR + point[0]) * 4
-    luminances = []
-    for numero in range(0, 60, 3):
-        luminances.append(_luminances(sortie, numero, 8)[point[1] * LARGEUR + point[0]])
-    return {
-        "images_du_calque": len(brut) // taille, "moments": secondes[:12], "image_choisie": image,
-        "rgba_au_point": list(brut[debut : debut + 4]), "export_au_point_toutes_les_3_images": luminances,
-    }
-
-
-def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_video, monkeypatch, tmp_path):
+def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_video):
     """Une vraie vidéo, depuis la fenêtre : mêmes images aux mêmes moments, son copié, étiquettes
     BT.709 ; les sous-titres sont dans l'image ; « Lire la vidéo » à la fin ; les choix sont retenus."""
-    from ugc_studio.exports import composition
-
-    monkeypatch.setattr(composition.shutil, "rmtree", lambda *_a, **_k: None)  # garde le calque provisoire (diagnostic)
     dialogue = _dialogue_video(services, projet_video, qtbot)
     plan = dialogue.plan()
     dialogue.exporter()
-    calque_provisoire = dialogue._export.calque_provisoire
     assert dialogue.en_cours() and dialogue.bouton_arreter.isVisible() and not dialogue.reglages.isEnabled()
     qtbot.waitUntil(lambda: not dialogue.en_cours(), timeout=120_000)
     assert dialogue.statut.text().startswith("Vidéo enregistrée en "), dialogue.statut.text()
@@ -443,36 +413,15 @@ def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_v
     assert [m * sortie.images.base_de_temps for m in sortie.images.moments] == [m * source.images.base_de_temps for m in source.images.moments]
     assert sortie.son.codec == "aac" and (sortie.couleurs.matrice, sortie.couleurs.transfert) == ("bt709", "bt709")
     # Pendant « sérum » (0,42 à 0,80 s) : un point d'un mot blanc est blanc (235 sur 255, le blanc d'une
-    # vidéo) dans l'image exportée ; le reste de l'image est celui de la vidéo.
+    # vidéo) dans l'image exportée ; le reste de l'image est celui de la vidéo. Le point est au milieu
+    # de l'image (480 lignes) : pendant le lot 3, zscale découpé en bandes rangeait sa transparence
+    # ailleurs (défaut de FFmpeg, voir vers_le_format), et le mot manquait.
     numero = 18  # 0,60 s
     point = _point_blanc(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
     assert point is not None
     avant, apres = _luminances(Path(projet_video.transcription.source), numero, 8), _luminances(plan.sortie, numero, 8)
     blanc = apres[point[1] * LARGEUR + point[0]]
-    if abs(blanc - 235) > 6:
-        temps = float((source.images.moments[numero] - source.images.moments[0]) * source.images.base_de_temps)
-        diagnostic = _diagnostic_du_calque(calque_provisoire, temps, point, plan.sortie)
-        # Le même calque, encodé ici par la même commande (messages d'avertissement gardés), puis avec
-        # le filtre « scale » à la place de zscale : où se perd le sous-titre ?
-        from dataclasses import replace as remplacer
-
-        from ugc_studio.exports.video import commande_video
-
-        essais = {}
-        for nom, changer in (("meme_commande", lambda g: g), ("scale", lambda g: g.replace(
-                "zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited", "scale=out_color_matrix=bt709:out_range=tv"))):
-            essai = remplacer(plan, sortie=tmp_path / f"{nom}.mp4")
-            messages = []
-            for passage in range(1, essai.passages + 1):
-                commande = commande_video(FFMPEG, essai, calque_provisoire, passage, tmp_path / f"{nom}-passages")
-                commande[commande.index("-loglevel") + 1] = "warning"
-                commande[commande.index("-filter_complex") + 1] = changer(commande[commande.index("-filter_complex") + 1])
-                resultat = executer(commande, 300)
-                messages.append(resultat.stderr[-600:])
-            essais[nom] = {"point": _luminances(essai.en_cours, numero, 8)[point[1] * LARGEUR + point[0]], "messages": messages}
-        raise AssertionError(
-            f"point {point} : {blanc} (source {avant[point[1] * LARGEUR + point[0]]}) ; {diagnostic} ; {plan.images.moments[:4]} ; {essais}"
-        )
+    assert abs(blanc - 235) <= 6, (point, blanc, avant[point[1] * LARGEUR + point[0]])
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
     assert ecarts[len(ecarts) // 2] < 6  # le reste de l'image intact
     assert services.preferences.lire("export_video_conteneur") == "mp4" and services.preferences.lire("export_video_debit") == "identique"
@@ -507,21 +456,12 @@ def test_bouton_video_grise_sans_video(app_configuree, qtbot, services, projet_p
 # --- Images du calque d'une vidéo en 10 bits : PNG de 16 bits écrits par Qt (V3, lot 3) ------------
 
 
-def _morceaux_png(png: bytes) -> dict:
-    morceaux, position = [], 8
-    while position + 8 <= len(png):
-        longueur, nom = struct.unpack_from(">I4s", png, position)
-        morceaux.append(nom.decode("latin-1"))
-        position += 12 + longueur
-    return {"bits": png[24], "sorte": png[25], "morceaux": morceaux}
-
-
 @avec_ffmpeg
-def test_png_de_16_bits_relu_par_ffmpeg(app_configuree, tmp_path, record_property):
+def test_png_de_16_bits_relu_par_ffmpeg(app_configuree, tmp_path):
     """Pour une vidéo en 10 bits (HDR, ProRes), les images du calque partent en PNG de 16 bits par
     couleur, écrits par Qt : relus par FFmpeg, seuls ou dans le calque provisoire (MOV), ils ont la
     transparence et les couleurs de l'image dessinée (à un niveau sur 255 près)."""
-    import json
+    import subprocess
 
     from PySide6.QtGui import QImage
 
@@ -536,30 +476,17 @@ def test_png_de_16_bits_relu_par_ffmpeg(app_configuree, tmp_path, record_propert
     image = calque.image(calque.cle(temps), temps)
     assert image.format() == QImage.Format.Format_RGBA64
     png = png_de(image)
-    record_property("png_16_bits", json.dumps(_morceaux_png(png)))
-    # Diagnostic : ce que FFmpeg dit des images de Qt (format, rapport des points, couleurs), en 8 et 16 bits.
-    import subprocess
-
-    calque8 = CalqueDeLaVideo(reglages, LARGEUR, HAUTEUR, contenu.sous_titres, contenu.mots, False)
-    for nom, donnees in (("16_bits", png), ("8_bits", png_de(calque8.image(calque8.cle(temps), temps))), ("vide_8_bits", png_de(calque8.image(None, 0.0)))):
-        infos = subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "info", "-f", "png_pipe", "-i", "pipe:0", "-vf", "showinfo", "-f", "null", "-"],
-                               input=donnees, capture_output=True, timeout=60).stderr.decode("utf-8", "replace")
-        record_property(f"showinfo_{nom}", " | ".join(ligne.strip()[-260:] for ligne in infos.splitlines() if "showinfo" in ligne and ("fmt:" in ligne or "color" in ligne)))
-        record_property(f"morceaux_{nom}", json.dumps(_morceaux_png(donnees)["morceaux"][:4]))
     assert (png[24], png[25]) == (16, 6)  # 16 bits, RGBA
     attendu = _pixels(image)
 
     def relu(commande: list[str], entree: bytes | None = None) -> list[tuple[int, int, int, int]]:
-        import subprocess
-
         sortie = subprocess.run(commande, input=entree, capture_output=True, timeout=60).stdout
         assert len(sortie) == LARGEUR * HAUTEUR * 8
         return _depuis_octets(sortie)
 
     seul = relu([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "png_pipe", "-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"], png)
     alpha, couleur = _ecarts(attendu, seul)
-    record_property("ecarts_png_seul", json.dumps([alpha, couleur]))
-    assert alpha <= 257 and couleur <= 257, (alpha / 257, couleur / 257, _morceaux_png(png))
+    assert alpha <= 257 and couleur <= 257, (alpha / 257, couleur / 257)
     vide = png_de(calque.image(None, 0.0))
     ecriture = EcritureMovPng(tmp_path / "calque.mov", LARGEUR, HAUTEUR, 600)
     for donnees in (vide, png, vide):
@@ -568,7 +495,6 @@ def test_png_de_16_bits_relu_par_ffmpeg(app_configuree, tmp_path, record_propert
     dans_le_mov = relu([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(tmp_path / "calque.mov"),
                         "-vf", "select=eq(n\\,1)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"])
     alpha, couleur = _ecarts(attendu, dans_le_mov)
-    record_property("ecarts_png_dans_le_mov", json.dumps([alpha, couleur]))
     assert alpha <= 257 and couleur <= 257, (alpha / 257, couleur / 257)
 
 

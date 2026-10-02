@@ -734,6 +734,28 @@ def etiquetage(primaires: str, courbe: str, matrice: str) -> str:
     return f"setparams=color_primaries={primaires}:color_trc={courbe}:colorspace={matrice}:range=tv"
 
 
+# Défaut de FFmpeg 8.1 et plus (filtre zscale ; toujours là dans la 9.0.2 de l'application, et dans
+# la version en préparation de septembre 2026) : pour aller plus vite, zscale découpe l'image en
+# bandes horizontales, une par cœur du processeur (chaque bande fait au moins 64 lignes). Quand
+# l'image garde sa transparence et que sa couleur est réduite en hauteur (4:2:0 : une valeur de
+# couleur pour deux lignes), il range la transparence de chaque bande, sauf la première, à
+# mi-hauteur de sa place (celle d'une bande qui commence à la ligne 480 part de la ligne 240) : des
+# sous-titres du bas de l'image disparaissent, et des bandes sombres apparaissent plus haut. Vu sur
+# la fabrication (lot 3 : images de 480 lignes, quatre cœurs), puis dans le code de FFmpeg
+# (libavfilter/vf_zscale.c, filter_slice : le décalage prévu pour la couleur est aussi appliqué à la
+# transparence ; FFmpeg 8.0 la traitait à part, sans ce défaut). En un seul morceau (option
+# « threads=1 » du filtre), tout est juste ; le calcul reste rapide (mesuré : moins de 30 ms par
+# image en 4K), l'encodage restant l'étape la plus longue.
+FORMATS_A_TRANSPARENCE_REDUITS_EN_HAUTEUR = ("yuva420p", "yuva420p10le")
+
+
+def vers_le_format(conversion: str, format_des_pixels: str) -> str:
+    """Une conversion par zscale (conversion_des_sous_titres, conversion_vers_le_hdr) suivie du format
+    voulu ; en un seul morceau pour un format touché par le défaut décrit ci-dessus."""
+    un_seul_morceau = ":threads=1" if format_des_pixels in FORMATS_A_TRANSPARENCE_REDUITS_EN_HAUTEUR else ""
+    return f"{conversion}{un_seul_morceau},format={format_des_pixels}"
+
+
 def commande_calque(
     ffmpeg: Path, largeur: int, hauteur: int, frequence: Fraction, nombre_images: int, sortie: Path,
     hdr: NormeHDR | None = None,
@@ -759,10 +781,10 @@ def commande_calque(
     - « -frames:v » : exactement le nombre d'images prévu ; « -an » : pas de son.
     - « -progress pipe:1 » : FFmpeg dit où il en est (images écrites), 4 fois par seconde."""
     if hdr is None:
-        filtres = f"{CONVERSION_BT709},format=yuva444p10le,{ETIQUETAGE_BT709}"
+        filtres = f"{vers_le_format(CONVERSION_BT709, 'yuva444p10le')},{ETIQUETAGE_BT709}"
         etiquettes = ETIQUETTES_BT709
     else:
-        filtres = f"{conversion_vers_le_hdr(hdr)},format=yuva444p10le,{etiquetage(hdr.primaires, hdr.courbe, hdr.matrice)}"
+        filtres = f"{vers_le_format(conversion_vers_le_hdr(hdr), 'yuva444p10le')},{etiquetage(hdr.primaires, hdr.courbe, hdr.matrice)}"
         etiquettes = ["-color_primaries", hdr.primaires, "-color_trc", hdr.courbe, "-colorspace", hdr.matrice, "-color_range", "tv"]
     return [
         str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
