@@ -36,7 +36,7 @@ def test_le_nom_au_dessus_du_champ(app_configuree, qtbot):
     """Comme dans le brief du module Script : le nom en 12 px gris, 4 px au-dessus du champ."""
     champ = QLineEdit()
     nomme = ChampNomme("Couleur", champ)
-    _montrer(qtbot, nomme, 300)
+    _fenetre = _montrer(qtbot, nomme, 300)  # garder la fenêtre : sinon Python la détruit
     assert nomme.nom.text() == "Couleur" and nomme.nom.property("role") == "legende"
     assert nomme.nom.font().pixelSize() == Typo.LEGENDE
     bas_du_nom = nomme.nom.mapTo(nomme, QPoint(0, nomme.nom.height())).y()
@@ -81,7 +81,7 @@ def test_champs_en_colonnes(app_configuree, qtbot):
     """Fenêtres et Options de Transcription : deux colonnes de même largeur, comme le brief."""
     nom, categorie, style = QLineEdit(), liste_deroulante(), QLineEdit()
     colonnes = champs_en_colonnes((("Nom", nom), ("Catégorie", categorie), ("Style", style, TOUTE_LA_RANGEE)))
-    _montrer(qtbot, colonnes, 516)
+    _fenetre = _montrer(qtbot, colonnes, 516)
     assert set(colonnes.champs) == {"Nom", "Catégorie", "Style"}
     assert nom.width() == categorie.width() == (516 - Espacements.L) // 2
     assert style.width() == 516
@@ -92,7 +92,7 @@ def test_case_a_cocher_a_la_taille_du_texte(app_configuree, qtbot):
     """14 px, bordure comprise : la hauteur du texte courant (20 px jusqu'à la 3.0.0)."""
     assert Dimensions.CASE_A_COCHER == Typo.COURANT == 14
     zone, case = case_a_cocher("Séparer les voix")
-    _montrer(qtbot, zone, 300)
+    _fenetre = _montrer(qtbot, zone, 300)
     option = QStyleOptionButton()
     case.initStyleOption(option)
     texte = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, option, case)
