@@ -423,7 +423,7 @@ def _diagnostic_du_calque(calque: Path, temps_relatif: float, point: tuple[int, 
     }
 
 
-def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_video, monkeypatch):
+def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_video, monkeypatch, tmp_path):
     """Une vraie vidéo, depuis la fenêtre : mêmes images aux mêmes moments, son copié, étiquettes
     BT.709 ; les sous-titres sont dans l'image ; « Lire la vidéo » à la fin ; les choix sont retenus."""
     from ugc_studio.exports import composition
@@ -452,7 +452,27 @@ def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_v
     if abs(blanc - 235) > 6:
         temps = float((source.images.moments[numero] - source.images.moments[0]) * source.images.base_de_temps)
         diagnostic = _diagnostic_du_calque(calque_provisoire, temps, point, plan.sortie)
-        raise AssertionError(f"point {point} : {blanc} (source {avant[point[1] * LARGEUR + point[0]]}) ; {diagnostic} ; {plan.images.moments[:4]}")
+        # Le même calque, encodé ici par la même commande (messages d'avertissement gardés), puis avec
+        # le filtre « scale » à la place de zscale : où se perd le sous-titre ?
+        from dataclasses import replace as remplacer
+
+        from ugc_studio.exports.video import commande_video
+
+        essais = {}
+        for nom, changer in (("meme_commande", lambda g: g), ("scale", lambda g: g.replace(
+                "zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited", "scale=out_color_matrix=bt709:out_range=tv"))):
+            essai = remplacer(plan, sortie=tmp_path / f"{nom}.mp4")
+            messages = []
+            for passage in range(1, essai.passages + 1):
+                commande = commande_video(FFMPEG, essai, calque_provisoire, passage, tmp_path / f"{nom}-passages")
+                commande[commande.index("-loglevel") + 1] = "warning"
+                commande[commande.index("-filter_complex") + 1] = changer(commande[commande.index("-filter_complex") + 1])
+                resultat = executer(commande, 300)
+                messages.append(resultat.stderr[-600:])
+            essais[nom] = {"point": _luminances(essai.en_cours, numero, 8)[point[1] * LARGEUR + point[0]], "messages": messages}
+        raise AssertionError(
+            f"point {point} : {blanc} (source {avant[point[1] * LARGEUR + point[0]]}) ; {diagnostic} ; {plan.images.moments[:4]} ; {essais}"
+        )
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
     assert ecarts[len(ecarts) // 2] < 6  # le reste de l'image intact
     assert services.preferences.lire("export_video_conteneur") == "mp4" and services.preferences.lire("export_video_debit") == "identique"
