@@ -24,8 +24,7 @@ from ...projets import nom_de_dossier
 from ...rendu.moteur import Moteur
 from ...rendu.polices import police_remplacee
 from ...services import Services
-from ...sous_titres import ReglagesSousTitres, creer_sous_titres, ecran, resolution, sous_titre_au_temps
-from ...style_sous_titres import style_de_depart
+from ...sous_titres import ReglagesSousTitres, creer_sous_titres, ecran, resolution, sous_titre_au_temps, style_de_depart_complet
 from ...transcription import Mot
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
@@ -314,8 +313,7 @@ class DialoguePrereglages(QDialog):
         nom = self._demander_nom("Nouveau préréglage", bibliotheque.nom_libre("Nouveau préréglage"))
         if nom is None:
             return
-        depart = ReglagesSousTitres(texte=style_de_depart())
-        cree = bibliotheque.ajouter(nom, depart.en_dict()["style"])
+        cree = bibliotheque.ajouter(nom, style_de_depart_complet())  # le style de départ, celui de « Par défaut »
         self._afficher(f"« {cree.nom} » créé : applique-le, règle-le dans le studio, puis « Mettre à jour ce préréglage ».")
 
     def dupliquer(self, identifiant: str) -> None:
@@ -403,7 +401,7 @@ class DialoguePrereglages(QDialog):
 
     def retablir_fournis(self) -> None:
         question = (
-            "Remettre les 6 préréglages fournis comme à l'origine ? Ceux que tu as modifiés ou supprimés "
+            "Remettre les 7 préréglages fournis comme à l'origine ? Ceux que tu as modifiés ou supprimés "
             "reviennent ; tes propres préréglages ne changent pas."
         )
         if not self._confirmer("Rétablir les préréglages fournis", question, "Rétablir"):

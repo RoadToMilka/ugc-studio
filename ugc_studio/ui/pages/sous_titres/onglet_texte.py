@@ -2,8 +2,11 @@
 qui vaut pour tous les mots.
 
 Groupes (chacun se replie ; ses réglages rares attendent dans « Réglages avancés ») : Police, Taille
-et casse, Remplissage, Contour, Ombre, Lueur, Fond, Espaces. Chaque groupe a son bouton « Rétablir »
-(les valeurs du préréglage d'origine du projet, sinon celles de départ des nouveaux projets). Les réglages d'un effet décoché (contour, ombre…) sont
+et casse, Remplissage, Contour, Ombre, Lueur, Fond, Espaces. V3.1 : la référence est le préréglage du
+projet tel qu'il est enregistré (sans lui, le style de départ) ; un réglage qui s'en écarte a son nom
+en mauve, et le ↺ de son groupe apparaît à côté du titre (un clic remet le groupe comme dans le
+préréglage). Jusqu'à la 3.0.3 : un bouton « Rétablir » toujours affiché au bas de chaque groupe, et un
+résumé à côté du titre d'un groupe fermé. Les réglages d'un effet décoché (contour, ombre…) sont
 grisés : on voit ce qu'il y a à régler, sans le confondre avec ce qui est actif.
 
 Les tailles sont montrées en pixels de la vidéo actuelle (« Contour : 6 px ») et rangées en % de sa
@@ -44,9 +47,21 @@ from ...composants.choix_voix import choisir
 from ...composants.elements import bouton, case_a_cocher, champ_decimal, libelle, liste_deroulante
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements, Typo
-from .reglages_communs import grille, nombre_lisible
+from .reglages_communs import grille, marque_de, marquer, meme_valeur, nombre_lisible, valeur_au_chemin
 
 HAUTEUR_PAR_DEFAUT = 1920
+# Groupes de l'onglet → réglages du style du texte qu'ils contiennent (ce que leur ↺ remet).
+GROUPES = {
+    "Police": ("police", "graisse"),
+    "Taille et casse": ("taille_pct", "casse", "ponctuation"),
+    "Remplissage": ("couleur", "degrade"),
+    "Contour": ("contour",),
+    "Ombre": ("ombre",),
+    "Lueur": ("lueur",),
+    "Fond": ("fond",),
+    "Espaces": ("espaces",),
+}
+RETABLIR = "Revenir au style de départ"  # infobulle des ↺ avant que la page donne le préréglage
 
 
 class ChampExact:
@@ -103,7 +118,8 @@ class OngletTexte(QWidget):
         super().__init__(parent)
         self._hauteur = HAUTEUR_PAR_DEFAUT
         self._style = StyleTexte()
-        self._reference: StyleTexte | None = None  # ce que « Rétablir » remet (None : le style de départ)
+        self._reference = style_de_depart()  # ce que les ↺ remettent : le préréglage du projet (V3.1)
+        self._marques: list[tuple] = []  # (nom ou case à cocher, chemin du réglage dans le style)
         self._chargement = False
         self._liste_des_polices: tuple | None = None  # ce que montre la liste (pour ne la refaire qu'au besoin)
         disposition = QVBoxLayout(self)
@@ -125,6 +141,7 @@ class OngletTexte(QWidget):
         ):
             section = SectionRepliable(titre, ouverte)
             construire(section.contenu)
+            section.ajouter_retablir(lambda groupe=titre: self._retablir(groupe), RETABLIR)
             self.sections[titre] = section
             disposition.addWidget(section)
         disposition.addStretch(1)
@@ -135,15 +152,14 @@ class OngletTexte(QWidget):
     def _signaler(self, *_arguments) -> None:
         self._actualiser_etats()
         if not self._chargement:
+            self._actualiser_marques()
             self.change.emit()
 
-    def _bouton_retablir(self, contenu: QVBoxLayout, action) -> None:
-        ligne = QHBoxLayout()
-        retablir = bouton("Rétablir", variante="contour", nom_icone="rotate-ccw", action=action)
-        retablir.setToolTip("Revenir aux valeurs du préréglage d'origine (sinon à celles de départ)")
-        ligne.addWidget(retablir)
-        ligne.addStretch(1)
-        contenu.addLayout(ligne)
+    def _suivre(self, reglages, *paires: tuple[str, str]) -> None:
+        """Retient le nom de chaque réglage d'une grille (nom affiché, chemin dans le style) : il passe
+        en mauve quand le réglage s'écarte du préréglage."""
+        for nom, chemin in paires:
+            self._marques.append((marque_de(reglages.champs[nom]), chemin))
 
     def _couleur(self, info_champ: str) -> ChampCouleur:
         champ = ChampCouleur(info_champ)
@@ -175,9 +191,9 @@ class OngletTexte(QWidget):
             "Polices fournies : libres pour la publicité (licence SIL OFL). Une police de Windows ou importée a "
             "sa propre licence : vérifie qu'elle autorise un usage commercial."
         )
-        contenu.addLayout(
-            grille((("Rechercher", self.recherche_police), ("Police", self.police, aide_police), ("Graisse", self.graisse)))
-        )
+        reglages = grille((("Rechercher", self.recherche_police), ("Police", self.police, aide_police), ("Graisse", self.graisse)))
+        self._suivre(reglages, ("Police", "police"), ("Graisse", "graisse"))
+        contenu.addLayout(reglages)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.bouton_importer = bouton("Importer une police…", variante="contour", nom_icone="type", action=self.importer_police)
@@ -187,7 +203,6 @@ class OngletTexte(QWidget):
         self.statut_police = libelle("", "legende-erreur")
         self.statut_police.hide()
         contenu.addWidget(self.statut_police)
-        self._bouton_retablir(contenu, lambda: self._retablir(police=True))
 
     def _groupe_taille(self, contenu: QVBoxLayout) -> None:
         self.taille = self._decimal(StyleTexte.LIMITES["taille_pct"], 0.1, 1, " %", "Taille du texte, en % de la hauteur de la vidéo")
@@ -199,28 +214,35 @@ class OngletTexte(QWidget):
         self.casse = liste_deroulante("Affichage seulement : le texte des mots ne change pas")
         for code, nom in CASSES.items():
             self.casse.addItem(nom, code)
-        contenu.addLayout(grille((("Taille du texte", ligne_taille), ("Casse", self.casse))))
+        reglages = grille((("Taille du texte", ligne_taille), ("Casse", self.casse)))
+        self._suivre(reglages, ("Taille du texte", "taille_pct"), ("Casse", "casse"))
+        contenu.addLayout(reglages)
         zone, self.ponctuation = case_a_cocher("Afficher la ponctuation")
+        self._marques.append((self.ponctuation, "ponctuation"))
         contenu.addWidget(zone)
         self.casse.currentIndexChanged.connect(self._signaler)
         self.ponctuation.toggled.connect(self._signaler)
-        self._bouton_retablir(contenu, lambda: self._retablir(taille=True))
 
     def _groupe_remplissage(self, contenu: QVBoxLayout) -> None:
         self.couleur = self._couleur("Couleur du texte (la première du dégradé)")
-        contenu.addLayout(grille((("Couleur", self.couleur),)))
+        reglages = grille((("Couleur", self.couleur),))
+        self._suivre(reglages, ("Couleur", "couleur"))
+        contenu.addLayout(reglages)
         zone, self.degrade = case_a_cocher("Dégradé de deux couleurs")
+        self._marques.append((self.degrade, "degrade.actif"))
         self.degrade.toggled.connect(self._signaler)
         contenu.addWidget(zone)
         self.couleur_2 = self._couleur("Seconde couleur du dégradé")
         self.direction = ChoixEnBoutons(DIRECTIONS, "Sens du dégradé, sur chaque ligne")
         self.direction.change.connect(self._signaler)
-        self.zone_degrade = _zone(grille((("Seconde couleur", self.couleur_2), ("Sens", self.direction))))
+        reglages = grille((("Seconde couleur", self.couleur_2), ("Sens", self.direction)))
+        self._suivre(reglages, ("Seconde couleur", "degrade.couleur"), ("Sens", "degrade.direction"))
+        self.zone_degrade = _zone(reglages)
         contenu.addWidget(self.zone_degrade)
-        self._bouton_retablir(contenu, lambda: self._retablir(remplissage=True))
 
     def _groupe_contour(self, contenu: QVBoxLayout) -> None:
         zone, self.contour = case_a_cocher("Contour autour des lettres")
+        self._marques.append((self.contour, "contour.actif"))
         self.contour.toggled.connect(self._signaler)
         contenu.addWidget(zone)
         self.contour_couleur = self._couleur("Couleur du contour")
@@ -228,18 +250,22 @@ class OngletTexte(QWidget):
         self.contour_angles = ChoixEnBoutons(ANGLES, "Angles du contour : arrondis ou nets")
         self.contour_angles.change.connect(self._signaler)
         avances = SectionRepliable("Réglages avancés")
-        avances.contenu.addLayout(grille((("Angles", self.contour_angles),)))
+        reglages = grille((("Angles", self.contour_angles),))
+        self._suivre(reglages, ("Angles", "contour.angles"))
+        avances.contenu.addLayout(reglages)
         self.zone_contour = QWidget()
         rangees = QVBoxLayout(self.zone_contour)
         rangees.setContentsMargins(0, 0, 0, 0)
         rangees.setSpacing(Espacements.M)
-        rangees.addLayout(grille((("Couleur", self.contour_couleur), ("Épaisseur", self.contour_epaisseur.champ))))
+        reglages = grille((("Couleur", self.contour_couleur), ("Épaisseur", self.contour_epaisseur.champ)))
+        self._suivre(reglages, ("Couleur", "contour.couleur"), ("Épaisseur", "contour.epaisseur_pct"))
+        rangees.addLayout(reglages)
         rangees.addWidget(avances)
         contenu.addWidget(self.zone_contour)
-        self._bouton_retablir(contenu, lambda: self._retablir(contour=True))
 
     def _groupe_ombre(self, contenu: QVBoxLayout) -> None:
         zone, self.ombre = case_a_cocher("Ombre portée")
+        self._marques.append((self.ombre, "ombre.active"))
         self.ombre.toggled.connect(self._signaler)
         contenu.addWidget(zone)
         self.ombre_couleur = self._couleur("Couleur de l'ombre (son opacité : la force de l'ombre)")
@@ -249,55 +275,65 @@ class OngletTexte(QWidget):
         self.ombre_portee = ChoixEnBoutons(PORTEES, "L'ombre suit les lettres, ou le fond derrière elles")
         self.ombre_portee.change.connect(self._signaler)
         avances = SectionRepliable("Réglages avancés")
-        avances.contenu.addLayout(grille((("Portée", self.ombre_portee),)))
+        reglages = grille((("Portée", self.ombre_portee),))
+        self._suivre(reglages, ("Portée", "ombre.portee"))
+        avances.contenu.addLayout(reglages)
         self.zone_ombre = QWidget()
         rangees = QVBoxLayout(self.zone_ombre)
         rangees.setContentsMargins(0, 0, 0, 0)
         rangees.setSpacing(Espacements.M)
-        rangees.addLayout(
-            grille(
-                (
-                    ("Couleur", self.ombre_couleur),
-                    ("Flou", self.ombre_flou.champ),
-                    ("Décalage horizontal", self.ombre_x.champ),
-                    ("Décalage vertical", self.ombre_y.champ),
-                )
+        reglages = grille(
+            (
+                ("Couleur", self.ombre_couleur),
+                ("Flou", self.ombre_flou.champ),
+                ("Décalage horizontal", self.ombre_x.champ),
+                ("Décalage vertical", self.ombre_y.champ),
             )
         )
+        self._suivre(
+            reglages,
+            ("Couleur", "ombre.couleur"),
+            ("Flou", "ombre.flou_pct"),
+            ("Décalage horizontal", "ombre.decalage_x_pct"),
+            ("Décalage vertical", "ombre.decalage_y_pct"),
+        )
+        rangees.addLayout(reglages)
         rangees.addWidget(avances)
         contenu.addWidget(self.zone_ombre)
-        self._bouton_retablir(contenu, lambda: self._retablir(ombre=True))
 
     def _groupe_lueur(self, contenu: QVBoxLayout) -> None:
         zone, self.lueur = case_a_cocher("Lueur autour des lettres")
+        self._marques.append((self.lueur, "lueur.active"))
         self.lueur.toggled.connect(self._signaler)
         contenu.addWidget(zone)
         self.lueur_couleur = self._couleur("Couleur de la lueur")
         self.lueur_taille = self._pixels(Lueur.LIMITES["taille_pct"], "Taille de la lueur")
         self.lueur_intensite = self._decimal(Lueur.LIMITES["intensite_pct"], 5, 0, " %", "Intensité de la lueur")
-        self.zone_lueur = _zone(
-            grille((("Couleur", self.lueur_couleur), ("Taille", self.lueur_taille.champ), ("Intensité", self.lueur_intensite.champ)))
-        )
+        reglages = grille((("Couleur", self.lueur_couleur), ("Taille", self.lueur_taille.champ), ("Intensité", self.lueur_intensite.champ)))
+        self._suivre(reglages, ("Couleur", "lueur.couleur"), ("Taille", "lueur.taille_pct"), ("Intensité", "lueur.intensite_pct"))
+        self.zone_lueur = _zone(reglages)
         contenu.addWidget(self.zone_lueur)
-        self._bouton_retablir(contenu, lambda: self._retablir(lueur=True))
 
     def _groupe_fond(self, contenu: QVBoxLayout) -> None:
         self.fond = liste_deroulante("Fond derrière le texte")
         for code, nom in FONDS.items():
             self.fond.addItem(nom, code)
         self.fond.currentIndexChanged.connect(self._signaler)
-        contenu.addLayout(grille((("Fond", self.fond),)))
+        reglages = grille((("Fond", self.fond),))
+        self._suivre(reglages, ("Fond", "fond.mode"))
+        contenu.addLayout(reglages)
         self.fond_couleur = self._couleur("Couleur du fond")
         self.fond_marge_x = self._pixels(Fond.LIMITES["marge_x_pct"], "Marge intérieure à gauche et à droite du texte")
         self.fond_marge_y = self._pixels(Fond.LIMITES["marge_y_pct"], "Marge intérieure en haut et en bas du texte")
         self.fond_arrondi = self._pixels(Fond.LIMITES["arrondi_pct"], "Arrondi des coins du fond")
         zone, self.fond_bordure = case_a_cocher("Bordure autour du fond")
+        self._marques.append((self.fond_bordure, "fond.bordure"))
         self.fond_bordure.toggled.connect(self._signaler)
         self.fond_bordure_couleur = self._couleur("Couleur de la bordure")
         self.fond_bordure_epaisseur = self._pixels(Fond.LIMITES["bordure_epaisseur_pct"], "Épaisseur de la bordure")
-        self.zone_bordure = _zone(
-            grille((("Couleur", self.fond_bordure_couleur), ("Épaisseur", self.fond_bordure_epaisseur.champ)))
-        )
+        reglages = grille((("Couleur", self.fond_bordure_couleur), ("Épaisseur", self.fond_bordure_epaisseur.champ)))
+        self._suivre(reglages, ("Couleur", "fond.bordure_couleur"), ("Épaisseur", "fond.bordure_epaisseur_pct"))
+        self.zone_bordure = _zone(reglages)
         avances = SectionRepliable("Réglages avancés")
         avances.contenu.addWidget(zone)
         avances.contenu.addWidget(self.zone_bordure)
@@ -305,34 +341,43 @@ class OngletTexte(QWidget):
         rangees = QVBoxLayout(self.zone_fond)
         rangees.setContentsMargins(0, 0, 0, 0)
         rangees.setSpacing(Espacements.M)
-        rangees.addLayout(
-            grille(
-                (
-                    ("Couleur", self.fond_couleur),
-                    ("Marge horizontale", self.fond_marge_x.champ),
-                    ("Marge verticale", self.fond_marge_y.champ),
-                    ("Arrondi", self.fond_arrondi.champ),
-                )
+        reglages = grille(
+            (
+                ("Couleur", self.fond_couleur),
+                ("Marge horizontale", self.fond_marge_x.champ),
+                ("Marge verticale", self.fond_marge_y.champ),
+                ("Arrondi", self.fond_arrondi.champ),
             )
         )
+        self._suivre(
+            reglages,
+            ("Couleur", "fond.couleur"),
+            ("Marge horizontale", "fond.marge_x_pct"),
+            ("Marge verticale", "fond.marge_y_pct"),
+            ("Arrondi", "fond.arrondi_pct"),
+        )
+        rangees.addLayout(reglages)
         rangees.addWidget(avances)
         contenu.addWidget(self.zone_fond)
-        self._bouton_retablir(contenu, lambda: self._retablir(fond=True))
 
     def _groupe_espaces(self, contenu: QVBoxLayout) -> None:
         self.interligne = self._decimal(Espaces.LIMITES["interligne_pct"], 5, 0, " %", "Interlignage, en % de celui de la police")
         self.lettres = self._pixels(Espaces.LIMITES["lettres_pct"], "Espace ajouté entre les lettres (négatif : plus serré)")
         self.mots = self._pixels(Espaces.LIMITES["mots_pct"], "Espace ajouté entre les mots (négatif : plus serré)")
-        contenu.addLayout(
-            grille(
-                (
-                    ("Interlignage", self.interligne.champ),
-                    ("Entre les lettres", self.lettres.champ),
-                    ("Entre les mots", self.mots.champ),
-                )
+        reglages = grille(
+            (
+                ("Interlignage", self.interligne.champ),
+                ("Entre les lettres", self.lettres.champ),
+                ("Entre les mots", self.mots.champ),
             )
         )
-        self._bouton_retablir(contenu, lambda: self._retablir(espaces=True))
+        self._suivre(
+            reglages,
+            ("Interlignage", "espaces.interligne_pct"),
+            ("Entre les lettres", "espaces.lettres_pct"),
+            ("Entre les mots", "espaces.mots_pct"),
+        )
+        contenu.addLayout(reglages)
 
     def _actualiser_etats(self) -> None:
         """Réglages d'un effet décoché : grisés."""
@@ -464,20 +509,17 @@ class OngletTexte(QWidget):
             f"La police « {style.police} » n'est pas installée sur cet ordinateur : Inter la remplace (le style garde son nom)."
         )
         self.police_absente.setVisible(police_remplacee)
-        self._actualiser_resumes()
+        self._actualiser_marques()
 
-    def _actualiser_resumes(self) -> None:
-        """Résumé de chaque groupe replié (ex. pour le contour : son code couleur et « 6 px »)."""
-        style = self._style
-        resumes = {
-            "Contour": f"{style.contour.couleur.code}, {self.contour_epaisseur.texte()}" if style.contour.actif else "aucun",
-            "Ombre": f"{style.ombre.couleur.code} à {round(style.ombre.couleur.opacite)} %" if style.ombre.active else "aucune",
-            "Lueur": f"{style.lueur.couleur.code}, {self.lueur_taille.texte()}" if style.lueur.active else "aucune",
-            "Fond": FONDS.get(style.fond.mode, "").lower(),
-            "Espaces": f"interlignage {nombre_lisible(style.espaces.interligne_pct)} %",
-        }
-        for titre, resume in resumes.items():
-            self.sections[titre].definir_resume(resume)
+    def _actualiser_marques(self) -> None:
+        """Comparé au préréglage du projet (V3.1) : le nom de chaque réglage qui s'en écarte passe en
+        mauve, et le ↺ de chaque groupe qui s'en écarte apparaît à côté de son titre."""
+        actuel, reference = self.style(self._style), self._reference
+        for element, chemin in self._marques:
+            marquer(element, not meme_valeur(valeur_au_chemin(actuel, chemin), valeur_au_chemin(reference, chemin)))
+        for titre, attributs in GROUPES.items():
+            ecart = any(not meme_valeur(getattr(actuel, nom), getattr(reference, nom)) for nom in attributs)
+            self.sections[titre].montrer_retablir(ecart)
 
     def style(self, base: StyleTexte) -> StyleTexte:
         """Style tel que réglé dans l'onglet."""
@@ -507,25 +549,18 @@ class OngletTexte(QWidget):
             espaces=Espaces(self.interligne.valeur(), self.lettres.valeur(), self.mots.valeur()),
         )
 
-    def definir_reference(self, style: StyleTexte | None) -> None:
-        """Ce que « Rétablir » remet : le style du texte du préréglage d'origine du projet (lot 7) ;
-        None : celui de départ des nouveaux projets."""
+    def definir_reference(self, style: StyleTexte, infobulle: str = RETABLIR) -> None:
+        """La référence (V3.1) : le style du texte du préréglage du projet, tel qu'il est enregistré
+        (sans préréglage, celui de départ). `infobulle` : ce que disent les ↺ (« Revenir au préréglage
+        « Par défaut » »)."""
         self._reference = style
+        for section in self.sections.values():
+            section.retablir.setToolTip(infobulle)
+        self._actualiser_marques()
 
-    def _retablir(self, **groupes) -> None:
-        """« Rétablir » : ce groupe reprend les valeurs du préréglage d'origine (sinon de départ)."""
-        depart = self._reference if self._reference is not None else style_de_depart()
+    def _retablir(self, groupe: str) -> None:
+        """↺ d'un groupe : ses réglages reprennent les valeurs du préréglage du projet."""
         actuel = self.style(self._style)
-        changements = {}
-        if groupes.get("police"):
-            changements.update(police=depart.police, graisse=depart.graisse)
-        if groupes.get("taille"):
-            changements.update(taille_pct=depart.taille_pct, casse=depart.casse, ponctuation=depart.ponctuation)
-        if groupes.get("remplissage"):
-            changements.update(couleur=depart.couleur, degrade=depart.degrade)
-        for nom in ("contour", "ombre", "lueur", "fond", "espaces"):
-            if groupes.get(nom):
-                changements[nom] = getattr(depart, nom)
-        nouveau = replace(actuel, **changements)
+        nouveau = replace(actuel, **{nom: getattr(self._reference, nom) for nom in GROUPES[groupe]})
         self.charger(nouveau, self._hauteur, round(self._hauteur * nouveau.taille_pct / 100), not self.police_absente.isHidden())
         self.change.emit()

@@ -270,9 +270,8 @@ def test_onglet_texte_montre_et_rend_le_style_exact(app_configuree, qtbot):
     # Une valeur changée à la main est prise telle qu'affichée (en % de la hauteur, trois décimales).
     onglet.contour_epaisseur.champ.setValue(6.0)
     assert onglet.style(StyleTexte()).contour.epaisseur_pct == 0.312
-    # Résumés des groupes repliés.
-    assert onglet.sections["Contour"].resume.text().startswith("#000000")
-    assert onglet.sections["Fond"].resume.text() == "derrière chaque ligne"
+    # V3.1 : plus de résumé à côté du titre des groupes repliés.
+    assert all(not section.resume.text() for section in onglet.sections.values())
 
 
 def test_reglages_d_un_effet_decoche_grises(app_configuree, qtbot):
@@ -311,11 +310,12 @@ def atelier(app_configuree, qtbot, services, tmp_path):
     return page.atelier
 
 
-def test_nouveau_projet_en_montserrat_avec_contour(atelier, services):
+def test_nouveau_projet_en_poppins_avec_contour(atelier, services):
+    """Le style de départ (V3.1 : celui du préréglage « Par défaut », Montserrat jusqu'à la 3.0.3)."""
     texte = atelier.panneau.texte
-    assert texte.police.currentText() == "Montserrat" and texte.graisse.currentData() == 800
+    assert texte.police.currentText() == "Poppins" and texte.graisse.currentData() == 800
     assert texte.contour.isChecked() and texte.contour_epaisseur.texte() == "5,8 px"
-    assert "(Montserrat Extra-grasse)" in atelier.infos_ecran.text()
+    assert "(Poppins Extra-grasse)" in atelier.infos_ecran.text()
     assert atelier._calcul.moteur.metriques.debord_x == pytest.approx(1920 * 0.3 / 100)
 
 
@@ -331,14 +331,22 @@ def test_changer_une_couleur_garde_le_reste_exact(atelier, services):
 
 
 def test_retablir_un_groupe(atelier, services):
+    """V3.1 : le ↺ d'un groupe, une icône à côté de son titre, n'apparaît que si le groupe s'écarte du
+    préréglage (sans préréglage : du style de départ) ; le nom du réglage changé passe en mauve."""
     texte = atelier.panneau.texte
+    contour, fond = texte.sections["Contour"], texte.sections["Fond"]
+    assert all(section.retablir.isHidden() for section in texte.sections.values())  # rien d'écarté au départ
+    assert texte.contour.property("modifie") is not True
     texte.contour.setChecked(False)
     texte.fond.setCurrentIndex(texte.fond.findData(FOND_BLOC))
     assert not services.projets.projet.sous_titres.texte.contour.actif
-    retablir = [b for b in texte.sections["Contour"].findChildren(type(texte.bouton_importer)) if b.text() == "Rétablir"]
-    retablir[0].click()
+    assert not contour.retablir.isHidden() and not fond.retablir.isHidden() and texte.sections["Ombre"].retablir.isHidden()
+    assert contour.retablir.text() == "" and contour.retablir.toolTip() == "Revenir au style de départ"
+    assert texte.contour.property("modifie") is True  # le texte de la case en mauve
+    contour.retablir.click()
     style = services.projets.projet.sous_titres.texte
     assert style.contour == style_de_depart().contour and style.fond.mode == FOND_BLOC  # seul le contour revient
+    assert contour.retablir.isHidden() and not fond.retablir.isHidden() and texte.contour.property("modifie") is not True
 
 
 def test_police_absente_remplacee_par_inter(app_configuree, qtbot, services, tmp_path):

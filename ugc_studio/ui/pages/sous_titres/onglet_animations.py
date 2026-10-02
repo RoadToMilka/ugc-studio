@@ -3,13 +3,19 @@
 - Quand un mot devient actif : aucune, pop, rebond, zoom, fondu ou glissement vers le haut ; durée
   et intensité. Réglages avancés : taille de départ, au sommet et d'arrivée, opacité et décalage de
   départ, courbe (douce, rebond ou régulière) ; tant qu'on ne les change pas, ce sont ceux de
-  l'animation choisie (↺ les y remet).
+  l'animation choisie.
 - Quand il redevient « déjà dit » : instantané ou fondu (durée).
 - Sous-titre entier : apparition et disparition (aucune, fondu, pop, zoom, glissement vers le haut
   ou vers le bas), chacune avec sa durée.
 
 Les animations ne changent jamais les temps des sous-titres : l'apparition commence au début du
 sous-titre, la disparition se termine à sa fin.
+
+V3.1 : la référence est le préréglage du projet tel qu'il est enregistré (sans lui, le style de
+départ, sans animation) ; un réglage qui s'en écarte a son nom en mauve, et le ↺ de son groupe
+apparaît à côté du titre (un clic remet le groupe comme dans le préréglage). Jusqu'à la 3.0.3 : un ↺
+au bout de chaque réglage avancé changé (« comme l'animation choisie »), et un résumé à côté du titre
+d'un groupe fermé.
 """
 
 from __future__ import annotations
@@ -35,10 +41,16 @@ from ...composants.elements import ChampNomme, champ_decimal, champ_entier, list
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements
 from .onglet_mots import GrilleEtat
-from .onglet_texte import HAUTEUR_PAR_DEFAUT, ChampExact, ChampPixels
-from .reglages_communs import GrilleDeReglages, nombre_lisible
+from .onglet_texte import HAUTEUR_PAR_DEFAUT, RETABLIR, ChampExact, ChampPixels
+from .reglages_communs import GrilleDeReglages, marque_de, marquer, meme_valeur, valeur_au_chemin
 
 PAS_DUREE_MS = 10
+# Groupes de l'onglet → réglages des animations qu'ils contiennent (ce que leur ↺ remet).
+GROUPES = {
+    "Mot qui devient actif": ("mot",),
+    "Retour": ("retour", "retour_duree_ms"),
+    "Sous-titre entier": ("apparition", "apparition_duree_ms", "disparition", "disparition_duree_ms"),
+}
 
 
 def _duree(minimum_maximum: tuple[int, int], info_champ: str):
@@ -53,6 +65,8 @@ class OngletAnimations(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._animations = Animations()
+        self._reference = Animations()  # ce que les ↺ remettent : les animations du préréglage (V3.1)
+        self._marques: list[tuple] = []  # (nom, chemin du réglage dans les animations)
         self._hauteur = HAUTEUR_PAR_DEFAUT
         self._chargement = False
         disposition = QVBoxLayout(self)
@@ -68,31 +82,34 @@ class OngletAnimations(QWidget):
         for code, nom in ANIMATIONS_DU_MOT.items():
             self.type.addItem(nom, code)
         self.type.currentIndexChanged.connect(lambda _index: self._mot(type=self.type.currentData() or ANIM_AUCUNE))
-        grille.ligne("Animation", self.type)
+        self._marques.append((marque_de(grille.ligne("Animation", self.type)), "mot.type"))
         self.duree = _duree(AnimationMot.LIMITES["duree_ms"], "Durée de l'animation")
         self.duree.valueChanged.connect(lambda valeur: self._mot(duree_ms=valeur))
         self.intensite = ChampExact(champ_decimal(*AnimationMot.LIMITES["intensite_pct"], 10, 0, " %", "Plus ou moins marquée"))
         self.intensite.champ.valueChanged.connect(lambda _valeur: self._mot(intensite_pct=self.intensite.valeur()))
         self._champs_animes = (grille.ligne("Durée", self.duree), grille.ligne("Intensité", self.intensite.champ))
+        self._marques += [(marque_de(self._champs_animes[0]), "mot.duree_ms"), (marque_de(self._champs_animes[1]), "mot.intensite_pct")]
         avances = SectionRepliable("Réglages avancés")
         self.section_avancee = avances
-        self.grille_avancee = GrilleEtat(avances.contenu, "Comme l'animation choisie")
+        # Chaque réglage avancé vaut « comme l'animation choisie » (None) tant qu'on ne le change pas.
+        self.grille_avancee = GrilleEtat(avances.contenu)
         self.taille_depart = self._pourcentage("taille_depart_pct", "Taille du mot au début de l'animation")
-        self.grille_avancee.ligne("Taille de départ", self.taille_depart.champ, "taille_depart_pct", lambda: self._mot(taille_depart_pct=None))
+        self.grille_avancee.ligne("Taille de départ", self.taille_depart.champ, "taille_depart_pct")
         self.taille_sommet = self._pourcentage("taille_sommet_pct", "Taille du mot au plus fort de l'animation")
-        self.grille_avancee.ligne("Taille au sommet", self.taille_sommet.champ, "taille_sommet_pct", lambda: self._mot(taille_sommet_pct=None))
+        self.grille_avancee.ligne("Taille au sommet", self.taille_sommet.champ, "taille_sommet_pct")
         self.taille_arrivee = self._pourcentage("taille_arrivee_pct", "Taille du mot à la fin de l'animation")
-        self.grille_avancee.ligne("Taille d'arrivée", self.taille_arrivee.champ, "taille_arrivee_pct", lambda: self._mot(taille_arrivee_pct=None))
+        self.grille_avancee.ligne("Taille d'arrivée", self.taille_arrivee.champ, "taille_arrivee_pct")
         self.opacite_depart = self._pourcentage("opacite_depart_pct", "Opacité du mot au début de l'animation")
-        self.grille_avancee.ligne("Opacité de départ", self.opacite_depart.champ, "opacite_depart_pct", lambda: self._mot(opacite_depart_pct=None))
+        self.grille_avancee.ligne("Opacité de départ", self.opacite_depart.champ, "opacite_depart_pct")
         self.decalage_depart = ChampPixels(AnimationMot.LIMITES["decalage_depart_pct"], "Décalage de départ, vers le bas (négatif : vers le haut)")
         self.decalage_depart.champ.valueChanged.connect(lambda _valeur: self._mot(decalage_depart_pct=self.decalage_depart.valeur()))
-        self.grille_avancee.ligne("Décalage de départ", self.decalage_depart.champ, "decalage_depart_pct", lambda: self._mot(decalage_depart_pct=None))
+        self.grille_avancee.ligne("Décalage de départ", self.decalage_depart.champ, "decalage_depart_pct")
         self.courbe = liste_deroulante("Douce : ralentit à l'arrivée ; rebond : dépasse un peu, puis revient")
         for code, nom in COURBES.items():
             self.courbe.addItem(nom, code)
         self.courbe.currentIndexChanged.connect(lambda _index: self._mot(courbe=self.courbe.currentData()))
-        self.grille_avancee.ligne("Courbe", self.courbe, "courbe", lambda: self._mot(courbe=None))
+        self.grille_avancee.ligne("Courbe", self.courbe, "courbe")
+        self._marques += [(marque, f"mot.{attribut}") for attribut, marque in self.grille_avancee.marques.items()]
         section.contenu.addWidget(avances)
         disposition.addWidget(section)
 
@@ -102,10 +119,11 @@ class OngletAnimations(QWidget):
         retour = GrilleDeReglages()
         self.retour = ChoixEnBoutons(RETOURS, "Quand le mot suivant devient actif")
         self.retour.change.connect(lambda valeur: self._modifier(retour=valeur))
-        retour.ajouter("Transition", self.retour)
+        self._marques.append((marque_de(retour.ajouter("Transition", self.retour)), "retour"))
         self.retour_duree = _duree(Animations.LIMITES["retour_duree_ms"], "Durée du fondu")
         self.retour_duree.valueChanged.connect(lambda valeur: self._modifier(retour_duree_ms=valeur))
         self._champ_retour_duree = retour.ajouter("Durée", self.retour_duree)
+        self._marques.append((marque_de(self._champ_retour_duree), "retour_duree_ms"))
         section.contenu.addLayout(retour)
         disposition.addWidget(section)
 
@@ -125,6 +143,8 @@ class OngletAnimations(QWidget):
         self.disparition, self.disparition_duree, self._champ_disparition_duree = self._entree_sortie(entier, "Disparition", "disparition")
         disposition.addWidget(section)
         disposition.addStretch(1)
+        for titre, section in self.sections.items():
+            section.ajouter_retablir(lambda groupe=titre: self._retablir(groupe), RETABLIR)
         self._afficher()
 
     # --- Construction --------------------------------------------------------------------------
@@ -146,10 +166,12 @@ class OngletAnimations(QWidget):
         ligne = QHBoxLayout(paire)
         ligne.setContentsMargins(0, 0, 0, 0)
         ligne.setSpacing(Espacements.L)
-        ligne.addWidget(ChampNomme(titre, liste))
+        champ_liste = ChampNomme(titre, liste)
+        ligne.addWidget(champ_liste)
         champ_duree = ChampNomme("Durée", duree)
         ligne.addWidget(champ_duree)
         grille.addWidget(paire)
+        self._marques += [(marque_de(champ_liste), attribut), (marque_de(champ_duree), f"{attribut}_duree_ms")]
         return liste, duree, champ_duree
 
     # --- Modifications --------------------------------------------------------------------------
@@ -180,6 +202,26 @@ class OngletAnimations(QWidget):
     def animations(self) -> Animations:
         return self._animations
 
+    def definir_reference(self, animations: Animations, infobulle: str = RETABLIR) -> None:
+        """La référence (V3.1) : les animations du préréglage du projet, telles qu'enregistrées (sans
+        préréglage, celles du style de départ : aucune). `infobulle` : ce que disent les ↺."""
+        self._reference = animations
+        for section in self.sections.values():
+            section.retablir.setToolTip(infobulle)
+        self._actualiser_marques()
+
+    def _retablir(self, groupe: str) -> None:
+        """↺ d'un groupe : ses réglages comme dans le préréglage (réglages avancés compris)."""
+        self._modifier(**{nom: getattr(self._reference, nom) for nom in GROUPES[groupe]})
+
+    def _actualiser_marques(self) -> None:
+        animations, reference = self._animations, self._reference
+        for element, chemin in self._marques:
+            marquer(element, not meme_valeur(valeur_au_chemin(animations, chemin), valeur_au_chemin(reference, chemin)))
+        for titre, noms in GROUPES.items():
+            ecart = any(not meme_valeur(getattr(animations, nom), getattr(reference, nom)) for nom in noms)
+            self.sections[titre].montrer_retablir(ecart)
+
     def _afficher(self) -> None:
         self._chargement = True
         animations = self._animations
@@ -201,8 +243,7 @@ class OngletAnimations(QWidget):
         choisir(self.disparition, animations.disparition)
         self.disparition_duree.setValue(animations.disparition_duree_ms)
         self._chargement = False
-        for attribut in self.grille_avancee.marques:
-            self.grille_avancee.marquer(attribut, getattr(mot, attribut) is not None)
+        self._actualiser_marques()
         anime = mot.type != ANIM_AUCUNE
         for champ in (*self._champs_animes, self.section_avancee):
             champ.setEnabled(anime)
@@ -210,11 +251,3 @@ class OngletAnimations(QWidget):
         self._champ_retour_duree.setEnabled(animations.retour == RETOUR_FONDU)
         self._champ_apparition_duree.setEnabled(animations.apparition != ANIM_AUCUNE)
         self._champ_disparition_duree.setEnabled(animations.disparition != ANIM_AUCUNE)
-        resume_mot = ANIMATIONS_DU_MOT.get(mot.type, "").lower()
-        if anime:
-            resume_mot += f", {mot.duree_ms} ms, {nombre_lisible(mot.intensite_pct)} %"
-        self.sections["Mot qui devient actif"].definir_resume(resume_mot)
-        self.sections["Retour"].definir_resume(RETOURS.get(animations.retour, "").lower())
-        self.sections["Sous-titre entier"].definir_resume(
-            f"{ANIMATIONS_DU_SOUS_TITRE.get(animations.apparition, '').lower()}, {ANIMATIONS_DU_SOUS_TITRE.get(animations.disparition, '').lower()}"
-        )

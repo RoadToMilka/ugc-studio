@@ -1,13 +1,41 @@
 {
-  "description": "Style des sous-titres des nouveaux projets (UGC Studio, V2, lot 4) : Montserrat ExtraBold, texte blanc, contour noir. Tailles en % de la hauteur de la vidéo ; couleurs « #RRGGBB » avec leur opacité (0 à 100 %). Les projets plus anciens gardent leur apparence.",
+  "description": "Style de départ des sous-titres (UGC Studio, V3.1) : celui du préréglage fourni « Par défaut », neutre : Poppins Extra-grasse, texte blanc, contour noir ; les mots comme le texte, sans animation ; au centre, 11 % plus bas. C'est le style d'un nouveau projet quand aucun préréglage n'a la ★, et la référence de « Rétablir » d'un projet sans préréglage. Tailles en % de la hauteur de la vidéo ; couleurs « #RRGGBB » avec leur opacité (0 à 100 %). Les projets plus anciens gardent leur apparence.",
   "texte": {
-    "police": "Montserrat",
+    "police": "Poppins",
     "graisse": 800,
     "taille_pct": 4.0,
     "casse": "normale",
     "ponctuation": true,
-    "couleur": {"code": "#FFFFFF", "opacite": 100},
-    "contour": {"actif": true, "couleur": {"code": "#000000", "opacite": 100}, "epaisseur_pct": 0.3, "angles": "arrondis"},
-    "ombre": {"active": false}
+    "couleur": {
+      "code": "#FFFFFF",
+      "opacite": 100
+    },
+    "contour": {
+      "actif": true,
+      "couleur": {
+        "code": "#000000",
+        "opacite": 100
+      },
+      "epaisseur_pct": 0.3,
+      "angles": "arrondis"
+    },
+    "ombre": {
+      "active": false
+    }
+  },
+  "mots": {},
+  "animations": {},
+  "position": {
+    "verticale": "centre",
+    "decalage_pct": 11.0,
+    "alignement": "centre",
+    "largeur_lignes_pct": 100.0
+  },
+  "decoupage": {
+    "caracteres_max": 24,
+    "mots_max": 5,
+    "lignes_max": 2,
+    "couper_sur_ponctuation": true,
+    "duree_min_s": 0.6
   }
 }

@@ -248,9 +248,9 @@ class Dimensions:
     FRISE_GRADUATION_MIN = 64  # écart minimum entre deux temps écrits sur la règle
     FRISE_ZOOM_MAX = 24  # Ctrl + molette : jusqu'à 24 fois plus large que « toute la pub »
     FRISE_PAS_DE_ZOOM = 1.25  # un cran de molette
-    # Préréglages de sous-titres (V2, lot 7) : vignettes animées, 3 cartes par rangée et les 2
-    # rangées des 6 préréglages fournis visibles sans faire défiler, dans une fenêtre qui tient sur
-    # l'écran d'un portable (DIALOGUE_HAUTEUR_MAX).
+    # Préréglages de sous-titres (V2, lot 7) : vignettes animées, 3 cartes par rangée, les 2
+    # premières rangées visibles sans faire défiler (6 des 7 préréglages fournis depuis la V3.1 ; la
+    # 3e rangée défile), dans une fenêtre qui tient sur l'écran d'un portable (DIALOGUE_HAUTEUR_MAX).
     VIGNETTE_LARGEUR = 240
     VIGNETTE_HAUTEUR = 108
     VIGNETTE_IMAGES_PAR_SECONDE = 20

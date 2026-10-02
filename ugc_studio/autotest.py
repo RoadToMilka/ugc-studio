@@ -86,8 +86,26 @@ VERIFICATIONS_OBLIGATOIRES = (
     "video_hdr",
     "disposition_v31",
     "liste_deroulante",
+    "aides_v31",
 )
 ELEMENTS_SIGNALES_MAX = 6
+# V3.1 (§9.4 ter) : les seules phrases d'aide qui restent écrites dans les modules (leur début),
+# celles qui disent quoi faire à ce moment ; toutes les autres sont dans une icône « i ». Une même
+# phrase peut s'afficher plusieurs fois (ex. sur chaque carte d'un script TikTok).
+PHRASES_INDISPENSABLES = (
+    "Vidéo (MP4, MOV, MKV…) ou audio",
+    "Clique sur un mot pour le corriger",
+    "La langue du projet est",
+    "Noms que la voix pourrait mal prononcer",
+    "Coche celles qui te plaisent",
+    "Voix générée par l'IA : active l'étiquette",
+    "Un projet regroupe",
+    "Pipette : clique dans l'aperçu",
+    "Vidéo avec sous-titres : seulement",
+    "Ces sous-titres ne viennent pas d'une prise",
+    "Le format suit la vidéo",
+    "Taux de départ, à vérifier",
+)
 
 
 def _verifier_variantes_script(dialogue) -> bool:
@@ -619,7 +637,7 @@ def _style_texte(atelier, capturer, capturer_image, rapport: dict) -> bool:
     from .prereglages import appliquer as appliquer_le_prereglage
     from .rendu.moteur import police_du_texte
     from .rendu.polices import POLICES_FOURNIES, familles
-    from .style_sous_titres import StyleTexte, style_de_depart
+    from .style_sous_titres import StyleTexte
     from .ui.composants.apercu import FOND_GRIS, FOND_VIDEO
     from .ui.composants.section_repliable import SectionRepliable
     from .ui.theme import CouleursApercu, qcolor
@@ -636,9 +654,10 @@ def _style_texte(atelier, capturer, capturer_image, rapport: dict) -> bool:
     rapport["polices_sous_titres"] = rendus
     etat["polices_fournies"] = familles()[: len(POLICES_FOURNIES)] == list(POLICES_FOURNIES) and all(justes)
     depart = atelier.reglages_du_projet().texte
-    # Lot 7 : un nouveau projet prend le préréglage marqué ★ (sinon le style de départ du lot 4).
-    defaut = atelier._services.prereglages.defaut()
-    etat["style_de_depart"] = depart == (appliquer_le_prereglage(atelier.reglages_du_projet(), defaut).texte if defaut else style_de_depart())
+    # Le projet de démonstration a le style de son préréglage (« Blanc contour noir », V3.1 : choisi
+    # pour montrer le mot actif ; le préréglage ★ des nouveaux projets est « Par défaut »).
+    origine = atelier._services.prereglages.prereglage(atelier.reglages_du_projet().prereglage)
+    etat["style_du_prereglage"] = origine is not None and depart == appliquer_le_prereglage(atelier.reglages_du_projet(), origine).texte
 
     # 2. Onglet « Texte », tous les groupes ouverts (le panneau entier, même la partie à faire défiler).
     panneau.onglets.setCurrentIndex(0)
@@ -784,24 +803,30 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
     - Frise : un bloc par sous-titre ; un clic sur un bloc le choisit aussi dans la liste ; le bord
       commun de deux sous-titres glissé d'un mot (capture pendant le glissement), le mot passe de
       l'un à l'autre ; puis le découpage automatique est rétabli.
-    - Préréglages : le projet de démonstration part de celui marqué ★, sans « (modifié) » ; les 6
-      fournis appliqués l'un après l'autre (une image à la taille de la vidéo, recadrée sur le
-      sous-titre, pendant « Sérum ») ; un réglage changé affiche « (modifié) » ; la fenêtre
-      « Préréglages de sous-titres » et ses vignettes (les 6 cartes visibles sans faire défiler,
-      chaque nom écrit en entier) ; puis tout revient comme au début."""
-    from .prereglages import modifie
+    - Préréglages : la ★ sur « Par défaut » (V3.1) ; le projet de démonstration part de son
+      préréglage, sans « (modifié) » ni ↺ ; les 7 fournis appliqués l'un après l'autre (une image à
+      la taille de la vidéo, recadrée sur le sous-titre, pendant « Sérum ») ; un réglage changé
+      affiche « (modifié) », son nom en mauve et le ↺ de son groupe, qui le remet comme dans le
+      préréglage (V3.1) ; la fenêtre « Préréglages de sous-titres » et ses vignettes (les 2 premières
+      rangées visibles sans faire défiler, chaque nom écrit en entier) ; puis tout revient comme au
+      début."""
+    from .prereglages import DEFAUT_FOURNI, modifie
     from .ui.dialogues.prereglages import DialoguePrereglages
+    from .ui.pages.sous_titres.reglages import ONGLET_DECOUPAGE, ONGLET_TEXTE
 
     services, panneau, toile, lecteur = atelier._services, atelier.panneau, atelier.toile, atelier.lecteur
     frise = atelier.frise.toile
     bibliotheque = services.prereglages
     depart = atelier.reglages_du_projet()
-    defaut = bibliotheque.defaut()
+    origine = bibliotheque.prereglage(depart.prereglage)
+    groupes = [*panneau.texte.sections.values(), *panneau.mots.sections.values(), *panneau.animations.sections.values()]
+    groupes += [panneau.mots.section_avancee, panneau.section_position, panneau.section_decoupage]
     etat: dict = {
-        "projet_avec_le_prereglage_par_defaut": defaut is not None
-        and depart.prereglage == defaut.identifiant
-        and not modifie(depart, defaut)
-        and panneau.prereglage.currentText() == defaut.nom,
+        "etoile_sur_par_defaut": bibliotheque.par_defaut == DEFAUT_FOURNI,
+        "projet_avec_son_prereglage": origine is not None
+        and not modifie(depart, origine)
+        and panneau.prereglage.currentText() == origine.nom,
+        "aucun_retablir_au_depart": all(groupe.retablir.isHidden() for groupe in groupes),
     }
 
     # 1. Frise.
@@ -830,7 +855,7 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
         etat["bord_glisse"] = False
     etat["decoupage_automatique_retabli"] = not any(s.ajuste for s in atelier.sous_titres)
 
-    # 2. Les 6 préréglages fournis, appliqués depuis la liste « Préréglage ».
+    # 2. Les 7 préréglages fournis, appliqués depuis la liste « Préréglage ».
     serum = next((i for i, mot in enumerate(atelier.mots) if mot.texte.casefold().startswith("sérum")), 0)
     appliques = []
     for numero, prereglage in enumerate([p for p in bibliotheque.prereglages if p.fourni], 1):
@@ -839,17 +864,46 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
         lecteur.aller_a(atelier.mots[serum].debut + 0.25)
         atelier._actualiser_toile()
         reglages = atelier.reglages_du_projet()
-        appliques.append(reglages.prereglage == prereglage.identifiant and not modifie(reglages, prereglage))
+        appliques.append(
+            reglages.prereglage == prereglage.identifiant
+            and not modifie(reglages, prereglage)
+            and all(groupe.retablir.isHidden() for groupe in groupes)  # juste après l'avoir choisi : aucun ↺
+        )
         nom = prereglage.identifiant.removeprefix("fourni-")
         capturer_image(_image_du_sous_titre(toile), f"prereglage-{numero}-{nom}")
     rapport["prereglages_appliques"] = appliques
-    etat["prereglages_appliques"] = len(appliques) == 6 and all(appliques)
+    etat["prereglages_appliques"] = len(appliques) == 7 and all(appliques)
+    # Un réglage changé (V3.1) : « (modifié) », son nom en mauve, le ↺ de son groupe (et lui seul).
+    panneau.onglets.setCurrentIndex(ONGLET_DECOUPAGE)
     panneau.caracteres.setValue(panneau.caracteres.value() + 1)
     _laisser_afficher()
+    nom = panneau._marques_decoupage[0][0]
     etat["modifie_affiche"] = panneau.prereglage.currentText().endswith("(modifié)")
+    etat["nom_en_mauve"] = nom.property("role") == "legende-modifiee"
+    etat["retablir_du_groupe_seul"] = not panneau.section_decoupage.retablir.isHidden() and all(
+        groupe.retablir.isHidden() for groupe in groupes if groupe is not panneau.section_decoupage
+    )
     atelier.defilement.ensureWidgetVisible(panneau.prereglage)  # la ligne « Préréglage » sur la capture
     _laisser_afficher()
     capturer(atelier.window(), "studio-prereglage-modifie")
+    panneau.section_decoupage.retablir.click()
+    _laisser_afficher()
+    etat["retablir_remet_le_prereglage"] = (
+        not panneau.prereglage.currentText().endswith("(modifié)")
+        and panneau.section_decoupage.retablir.isHidden()
+        and nom.property("role") == "legende"
+    )
+    # Onglet Texte : une taille changée, le ↺ à côté de « Taille et casse » (capture du panneau).
+    panneau.onglets.setCurrentIndex(ONGLET_TEXTE)
+    taille = panneau.texte.sections["Taille et casse"]
+    panneau.texte.taille.champ.setValue(panneau.texte.taille.champ.value() + 0.5)
+    _laisser_afficher()
+    etat["retablir_texte_visible"] = not taille.retablir.isHidden()
+    capturer(panneau, "studio-retablir-groupe")
+    taille.retablir.click()
+    _laisser_afficher()
+    actuel = bibliotheque.prereglage(atelier.reglages_du_projet().prereglage)  # le dernier appliqué
+    etat["retablir_texte_remet"] = taille.retablir.isHidden() and actuel is not None and not modifie(atelier.reglages_du_projet(), actuel)
 
     # 3. La fenêtre des préréglages, ses vignettes au milieu de « sérum ».
     fenetre = DialoguePrereglages(services, atelier.window(), atelier.reglages_du_projet().prereglage)
@@ -859,14 +913,15 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
     capturer(fenetre, "dialogue-prereglages")
     problemes = _debordements(fenetre, "fenêtre préréglages")
     rapport["prereglages_debordements"] = problemes
-    etat["fenetre_prereglages"] = len(fenetre.cartes) == len(bibliotheque.prereglages) == 6 and not problemes
-    # Les 6 fournis visibles d'un coup (2 rangées de 3), chaque nom écrit en entier, ★ compris.
-    etat["six_cartes_sans_defiler"] = fenetre.zone.verticalScrollBar().maximum() == 0
+    etat["fenetre_prereglages"] = len(fenetre.cartes) == len(bibliotheque.prereglages) == 7 and not problemes
+    # Les 2 premières rangées (6 des 7 fournis) visibles d'un coup, chaque nom écrit en entier, ★ compris.
+    sixieme = fenetre.cartes[5]
+    etat["deux_rangees_sans_defiler"] = sixieme.mapTo(fenetre.zone.viewport(), QPoint(0, sixieme.height())).y() <= fenetre.zone.viewport().height()
     etat["noms_entiers"] = not any(carte.nom.est_abrege() for carte in fenetre.cartes)
     fenetre.reject()
 
     _remettre_les_reglages(atelier, depart)
-    etat["retour_au_depart"] = atelier.reglages_du_projet() == depart and panneau.prereglage.currentText() == defaut.nom
+    etat["retour_au_depart"] = atelier.reglages_du_projet() == depart and panneau.prereglage.currentText() == origine.nom
     rapport["frise_et_prereglages"] = etat
     return all(etat.values())
 
@@ -1618,19 +1673,35 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     "icones_i_visibles": sum(1 for b in page.findChildren(BoutonInfo) if b.isVisible()),
                 }
             fenetre.afficher_module("sous-titres")
-            frise = fenetre.page("sous-titres").atelier.cadre_frise
+            page_sous_titres = fenetre.page("sous-titres").atelier
+            frise = page_sous_titres.cadre_frise
+            page_sous_titres.defilement.ensureWidgetVisible(frise.aide)  # l'icône à l'écran, et sa bulle avec
+            _laisser_afficher()
             frise.aide.montrer()
             bulle = _attendre(lambda: QToolTip.isVisible(), 2.0)
             capturer_avec_bulle(f"bulle-{frise.titre.text().lower()}")
             QToolTip.hideText()
+            page_sous_titres.defilement.verticalScrollBar().setValue(0)
             fenetre.afficher_module("script")
             produit = fenetre.page("script").atelier.produit
             produit.bouton_lire.definir_occupe(True)
             capturer(produit.cadre, "bouton-occupe")
             occupe = produit.bouton_lire.est_occupe() and produit.bouton_lire.isEnabled()
             produit.bouton_lire.definir_occupe(False)
-            rapport["aides_v31"] = {"modules": aides, "bulle_visible": bulle, "bouton_occupe": occupe}
-            verifs["aides_v31"] = bulle and occupe and all(len(a["phrases_visibles"]) <= 2 for a in aides.values())
+            # Chaque phrase encore écrite est l'une des indispensables (comptée une fois : celle d'un script
+            # TikTok est sur chaque carte).
+            imprevues = sorted(
+                {
+                    phrase
+                    for a in aides.values()
+                    for phrase in a["phrases_visibles"]
+                    if not phrase.startswith(PHRASES_INDISPENSABLES)
+                }
+            )
+            rapport["aides_v31"] = {
+                "modules": aides, "phrases_imprevues": imprevues, "bulle_visible": bulle, "bouton_occupe": occupe
+            }
+            verifs["aides_v31"] = bulle and occupe and not imprevues
             fenetre.afficher_module("voix")
             verifs["editeur_badges"] = atelier.editeur.segments() == normaliser([dict(s) for s in SCRIPT_DEMO])
             rapport["texte_api_demo"] = atelier.editeur.texte_api()

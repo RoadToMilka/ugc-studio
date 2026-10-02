@@ -54,7 +54,7 @@ class SansProjet(Page):
         for nom, dossier in recents:
             ligne = QHBoxLayout()
             ligne.addWidget(
-                bouton(nom, variante="contour", nom_icone="folder-open", action=lambda _coche=False, d=dossier: ouvrir_projet(self, self._services, d))
+                bouton(nom, variante="contour", nom_icone="folder-open", action=lambda d=dossier: ouvrir_projet(self, self._services, d))
             )
             ligne.addWidget(libelle(str(dossier), "legende"), 1)
             self._recents.addLayout(ligne)

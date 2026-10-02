@@ -323,11 +323,12 @@ def test_glisser_le_sous_titre_dans_l_apercu(atelier, services, tmp_path, qtbot)
     toile = atelier.toile
     rect = toile.rect_du_sous_titre()
     depart = rect.center().toPoint()
+    avant = services.projets.projet.sous_titres.position.decalage_pct
     qtbot.mousePress(toile, Qt.MouseButton.LeftButton, pos=depart)
     qtbot.mouseMove(toile, QPoint(depart.x(), depart.y() - 40))
     qtbot.mouseRelease(toile, Qt.MouseButton.LeftButton, pos=QPoint(depart.x(), depart.y() - 40))
     decalage = services.projets.projet.sous_titres.position.decalage_pct
-    assert decalage < 0  # remonté
+    assert decalage < avant  # remonté
     assert atelier.panneau.reglage_fin.value() == round(decalage * 10)
 
 

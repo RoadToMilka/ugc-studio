@@ -49,8 +49,7 @@ from .nombres import FRANCE
 from .nombres import VARIANTES as VARIANTES_NOMBRES
 from .prononciation import Prononciation, depuis_liste
 from .script import joindre_repliques
-from .sous_titres import ReglagesSousTitres
-from .style_sous_titres import style_de_depart
+from .sous_titres import ReglagesSousTitres, avec_le_style, style_de_depart_complet
 from .stockage import ecrire_json, lire_json
 from .transcription import Remplacement, Transcription, remplacements_depuis_liste
 
@@ -294,8 +293,8 @@ class GestionnaireProjets:
         projet = Projet(dossier=dossier, nom=nom, langue=langue, cree_le=maintenant, modifie_le=maintenant)
         if self.style_des_nouveaux is not None:
             projet.sous_titres = self.style_des_nouveaux(projet.sous_titres)
-        else:
-            projet.sous_titres.texte = style_de_depart()  # V2, lot 4 : Montserrat ExtraBold, contour noir
+        else:  # le style de départ (V3.1 : celui du préréglage « Par défaut »)
+            projet.sous_titres = avec_le_style(projet.sous_titres, style_de_depart_complet())
         self._activer(projet)
         self.enregistrer()
         journal.info("Projet créé : %s (%s)", nom, dossier)

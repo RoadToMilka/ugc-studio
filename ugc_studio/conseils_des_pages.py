@@ -285,11 +285,14 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Style du texte",
             (
-                "Un nouveau projet prend le préréglage marqué ★ (au départ « Blanc contour noir » : Montserrat "
-                "Extra-grasse, blanc, contour noir, le mot dit en jaune). Un projet plus ancien garde son apparence.",
+                "Un nouveau projet prend le préréglage marqué ★ (au départ « Par défaut » : Poppins Extra-grasse, "
+                "blanc, contour noir, les mots comme le texte, sans animation). Un projet plus ancien garde son "
+                "apparence.",
                 "Chaque groupe de l'onglet Texte (police, remplissage, contour, ombre, lueur, fond, espaces) se "
-                "replie ; ses réglages rares attendent dans « Réglages avancés », et « Rétablir » le remet "
-                "comme dans le préréglage du projet (sinon comme au départ).",
+                "replie ; ses réglages rares attendent dans « Réglages avancés ».",
+                "Un réglage qui s'écarte du préréglage du projet a son nom en mauve, et ↺ apparaît à côté du "
+                "titre de son groupe : un clic remet le groupe comme dans le préréglage enregistré (sans "
+                "préréglage, comme au départ), sans même l'ouvrir.",
                 "Les tailles s'affichent en pixels de ta vidéo et sont gardées en % de sa hauteur : un style "
                 "garde le même aspect en 9:16, en 4:5 ou en 1:1.",
                 "Le contour est dessiné autour des lettres, sans les amincir. Ordre de dessin : ombre, fond, "
@@ -307,7 +310,8 @@ SOUS_TITRES = PageDeConseils(
                 "Les raccourcis remplissent les états : Surlignage (le mot actif en jaune, un peu plus grand), "
                 "Karaoké (les mots dits restent jaunes), Apparition (les mots apparaissent quand ils sont "
                 "dits), Mot par mot (un seul mot à la fois). Tout reste modifiable ensuite.",
-                "Un réglage changé a son nom en mauve ; ↺ le remet comme le texte.",
+                "Un réglage qui s'écarte du préréglage a son nom en mauve ; ↺, à côté du titre de son groupe, "
+                "le remet comme dans le préréglage (« comme le texte » si le préréglage l'y laissait).",
                 "Un mot invisible garde sa place : rien ne bouge pendant la lecture. Un mot agrandi grandit "
                 "autour de son centre, sans pousser ses voisins ; la place qu'il prend compte dans le "
                 "découpage, il ne sort jamais de la marge maximum.",
@@ -353,10 +357,13 @@ SOUS_TITRES = PageDeConseils(
                 "Ni le format ni la zone de sécurité : ils dépendent de la vidéo et de la plateforme.",
                 "Choisis-en un dans la liste « Préréglage » pour l'appliquer. Dès que tu changes un réglage, "
                 "la liste affiche « (modifié) » : ton projet garde sa propre copie du style.",
+                "Le préréglage tel qu'il est enregistré sert de référence : juste après l'avoir choisi, "
+                "enregistré ou mis à jour, aucun ↺ ; tant que tu ne l'enregistres pas, tu vois ce qui a "
+                "changé par rapport à lui.",
                 "« Enregistrer… » crée un préréglage avec le style du projet. Menu ⋯ : « Mettre à jour » le "
                 "préréglage avec tes changements, ou « Revenir » à lui.",
-                "Six styles sont fournis (Blanc contour noir, Surligneur, Karaoké, Mot par mot, Bandeau, "
-                "Atténué) : modifie-les ou supprime-les, « Rétablir les préréglages fournis » les remet.",
+                "Sept styles sont fournis (Par défaut, Blanc contour noir, Surligneur, Karaoké, Mot par mot, "
+                "Bandeau, Atténué) : modifie-les ou supprime-les, « Rétablir les préréglages fournis » les remet.",
                 "Si un préréglage change le découpage et défait un sous-titre réorganisé à la main, l'app te "
                 "demande d'abord, comme pour un réglage.",
             ),
@@ -396,7 +403,8 @@ SOUS_TITRES = PageDeConseils(
             (
                 "« Haut » et « Bas » placent le sous-titre juste à l'intérieur de la zone de sécurité de la "
                 "plateforme : le même réglage convient à TikTok comme à Reels. Le réglage fin le décale (tu "
-                "peux aussi le glisser dans l'aperçu) ; il s'arrête avant la marge maximum.",
+                "peux aussi le glisser dans l'aperçu) ; il s'arrête avant la marge maximum. Le ↺ du groupe "
+                "Position remet la position du préréglage, réglage fin compris.",
                 "Un sous-titre de deux lignes grandit vers le bas (Haut), des deux côtés (Centre) ou vers le "
                 "haut (Bas).",
                 "L'alignement à gauche ou à droite part du bord de la zone de sécurité ; il peut changer le "
