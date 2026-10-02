@@ -153,8 +153,9 @@ def test_clic_droit_dans_un_champ(app_configuree, qtbot):
     QApplication.sendEvent(champ, QContextMenuEvent(QContextMenuEvent.Reason.Mouse, centre, champ.mapToGlobal(centre)))
     menus = [m for m in QApplication.topLevelWidgets() if isinstance(m, Menu) and m.isVisible()]
     assert len(menus) == 1
-    textes = [a.text() for a in menus[0].actions()]
-    assert any("Copier" in t or "Copy" in t for t in textes)
+    # Qt souligne une lettre de chaque choix avec « & » (« Co&pier » en français) : on l'enlève.
+    textes = [a.text().replace("&", "") for a in menus[0].actions()]
+    assert any("Copier" in t or "Copy" in t for t in textes), textes
     menus[0].close()
 
 
