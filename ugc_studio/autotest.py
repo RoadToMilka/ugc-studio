@@ -48,7 +48,7 @@ from .voice_design import assembler_description
 from .ui.galerie import GalerieComposants
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
-from .ui.theme import Dimensions, Espacements, Typo
+from .ui.theme import Dimensions, Espacements, Hauteurs, Typo
 
 DELAI_DEMARRAGE_MS = 1500  # laisse la fenêtre s'afficher complètement
 DELAI_MAX_MS = 240_000  # sécurité : l'autotest ne peut pas bloquer la fabrication (exports vidéo compris)
@@ -83,6 +83,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "calque",
     "video_avec_sous_titres",
     "video_hdr",
+    "disposition_v31",
 )
 ELEMENTS_SIGNALES_MAX = 6
 
@@ -257,6 +258,58 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
             + ", ".join(_description(e) for e in coupables[:ELEMENTS_SIGNALES_MAX])
         )
     return problemes
+
+
+def _disposition_de_la_fenetre(fenetre) -> dict:
+    """V3.1, lot 1 : dans chaque module, le bandeau montre l'en-tête de la page affichée, et le
+    premier bloc est à 16 px de la barre latérale, du bandeau et du bord droit de la fenêtre (avec
+    ou sans barre de défilement, qui est au bord de la fenêtre). Le titre du bandeau s'aligne sur le
+    bord gauche des blocs, le coût de la session sur leur bord droit."""
+    espace = Dimensions.ESPACE_BLOCS
+    mesures: dict = {"largeur_fenetre": fenetre.width(), "barre_laterale": fenetre.barre_laterale.width(), "modules": {}}
+    ecarts: list[str] = []
+    cout = fenetre.entete.cout_session
+    droite_cout = cout.mapTo(fenetre, QPoint(cout.width(), 0)).x()
+    for identifiant in fenetre.identifiants_modules():
+        fenetre.afficher_module(identifiant)
+        _laisser_afficher()
+        page = fenetre.page_affichee()
+        page.defilement.verticalScrollBar().setValue(0)
+        _laisser_afficher()
+        premier = page.contenu.itemAt(0)
+        colonne = page.contenu.parentWidget()
+        cadre = premier.geometry()
+        gauche = colonne.mapTo(fenetre, cadre.topLeft()).x()
+        haut = colonne.mapTo(fenetre, cadre.topLeft()).y()
+        droite = colonne.mapTo(fenetre, QPoint(cadre.x() + cadre.width(), 0)).x()
+        barre = page.defilement.verticalScrollBar()
+        entete = fenetre.entete.entete_affichee()
+        titre = entete.titre.mapTo(fenetre, QPoint(0, 0)).x() if entete is not None else None
+        module = {
+            "bloc": [gauche, haut, fenetre.width() - droite],
+            "barre_visible": barre.isVisible(),
+            "barre_au_bord": barre.mapTo(fenetre, QPoint(barre.width(), 0)).x() if barre.isVisible() else None,
+            "titre": entete.titre.text() if entete is not None else None,
+            "conseils": entete.conseils.property("conseils") if entete is not None and entete.conseils else None,
+            "x_titre": titre,
+        }
+        mesures["modules"][identifiant] = module
+        attendu = (Dimensions.LARGEUR_BARRE_LATERALE + espace, Hauteurs.BANDEAU + espace, espace)
+        if tuple(module["bloc"]) != attendu:
+            ecarts.append(f"{identifiant} : bloc à {module['bloc']} (attendu {list(attendu)})")
+        if entete is None or entete is not page.entete:
+            ecarts.append(f"{identifiant} : le bandeau ne montre pas l'en-tête de la page")
+        elif titre != gauche:
+            ecarts.append(f"{identifiant} : titre à {titre} px, blocs à {gauche} px")
+        if module["barre_au_bord"] not in (None, fenetre.width()):
+            ecarts.append(f"{identifiant} : barre de défilement à {module['barre_au_bord']} px du bord gauche")
+    mesures["droite_cout"] = fenetre.width() - droite_cout
+    if fenetre.width() - droite_cout != espace:
+        ecarts.append(f"coût de la session à {fenetre.width() - droite_cout} px du bord droit")
+    if fenetre.barre_laterale.width() != Dimensions.LARGEUR_BARRE_LATERALE:
+        ecarts.append(f"barre latérale de {fenetre.barre_laterale.width()} px")
+    mesures["ecarts"] = ecarts
+    return mesures
 
 
 def _assistant_rempli(parent) -> DialogueAssistantStyle:
@@ -1500,6 +1553,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             for identifiant in fenetre.identifiants_modules():
                 fenetre.afficher_module(identifiant)
                 capturer(fenetre, f"module-{identifiant}")
+            # V3.1, lot 1 : barre latérale, bandeau et espaces de 16 px, à la taille des captures.
+            disposition = {"standard": _disposition_de_la_fenetre(fenetre)}
 
             # Page Voix (projet de démonstration) : bas de page (prises), puis vérification de l'éditeur.
             atelier = fenetre.page("voix").atelier
@@ -1648,16 +1703,17 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             for index in range(reglages.onglets.count()):
                 reglages.onglets.setCurrentIndex(index)
                 capturer(fenetre, f"reglages-{index + 1}")
-                # Onglet plus haut que la fenêtre : capture du bas de l'onglet aussi.
-                defilement = reglages.onglets.widget(index).findChild(QScrollArea)
-                if defilement is not None and defilement.verticalScrollBar().maximum() > 0:
-                    defilement.verticalScrollBar().setValue(defilement.verticalScrollBar().maximum())
+                # Onglet plus haut que la fenêtre : capture du bas de la page aussi (V3.1 : la page
+                # défile comme les autres, d'une seule barre au bord de la fenêtre).
+                barre = reglages.defilement.verticalScrollBar()
+                if barre.maximum() > 0:
+                    barre.setValue(barre.maximum())
                     capturer(fenetre, f"reglages-{index + 1}-bas")
-                    defilement.verticalScrollBar().setValue(0)
+                    barre.setValue(0)
             reglages.onglets.setCurrentIndex(0)
 
-            # Menu « Projet » du bandeau : icônes et texte, avec le même écart que partout.
-            bouton_projet, menu_projet = fenetre.entete.bouton_projet, fenetre.entete.menu_projet
+            # Menu « Projet » (haut de la barre latérale) : icônes et texte, avec le même écart que partout.
+            bouton_projet, menu_projet = fenetre.barre_laterale.bouton_projet, fenetre.barre_laterale.menu_projet
             menu_projet.popup(bouton_projet.mapToGlobal(QPoint(0, bouton_projet.height())))
             capturer(menu_projet, "menu-projet")
             menu_projet.hide()
@@ -1745,6 +1801,10 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 defilement.ensureWidgetVisible(sous_titres.tableau)
                 capturer(fenetre, "sous-titres-etroit")
                 defilement.verticalScrollBar().setValue(0)
+            # … et à la largeur minimale de la fenêtre.
+            disposition["etroite"] = _disposition_de_la_fenetre(fenetre)
+            rapport["disposition_v31"] = disposition
+            verifs["disposition_v31"] = not disposition["standard"]["ecarts"] and not disposition["etroite"]["ecarts"]
             fenetre.afficher_module("voix")
             rapport["debordements"] = debordements
             verifs["sans_debordement"] = not debordements

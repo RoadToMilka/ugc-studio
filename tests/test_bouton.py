@@ -220,11 +220,48 @@ def test_touche_entree(app_configuree, qtbot):
 
 
 def test_projet_attenue_sans_projet(app_configuree, qtbot):
-    from ugc_studio.ui.composants.entete import TEXTE_SANS_PROJET, Entete
+    """V3.1 : le projet ouvert est en haut de la barre latérale (il quitte le bandeau)."""
+    from ugc_studio.ui.composants.barre_laterale import AIDE_PROJET, TEXTE_SANS_PROJET, BarreLaterale
 
-    entete = Entete()
-    qtbot.addWidget(entete)
-    assert entete.bouton_projet.text() == TEXTE_SANS_PROJET and entete.bouton_projet.est_attenue()
-    entete.definir_projet("Sérum Glowzy")
-    assert entete.bouton_projet.text() == "Sérum Glowzy" and not entete.bouton_projet.est_attenue()
-    assert entete.bouton_projet.menu() is entete.menu_projet
+    barre = BarreLaterale((), ())
+    qtbot.addWidget(barre)
+    projet = barre.bouton_projet
+    assert projet.text() == TEXTE_SANS_PROJET and projet.est_attenue() and projet.toolTip() == AIDE_PROJET
+    barre.definir_projet("Sérum Glowzy")
+    assert projet.text() == "Sérum Glowzy" and not projet.est_attenue()
+    assert projet.toolTip() == f"Sérum Glowzy\n{AIDE_PROJET}"  # nom complet au survol, même abrégé
+    assert projet.menu() is barre.menu_projet
+
+
+def test_bouton_du_projet(app_configuree, qtbot):
+    """Contour gris et coins arrondis, sans fond ; le nom à gauche, abrégé par « … » s'il est long ;
+    la flèche au bord droit ; toute la largeur de la barre latérale, à la hauteur des champs."""
+    from ugc_studio.ui.composants.barre_laterale import BarreLaterale
+
+    barre = BarreLaterale((), ())
+    qtbot.addWidget(barre)
+    barre.show()
+    projet = barre.bouton_projet
+    assert projet.width() == Dimensions.LARGEUR_BARRE_LATERALE - 2 * Espacements.M
+    assert projet.height() == Hauteurs.CONTROLE
+    apparence = projet._apparence()
+    assert apparence.fond is None and apparence.contour == qcolor(Couleurs.TEXTE_SECONDAIRE, Opacites.CONTOUR_BOUTON)
+    barre.definir_projet("Sérum Glowzy")
+    assert projet._apparence().texte == Couleurs.TEXTE and not projet.texte_abrege()
+    barre.definir_projet("Sérum éclat Glowzy, campagne de la rentrée 2026")
+    assert projet.texte_abrege() and projet.minimumSizeHint().width() < projet.width()
+    # La flèche est dessinée contre le bord droit (à 12 px), le nom contre le bord gauche (à 12 px) :
+    # pixels opaques et clairs (le contour, lui, est transparent à 65 %).
+    image = projet.grab().toImage()
+    echelle = image.width() / projet.width()
+    traits = [
+        x / echelle
+        for x in range(image.width())
+        for y in range(image.height())
+        if image.pixelColor(x, y).alpha() > 200 and image.pixelColor(x, y).lightness() > 120
+    ]
+    assert Espacements.M - 1 <= min(traits) <= Espacements.M + 2
+    debut_fleche = projet.width() - Espacements.M - Dimensions.ICONE_PETITE
+    assert debut_fleche < max(traits) <= projet.width() - Espacements.M  # la flèche, au bord droit
+    # Entre le nom abrégé et la flèche : l'écart habituel entre un texte et son icône, vide.
+    assert not [x for x in traits if debut_fleche - Dimensions.ECART_ICONE_TEXTE + 1 < x < debut_fleche]

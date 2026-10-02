@@ -105,12 +105,22 @@ class ZoneDefilante(QScrollArea):
 def zone_defilante(
     largeur_max: int | None = None,
     marges: tuple[int, int, int, int] = (0, 0, 0, 0),
+    remplir_la_hauteur: bool = False,
+    barre_dans_la_marge: bool = False,
 ) -> tuple[QScrollArea, QVBoxLayout]:
     """Zone qui défile verticalement quand son contenu est trop haut.
 
     Renvoie la zone et la disposition verticale où ajouter le contenu. La colonne de contenu
     occupe toute la largeur disponible (en plein écran, les blocs s'étirent jusqu'au bord droit),
     sauf si `largeur_max` la limite ; elle reste alors calée à gauche.
+
+    `remplir_la_hauteur` : la colonne prend toute la hauteur visible (un élément ajouté avec un
+    facteur d'étirement la remplit, ex. le tableau du suivi des coûts) ; sinon, le contenu reste en
+    haut et la place en trop est en bas.
+
+    `barre_dans_la_marge` (pages, V3.1) : la barre de défilement prend place dans la marge de droite
+    quand elle apparaît. Ainsi, l'espace entre les blocs et le bord de la fenêtre reste le même avec
+    ou sans barre, et les blocs ne changent pas de largeur quand elle apparaît.
     """
     zone = ZoneDefilante()
     zone.setWidgetResizable(True)
@@ -128,6 +138,17 @@ def zone_defilante(
     disposition = QVBoxLayout(interieur)
     disposition.setContentsMargins(*marges)
     disposition.setSpacing(0)
+    if barre_dans_la_marge:
+        gauche, haut, droite, bas = marges
+        barre = zone.verticalScrollBar()
+
+        def placer_la_barre(*_bornes) -> None:
+            # La barre est visible dès qu'il y a quelque chose à faire défiler (« si besoin »).
+            visible = barre.maximum() > barre.minimum()
+            reste = max(0, droite - Dimensions.BARRE_DEFILEMENT) if visible else droite
+            disposition.setContentsMargins(gauche, haut, reste, bas)
+
+        barre.rangeChanged.connect(placer_la_barre)
 
     colonne = QWidget()
     if largeur_max is not None:
@@ -139,6 +160,9 @@ def zone_defilante(
     ligne.setContentsMargins(0, 0, 0, 0)
     ligne.addWidget(colonne, 1)
     ligne.addStretch(0)
-    disposition.addLayout(ligne)
-    disposition.addStretch(1)
+    if remplir_la_hauteur:
+        disposition.addLayout(ligne, 1)
+    else:
+        disposition.addLayout(ligne)
+        disposition.addStretch(1)
     return zone, contenu

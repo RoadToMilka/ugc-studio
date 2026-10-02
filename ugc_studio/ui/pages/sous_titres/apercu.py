@@ -181,7 +181,7 @@ class DispositionStudio(QWidget):
         self._apercu, self._reglages = apercu, reglages
         self._disposition = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
         self._disposition.setContentsMargins(0, 0, 0, 0)
-        self._disposition.setSpacing(Espacements.XL)
+        self._disposition.setSpacing(Dimensions.ESPACE_BLOCS)  # comme entre deux blocs l'un sous l'autre (V3.1)
         self._disposition.addWidget(apercu, 0)
         self._disposition.addWidget(reglages, 1)
         self._deux_colonnes: bool | None = None

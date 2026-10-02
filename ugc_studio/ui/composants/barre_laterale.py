@@ -1,4 +1,8 @@
-"""Barre latérale gauche (§9.6) : Voix, Transcription, Sous-titres… et Réglages en bas."""
+"""Barre latérale gauche (§9.6) : le projet ouvert en haut, puis Script, Voix, Transcription,
+Sous-titres… et Réglages en bas.
+
+V3.1 : le bouton du projet quitte le bandeau pour le haut de la barre, à la place du logo (le nom de
+l'app reste dans la barre de titre de Windows et en bas de la barre, avec la version)."""
 
 from __future__ import annotations
 
@@ -11,18 +15,20 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
     QHBoxLayout,
-    QLabel,
+    QMenu,
     QSizePolicy,
     QVBoxLayout,
 )
 
 from ... import NOM_APP, __version__
-from ...chemins import dossier_ressources
 from ..icones import icone
 from ..polices import police
 from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
-from .bouton import dessiner_icone_et_texte
+from .bouton import Bouton, dessiner_icone_et_texte
 from .elements import libelle
+
+TEXTE_SANS_PROJET = "Aucun projet ouvert"
+AIDE_PROJET = "Nouveau projet, ouvrir un projet, projets récents…"
 
 
 @dataclass(frozen=True)
@@ -127,7 +133,10 @@ class BoutonNavigation(QAbstractButton):
 
 
 class BarreLaterale(QFrame):
-    """Barre de navigation. Émet `module_selectionne(identifiant)` quand on clique un module."""
+    """Barre de navigation. Émet `module_selectionne(identifiant)` quand on clique un module.
+
+    En haut, dans une bande de la hauteur du bandeau (et avec la même ligne dessous) : le bouton du
+    projet ouvert, qui ouvre le menu Projet (nouveau, ouvrir, récents…), rempli par la fenêtre."""
 
     module_selectionne = Signal(str)
 
@@ -137,45 +146,49 @@ class BarreLaterale(QFrame):
         self.setFixedWidth(Dimensions.LARGEUR_BARRE_LATERALE)
 
         disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.M, Espacements.L, Espacements.M, Espacements.L)
-        disposition.setSpacing(Espacements.XS)
+        disposition.setContentsMargins(0, 0, 0, 0)
+        disposition.setSpacing(0)
 
-        # Logo + nom de l'app
-        ligne_logo = QHBoxLayout()
-        ligne_logo.setContentsMargins(Espacements.S, 0, 0, 0)
-        ligne_logo.setSpacing(Espacements.S)
-        logo = QLabel()
-        logo.setPixmap(self._image_logo())
-        logo.setFixedSize(Dimensions.LOGO, Dimensions.LOGO)
-        ligne_logo.addWidget(logo)
-        nom = QLabel(NOM_APP)
-        nom.setProperty("role", "nom-app")
-        ligne_logo.addWidget(nom)
-        ligne_logo.addStretch(1)
-        disposition.addLayout(ligne_logo)
-        disposition.addSpacing(Espacements.XL)
+        # Haut : le projet ouvert. Bouton contour, nom à gauche, flèche au bord droit.
+        haut = QFrame()
+        haut.setObjectName("hautBarreLaterale")
+        haut.setFixedHeight(Hauteurs.BANDEAU)
+        ligne_projet = QHBoxLayout(haut)
+        ligne_projet.setContentsMargins(Espacements.M, 0, Espacements.M, 0)
+        self.bouton_projet = Bouton(TEXTE_SANS_PROJET, "projet", "chevron-down")
+        self.bouton_projet.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.menu_projet = QMenu(self.bouton_projet)
+        self.bouton_projet.setMenu(self.menu_projet)
+        ligne_projet.addWidget(self.bouton_projet)
+        disposition.addWidget(haut)
 
+        # Les modules, puis Réglages et la version en bas.
+        navigation = QVBoxLayout()
+        navigation.setContentsMargins(Espacements.M, Dimensions.ESPACE_BLOCS, Espacements.M, Espacements.L)
+        navigation.setSpacing(Espacements.XS)
         self._groupe = QButtonGroup(self)
         self._groupe.setExclusive(True)
         self._boutons: dict[str, BoutonNavigation] = {}
         for module in modules_haut:
-            disposition.addWidget(self._ajouter(module))
-        disposition.addStretch(1)
+            navigation.addWidget(self._ajouter(module))
+        navigation.addStretch(1)
         for module in modules_bas:
-            disposition.addWidget(self._ajouter(module))
-        disposition.addSpacing(Espacements.S)
-        version = libelle(f"Version {__version__}", "discret", retour_a_la_ligne=False)
-        version.setContentsMargins(Espacements.M, 0, 0, 0)
-        disposition.addWidget(version)
+            navigation.addWidget(self._ajouter(module))
+        navigation.addSpacing(Espacements.S)
+        self.version = libelle(f"{NOM_APP} {__version__}", "discret", retour_a_la_ligne=False)
+        self.version.setContentsMargins(Espacements.M, 0, 0, 0)
+        navigation.addWidget(self.version)
+        disposition.addLayout(navigation, 1)
 
-    def _image_logo(self) -> QPixmap:
-        echelle = self.devicePixelRatioF()
-        cote = round(Dimensions.LOGO * echelle)
-        image = QPixmap(str(dossier_ressources() / "app.png")).scaled(
-            cote, cote, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
-        )
-        image.setDevicePixelRatio(echelle)
-        return image
+        self.definir_projet(None)
+
+    def definir_projet(self, nom: str | None) -> None:
+        """Nom du projet ouvert (texte grisé « Aucun projet ouvert » sans projet). Au survol : le nom
+        complet (utile quand il est abrégé) et ce que propose le menu."""
+        self.bouton_projet.setText(nom or TEXTE_SANS_PROJET)
+        self.bouton_projet.definir_attenue(not nom)
+        self.bouton_projet.setToolTip(f"{nom}\n{AIDE_PROJET}" if nom else AIDE_PROJET)
+        self.bouton_projet.update()
 
     def _ajouter(self, module: Module) -> BoutonNavigation:
         bouton = BoutonNavigation(module)

@@ -1,6 +1,6 @@
 # UGC Studio : cahier des charges
 
-> Version du document : 3.20, 02/10/2026 (V3 terminée, version 3.0.0, §12.4 : lot 1, calque transparent, version 2.1.0, §8.2 et §8.5 ; lot 2, vidéo avec sous-titres, version 2.2.0, §8.3 ; lot 3, HDR et 10 bits, version 3.0.0, §8.3 ; V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
+> Version du document : 3.21, 02/10/2026 (V3.1 en cours, §12.5 : lot 1, fenêtre, version 3.0.1, §9.2, §9.4 quater, §9.6 ; V3 terminée, version 3.0.0, §12.4 : lot 1, calque transparent, version 2.1.0, §8.2 et §8.5 ; lot 2, vidéo avec sous-titres, version 2.2.0, §8.3 ; lot 3, HDR et 10 bits, version 3.0.0, §8.3 ; V2 terminée, version 2.0.0 : lots 1 et 2, module Script, §4 bis ; lot 3, studio des sous-titres, §7.9 ; lot 4, style du texte, §7.10 ; lot 5, mots, §7.11 ; lot 6, animations, §7.12 ; lot 7, frise et préréglages, §7.13 ; suivi au §12.3. V1.1 terminée, version 1.1.0, §12.2)
 > Référence unique pour le développement. Toute règle écrite ici fait foi ; en cas de doute pendant le code, on revient à ce document (et on le met à jour si une décision change).
 
 ---
@@ -975,6 +975,8 @@ Le mauve sert aux contours des éléments clés (champ actif, bloc sélectionné
 
 Uniquement : **4, 8, 12, 16, 24, 32 px**.
 
+**Autour et entre les blocs des pages** (V3.1, lot 1) : **16 px partout** (`Dimensions.ESPACE_BLOCS`) : entre la barre latérale et les blocs, sous le bandeau, en bas, entre deux blocs l'un sous l'autre comme côte à côte (aperçu et réglages du studio des sous-titres : 24 px jusqu'à la 3.0.0). À droite, la **barre de défilement** de la page prend place dans ces 16 px quand elle apparaît, au bord de la fenêtre : l'espace entre les blocs et le bord reste le même avec ou sans barre, et les blocs ne changent pas de largeur quand elle apparaît. Jusqu'à la 3.0.0 : 32 px à gauche et à droite, 24 px en haut. Les fenêtres de dialogue gardent leurs marges.
+
 ### 9.3 Arrondis
 
 - Boutons, champs, badges : **8 px**
@@ -985,19 +987,20 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 
 - Boutons et champs : **36 px** (champs de nombre compris, depuis le lot 2 de la V2 : Qt leur donnait quelques pixels de plus, qui les décalaient des listes posées sur la même ligne)
 - Petits boutons (icônes) : 28 px
+- Bandeau du haut (V3.1) : **68 px** (`Hauteurs.BANDEAU`), comme le haut de la barre latérale, où le bouton du projet (36 px) tombe à 16 px du haut et du bas
 
 ### 9.4 bis Boutons
 
 - Tous les boutons de l'app sont dessinés par un **composant maison** (`ui/composants/bouton.py`), comme les entrées de la barre latérale : le bouton standard de Qt colle l'icône au texte (≈ 4 px) sans réglage possible.
 - L'icône et le texte sont toujours **centrés en hauteur** (le texte est centré sur la hauteur de ses majuscules).
-- **Écart icône → texte identique partout** : 12 px (`Dimensions.ECART_ICONE_TEXTE`), dans la barre latérale, les boutons, le bandeau (flèche après le nom du projet) et les menus.
+- **Écart icône → texte identique partout** : 12 px (`Dimensions.ECART_ICONE_TEXTE`), dans la barre latérale, les boutons (entre le nom du projet et sa flèche aussi) et les menus.
 - Icônes : 16 px dans les boutons avec texte et les menus, 20 px dans la barre latérale et les petits boutons-icônes (⋯, lecture).
 - **Quatre styles** (depuis la 1.0.2), les mêmes dans toute l'app :
   - **Principal** : fond mauve léger et contour mauve. L'action principale d'une zone (« Générer l'audio », « Transcrire », « Enregistrer »…).
   - **Normal** (dit secondaire) : fond gris clair et contour fin. Les autres actions (« Tester la clé », « Annuler »…).
   - **Contour** : pas de fond, contour gris bien visible. Les outils d'un bloc (« Accentuer », « Prononciation », « Remplacements »…) et les onglets non choisis. Il remplace l'ancien style « discret », sans cadre, qu'on ne reconnaissait pas comme un bouton.
   - **Icône** : carré de 28 px, icône seule, sans fond ni contour (⋯, lecture, favori).
-  - Plus le nom du projet dans le bandeau (style « projet »).
+  - Plus le **bouton du projet**, en haut de la barre latérale (style « projet », V3.1) : contour gris et coins arrondis comme le style contour, sans fond (fond gris au survol) ; le nom du projet à gauche, en 14 px demi-gras, blanc (gris « Aucun projet ouvert » sans projet), abrégé par « … » s'il est long (nom complet au survol) ; la flèche au bord droit, comme une liste déroulante. Jusqu'à la 3.0.0 : nom du projet en 16 px dans le bandeau, sans cadre, flèche collée au nom.
 - **Sélectionné** (un état, pas un style) : contour mauve et fond mauve très léger, comme le module actif de la barre latérale. Pour l'onglet actif et la lettre de la variante en écoute (fenêtre de comparaison).
 - Contour de focus seulement en navigation au clavier (touche Tab).
 
@@ -1010,7 +1013,7 @@ Uniquement : **4, 8, 12, 16, 24, 32 px**.
 
 ### 9.4 quater Bouton « Conseils »
 
-- Bouton **« Conseils »** (ampoule, style contour) **en haut à droite**, sur la ligne du titre : dans chaque module (Voix, Transcription, Sous-titres, Réglages, avec ou sans projet ouvert) et dans les fenêtres qui ont quelque chose à expliquer : Créer une voix, Style (nouveau ou modifié), Assistant de style, Assistant de description, Bibliothèque de voix, Bibliothèque de styles, Prononciation, Remplacements, Variantes A/B, Comparer les variantes, Ajouter une clé API. Pas de bouton dans les petites fenêtres (nouveau projet, renommer, confirmations).
+- Bouton **« Conseils »** (ampoule, style contour) : pour chaque module (Script, Voix, Transcription, Sous-titres, Réglages, avec ou sans projet ouvert), **dans le bandeau, au bout de la partie titre** (V3.1 : juste avant la ligne verticale qui la sépare du coût de la session ; jusqu'à la 3.0.0, en haut à droite de chaque page, sur la ligne du titre) ; **en haut à droite** des fenêtres qui ont quelque chose à expliquer : Créer une voix, Style (nouveau ou modifié), Assistant de style, Assistant de description, Bibliothèque de voix, Bibliothèque de styles, Prononciation, Remplacements, Variantes A/B, Comparer les variantes, Ajouter une clé API. Pas de bouton dans les petites fenêtres (nouveau projet, renommer, confirmations).
 - Il ouvre la fenêtre « Voix / Conseils » (ou « Créer une voix / Conseils »…) : des rubriques, chacune avec quelques conseils courts, **en français seulement** (seul un exemple de style reste en anglais, puisque c'est ce qui est envoyé à Google). Les textes sont rangés dans `conseils_des_pages.py` ; un test vérifie que chaque bouton ouvre une page qui existe et que chaque page sert.
 - Ce qui disparaît : le bloc « Conseils Google pour les styles » sous le script (et son bouton Masquer / Afficher), et la colonne « Conseils Google » en anglais des fenêtres Style et Créer une voix (ces fenêtres passent à 760 px de large). Leur contenu, traduit, est dans les fenêtres « Conseils ».
 - Bibliothèque de styles : « Nouveau style » et « Enregistrer le style actuel » passent en bas à gauche, le coin en haut à droite étant pour « Conseils ».
@@ -1072,9 +1075,10 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 
 ### 9.6 Disposition générale
 
-- Barre latérale gauche : Voix, Transcription, Sous-titres, Réglages (icônes + libellés).
-- En haut : nom du projet, **compteur de coût de la session** (format §4.4).
-- Zone centrale : contenu du module. Titre de page : **« Module / Projet »** (ex. « Voix / Sérum Glowzy ») ; barre de titre de Windows : « UGC Studio / Sérum Glowzy ».
+- **Barre latérale gauche** (200 px depuis la V3.1 ; 224 px jusqu'à la 3.0.0) : en haut, le **bouton du projet** (§9.4 bis), dans une bande de la hauteur du bandeau, avec la même ligne dessous ; un clic ouvre le menu Projet (Nouveau projet…, Ouvrir un projet…, projets récents, Ouvrir le dossier du projet). Puis Script, Voix, Transcription, Sous-titres (icônes + libellés), le premier à 16 px sous la bande, à la hauteur du premier bloc des pages ; Réglages en bas, et « UGC Studio 3.0.1 » (le nom de l'app et sa version) dessous. Le logo n'y est plus (V3.1, retiré « pour le moment » : décision de l'utilisateur du 02/10/2026) ; l'icône de l'app reste celle de la fenêtre et du `.exe`.
+- **Bandeau du haut** (V3.1, 68 px) : à gauche, le **titre du module** affiché et son **sous-titre** dessous (abrégés par « … » quand la place manque, texte complet au survol), avec le bouton « Conseils » au bout ; une **fine ligne verticale** ; à droite, le **compteur de coût de la session** (format §4.4). Le titre s'aligne sur le bord gauche des blocs, le coût sur leur bord droit. Chaque page garde son en-tête (titre, sous-titre, « Conseils ») et la fenêtre le confie au bandeau, qui montre celui de la page affichée (avec ou sans projet ouvert). Jusqu'à la 3.0.0, le bandeau montrait le projet, et le titre était en haut de chaque page : les blocs commencent maintenant environ 70 px plus haut, et le titre reste visible quand la page défile.
+- Zone centrale : contenu du module. Titre : **« Module / Projet »** (ex. « Voix / Sérum Glowzy ») ; barre de titre de Windows : « UGC Studio / Sérum Glowzy ».
+- **Une seule barre de défilement par page, au bord de la fenêtre** (V3.1) : Réglages défile comme les autres pages (jusqu'à la 3.0.0, son titre et ses onglets restaient fixes et chaque onglet défilait dans sa propre zone, dont la barre était collée aux blocs, à 32 px du bord). Ses onglets, sans ligne au-dessus, prennent la hauteur de l'onglet affiché ; un autre onglet s'ouvre en haut ; le tableau du suivi des coûts remplit la hauteur de la fenêtre (la page défile quand il atteint sa hauteur minimale, 320 px). Les zones qui défilent à l'intérieur d'un bloc (listes, tableaux) gardent leur barre fine.
 - **Pleine largeur** : les blocs prennent toute la largeur disponible, dans tous les modules (jusqu'à la 1.0.0, les pages étaient bridées à 960 px et calées à gauche : en plein écran, un grand vide restait à droite).
 - **Pas de tiret long** (« — ») comme séparateur dans l'interface : « / » entre un module et un projet, ailleurs la ponctuation qui convient (parenthèses, point médian « · », deux-points, virgule). Ex. « Prise 5 (variante C) », « Kore · Ferme · féminine ». Les noms donnés automatiquement par la v1.0.0 (« Prise 5 — variante C ») et le message de test de clé enregistré sont corrigés à la lecture ; un nom choisi à la main ne change jamais. Vérifié par un test.
 - **Tout tient dans la largeur minimale de la fenêtre (960 px)** : rien n'est coupé à droite. Les listes déroulantes prennent la largeur de leur plus long choix quand il y a de la place, et rétrécissent sinon (texte abrégé par « … », menu ouvert complet) ; elles se créent toujours avec `liste_deroulante()` (vérifié par un test).
@@ -1083,7 +1087,7 @@ Suivi des coûts et liste des sous-titres (un seul composant, `composants/tablea
 
 ### 9.7 Valeurs complémentaires
 
-- Également définies dans `theme.py` : largeur de la barre latérale, taille des icônes, petits arrondis de 4 px (cases à cocher, barres de défilement), pastilles d'information de 20 px de haut, taille de la fenêtre au premier lancement (au plus 92 % de l'écran) et taille minimale.
+- Également définies dans `theme.py` : largeur de la barre latérale, hauteur du bandeau, espace autour et entre les blocs des pages, taille des icônes, petits arrondis de 4 px (cases à cocher, barres de défilement), pastilles d'information de 20 px de haut, taille de la fenêtre au premier lancement (au plus 92 % de l'écran) et taille minimale.
 - Icônes : collection **Lucide** (licence ISC, incluse), recolorées avec les couleurs du thème.
 - Un test automatique refuse toute couleur, taille ou marge écrite en dur hors de `theme.py`.
 
@@ -1141,7 +1145,7 @@ Chaque étape est publiée (Pull Request + Release avec le `.exe`) dès qu'elle 
 | 8. Sous-titres | 0.8.0 | Prise TTS → sous-titres (alignement sur le script), découpage §7.3, export SRT |
 | V1 complète | 1.0.0 | Finitions (la molette de la souris ne change plus une valeur en faisant défiler une page ; réglages des sous-titres plus lisibles) et Release définitive |
 
-**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 (§12.3) terminée le 01/10/2026 (Release v2.0.0) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0 ; lot 5 (mots), version 1.6.0 ; lot 6 (animations), version 1.7.0 ; lot 7 (frise et préréglages), version 2.0.0. V3 (§12.4) terminée le 02/10/2026 (Release v3.0.0) : lot 1 (calque transparent), version 2.1.0 ; lot 2 (vidéo avec sous-titres), version 2.2.0 ; lot 3 (HDR et 10 bits), version 3.0.0.
+**État** : V1 terminée le 30/09/2026 (Release v1.0.0). V1.1 (retouches de l'interface, §12.2) terminée le 01/10/2026 (Release v1.1.0). V2 (§12.3) terminée le 01/10/2026 (Release v2.0.0) : lots 1 et 2 (module Script), versions 1.2.0 et 1.3.0 ; lot 3 (studio), version 1.4.0 ; lot 4 (style du texte), version 1.5.0 ; lot 5 (mots), version 1.6.0 ; lot 6 (animations), version 1.7.0 ; lot 7 (frise et préréglages), version 2.0.0. V3 (§12.4) terminée le 02/10/2026 (Release v3.0.0) : lot 1 (calque transparent), version 2.1.0 ; lot 2 (vidéo avec sous-titres), version 2.2.0 ; lot 3 (HDR et 10 bits), version 3.0.0. V3.1 (§12.5) en cours : lot 1 (fenêtre), version 3.0.1.
 
 #### 12.2 V1.1 : retouches de l'interface
 
@@ -1200,6 +1204,23 @@ Demande de l'utilisateur du 02/10/2026, réécrite et validée dans le document 
 | 1 | 2.1.0 | **Calque transparent** : FFmpeg 9.0.2 intégré (empreinte vérifiée, licence jointe, démarrage mesuré), fréquence et moments exacts des images (lus par FFmpeg), dessin en 16 bits, MOV ProRes 4444 avec transparence, fenêtre d'export (réglages, résumé avant export, avancement, « Arrêter »), bloc « Exporter » de la page Sous-titres (§8.2, §8.4, §8.5, §9.4 decies) | Fait |
 | 2 | 2.2.0 | **Vidéo avec sous-titres (SDR)** : MP4, MOV ou MKV ; H.264, H.265 ou ProRes 422 HQ ; débit identique (+ 10 %), conseillé (2 × YouTube) ou personnalisé, en deux passages ; son copié (ou AAC 320 kb/s) ; moments exacts des images, fréquence variable comprise (calque provisoire MOV de PNG) ; couleurs exactes et étiquetées ; « Lire la vidéo » ; durée de l'export affichée (§8.3, §8.5) | Fait |
 | 3 | 3.0.0 | **HDR et 10 bits** : vidéos HDR de téléphone (HLG, PQ) gardées en HDR (H.265 10 bits ou ProRes), sous-titres au blanc de référence BT.2408 (zscale) ; Dolby Vision 8.4 repris en MP4 et MKV ; « Convertir en SDR » (courbe mobius) ; calque HDR pour une vidéo HDR ; débits HDR de YouTube ; sous-titres convertis par zscale aussi en SDR (couleurs exactes en 16 bits) ; corrigés : couleurs des sous-titres sur une vidéo sans étiquettes de couleurs (FFmpeg 7.1 et plus), défaut de zscale qui effaçait le bas des sous-titres (FFmpeg 8.1 et plus) ; vidéo de test HLG dans l'autotest et vidéo Dolby Vision dans les tests ; démarrage comparé aussi à la 2.2.0 ; cahier des charges finalisé (§8.2, §8.3, §8.5) | Fait |
+
+### V3.1 : retouches de l'interface et du module Sous-titres
+
+Demandes de l'utilisateur du 02/10/2026 (« avant de passer à la V4 »), réécrites et validées le jour même dans le document « UGC Studio - V3.1 Retouches interface » (projet ECOM BUILDR ; ses réponses sont au §8 de ce document). Toute l'app : barre latérale plus fine avec le projet en haut, titre du module dans le bandeau, les mêmes espaces partout, noms des champs au-dessus, cases à cocher à la taille du texte, listes déroulantes revues, roue de chargement dans les boutons, moins de texte à l'écran (icône « i »), fenêtre « Conseils » en cartes. Module Sous-titres : « Rétablir » revient au préréglage enregistré, nouveau préréglage neutre « Par défaut » (★), Source et Exporter en haut, trois zones côte à côte (Aperçu, Apparence, Sous-titres) et la frise en bas, aperçu à la taille de la vidéo, zone Source (module Transcription ou import : autre vidéo, sous-titres d'une prise ou d'un fichier SRT).
+
+#### 12.5 V3.1 : lots
+
+Même méthode que la V3 : une branche et une Pull Request par lot, fabrication automatique verte, captures relues, fusion et Release, puis le lot suivant sans attendre de validation. L'utilisateur teste le résultat final (la 3.1.0).
+
+| Lot | Version | Contenu | État |
+|---|---|---|---|
+| 1 | 3.0.1 | **Fenêtre** : barre latérale de 200 px avec le bouton du projet en haut (logo retiré), titre et sous-titre du module dans le bandeau avec « Conseils » au bout, ligne verticale avant le coût de la session, 16 px autour et entre les blocs, barre de défilement au bord de la fenêtre, Réglages défile comme les autres pages (§9.2, §9.4 bis, §9.4 quater, §9.6) | Fait |
+| 2 | 3.0.2 | **Champs** : noms au-dessus, cases à cocher de 14 px, listes déroulantes | À faire |
+| 3 | 3.0.3 | **Boutons et aides** : roue de chargement, ↺ sans texte, infos en icône « i », fenêtre Conseils en cartes, « Tout en majuscules » | À faire |
+| 4 | 3.0.4 | **Sous-titres (1)** : le préréglage enregistré comme référence de « Rétablir », ↺ à côté des titres, plus de résumés, préréglage « Par défaut » ★ | À faire |
+| 5 | 3.0.5 | **Sous-titres (2)** : Apparence, Découpage dans Sous-titres, Source et Exporter en haut, trois colonnes qui défilent chacune, frise en bas, aperçu à la taille de la vidéo | À faire |
+| 6 | 3.1.0 | **Sous-titres (3)** : zone Source (module Transcription ou import : autre vidéo, sous-titres d'une prise ou d'un fichier SRT, fenêtre « Corriger les mots ») ; cahier des charges finalisé | À faire |
 
 ### V4 : voix avancées et fournisseurs
 - Voice Replication (avec consentement), multi-voix.

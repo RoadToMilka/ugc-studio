@@ -31,7 +31,7 @@ from ...dialogues.choix_modeles import DialogueChoixModeles
 from ...composants.montant_label import MontantLabel
 from ...ouvrir import ouvrir_page_web
 from ...theme import Dimensions, Espacements, Typo
-from ...composants.defilement import zone_defilante
+from ...composants.onglets import contenu_d_onglet
 
 NATURES = {"texte": "texte envoyé", "audio": "audio"}
 # Les capacités passent sous le nom du modèle, pour laisser la place à « Utilisé dans ».
@@ -83,10 +83,7 @@ class OngletModeles(QWidget):
         super().__init__()
         self._services = services
 
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(0, 0, 0, 0)
-        zone, contenu = zone_defilante(marges=(0, Espacements.XL, 0, Espacements.XXL))
-        disposition.addWidget(zone)
+        contenu = contenu_d_onglet(self)  # la page Réglages défile : pas de zone à part (V3.1)
 
         # --- Taux de change ---
         cadre, d = bloc("Taux de change")
