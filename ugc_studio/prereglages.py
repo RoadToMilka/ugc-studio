@@ -74,7 +74,7 @@ def normaliser(style) -> dict:
 
 
 def appliquer(reglages: ReglagesSousTitres, prereglage: Prereglage) -> ReglagesSousTitres:
-    """Réglages du projet avec le style du préréglage (format, plateforme et vidéo d'aperçu ne
+    """Réglages du projet avec le style du préréglage (format, plateforme et vidéo importée ne
     changent pas) ; le préréglage devient celui d'origine."""
     return replace(avec_le_style(reglages, prereglage.style), prereglage=prereglage.identifiant, prereglage_nom=prereglage.nom)
 
@@ -200,7 +200,7 @@ class BibliothequePrereglages:
     def reference(self, reglages: ReglagesSousTitres) -> ReglagesSousTitres:
         """Ce que les ↺ du studio remettent (V3.1) : le style du préréglage d'origine du projet, tel
         qu'il est enregistré dans la bibliothèque ; sans préréglage (ou s'il a été supprimé depuis), le
-        style de départ. L'écran et la vidéo d'aperçu restent ceux du projet."""
+        style de départ. L'écran et la vidéo importée restent ceux du projet."""
         origine = self.prereglage(reglages.prereglage)
         if origine is not None:
             return appliquer(reglages, origine)

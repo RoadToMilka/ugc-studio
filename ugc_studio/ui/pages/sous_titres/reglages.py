@@ -24,14 +24,13 @@ qui s'en écarte a son nom en mauve, et le ↺ de son groupe apparaît à côté
 (definir_reference). Position et Découpage forment chacun un groupe ; le ↺ « Revenir à 0 % » du
 réglage fin a disparu : celui du groupe Position remet la position du préréglage, réglage fin compris.
 - Écran : format (suivi de la vidéo quand il y en a une, sinon au choix, dont personnalisé), zone de
-  sécurité, marge maximum ; pour un projet sans vidéo, la vidéo choisie seulement pour l'aperçu.
+  sécurité, marge maximum. La vidéo choisie pour l'aperçu d'un projet sans vidéo y était jusqu'à la
+  3.0.5 : c'est maintenant la vidéo importée de la zone Source (V3.1, lot 6, source.py).
 
 Ce panneau ne fait que montrer et lire les réglages : la page (atelier.py) les applique.
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QMenu, QVBoxLayout, QWidget
@@ -49,7 +48,7 @@ from ....sous_titres import (
     cote_pair,
 )
 from ....prereglages import Prereglage
-from ....style_sous_titres import ALIGNEMENTS, POSITIONS, Position, VideoApercu
+from ....style_sous_titres import ALIGNEMENTS, POSITIONS, Position
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
 from ...composants.elements import (
@@ -61,7 +60,6 @@ from ...composants.elements import (
     conteneur_vertical,
     glissiere,
     info,
-    intitule,
     libelle,
     liste_deroulante,
 )
@@ -84,9 +82,6 @@ class PanneauReglages(QWidget):
     change = Signal()  # un réglage qui peut changer le découpage (la page le vérifie, puis l'applique)
     position_change = Signal()  # position verticale ou réglage fin : seul l'aperçu change
     masquer_change = Signal(bool)  # « Masquer les hésitations » (réglage partagé avec la transcription)
-    choisir_video_demande = Signal()  # « Choisir une vidéo… » (vidéo d'aperçu)
-    retirer_video_demande = Signal()
-    video_apercu_change = Signal()  # décalage ou son de la vidéo d'aperçu
     # Préréglages (lot 7) : la page s'en charge (bibliothèque, question avant de défaire un ajustement).
     prereglage_choisi = Signal(str)  # identifiant du préréglage choisi dans la liste
     enregistrer_prereglage_demande = Signal()  # « Enregistrer… » : nouveau préréglage avec ce style
@@ -121,7 +116,6 @@ class PanneauReglages(QWidget):
         disposition.addWidget(self.onglets)
         # Le découpage (V3.1, lot 5) : construit ici, placé par la page en haut du bloc Sous-titres.
         self.zone_decoupage = self._zone_decoupage()
-        self._apercu = VideoApercu()
         self._resolution_imposee: tuple[int, int] | None | bool = False  # False : liste des formats pas encore remplie
         self._reference: ReglagesSousTitres | None = None  # le préréglage du projet (V3.1), donné par la page
 
@@ -280,7 +274,8 @@ class PanneauReglages(QWidget):
         ]
         self.zone_masquer, self.masquer = case_a_cocher(
             "Masquer les hésitations",
-            "« euh », « hum »… Même réglage que dans le module Transcription ; il ne fait pas partie d'un préréglage.",
+            "« euh », « hum »… Pour les mots du module Transcription, le même réglage que là-bas ; chaque "
+            "source a le sien. Il ne fait pas partie d'un préréglage.",
         )
         groupe.addWidget(self.zone_masquer)
         for champ in (self.caracteres, self.mots_max, self.lignes, self.duree_min):
@@ -324,55 +319,12 @@ class PanneauReglages(QWidget):
         # ampoule (V3.1).
         self.infos_ecran = libelle("", "legende")
         contenu.addWidget(self.infos_ecran)
-        contenu.addWidget(self._zone_video_apercu())
         contenu.addStretch(1)
         self.format.currentIndexChanged.connect(lambda _index: self._format_change())
         for element in (self.largeur_perso, self.hauteur_perso, self.marge):
             element.valueChanged.connect(lambda _valeur: self.change.emit())
         self.plateforme.currentIndexChanged.connect(lambda _index: self.change.emit())
         return page
-
-    def _zone_video_apercu(self) -> QWidget:
-        """Projet sans vidéo (prise de voix) : une vidéo choisie seulement pour l'aperçu (§7.7)."""
-        self.zone_video, contenu = conteneur_vertical(Espacements.S)
-        contenu.setContentsMargins(0, Espacements.S, 0, 0)
-        contenu.addWidget(
-            intitule(
-                "Vidéo d'aperçu",
-                "Par exemple ton montage exporté de Premiere Pro : tu vois tes sous-titres sur la vraie image. "
-                "Elle n'est pas copiée dans le projet, et elle impose son format.",
-            )
-        )
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.S)
-        self.bouton_choisir_video = bouton(
-            "Choisir une vidéo…", variante="contour", nom_icone="film", action=lambda: self.choisir_video_demande.emit()
-        )
-        ligne.addWidget(self.bouton_choisir_video)
-        self.bouton_retirer_video = bouton(
-            "Retirer", variante="contour", nom_icone="trash", action=lambda: self.retirer_video_demande.emit()
-        )
-        ligne.addWidget(self.bouton_retirer_video)
-        ligne.addStretch(1)
-        contenu.addLayout(ligne)
-        self.nom_video = libelle("", "secondaire")
-        contenu.addWidget(self.nom_video)
-        self.decalage_video = champ_decimal(0.0, 3600.0, 0.1, 1, " s", "Moment de la vidéo où la voix commence")
-        self.ligne_decalage = QWidget()
-        disposition = QHBoxLayout(self.ligne_decalage)
-        disposition.setContentsMargins(0, 0, 0, 0)
-        disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("La voix commence à", "legende", retour_a_la_ligne=False))
-        disposition.addWidget(self.decalage_video)
-        disposition.addStretch(1)
-        contenu.addWidget(self.ligne_decalage)
-        self.zone_son_video, self.son_video = case_a_cocher(
-            "Son de la vidéo", "Sinon : la voix de la prise, sous la vidéo muette."
-        )
-        contenu.addWidget(self.zone_son_video)
-        self.decalage_video.valueChanged.connect(lambda _valeur: self.video_apercu_change.emit())
-        self.son_video.toggled.connect(lambda _coche: self.video_apercu_change.emit())
-        return self.zone_video
 
     # --- Réglage fin ---------------------------------------------------------------------------
 
@@ -416,13 +368,11 @@ class PanneauReglages(QWidget):
         resolution_imposee: tuple[int, int] | None,
         masquer: bool,
         transcription: bool,
-        video_du_projet: bool,
         hauteur_video: int,
         police_remplacee: bool = False,
         accentues_du_script: int | None = None,
     ) -> None:
         """Montre les réglages du projet. `resolution_imposee` : une vidéo impose son format ;
-        `video_du_projet` : le projet a sa propre vidéo (pas de vidéo d'aperçu à choisir) ;
         `hauteur_video` : pour montrer les tailles du style en pixels de la vidéo."""
         self.texte.charger(
             reglages.texte, hauteur_video, max(1, round(hauteur_video * reglages.texte.taille_pct / 100)), police_remplacee
@@ -433,7 +383,6 @@ class PanneauReglages(QWidget):
             self.verticale, self.reglage_fin, self.alignement,
             self.largeur_lignes, self.caracteres, self.mots_max, self.lignes, self.duree_min, self.couper_ponctuation,
             self.masquer, self.format, self.largeur_perso, self.hauteur_perso, self.plateforme, self.marge,
-            self.decalage_video, self.son_video,
         )
         for element in elements:
             element.blockSignals(True)
@@ -459,13 +408,9 @@ class PanneauReglages(QWidget):
         self._montrer_taille_perso(resolution_imposee is None and reglages.format == FORMAT_PERSONNALISE)
         choisir(self.plateforme, reglages.plateforme)
         self.marge.setValue(reglages.marge_max_pct)
-        self._apercu = reglages.apercu
-        self.decalage_video.setValue(reglages.apercu.decalage_s)
-        self.son_video.setChecked(reglages.apercu.son_de_la_video)
         for element in elements:
             element.blockSignals(False)
         self._reglage_fin_texte()
-        self._montrer_video_apercu(video_du_projet)
         self._actualiser_marques()
 
     # --- Référence : le préréglage du projet (V3.1) ------------------------------------------------
@@ -573,21 +518,8 @@ class PanneauReglages(QWidget):
         self.format.setEnabled(resolution_imposee is None)
         self.info_format.setVisible(resolution_imposee is not None)
 
-    def _montrer_video_apercu(self, video_du_projet: bool) -> None:
-        self.zone_video.setVisible(not video_du_projet)
-        choisie = bool(self._apercu.chemin)
-        self.bouton_retirer_video.setVisible(choisie)
-        self.bouton_choisir_video.setText("Changer de vidéo…" if choisie else "Choisir une vidéo…")
-        self.nom_video.setVisible(choisie)
-        if choisie:
-            resolution = self._apercu.resolution
-            details = f"  ·  {resolution[0]} × {resolution[1]}" if resolution else ""
-            self.nom_video.setText(f"{Path(self._apercu.chemin).name}{details}")
-        self.ligne_decalage.setVisible(choisie)
-        self.zone_son_video.setVisible(choisie)
-
     def reglages(self, base: ReglagesSousTitres) -> ReglagesSousTitres:
-        """Réglages tels que choisis dans le panneau (la vidéo d'aperçu, elle, vient de `base`)."""
+        """Réglages tels que choisis dans le panneau (la vidéo importée, elle, vient de `base`)."""
         format_choisi = self.format.currentData() if self.format.isEnabled() else base.format
         return ReglagesSousTitres(
             caracteres_max=self.caracteres.value(),
@@ -608,6 +540,3 @@ class PanneauReglages(QWidget):
             prereglage=base.prereglage,
             prereglage_nom=base.prereglage_nom,
         )
-
-    def decalage_et_son(self) -> tuple[float, bool]:
-        return round(self.decalage_video.value(), 2), self.son_video.isChecked()

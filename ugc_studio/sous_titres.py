@@ -287,7 +287,7 @@ def style_de_depart_complet() -> dict:
 
 def avec_le_style(reglages: ReglagesSousTitres, style: dict) -> ReglagesSousTitres:
     """Réglages du projet avec ce style (texte, mots, animations, position, découpage) ; l'écran, la
-    vidéo d'aperçu et le préréglage d'origine ne changent pas."""
+    vidéo importée (zone Source) et le préréglage d'origine ne changent pas."""
     lu = ReglagesSousTitres.depuis_dict({"style": style if isinstance(style, dict) else {}})
     return replace(
         reglages,
@@ -777,16 +777,17 @@ def texte_reglage_qui_defait(concernes: list[tuple[int, str, tuple[Refus, ...]]]
     return "\n".join(lignes)
 
 
-def texte_ajustements_defaits(defaits: list[tuple[int, Defait]]) -> str:
-    """Message de la page Sous-titres quand des mots changés dans le module Transcription défont
-    des ajustements : (numéro du sous-titre où se trouvent maintenant ses mots, ajustement défait)."""
+def texte_ajustements_defaits(defaits: list[tuple[int, Defait]], module: bool = True) -> str:
+    """Message de la page Sous-titres quand des mots changés dans le module Transcription (ou, V3.1,
+    des mots importés corrigés : `module` False) défont des ajustements : (numéro du sous-titre où se
+    trouvent maintenant ses mots, ajustement défait)."""
 
     def decrire(numero: int, defait: Defait) -> str:
         if not defait.texte:
             return "un sous-titre ajusté n'a plus aucun mot affiché"
         return f"sous-titre {numero} (« {_sur_une_ligne(defait.texte)} ») : {_raisons(defait.refus)}"
 
-    debut = "Des mots ont changé dans le module Transcription"
+    debut = "Des mots ont changé dans le module Transcription" if module else "Des mots ont changé"
     if len(defaits) == 1:
         ((numero, defait),) = defaits
         if not defait.texte:
@@ -1152,6 +1153,18 @@ def srt(sous_titres: list[SousTitre]) -> str:
         for numero, s in enumerate(sous_titres, 1)
     ]
     return "\r\n\r\n".join(blocs) + ("\r\n" if blocs else "")
+
+
+def decales(sous_titres: list[SousTitre], mots: list[MotAffiche], decalage: float) -> tuple[list[SousTitre], list[MotAffiche]]:
+    """Les sous-titres et leurs mots sur le temps de la vidéo, quand la voix y commence `decalage`
+    secondes après son début (V3.1, « La voix commence à » : sous-titres d'une prise sur le montage).
+    Les exports dessinent chaque image de la vidéo à son moment : les sous-titres doivent y être."""
+    if not decalage:
+        return list(sous_titres), list(mots)
+    return (
+        [replace(s, debut=s.debut + decalage, fin=s.fin + decalage) for s in sous_titres],
+        [replace(m, debut=m.debut + decalage, fin=m.fin + decalage) for m in mots],
+    )
 
 
 def ecrire_srt(chemin: Path, sous_titres: list[SousTitre]) -> None:

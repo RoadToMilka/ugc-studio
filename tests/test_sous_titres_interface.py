@@ -8,6 +8,7 @@ from ugc_studio.audio import wav_depuis_pcm
 from ugc_studio.fournisseurs.base import Adaptateur, ErreurFournisseur
 from ugc_studio.fournisseurs.stt import MotTranscrit, ResultatTranscription
 from ugc_studio.projets import FICHIER_AUDIO
+from ugc_studio.sources import SOURCE_IMPORTEE, SOURCE_TRANSCRIPTION
 from ugc_studio.transcription import Mot, Transcription
 from ugc_studio.ui import taches
 from ugc_studio.ui.pages.sous_titres import PageSousTitres
@@ -166,25 +167,65 @@ def test_creer_les_sous_titres_d_une_prise(atelier, qtbot, services):
     qtbot.waitUntil(lambda: atelier.statut.property("role") == "succes", timeout=10_000)
     (requete,) = FauxTranscripteur.requetes
     assert requete.langue == "fr-FR" and requete.horodatage and not requete.separation_voix
-    transcription = services.projets.projet.transcription
+    projet = services.projets.projet
+    # V3.1, lot 6 : des mots importés, choisis ; le module Transcription garde les siens (aucun ici).
+    transcription = projet.sous_titres_importes
+    assert projet.transcription is None and projet.sources.sous_titres == SOURCE_IMPORTEE
     # Orthographe du script (majuscules, ponctuation, nom de marque), temps de la transcription.
     assert [m.texte for m in transcription.mots] == ["Franchement,", "ce", "sérum", "Glowzy", "est", "top !"]
     assert (transcription.mots[3].debut, transcription.mots[3].fin) == (1.2, 1.7)
     assert transcription.prise == prise.identifiant and transcription.source == prise.nom
-    assert services.projets.projet.chemin(FICHIER_AUDIO).read_bytes() == WAV_PRISE
+    # La piste son est celle de la prise elle-même (plus de copie dans celle du module Transcription).
+    assert transcription.audio == prise.fichier and not projet.chemin(FICHIER_AUDIO).exists()
     (appel,) = services.couts.lire()
     assert appel.operation == "transcription" and Decimal(transcription.cout_eur) == appel.cout_eur
     assert atelier.sous_titres and "voix générée" in atelier.texte_source.text()
+    assert atelier.source.choix_mots.valeur() == SOURCE_IMPORTEE
     assert taches.en_cours() == 0
 
 
-def test_prise_qui_remplacerait_une_transcription(atelier, services, monkeypatch):
-    video = _transcription_video(services)
+def test_une_prise_ne_remplace_plus_la_transcription(atelier, qtbot, services):
+    """V3.1, lot 6 : les sous-titres d'une prise s'ajoutent aux mots du module Transcription, qui
+    restent ; on passe de l'une à l'autre sans rien perdre, retouches comprises."""
+    prise = _prise(services)
+    _pub_en_sous_titres(atelier, services)  # « Mais ce sérum », « Glowzy a vraiment »…
+    video = services.projets.projet.transcription
+    atelier.choisir_sous_titre(0)
+    atelier.couper_avant(1)  # une retouche des sous-titres de la vidéo : « Mais » | « ce sérum »
+    de_la_video = [s.texte for s in atelier.sous_titres]
+    assert de_la_video[:2] == ["Mais", "ce sérum"]
+    atelier.creer_depuis_prise(prise.identifiant)
+    qtbot.waitUntil(lambda: atelier.statut.property("role") == "succes", timeout=10_000)
+    projet = services.projets.projet
+    assert projet.transcription is video and len(video.ajustements_sous_titres) == 2  # rien n'est remplacé
+    assert projet.sous_titres_importes.prise == prise.identifiant
+    assert [s.texte for s in atelier.sous_titres] != de_la_video
+    # La vidéo du module et les mots d'une prise : « La voix commence à » les cale.
+    assert not atelier.source.ligne_decalage.isHidden()
+    atelier.source.choix_mots.bouton(SOURCE_TRANSCRIPTION).click()
+    assert projet.sources.sous_titres == SOURCE_TRANSCRIPTION and [s.texte for s in atelier.sous_titres] == de_la_video
+    assert "pub.mp4" in atelier.texte_source.text() and atelier.source.ligne_decalage.isHidden()
+    atelier.source.choix_mots.bouton(SOURCE_IMPORTEE).click()
+    assert "voix générée" in atelier.texte_source.text() and atelier.sous_titres[0].texte.startswith("Franchement")
+
+
+def test_nouvel_import_apres_confirmation_si_retouches(atelier, qtbot, services, monkeypatch):
+    """Un nouvel import remplace l'import précédent : il demande d'abord s'il avait des retouches."""
     prise = _prise(services)
     atelier.rafraichir()
-    monkeypatch.setattr(atelier, "_confirmer_remplacement", lambda _actuelle: False)
     atelier.creer_depuis_prise(prise.identifiant)
-    assert services.projets.projet.transcription is video and FauxTranscripteur.requetes == []
+    qtbot.waitUntil(lambda: atelier.statut.property("role") == "succes", timeout=10_000)
+    importes = services.projets.projet.sous_titres_importes
+    questions = []
+    monkeypatch.setattr(atelier, "_confirmer_remplacement", lambda actuelle: questions.append(actuelle) or False)
+    atelier.creer_depuis_prise(prise.identifiant)  # sans retouche : remplacé sans question
+    qtbot.waitUntil(lambda: services.projets.projet.sous_titres_importes is not importes, timeout=10_000)
+    assert questions == [] and len(FauxTranscripteur.requetes) == 2
+    importes = services.projets.projet.sous_titres_importes
+    importes.corrigee = True  # une retouche : un mot corrigé
+    atelier.creer_depuis_prise(prise.identifiant)
+    assert questions == [importes] and len(FauxTranscripteur.requetes) == 2  # « Annuler » : rien n'est envoyé
+    assert services.projets.projet.sous_titres_importes is importes
 
 
 def test_erreur_de_transcription_de_la_prise(atelier, qtbot, services):
@@ -194,8 +235,9 @@ def test_erreur_de_transcription_de_la_prise(atelier, qtbot, services):
     atelier.creer_depuis_prise(prise.identifiant)
     qtbot.waitUntil(lambda: atelier.statut.property("role") == "erreur", timeout=10_000)
     assert "Limite d'utilisation" in atelier.statut.text()
-    assert services.projets.projet.transcription is None  # rien n'est remplacé
-    assert not services.projets.projet.chemin(FICHIER_AUDIO).exists()
+    projet = services.projets.projet
+    assert projet.transcription is None and projet.sous_titres_importes is None  # rien n'est remplacé
+    assert not projet.chemin(FICHIER_AUDIO).exists()
     assert atelier.bouton_creer.isEnabled()
 
 

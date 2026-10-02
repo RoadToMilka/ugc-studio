@@ -24,11 +24,12 @@ from .fournisseurs.base import Adaptateur
 from .fournisseurs.capacites import TOKENS_AUDIO_PAR_SECONDE, TOKENS_TEXTE_PAR_MINUTE_TRANSCRITE
 from .fournisseurs.stt import MODE_SMART, RequeteTranscription
 from .prix import CataloguePrix
-from .projets import FICHIER_AUDIO, Prise, Projet
+from .projets import Prise, Projet
 from .prononciation import appliquer as remplacer_dans_le_texte
 from .prononciation import Prononciation
 from .script import texte_brut
 from .services import Services
+from .sources import SOURCE_IMPORTEE
 from .transcription import (
     DUREE_MAX_HORODATEE_S,
     DUREE_MAX_TEXTE_S,
@@ -136,11 +137,13 @@ def hesitations(services: Services, transcription: Transcription | None) -> set[
 
 def transcription_de_prise(projet: Projet, prise: Prise) -> tuple[Transcription, bytes]:
     """Prépare les sous-titres d'une prise TTS (§3.3) : sa transcription, à aligner sur son script,
-    et son audio (WAV 24 kHz mono, envoyé tel quel ; rangé dans « sources » une fois transcrit)."""
+    et son audio (WAV 24 kHz mono, envoyé tel quel). V3.1 : ces mots sont importés (sources.py) ;
+    leur piste son est celle de la prise, dans le dossier « prises » (jusqu'à la 3.0.5, une copie
+    remplaçait celle du module Transcription)."""
     wav = projet.chemin(prise.fichier).read_bytes()
     transcription = Transcription(
         source=prise.nom,
-        audio=FICHIER_AUDIO,
+        audio=prise.fichier,
         duree_s=round(duree_wav(wav), 3),
         infos={"duree_s": round(duree_wav(wav), 3), "video": False},
         langue=projet.langue,
@@ -178,7 +181,14 @@ def terminer_transcription(
     transcription.ajustements_sous_titres = []  # nouveaux mots : les sous-titres ajustés à la main repartent de zéro
     transcription.date = datetime.now().astimezone().isoformat(timespec="seconds")
     transcription.cout_eur = None if appel.cout_eur is None else format(appel.cout_eur, "f")
+    transcription.corrigee = False
     if projet is not None:
-        projet.transcription = transcription
+        if transcription.prise:
+            # Sous-titres d'une prise (V3.1, lot 6) : des mots importés, choisis ; ceux du module
+            # Transcription restent.
+            projet.sous_titres_importes = transcription
+            projet.sources.sous_titres = SOURCE_IMPORTEE
+        else:
+            projet.transcription = transcription
         services.projets.enregistrer()
     return transcription

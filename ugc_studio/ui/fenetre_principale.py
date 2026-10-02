@@ -97,6 +97,9 @@ class FenetrePrincipale(QMainWindow):
         # « Corriger les mots » des sous-titres : dans le module Transcription (sur le premier mot d'un
         # sous-titre, depuis la frise du studio).
         self.page("sous-titres").atelier.corriger_demande.connect(self.corriger_les_mots)
+        # Zone Source des sous-titres (V3.1, lot 6) : le module Transcription importe et transcrit pour
+        # elle, avec ses options ; les deux modules montrent la même vidéo.
+        self.page("sous-titres").atelier.relier_transcription(self.page("transcription").atelier)
         # « Envoyer dans Voix » d'un script (V2) : ses répliques remplacent celles du module Voix.
         self.page("script").atelier.envoi_demande.connect(self.envoyer_dans_voix)
         # Accroches d'une série « Accroches seulement » (V2, lot 2) : en variantes A/B de voix.

@@ -577,8 +577,11 @@ def courbe(nom: str, avancee: float) -> float:
 
 @dataclass(frozen=True)
 class VideoApercu:
-    """Vidéo choisie seulement pour l'aperçu, pour un projet sans vidéo (sous-titres d'une prise de
-    voix) : par exemple le montage exporté de Premiere Pro. Elle n'est pas copiée dans le projet."""
+    """Vidéo importée dans la zone Source de la page Sous-titres (V3.1, lot 6, sources.py ; jusqu'à la
+    3.0.5, la « vidéo d'aperçu » de l'onglet Écran, pour un projet sans vidéo) : par exemple le montage
+    exporté de Premiere Pro. Elle n'est pas copiée dans le projet. `decalage_s` (« La voix commence
+    à ») vaut aussi pour la vidéo du module Transcription quand les mots viennent d'un autre
+    enregistrement (voir sources.decalage_des_mots)."""
 
     chemin: str = ""
     decalage_s: float = 0.0  # moment de la vidéo où la voix commence

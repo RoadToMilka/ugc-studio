@@ -126,7 +126,7 @@ def test_projet_de_la_v1_garde_son_decoupage_et_prend_l_apparence_de_la_v1():
     assert reglages.position == Position(BAS, 0.0, CENTRE, 100.0)
 
 
-def test_projet_au_format_6_s_ouvre_et_s_enregistre_au_format_7(tmp_path):
+def test_projet_au_format_6_s_ouvre_et_s_enregistre_au_format_actuel(tmp_path):
     dossier = tmp_path / "Ancien"
     dossier.mkdir()
     (dossier / "projet.json").write_text(
@@ -138,7 +138,7 @@ def test_projet_au_format_6_s_ouvre_et_s_enregistre_au_format_7(tmp_path):
     assert projet.sous_titres.texte.casse == CASSE_MAJUSCULES and projet.sous_titres.lignes_max == 1
     gestion.enregistrer()
     ecrit = json.loads((dossier / "projet.json").read_text(encoding="utf-8"))
-    assert ecrit["version_format"] == Projet.VERSION_FORMAT == 7
+    assert ecrit["version_format"] == Projet.VERSION_FORMAT == 8  # V3.1, lot 6 : les sources des sous-titres
     assert ecrit["sous_titres"]["style"]["texte"]["casse"] == "majuscules"
     assert ecrit["sous_titres"]["style"]["decoupage"]["lignes_max"] == 1
 

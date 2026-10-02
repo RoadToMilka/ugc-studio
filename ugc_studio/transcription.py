@@ -79,6 +79,9 @@ class Transcription:
     # de son premier mot, fin de son dernier mot). Repérés par le temps, ils suivent les mots
     # corrigés ; une nouvelle transcription les efface.
     ajustements_sous_titres: list[list[float]] = field(default_factory=list)
+    # Mots corrigés à la main (V3.1, lot 6) : un nouvel import de sous-titres demande d'abord, pour ne
+    # pas perdre ces corrections sans le savoir.
+    corrigee: bool = False
 
     @property
     def horodatee(self) -> bool:

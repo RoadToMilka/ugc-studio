@@ -19,6 +19,7 @@ from ugc_studio.exports.plan import (
     texte_des_sous_titres,
 )
 from ugc_studio.projets import Projet
+from ugc_studio.sources import SOURCE_IMPORTEE
 from ugc_studio.style_sous_titres import VideoApercu
 from ugc_studio.transcription import Mot, Transcription
 
@@ -40,9 +41,13 @@ def _projet_video(dossier: Path, infos: dict | None = None) -> Projet:
 
 
 def _projet_prise(dossier: Path) -> Projet:
+    """Sous-titres d'une prise de voix : des mots importés (V3.1, lot 6), choisis."""
     projet = Projet(dossier / "Projet", "Voix Glowzy")
     projet.dossier.mkdir(parents=True)
-    projet.transcription = Transcription(source="Prise 3", audio="sources/audio.wav", duree_s=12.34, prise="prise-003", mots=[Mot("Salut", 0.1, 0.4)])
+    projet.sous_titres_importes = Transcription(
+        source="Prise 3", audio="prises/prise-003.wav", duree_s=12.34, prise="prise-003", mots=[Mot("Salut", 0.1, 0.4)]
+    )
+    projet.sources.sous_titres = SOURCE_IMPORTEE
     return projet
 
 
@@ -100,9 +105,52 @@ def test_source_d_une_prise(tmp_path):
     projet = _projet_prise(tmp_path)
     source = source_du_projet(projet)
     assert not source.video and source.prise and source.chemin is None and source.dossier is None
-    assert source.duree_s == 12.34
-    projet.sous_titres.apercu = VideoApercu(str(tmp_path / "Montage" / "montage.mp4"), 1.5, 1080, 1920)
-    assert source_du_projet(projet).dossier == tmp_path / "Montage"  # dossier de la vidéo d'aperçu
+    assert source.duree_s == 12.34 and source.decalage_s == 0.0 and source.voix is None
+    # V3.1, lot 6 : la vidéo importée (ex. le montage) devient la source de l'export, avec le moment où
+    # la voix y commence ; muette, la voix de la prise passe dessous.
+    montage = tmp_path / "Montage" / "montage.mp4"
+    projet.sous_titres.apercu = VideoApercu(str(montage), 1.5, 1080, 1920, son_de_la_video=False)
+    assert not source_du_projet(projet).video  # importée, mais pas choisie
+    projet.sources.video = SOURCE_IMPORTEE
+    source = source_du_projet(projet)
+    assert source.video and source.chemin == montage and source.dossier == tmp_path / "Montage"
+    assert (source.largeur, source.hauteur, source.decalage_s, source.prise) == (1080, 1920, 1.5, True)
+    assert source.voix is None  # le fichier de la prise manque : le son de la vidéo reste
+    voix = projet.chemin("prises/prise-003.wav")
+    voix.parent.mkdir()
+    voix.write_bytes(b"RIFF")
+    assert source_du_projet(projet).voix == voix
+    projet.sous_titres.apercu = replace(projet.sous_titres.apercu, son_de_la_video=True)
+    assert source_du_projet(projet).voix is None  # « Son de la vidéo » coché : son son à elle
+
+
+def test_source_d_un_fichier_srt_et_de_mots_d_un_autre_enregistrement(tmp_path):
+    """V3.1, lot 6 : des mots d'un fichier SRT, sans vidéo (pas de son) ; puis sur la vidéo du module
+    Transcription, où ils commencent à « La voix commence à »."""
+    projet = _projet_video(tmp_path)
+    module = projet.transcription
+    projet.sous_titres_importes = Transcription(
+        source=str(tmp_path / "montage.srt"), duree_s=6.5, infos={"srt": True, "video": False, "sous_titres": 3},
+        mots=[Mot("Salut", 0.1, 0.4)],
+    )
+    projet.sources.sous_titres = SOURCE_IMPORTEE
+    projet.sous_titres.apercu = VideoApercu(decalage_s=2.0)
+    source = source_du_projet(projet)
+    assert source.video and source.chemin == Path(module.source) and source.decalage_s == 2.0 and source.voix is None
+    projet.transcription = replace(module, source="C:/Sons/voix.wav", infos={"video": False})  # un audio seul
+    source = source_du_projet(projet)
+    assert not source.video and source.chemin is None and source.format == "SRT" and source.codec_audio == ""
+    assert source.duree_s == 6.5 and source.decalage_s == 0.0  # pas de vidéo : rien à caler
+
+
+def test_ancienne_prise_dans_le_module_transcription(tmp_path):
+    """Robustesse : une prise restée dans les mots du module Transcription n'est pas prise pour un
+    fichier (son nom n'est pas un chemin)."""
+    projet = _projet_prise(tmp_path)
+    projet.transcription, projet.sous_titres_importes = projet.sous_titres_importes, None
+    projet.sources.sous_titres = "transcription"
+    source = source_du_projet(projet)
+    assert source.chemin is None and source.prise and not source.video and source.format == "WAV"
 
 
 def test_nom_propose(tmp_path):

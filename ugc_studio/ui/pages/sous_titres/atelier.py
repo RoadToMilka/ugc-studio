@@ -4,10 +4,12 @@ Disposition (V3.1, lot 5, disposition.py) : en haut, Source à gauche et Exporte
 l'Aperçu, l'Apparence et les Sous-titres (trois colonnes qui défilent chacune seule en grande
 fenêtre ; aperçu et apparence côte à côte, puis la liste, en fenêtre moyenne) ; la Frise en bas.
 
-1. Source (« Mots des sous-titres » jusqu'à la 3.0.4) : les mots de la transcription du projet
-   (vidéo transcrite dans le module Transcription), ou ceux d'une prise de voix : « Créer les
-   sous-titres » transcrit la prise puis cale les mots sur son script (orthographe exacte). Les mots
-   se corrigent dans le module Transcription.
+1. Source (source.py, V3.1, lot 6 ; « Mots des sous-titres » jusqu'à la 3.0.4) : la vidéo de
+   l'aperçu (celle du module Transcription, ou une vidéo importée ici) et les mots des sous-titres
+   (ceux du module Transcription, ou des mots importés ici : d'une prise de voix, que « Créer les
+   sous-titres » transcrit puis cale sur son script, ou d'un fichier SRT). On passe de l'une à
+   l'autre sans rien perdre (sources.py). Les mots du module se corrigent dans le module, les mots
+   importés dans la fenêtre « Corriger les mots » (la même correction).
 2. Aperçu (apercu.py) : la vidéo, ou un fond gris ou un damier, et les sous-titres dessinés par le
    moteur de dessin, le même que l'export de la V3 ; la zone a la taille de la vidéo affichée.
 3. Apparence (reglages.py ; « Réglages » jusqu'à la 3.0.4) : préréglage, onglets Texte, Mots,
@@ -37,30 +39,44 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush
-from PySide6.QtWidgets import QFileDialog, QGridLayout, QHBoxLayout, QInputDialog, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMenu, QMessageBox, QTableWidgetItem, QVBoxLayout
 
 from ....alignement import mots_du_script_accentues
 from ....chemins import dossier_documents
 from ....exports.plan import SousTitresAExporter, source_du_projet
 from ....fournisseurs.stt import MODE_VERBATIM
+from ....import_srt import FILTRE, ErreurSrt, est_srt, transcription_depuis_srt
 from ....mise_en_page import limites_du_reglage_fin
 from ....modeles_charges import SOUS_TITRES
 from ....prereglages import appliquer as appliquer_le_prereglage
 from ....prereglages import modifie, style_du_projet
-from ....projets import FICHIER_AUDIO, ErreurProjet, Projet, nom_de_dossier
+from ....projets import ErreurProjet, Projet, nom_de_dossier
 from ....rendu.moteur import Moteur
 from ....rendu.polices import NOMS_GRAISSES, police_remplacee
 from ....script import texte_brut
 from ....services import Services
+from ....sources import (
+    SOURCE_IMPORTEE,
+    SOURCE_TRANSCRIPTION,
+    a_des_retouches,
+    a_une_video,
+    audio_des_mots,
+    decalage_des_mots,
+    mots_des_sous_titres,
+    video_de_l_apercu,
+    voix_a_caler,
+)
 from ....sous_titres import (
     ESPACE_INSECABLE,
     MotAffiche,
     Reorganisation,
     SousTitre,
+    decales,
     ecrire_srt,
     resolution,
     retablir_automatique,
@@ -77,6 +93,7 @@ from ....stt import (
     MODELE_PAR_DEFAUT,
     Options,
     estimer_cout,
+    hesitations,
     terminer_transcription,
     transcription_de_prise,
     transcrire_source,
@@ -85,32 +102,28 @@ from ....style_sous_titres import VideoApercu
 from ....transcription import Transcription, resolution_video
 from ... import taches
 from ...composants.apercu import LecteurApercu
-from ...composants.bouton import montrer_occupe
+from ...composants.bouton import BoutonOccupe, montrer_occupe
 from ...composants.choix_voix import choisir
 from ...composants.defilement import ColonneDefilante
 from ...composants.elements import (
-    BoutonInfo,
     bloc,
     bouton,
     conteneur_vertical,
     info,
     intitule,
     libelle,
-    ligne_avec_aide,
-    liste_deroulante,
     minutes_secondes,
 )
 from ...composants.flux import DispositionFlux
 from ...composants.frise import FriseSousTitres
-from ...composants.montant_label import MontantLabel
 from ...composants.tableau import Colonne, Tableau
 from ...connexion_ia import FOURNISSEUR, adaptateur_par_defaut, message_erreur
+from ...dialogues.corriger_mots import DialogueCorrigerMots
 from ...dialogues.export import DialogueExportCalque, DialogueExportVideo
 from ...dialogues.prereglages import DialoguePrereglages
 from ...extraction import FILTRE_FICHIERS, LecteurInfos
 from ...sous_titres_du_projet import (
     Calcul,
-    a_sa_video,
     ajustements,
     calculer as calculer_du_projet,
     confirmer_reglage,
@@ -124,6 +137,7 @@ from ..transcription.atelier import description_source
 from .apercu import BlocApercu
 from .disposition import GRANDE, DispositionStudio
 from .reglages import PanneauReglages
+from .source import BlocSource, EtatSource
 
 journal = logging.getLogger(__name__)
 
@@ -193,6 +207,10 @@ class AtelierSousTitres(Page):
         self._enregistrement_position.setSingleShot(True)
         self._enregistrement_position.setInterval(DELAI_ENREGISTREMENT_POSITION_MS)
         self._enregistrement_position.timeout.connect(self._services.projets.enregistrer)
+        # V3.1, lot 6 : le module Transcription (relier_transcription), qui importe et transcrit pour
+        # la zone Source ; le bouton où tourne le cercle en attendant qu'il ait fini.
+        self._module_transcription = None
+        self._attente_du_module = BoutonOccupe()
 
         # --- Aperçu et apparence ---
         self.bloc_apercu = BlocApercu(services.preferences)
@@ -232,59 +250,28 @@ class AtelierSousTitres(Page):
     # --- Construction ------------------------------------------------------------------------
 
     def _bloc_source(self):
-        """Source (V3.1, lot 5 ; « Mots des sous-titres » jusqu'à la 3.0.4) : d'où viennent les mots
-        des sous-titres, en haut à gauche de la page. « Corriger les mots » au bout de la ligne qui
-        les décrit."""
-        self.cadre_source, d = bloc("Source")
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.M)
-        self.texte_source = libelle("", "secondaire")
-        ligne.addWidget(self.texte_source, 1)
-        self.bouton_corriger = bouton(
-            "Corriger les mots", variante="contour", nom_icone="pencil", action=lambda: self.corriger_demande.emit(-1.0)
-        )
-        self.bouton_corriger.setToolTip("Corriger un mot ou son moment dans le module Transcription")
-        ligne.addWidget(self.bouton_corriger, 0, Qt.AlignmentFlag.AlignVCenter)
-        d.addLayout(ligne)
-        # La liste des prises sous son nom (V3.1), le bouton sur sa ligne ; l'explication au survol de
-        # l'icône « i » après « Prise ».
-        ligne = QGridLayout()
-        ligne.setHorizontalSpacing(Espacements.S)
-        ligne.setVerticalSpacing(Espacements.XS)
-        self.prises = liste_deroulante("Prise dont créer les sous-titres")
+        """Source (V3.1, lot 6, source.py) : la vidéo de l'aperçu et les mots des sous-titres, en haut
+        à gauche de la page. Raccourcis vers ses éléments (tests, autotest) : la ligne qui dit d'où
+        viennent les mots, « Corriger les mots », la liste des prises et « Créer les sous-titres »."""
+        self.source = source = BlocSource()
+        self.cadre_source = source
+        self.texte_source, self.bouton_corriger = source.texte_mots, source.bouton_corriger
+        self.prises, self.bouton_creer = source.prises, source.bouton_creer
+        self.estimation, self.cout_estime = source.estimation, source.cout_estime
+        self.statut = source.statut
         self.prises.currentIndexChanged.connect(lambda _index: self._mettre_a_jour_estimation())
-        ligne.addLayout(
-            ligne_avec_aide(
-                libelle("Prise", "legende", retour_a_la_ligne=False),
-                BoutonInfo(
-                    "Depuis une voix générée : la prise est transcrite (moment de chaque mot), puis calée sur son "
-                    "script, dont l'orthographe exacte est gardée. Pour une vidéo, passe par le module Transcription."
-                ),
-            ),
-            0,
-            0,
-        )
-        ligne.addWidget(self.prises, 1, 0)
-        self.bouton_creer = bouton(
-            "Créer les sous-titres", variante="principal", nom_icone="captions", action=self.creer_depuis_la_prise_choisie
-        )
-        ligne.addWidget(self.bouton_creer, 1, 1)
-        ligne.setColumnStretch(0, 1)
-        d.addLayout(ligne)
-        estimation = QHBoxLayout()
-        estimation.setSpacing(Espacements.XS)
-        self.estimation = libelle("", "legende", retour_a_la_ligne=False)
-        estimation.addWidget(self.estimation)
-        self.cout_estime = MontantLabel(0)
-        self.cout_estime.setProperty("role", "legende")
-        estimation.addWidget(self.cout_estime)
-        estimation.addStretch(1)
-        d.addLayout(estimation)
-        self.statut = libelle("", "secondaire")
-        self.statut.hide()
-        d.addWidget(self.statut)
-        d.addStretch(1)  # à côté d'Exporter, les deux blocs ont la même hauteur : le contenu reste en haut
-        return self.cadre_source
+        source.video_choisie.connect(self.choisir_la_video)
+        source.mots_choisis.connect(self.choisir_les_mots)
+        source.importer_demande.connect(self.importer_dans_transcription)
+        source.choisir_video_demande.connect(self.choisir_video_apercu)
+        source.retirer_video_demande.connect(self.retirer_video_apercu)
+        source.son_de_la_video_change.connect(lambda _son: self._video_apercu_change())
+        source.decalage_change.connect(lambda _decalage: self._video_apercu_change())
+        source.transcrire_demande.connect(self.transcrire_ici)
+        source.corriger_demande.connect(self.corriger_les_mots)
+        source.creer_demande.connect(self.creer_depuis_la_prise_choisie)
+        source.importer_srt_demande.connect(self.importer_srt)
+        return source
 
     def _bloc_sous_titres(self):
         """Sous-titres : le Découpage (V3.1, lot 5 : il quitte les onglets de l'apparence, replié au
@@ -341,14 +328,16 @@ class AtelierSousTitres(Page):
         self.cadre_export, d = bloc(
             "Exporter",
             aide=(
-                "Vidéo avec sous-titres : ta vidéo, sous-titres incrustés, prête à publier. Calque transparent : "
+                "Vidéo avec sous-titres : la vidéo de l'aperçu, sous-titres incrustés, prête à publier. Calque transparent : "
                 "les sous-titres seuls, à poser au-dessus de ton montage dans Premiere Pro. Fichier SRT : le texte "
                 "et le moment de chaque sous-titre, sans style."
             ),
         )
         boutons = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la fenêtre est étroite
         self.bouton_video = bouton("Vidéo avec sous-titres…", variante="principal", nom_icone="clapperboard", action=self.exporter_video)
-        self.bouton_video.setToolTip("MP4, MOV ou MKV : ta vidéo et ses sous-titres, chaque image à son moment exact")
+        self.bouton_video.setToolTip(
+            "MP4, MOV ou MKV : la vidéo de l'aperçu et ses sous-titres, chaque image à son moment exact"
+        )
         boutons.addWidget(self.bouton_video)
         self.bouton_calque = bouton("Calque transparent…", nom_icone="film", action=self.exporter_calque)
         self.bouton_calque.setToolTip("MOV, ProRes 4444 avec transparence, à la taille et aux images de ta vidéo")
@@ -359,7 +348,7 @@ class AtelierSousTitres(Page):
         d.addLayout(boutons)
         # Grisé sans vidéo (sous-titres d'une voix, d'un audio) : l'explication est dessous.
         self.info_video = info(
-            "Vidéo avec sous-titres : seulement pour une vidéo importée dans le module Transcription. Ici, "
+            "Vidéo avec sous-titres : il faut une vidéo (zone Source, onglet « Vidéo ou audio »). Sinon, "
             "exporte le calque transparent et pose-le sur ton montage.",
             "legende",
         )
@@ -376,9 +365,6 @@ class AtelierSousTitres(Page):
         panneau.change.connect(self._reglage_change)
         panneau.position_change.connect(self._position_change)
         panneau.masquer_change.connect(self._masquer_change)
-        panneau.choisir_video_demande.connect(self.choisir_video_apercu)
-        panneau.retirer_video_demande.connect(self.retirer_video_apercu)
-        panneau.video_apercu_change.connect(self._video_apercu_change)
         panneau.texte.pipette_demandee.connect(self.prendre_une_couleur)
         panneau.mots.pipette_demandee.connect(self.prendre_une_couleur)
         panneau.prereglage_choisi.connect(self.appliquer_prereglage)
@@ -452,7 +438,8 @@ class AtelierSousTitres(Page):
 
     @property
     def transcription(self) -> Transcription | None:
-        return self._projet.transcription if self._projet else None
+        """Les mots des sous-titres : ceux de la source choisie (module Transcription, ou importés)."""
+        return mots_des_sous_titres(self._projet) if self._projet else None
 
     def _projet_change(self, projet: Projet | None) -> None:
         self._enregistrement_position.stop()
@@ -504,14 +491,7 @@ class AtelierSousTitres(Page):
         self._services.modeles.choisir(SOUS_TITRES, self._modele() if self._projet else None)
         if self._projet is None:
             return
-        transcription = self.transcription
-        if transcription is not None and transcription.horodatee:
-            self.texte_source.setText(f"{description_source(transcription)}  ·  {len(transcription.mots)} mots")
-        elif transcription is not None and transcription.texte:
-            self.texte_source.setText("La transcription du projet est en texte seul (sans le moment de chaque mot) : pas de sous-titres possibles.")
-        else:
-            self.texte_source.setText("Pas encore de mots : crée les sous-titres d'une prise ci-dessous, ou transcris une vidéo.")
-        self.bouton_corriger.setVisible(bool(transcription and transcription.horodatee))
+        self._actualiser_la_source()
         self._remplir_prises()
         self._charger_reglages()
         self.calculer()
@@ -535,16 +515,288 @@ class AtelierSousTitres(Page):
         self._mettre_a_jour_estimation()
 
     def _mettre_a_jour_estimation(self) -> None:
+        """Coût estimé : des sous-titres de la prise choisie, et de « Transcrire » (la source du
+        module Transcription, avec le modèle choisi là-bas)."""
+        projet = self._projet
         identifiant = self.prises.currentData()
-        prise = next((p for p in self._projet.prises if p.identifiant == identifiant), None) if self._projet else None
-        self.estimation.setText(f"≈ {minutes_secondes(prise.duree_s)} d'audio à transcrire  ·  ≈" if prise else "")
-        self.cout_estime.setVisible(prise is not None)
-        if prise is not None:
-            cout = estimer_cout(prise.duree_s, self._modele(), self._services.prix)
+        prise = next((p for p in projet.prises if p.identifiant == identifiant), None) if projet else None
+        self._estimer(self.estimation, self.cout_estime, prise.duree_s if prise else 0.0, "d'audio à transcrire", self._modele())
+        module = projet.transcription if projet else None
+        self._estimer(
+            self.source.estimation_transcrire, self.source.cout_transcrire, module.duree_s if module else 0.0, "d'audio",
+            self._modele_du_module(),
+        )
+
+    def _estimer(self, texte, montant, duree: float, quoi: str, modele: str) -> None:
+        texte.setText(f"≈ {minutes_secondes(duree)} {quoi}  ·  ≈" if duree else "")
+        montant.setVisible(bool(duree))
+        if duree:
+            cout = estimer_cout(duree, modele, self._services.prix)
             if cout is None:
-                self.cout_estime.setText("prix inconnu")
+                montant.setText("prix inconnu")
             else:
-                self.cout_estime.definir_montant(cout)
+                montant.definir_montant(cout)
+
+    # --- Source (V3.1, lot 6) ----------------------------------------------------------------------
+
+    def _actualiser_la_source(self) -> None:
+        """La zone Source : les choix, ce que décrit chaque onglet, les boutons utiles."""
+        projet = self._projet
+        module, mots = projet.transcription, self.transcription
+        apercu = projet.sous_titres.apercu
+        if projet.sources.video == SOURCE_IMPORTEE:
+            texte_video = (
+                self._description_video_importee(apercu)
+                if apercu.chemin
+                else "Aucune vidéo importée : par exemple ton montage exporté de Premiere Pro."
+            )
+        elif module is not None and module.source and a_une_video(module):
+            texte_video = description_source(module)
+        elif module is not None and module.source:
+            texte_video = f"{description_source(module)} : un audio, sans image (l'aperçu montre un fond gris)."
+        else:
+            texte_video = "Rien d'importé dans le module Transcription."
+        self.source.afficher(
+            EtatSource(
+                video=projet.sources.video,
+                mots=projet.sources.sous_titres,
+                texte_video=texte_video,
+                texte_mots=self._description_des_mots(),
+                module_a_une_source=bool(module and module.source),
+                video_importee=bool(apercu.chemin),
+                son_de_la_video=apercu.son_de_la_video,
+                voix_des_mots=audio_des_mots(projet) is not None,
+                corriger=bool(mots and mots.horodatee),
+                transcrire=bool(module and module.audio and not module.mots and not module.texte),
+                voix_a_caler=voix_a_caler(projet),
+                decalage_s=apercu.decalage_s,
+            )
+        )
+        self.bouton_corriger.setToolTip(
+            "Corriger un mot ou son moment dans le module Transcription"
+            if mots is module
+            else "Corriger un mot ou son moment (la même correction que dans le module Transcription)"
+        )
+        # Pendant un import ou une transcription du module : le cercle tourne dans le bouton qui l'a
+        # demandé ; l'autre est grisé.
+        attente = self._attente_du_module
+        for element in (self.source.bouton_transcrire, self.source.bouton_importer):
+            element.setEnabled(attente.bouton is None or attente.est(element))
+
+    @staticmethod
+    def _description_video_importee(apercu: VideoApercu) -> str:
+        resolution = apercu.resolution
+        details = f"  ·  {resolution[0]} × {resolution[1]}" if resolution else ""
+        return f"{Path(apercu.chemin).name}{details}"
+
+    def _description_des_mots(self) -> str:
+        """La ligne qui dit toujours d'où viennent les mots des sous-titres."""
+        projet, mots = self._projet, self.transcription
+        if projet.sources.sous_titres == SOURCE_TRANSCRIPTION:
+            if mots is None or not mots.source:
+                return (
+                    "Pas encore de mots : importe une vidéo ou un audio (onglet « Vidéo ou audio »), ou des "
+                    "sous-titres (« Importés »)."
+                )
+            nom = Path(mots.source).name
+            if mots.horodatee:
+                return f"Les sous-titres viennent de la transcription de {nom} ({len(mots.mots)} mots{self._date(mots)})."
+            if mots.texte:
+                return (
+                    f"La transcription de {nom} est en texte seul (sans le moment de chaque mot) : pas de "
+                    "sous-titres possibles. Transcris-la sans « Texte seul » dans le module Transcription."
+                )
+            return f"Pas encore de mots : {nom} n'est pas encore transcrite. « Transcrire » le fait ici, avec les options du module Transcription."
+        if mots is None or not mots.horodatee:
+            return "Pas encore de mots importés : crée les sous-titres d'une prise, ou importe un fichier SRT."
+        if est_srt(mots):
+            nombre = (mots.infos or {}).get("sous_titres", 0)
+            return (
+                f"Les sous-titres viennent du fichier {Path(mots.source).name} ({nombre} sous-titres, "
+                f"{len(mots.mots)} mots ; moment de chaque mot estimé)."
+            )
+        return (
+            f"Les sous-titres viennent de « {mots.source} » : voix générée, calée sur son script "
+            f"({len(mots.mots)} mots{self._date(mots)})."
+        )
+
+    @staticmethod
+    def _date(transcription: Transcription) -> str:
+        try:
+            return ", " + datetime.fromisoformat(transcription.date).strftime("%d/%m/%Y")
+        except ValueError:
+            return ""
+
+    def choisir_la_video(self, source: str) -> None:
+        """Onglet « Vidéo ou audio » : celle du module Transcription, ou la vidéo importée. Le format
+        suit la vidéo choisie : s'il défait un sous-titre réorganisé à la main, la question vient d'abord."""
+        projet = self._projet
+        if projet is None or source == projet.sources.video:
+            return
+        avant = projet.sources.video
+        projet.sources.video = source
+        if not confirmer_reglage(self.window(), self._services, projet):
+            projet.sources.video = avant
+            self._actualiser_la_source()
+            return
+        self._services.projets.enregistrer()
+        self.rafraichir()
+
+    def choisir_les_mots(self, source: str) -> None:
+        """Onglet « Sous-titres » : les mots du module Transcription, ou les mots importés. Chacun
+        garde ses retouches : rien ne se perd."""
+        projet = self._projet
+        if projet is None or source == projet.sources.sous_titres:
+            return
+        projet.sources.sous_titres = source
+        self._services.projets.enregistrer()
+        self.tableau.clearSelection()
+        self.rafraichir()
+        self._au_debut()
+
+    def relier_transcription(self, module) -> None:
+        """Le module Transcription (fenêtre principale) : il importe et transcrit pour la zone Source,
+        avec ses options ; la fin arrive par ses signaux."""
+        self._module_transcription = module
+        module.import_termine.connect(self._le_module_a_fini)
+        module.transcription_terminee.connect(self._le_module_a_fini)
+        module.infos_lues.connect(self._infos_du_module_lues)
+        self._mettre_a_jour_estimation()
+
+    def _infos_du_module_lues(self) -> None:
+        """Les informations de la source du module (taille de la vidéo…) arrivées après la fin de son
+        import : l'aperçu et le format suivent."""
+        if self._projet is not None and self.isVisible() and not self._occupe:
+            self.rafraichir()
+
+    def _modele_du_module(self) -> str:
+        module = self._module_transcription
+        return module.options().modele if module is not None else MODELE_PAR_DEFAUT
+
+    def importer_dans_transcription(self) -> None:
+        """« Choisir une vidéo ou un audio… » : importée dans le module Transcription (les deux modules
+        montrent la même source). Le cercle tourne ici jusqu'à la fin de l'extraction du son."""
+        module = self._module_transcription
+        if module is None or self._projet is None or self._module_occupe(module):
+            return
+        chemin = self._choisir_un_fichier("Choisir une vidéo ou un audio", FILTRE_FICHIERS)
+        if chemin is None:
+            return
+        self.lecteur.arreter()  # libère la piste son, qui peut être remplacée
+        self._attendre_le_module(self.source.bouton_importer, f"Import de « {chemin.name} » dans le module Transcription…")
+        if not module.importer(chemin):
+            self._sans_reponse_du_module()  # ex. remplacement annulé (un refus, lui, a déjà répondu)
+
+    def transcrire_ici(self) -> None:
+        """« Transcrire » : la source du module Transcription, avec ses options (modèle, langue…)."""
+        module = self._module_transcription
+        if module is None or self._projet is None or self._module_occupe(module):
+            return
+        self.lecteur.arreter()
+        self._attendre_le_module(self.source.bouton_transcrire, "Transcription en cours… (envoi de l'audio à Google, puis transcription)")
+        if not module.transcrire():
+            self._sans_reponse_du_module()
+
+    def _module_occupe(self, module) -> bool:
+        """Le module Transcription travaille déjà (un import ou une transcription lancés là-bas) : la
+        page le dit, plutôt que d'attendre sans rien montrer."""
+        if module.occupe:
+            self._afficher(
+                "Le module Transcription est déjà au travail (import ou transcription) : attends qu'il ait fini.",
+                "avertissement",
+            )
+        return module.occupe
+
+    def _attendre_le_module(self, bouton_occupe, message: str) -> None:
+        self._attente_du_module.occuper(bouton_occupe)
+        self._afficher(message, "secondaire")
+        self._actualiser_la_source()  # l'autre bouton est grisé pendant l'attente
+
+    def _sans_reponse_du_module(self) -> None:
+        """Le module n'a rien commencé, et n'a rien dit (sinon _le_module_a_fini a déjà répondu) :
+        plus d'attente, plus de message."""
+        if self._attente_du_module.bouton is None:
+            return
+        self._attente_du_module.liberer()
+        self._afficher("", "secondaire")
+        self._actualiser_la_source()
+        self._charger_la_lecture()
+
+    def _le_module_a_fini(self, message: str, role: str) -> None:
+        """Import ou transcription du module Transcription terminé : la page suit."""
+        attendu = self._attente_du_module.bouton is not None
+        self._attente_du_module.liberer()
+        if self._projet is None:
+            return
+        if attendu:
+            self._afficher(message, role)
+        if attendu or self.isVisible():
+            self.rafraichir()
+            self._au_debut()
+
+    def importer_srt(self) -> None:
+        """« Importer un fichier SRT… » : ses mots deviennent les mots importés (le moment de chaque
+        mot est estimé), après confirmation si l'import précédent avait des retouches."""
+        if self._projet is None:
+            return
+        chemin = self._choisir_un_fichier("Importer des sous-titres", FILTRE)
+        if chemin is not None:
+            self.importer_srt_depuis(chemin)
+
+    def _choisir_un_fichier(self, titre: str, filtre: str) -> Path | None:
+        """Un fichier à importer (remplacé dans les tests)."""
+        chemin, _ = QFileDialog.getOpenFileName(self, titre, str(dossier_documents()), filtre)
+        return Path(chemin) if chemin else None
+
+    def importer_srt_depuis(self, chemin: Path) -> None:
+        projet = self._projet
+        if projet is None:
+            return
+        try:
+            importes = transcription_depuis_srt(chemin, projet.langue)
+        except ErreurSrt as erreur:
+            self._afficher(f"Sous-titres non importés : {erreur}", "erreur")
+            return
+        actuels = projet.sous_titres_importes
+        if a_des_retouches(actuels) and not self._confirmer_remplacement(actuels):
+            return
+        importes.masquer_hesitations = actuels.masquer_hesitations if actuels is not None else True
+        projet.sous_titres_importes = importes
+        projet.sources.sous_titres = SOURCE_IMPORTEE
+        self._services.projets.enregistrer()
+        self.tableau.clearSelection()
+        self.rafraichir()
+        self._au_debut()
+        nombre = importes.infos.get("sous_titres", 0)
+        self._afficher(
+            f"Sous-titres importés de {chemin.name} : {nombre} sous-titres, {len(importes.mots)} mots (moment de "
+            "chaque mot estimé, puis ton découpage appliqué).",
+            "succes",
+        )
+
+    def corriger_les_mots(self, mot: int = -1) -> None:
+        """« Corriger les mots » : ceux du module Transcription dans le module (comme avant) ; des mots
+        importés dans la fenêtre de correction. `mot` : le mot à choisir (-1 : aucun)."""
+        projet, mots = self._projet, self.transcription
+        if projet is None or mots is None or not mots.horodatee:
+            return
+        if mots is projet.transcription:
+            self.corriger_demande.emit(mots.mots[mot].debut if 0 <= mot < len(mots.mots) else -1.0)
+            return
+        self.lecteur.arreter()  # la fenêtre lit la prise
+        description = self._description_des_mots()
+        fenetre = DialogueCorrigerMots(mots, description, audio_des_mots(projet), hesitations(self._services, mots), self.window(), mot)
+        if self._corriger(fenetre) and fenetre.modifie:
+            mots.mots = fenetre.mots
+            mots.corrigee = True
+            self._services.projets.enregistrer()
+            self._afficher("Mots corrigés : les sous-titres suivent.", "succes")
+        self.rafraichir()
+
+    @staticmethod
+    def _corriger(fenetre: DialogueCorrigerMots) -> bool:
+        """Ouvre la fenêtre de correction (remplacé dans les tests)."""
+        return fenetre.exec() == DialogueCorrigerMots.DialogCode.Accepted
 
     def _charger_reglages(self) -> None:
         transcription, reglages = self.transcription, self._projet.sous_titres
@@ -554,7 +806,6 @@ class AtelierSousTitres(Page):
             imposee,
             transcription.masquer_hesitations if transcription else True,
             transcription is not None,
-            a_sa_video(transcription),
             resolution(reglages, imposee)[1],
             police_remplacee(reglages.texte),
             self._accentues_du_script(),
@@ -671,9 +922,10 @@ class AtelierSousTitres(Page):
         self.panneau.definir_limites_reglage_fin(bas, haut)
 
     def _retirer_les_ajustements_defaits(self, calcul: Calcul) -> None:
-        """Des mots changés dans le module Transcription (texte, temps, fusion, coupe, suppression,
-        hésitations) défont des sous-titres réorganisés à la main : ils sont retirés du projet (leurs
-        mots sont déjà redécoupés automatiquement), et la page dit lesquels."""
+        """Des mots changés dans le module Transcription, ou des mots importés corrigés (texte, temps,
+        fusion, coupe, suppression, hésitations), défont des sous-titres réorganisés à la main : ils
+        sont retirés du projet (leurs mots sont déjà redécoupés automatiquement), et la page dit
+        lesquels."""
         transcription = self.transcription
         defaits = calcul.decoupage.defaits
         retires = {defait.ajustement for defait in defaits}
@@ -685,7 +937,8 @@ class AtelierSousTitres(Page):
                 (rang for rang, s in enumerate(self.sous_titres, 1) if s.premier_mot <= defait.premier_mot < s.dernier_mot), 0
             )
             numeros.append((numero, defait))
-        self._statut_reorganisation(texte_ajustements_defaits(numeros), "avertissement")
+        module = transcription is self._projet.transcription  # sinon : des mots importés, corrigés ici
+        self._statut_reorganisation(texte_ajustements_defaits(numeros, module), "avertissement")
 
     def _remplir_tableau(self) -> None:
         self.tableau.setRowCount(len(self.sous_titres))
@@ -770,35 +1023,26 @@ class AtelierSousTitres(Page):
 
     # --- Lecture -----------------------------------------------------------------------------
 
-    def _chemin_audio(self) -> Path | None:
-        transcription = self.transcription
-        if self._projet is None or transcription is None or not transcription.audio:
-            return None
-        return self._projet.chemin(transcription.audio)
-
     def _charger_la_lecture(self) -> None:
-        """Ce que lit l'aperçu : la vidéo transcrite (avec son son) ; sinon la piste son des
-        sous-titres (prise), sous la vidéo choisie pour l'aperçu s'il y en a une. Une vidéo
-        introuvable (déplacée, supprimée) laisse le fond gris et propose de la retrouver."""
-        transcription, reglages = self.transcription, self._projet.sous_titres
-        audio = self._chemin_audio()
+        """Ce que lit l'aperçu (V3.1, lot 6) : la vidéo choisie dans la zone Source (celle du module
+        Transcription, dès son import, ou la vidéo importée), avec son son ; sous une vidéo importée
+        muette, ou sans vidéo, la piste son des mots (une prise, ou l'audio du module). Des mots d'un
+        autre enregistrement que la vidéo commencent à « La voix commence à ». Une vidéo introuvable
+        (déplacée, supprimée) laisse le fond gris et propose de la retrouver."""
+        projet = self._projet
+        video = video_de_l_apercu(projet)
+        audio = audio_des_mots(projet)
         audio = str(audio) if audio is not None and audio.exists() else ""
-        video, decalage, son_de_la_video, introuvable = "", 0.0, True, ""
-        if a_sa_video(transcription):
-            if Path(transcription.source).is_file():
-                video, audio = transcription.source, ""
+        chemin, son_de_la_video, introuvable = "", True, ""
+        if video is not None:
+            if Path(video.chemin).is_file():
+                chemin, son_de_la_video = video.chemin, video.son_de_la_video
             else:
-                introuvable = transcription.source
-        elif reglages.apercu.chemin:
-            if Path(reglages.apercu.chemin).is_file():
-                video, decalage, son_de_la_video = reglages.apercu.chemin, reglages.apercu.decalage_s, reglages.apercu.son_de_la_video
-            else:
-                introuvable = reglages.apercu.chemin
-        if transcription is None or not transcription.horodatee:
-            video = audio = ""
+                introuvable = video.chemin
         if self.isVisible():  # page cachée : rien n'est ouvert (la lecture se prépare à son affichage)
-            self.lecteur.charger(video, audio, decalage, son_de_la_video)
-        self.bloc_apercu.definir_video_possible(bool(video))
+            self.lecteur.charger(chemin, audio, decalage_des_mots(projet), son_de_la_video)
+        self.bloc_apercu.definir_video_possible(bool(chemin))
+        self.bloc_apercu.definir_lecture_possible(bool(chemin or audio))  # rien à lire : un fichier SRT seul
         self.bloc_apercu.ligne_introuvable.setVisible(bool(introuvable))
         if introuvable:
             self.bloc_apercu.message_video.setText(
@@ -808,8 +1052,7 @@ class AtelierSousTitres(Page):
         self._actualiser_toile()
 
     def basculer_lecture(self) -> None:
-        if not self.sous_titres:
-            return
+        """Lecture ou pause (avant même la transcription : la vidéo se regarde dès son import)."""
         self.lecteur.basculer()
 
     def _erreur_de_lecture(self, message: str) -> None:
@@ -847,7 +1090,7 @@ class AtelierSousTitres(Page):
         return texte if ok and texte.strip() else None
 
     def appliquer_prereglage(self, identifiant: str) -> None:
-        """Le style du préréglage remplace celui du projet (format, plateforme et vidéo d'aperçu ne
+        """Le style du préréglage remplace celui du projet (format, plateforme et vidéo importée ne
         changent pas). S'il défait un ajustement fait à la main, la question de la 1.1.0 vient d'abord."""
         prereglage = self._services.prereglages.prereglage(identifiant)
         if self._projet is None or prereglage is None:
@@ -922,7 +1165,7 @@ class AtelierSousTitres(Page):
         else:
             self._actualiser_prereglage()
 
-    # --- Vidéo : retrouvée, ou choisie seulement pour l'aperçu ----------------------------------
+    # --- Vidéo : retrouvée, ou importée dans la zone Source (V3.1) ------------------------------
 
     def _demander_video(self, titre: str, proposition: str) -> Path | None:
         dossier = str(Path(proposition).parent) if proposition else str(dossier_documents())
@@ -930,45 +1173,55 @@ class AtelierSousTitres(Page):
         return Path(choix) if choix else None
 
     def retrouver_la_video(self) -> None:
-        """« Retrouver la vidéo… » : la vidéo du projet (ou d'aperçu) a été déplacée."""
-        if self._projet is None:
+        """« Retrouver la vidéo… » : la vidéo de l'aperçu (celle du module Transcription, ou la vidéo
+        importée) a été déplacée."""
+        projet = self._projet
+        video = video_de_l_apercu(projet) if projet is not None else None
+        if video is None:
             return
-        transcription = self.transcription
-        if a_sa_video(transcription):
-            chemin = self._demander_video("Retrouver la vidéo transcrite", transcription.source)
-            if chemin is None:
-                return
-            transcription.source = str(chemin)
+        chemin = self._demander_video("Retrouver la vidéo", video.chemin)
+        if chemin is None:
+            return
+        if video.importee:
+            apercu = projet.sous_titres.apercu
+            projet.sous_titres = replace(projet.sous_titres, apercu=replace(apercu, chemin=str(chemin)))
         else:
-            apercu = self._projet.sous_titres.apercu
-            chemin = self._demander_video("Retrouver la vidéo d'aperçu", apercu.chemin)
-            if chemin is None:
-                return
-            self._projet.sous_titres = replace(self._projet.sous_titres, apercu=replace(apercu, chemin=str(chemin)))
+            projet.transcription.source = str(chemin)
         self._services.projets.enregistrer()
         self.rafraichir()
 
     def choisir_video_apercu(self) -> None:
-        """Projet sans vidéo : une vidéo seulement pour l'aperçu (ex. le montage exporté de Premiere)."""
+        """« Choisir une vidéo… » (onglet « Vidéo ou audio », Importée) : par exemple le montage exporté
+        de Premiere Pro ; elle remplace la précédente, et devient la vidéo de l'aperçu (et de l'export)."""
         if self._projet is None:
             return
         apercu = self._projet.sous_titres.apercu
-        chemin = self._demander_video("Choisir une vidéo pour l'aperçu", apercu.chemin)
+        chemin = self._demander_video("Choisir une vidéo", apercu.chemin)
         if chemin is None:
             return
-        self._definir_video_apercu(VideoApercu(str(chemin), apercu.decalage_s, 0, 0, apercu.son_de_la_video))
-        self._infos_video.lire(chemin)  # sa résolution fixera le format
+        if self._definir_video_apercu(VideoApercu(str(chemin), apercu.decalage_s, 0, 0, apercu.son_de_la_video), choisie=True):
+            self._infos_video.lire(chemin)  # sa résolution fixera le format
 
-    def _definir_video_apercu(self, apercu: VideoApercu) -> None:
-        reglages = replace(self._projet.sous_titres, apercu=apercu)
-        if not confirmer_reglage(self.window(), self._services, self._projet, reglages=reglages):
-            return
-        self._projet.sous_titres = reglages
+    def _definir_video_apercu(self, apercu: VideoApercu, choisie: bool = False) -> bool:
+        """La vidéo importée change (`choisie` : elle devient aussi la vidéo de l'aperçu). Son format
+        s'impose : s'il défait un sous-titre réorganisé à la main, la question vient d'abord.
+        Renvoie True si c'est fait."""
+        projet = self._projet
+        reglages = replace(projet.sous_titres, apercu=apercu)
+        avant = projet.sources.video
+        if choisie:
+            projet.sources.video = SOURCE_IMPORTEE
+        if not confirmer_reglage(self.window(), self._services, projet, reglages=reglages):
+            projet.sources.video = avant
+            self._actualiser_la_source()
+            return False
+        projet.sous_titres = reglages
         self._services.projets.enregistrer()
         self.rafraichir()
+        return True
 
     def _infos_video_lues(self, infos: dict) -> None:
-        """Résolution de la vidéo d'aperçu : elle impose son format (comme la vidéo d'un projet)."""
+        """Résolution de la vidéo importée (zone Source) : elle impose son format, quand elle est choisie."""
         if self._projet is None or not self._projet.sous_titres.apercu.chemin:
             return
         resolution_lue = resolution_video(infos)
@@ -978,15 +1231,17 @@ class AtelierSousTitres(Page):
         self._definir_video_apercu(replace(apercu, largeur=resolution_lue[0], hauteur=resolution_lue[1]))
 
     def retirer_video_apercu(self) -> None:
+        """« Retirer » la vidéo importée (« La voix commence à » reste : il sert aussi avec la vidéo du
+        module Transcription)."""
         if self._projet is None:
             return
-        self._definir_video_apercu(VideoApercu())
+        self._definir_video_apercu(VideoApercu(decalage_s=self._projet.sous_titres.apercu.decalage_s))
 
     def _video_apercu_change(self) -> None:
-        """Décalage de la voix, ou son de la vidéo : seule la lecture change."""
+        """« La voix commence à », ou « Son de la vidéo » : seule la lecture change (et les exports)."""
         if self._projet is None:
             return
-        decalage, son = self.panneau.decalage_et_son()
+        decalage, son = round(self.source.decalage.value(), 2), self.source.son_video.isChecked()
         apercu = replace(self._projet.sous_titres.apercu, decalage_s=decalage, son_de_la_video=son)
         self._projet.sous_titres = replace(self._projet.sous_titres, apercu=apercu)
         self._services.projets.enregistrer()
@@ -1089,9 +1344,17 @@ class AtelierSousTitres(Page):
         )
 
     def _corriger_le_sous_titre(self, index: int) -> None:
-        """Double-clic sur un bloc de la frise : « Corriger les mots », sur son premier mot."""
-        if 0 <= index < len(self.sous_titres):
-            self.corriger_demande.emit(self.mots[self.sous_titres[index].premier_mot].debut)
+        """Double-clic sur un bloc de la frise : « Corriger les mots », sur son premier mot (dans le
+        module Transcription, ou dans la fenêtre de correction des mots importés)."""
+        mots = self.transcription
+        if not 0 <= index < len(self.sous_titres) or mots is None:
+            return
+        debut = self.mots[self.sous_titres[index].premier_mot].debut
+        if mots is self._projet.transcription:
+            self.corriger_demande.emit(debut)
+            return
+        rang = next((i for i, mot in enumerate(mots.mots) if mot.debut >= debut - 1e-3), -1)
+        self.corriger_les_mots(rang)
 
     def monter_premier_mot(self) -> None:
         index = self._choisi()
@@ -1166,7 +1429,9 @@ class AtelierSousTitres(Page):
             self.creer_depuis_prise(identifiant)
 
     def creer_depuis_prise(self, identifiant: str) -> None:
-        """La prise est transcrite (moment de chaque mot), puis les mots sont calés sur son script."""
+        """La prise est transcrite (moment de chaque mot), puis les mots sont calés sur son script. Ils
+        deviennent les mots importés, choisis (V3.1, lot 6) : ceux du module Transcription restent ;
+        un import précédent est remplacé, après confirmation s'il avait des retouches."""
         projet = self._projet
         if projet is None or self._occupe:
             return
@@ -1179,8 +1444,8 @@ class AtelierSousTitres(Page):
         if not texte_brut(prise.script).strip():
             self._afficher(f"Le script de « {prise.nom} » est vide : rien à sous-titrer.", "erreur")
             return
-        actuelle = self.transcription
-        if actuelle is not None and actuelle.horodatee and actuelle.prise != identifiant and not self._confirmer_remplacement(actuelle):
+        actuelle = projet.sous_titres_importes
+        if a_des_retouches(actuelle) and not self._confirmer_remplacement(actuelle):
             return
         try:
             adaptateur = adaptateur_par_defaut(self._services)
@@ -1194,7 +1459,6 @@ class AtelierSousTitres(Page):
             return
         transcription.masquer_hesitations = actuelle.masquer_hesitations if actuelle else True
         options = Options(self._modele(), projet.langue, MODE_VERBATIM, False, FOURNISSEUR)
-        self.lecteur.arreter()  # libère la piste son, qui va être remplacée
         self._occuper(True)
         self._afficher(f"Transcription de « {prise.nom} », puis calage sur son script…", "secondaire")
 
@@ -1205,14 +1469,7 @@ class AtelierSousTitres(Page):
             if not resultat.mots:
                 self._afficher("Google n'a renvoyé aucun mot : la prise est-elle silencieuse ?", "avertissement")
                 return
-            chemin = projet.chemin(FICHIER_AUDIO)
-            try:
-                chemin.parent.mkdir(parents=True, exist_ok=True)
-                chemin.write_bytes(wav)  # l'audio de la prise devient celui des sous-titres
-            except OSError as erreur:
-                self._afficher(f"Audio de la prise non copié dans le projet : {erreur}", "erreur")
-                return
-            fini = terminer_transcription(self._services, transcription, options, resultat)
+            fini = terminer_transcription(self._services, transcription, options, resultat)  # mots importés, choisis
             self.tableau.clearSelection()
             self._afficher(f"Sous-titres créés depuis « {prise.nom} » : {len(fini.mots)} mots calés sur le script.", "succes")
             self.rafraichir()
@@ -1221,23 +1478,23 @@ class AtelierSousTitres(Page):
         def echec(erreur: Exception) -> None:
             self._occuper(False)
             self._afficher(f"Sous-titres impossibles : {message_erreur(erreur)}", "erreur")
-            self._charger_la_lecture()
 
         taches.lancer(lambda: transcrire_source(adaptateur, wav, options, f"{projet.nom} - {prise.nom}"), fin, echec)
 
     def _confirmer_remplacement(self, actuelle: Transcription) -> bool:
+        """Un nouvel import (prise ou fichier SRT) remplace l'import précédent, qui a des retouches."""
         boite = QMessageBox(self.window())
         boite.setIcon(QMessageBox.Icon.Question)
-        boite.setWindowTitle("Créer les sous-titres")
-        boite.setText("Remplacer les mots actuels ?")
-        ajustes = (
-            " Les sous-titres réorganisés à la main reviendront au découpage automatique."
-            if actuelle.ajustements_sous_titres
-            else ""
-        )
+        boite.setWindowTitle("Importer des sous-titres")
+        boite.setText("Remplacer les mots importés ?")
+        retouches = []
+        if actuelle.corrigee:
+            retouches.append("des mots corrigés")
+        if actuelle.ajustements_sous_titres:
+            retouches.append("des sous-titres réorganisés à la main")
         boite.setInformativeText(
-            f"Les sous-titres viennent aujourd'hui de « {Path(actuelle.source).name or actuelle.source} ». "
-            f"Ses mots et ses corrections seront remplacés par ceux de la prise.{ajustes}"
+            f"Les mots importés de « {Path(actuelle.source).name or actuelle.source} » ont des retouches "
+            f"({' et '.join(retouches)}) : elles seront perdues. Les mots du module Transcription, eux, ne changent pas."
         )
         remplacer = boite.addButton("Remplacer", QMessageBox.ButtonRole.AcceptRole)
         boite.addButton("Annuler", QMessageBox.ButtonRole.RejectRole)
@@ -1267,8 +1524,10 @@ class AtelierSousTitres(Page):
             return
         if chemin.suffix.lower() != ".srt":
             chemin = chemin.with_name(chemin.name + ".srt")
+        # Sur le temps de la vidéo (« La voix commence à ») : le fichier se pose sur elle.
+        sous_titres, _mots = decales(self.sous_titres, self.mots, decalage_des_mots(self._projet))
         try:
-            ecrire_srt(chemin, self.sous_titres)
+            ecrire_srt(chemin, sous_titres)
         except OSError as erreur:
             self._afficher(f"Fichier non enregistré : {erreur}", "erreur", self.statut_export)
             return
@@ -1286,13 +1545,14 @@ class AtelierSousTitres(Page):
         return f"{origine.nom} (modifié)" if modifie(reglages, origine) else origine.nom
 
     def contenu_a_exporter(self) -> SousTitresAExporter | None:
-        """Les sous-titres tels que l'aperçu les montre : mêmes réglages, même taille de vidéo."""
+        """Les sous-titres tels que l'aperçu les montre : mêmes réglages, même taille de vidéo, sur le
+        temps de la vidéo (V3.1 : des mots d'un autre enregistrement commencent à « La voix commence
+        à »)."""
         if self._projet is None or self._calcul is None or not self.sous_titres:
             return None
         moteur = self._calcul.moteur
-        return SousTitresAExporter(
-            self._calcul.reglages, moteur.largeur, moteur.hauteur, list(self.sous_titres), list(self.mots), self._nom_du_style()
-        )
+        sous_titres, mots = decales(self.sous_titres, self.mots, decalage_des_mots(self._projet))
+        return SousTitresAExporter(self._calcul.reglages, moteur.largeur, moteur.hauteur, sous_titres, mots, self._nom_du_style())
 
     def dialogue_calque(self) -> DialogueExportCalque | None:
         """La fenêtre d'export du calque, prête à s'ouvrir (None : rien à exporter)."""

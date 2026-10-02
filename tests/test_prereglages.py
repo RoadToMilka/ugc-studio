@@ -229,7 +229,7 @@ def test_par_defaut_ajoute_aux_bibliotheques_d_avant(tmp_path):
 
 def test_reference_des_retablir(tmp_path):
     """V3.1 : les ↺ ramènent au préréglage du projet tel qu'il est enregistré (sans lui, au style de
-    départ) ; l'écran et la vidéo d'aperçu restent ceux du projet."""
+    départ) ; l'écran et la vidéo importée restent ceux du projet."""
     bibliotheque = BibliothequePrereglages(tmp_path / "p.json")
     karaoke = bibliotheque.prereglages[3]
     projet = appliquer(ReglagesSousTitres(format="1:1", apercu=VideoApercu("C:/pub.mp4")), karaoke)

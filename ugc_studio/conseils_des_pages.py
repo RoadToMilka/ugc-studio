@@ -272,14 +272,33 @@ SOUS_TITRES = PageDeConseils(
             ),
         ),
         Rubrique(
-            "Source : d'où viennent les mots",
+            "Source : la vidéo et les mots",
             (
-                "Les sous-titres partent des mots de la transcription du projet, avec le moment de chaque mot.",
-                "Pour une prise du module Voix, « Créer les sous-titres » la transcrit, puis cale le texte "
-                "sur son script : l'orthographe du script est gardée (noms de marque, sans les majuscules "
-                "d'accentuation).",
-                "« Corriger les mots » ouvre le module Transcription ; un double-clic sur un sous-titre de la "
-                "frise l'ouvre directement sur son premier mot.",
+                "Deux onglets. « Vidéo ou audio » : ce que montre l'aperçu, et la vidéo que reprend l'export "
+                "« Vidéo avec sous-titres ». « Sous-titres » : d'où viennent les mots, avec le moment de chaque "
+                "mot ; une ligne le dit toujours.",
+                "Dans chacun, « Module Transcription » ou un import (« Importée », « Importés »). Tu passes de "
+                "l'un à l'autre sans rien perdre : chaque source garde ses mots, ses corrections et ses "
+                "sous-titres réorganisés à la main.",
+                "Module Transcription : la même vidéo que là-bas, visible dès son import. « Choisir une vidéo "
+                "ou un audio… » l'importe pour les deux modules ; « Transcrire » la transcrit ici, avec les "
+                "options choisies dans le module Transcription.",
+                "Vidéo importée : par exemple ton montage exporté de Premiere Pro (elle n'est pas copiée dans "
+                "le projet). Décoche « Son de la vidéo » pour entendre la voix des sous-titres sous la vidéo "
+                "muette, aussi dans l'export.",
+                "Mots importés : ceux d'une prise du module Voix (« Créer les sous-titres » la transcrit, puis "
+                "cale le texte sur son script : l'orthographe du script est gardée), ou d'un fichier SRT fait "
+                "ailleurs (Premiere Pro, CapCut…). Un nouvel import ne remplace que l'import précédent, après "
+                "confirmation s'il avait des retouches.",
+                "Un fichier SRT donne le moment de chaque sous-titre, pas celui de chaque mot : il est estimé "
+                "selon la longueur des mots, puis ton découpage s'applique. Pour un mot actif parfaitement "
+                "calé, transcris la vidéo dans le module Transcription.",
+                "« La voix commence à » : quand la vidéo et les mots ne viennent pas du même enregistrement (les "
+                "sous-titres d'une prise sur ton montage), le moment de la vidéo où la voix commence. Il vaut "
+                "aussi pour les exports.",
+                "« Corriger les mots » : ceux du module Transcription s'y corrigent ; les mots importés, dans "
+                "une fenêtre qui fait la même correction. Un double-clic sur un sous-titre de la frise l'ouvre "
+                "sur son premier mot.",
             ),
         ),
         Rubrique(
@@ -404,12 +423,13 @@ SOUS_TITRES = PageDeConseils(
                 "est ce qui est exporté, à la finesse de ton écran près.",
                 "Il a la taille de ta vidéo, sans bandes autour ; dans une grande fenêtre, il prend toute la "
                 "hauteur de sa colonne.",
-                "Fond « Vidéo » : la vidéo du projet ; « Gris » : un fond neutre ; « Damier » : pour juger un "
-                "texte prévu pour le calque transparent.",
+                "Fond « Vidéo » : la vidéo choisie dans la zone Source ; « Gris » : un fond neutre ; « Damier » : "
+                "pour juger un texte prévu pour le calque transparent.",
                 "« 100 % » montre un pixel de la vidéo par pixel de ton écran, pour juger la netteté ; la "
                 "zone défile.",
                 "La boucle rejoue le sous-titre choisi dans la liste ; la barre Espace lance ou arrête la "
-                "lecture. Le sous-titre change exactement sur l'image où son premier mot commence.",
+                "lecture. Le sous-titre change exactement sur l'image où son premier mot commence. Sans vidéo "
+                "ni son (un fichier SRT seul), rien à lire : clique sur un sous-titre pour le voir.",
                 "Repères : pointillés mauves pour la zone de sécurité, trait rouge pour la marge maximum, "
                 "grille des tiers et du milieu.",
                 "La vidéo n'est pas copiée dans le projet : si elle a été déplacée, « Retrouver la vidéo… » "
@@ -429,8 +449,8 @@ SOUS_TITRES = PageDeConseils(
                 "découpage, comme la largeur maximale des lignes (réglages avancés).",
                 "Avec une vidéo, le format est le sien : le calque transparent doit avoir sa taille exacte. "
                 "Sans vidéo, choisis-le (9:16, 4:5…) ou donne une taille personnalisée.",
-                "Sous-titres d'une prise de voix : « Choisir une vidéo… » (onglet Écran) montre tes "
-                "sous-titres sur ton montage, avec le moment où la voix commence.",
+                "Sous-titres d'une prise de voix : importe ton montage dans la zone Source (onglet « Vidéo ou "
+                "audio ») pour voir tes sous-titres dessus, avec le moment où la voix commence.",
             ),
         ),
         Rubrique(
@@ -471,8 +491,9 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Exporter",
             (
-                "« Vidéo avec sous-titres… » : ta vidéo avec ses sous-titres incrustés, prête à publier (MP4 et "
-                "H.264 au départ). Chaque image garde son moment exact, et le son est copié tel quel.",
+                "« Vidéo avec sous-titres… » : la vidéo de l'aperçu (zone Source) avec ses sous-titres "
+                "incrustés, prête à publier (MP4 et H.264 au départ). Chaque image garde son moment exact, et "
+                "le son est copié tel quel.",
                 "« Calque transparent… » : les sous-titres seuls, animations comprises, sur un fond transparent "
                 "(MOV, ProRes 4444). Pose-le dans Premiere Pro sur une piste au-dessus de ton montage, au même "
                 "point de départ : il tombe juste, image par image.",
@@ -498,8 +519,9 @@ EXPORT = PageDeConseils(
                 "l'aperçu (mot actif, animations, fond qui glisse), image par image.",
                 "Il a la taille et le nombre d'images par seconde de ta vidéo, à partir de 0 s : posé au même "
                 "endroit que ta vidéo ou ta voix, il ne se décale jamais, même au bout de 10 minutes.",
-                "Sans vidéo (sous-titres d'une voix) : choisis le nombre d'images par seconde de ta séquence "
-                "Premiere Pro (30 au départ) ; avec une vidéo d'aperçu, c'est le sien qui est proposé.",
+                "Sans vidéo (sous-titres d'une voix ou d'un fichier SRT) : choisis le nombre d'images par "
+                "seconde de ta séquence Premiere Pro (30 au départ). Avec une vidéo, importée comprise, c'est "
+                "le sien.",
             ),
         ),
         Rubrique(
@@ -1045,6 +1067,8 @@ EXPORT_VIDEO = PageDeConseils(
                 "enregistrement d'écran) : les sous-titres sont ceux de ce moment.",
                 "Le son est copié tel quel, sans aucune perte. S'il ne peut pas aller dans le format choisi (un son "
                 "non compressé vers un MP4), il est converti en AAC à 320 kb/s, et le résumé l'indique en mauve.",
+                "Vidéo importée dont « Son de la vidéo » est décoché : c'est la voix des sous-titres (une prise) "
+                "qui passe dessous, à partir de « La voix commence à », en AAC à 320 kb/s.",
                 "Les couleurs des sous-titres sont celles de l'aperçu : elles sont converties avec la norme de ta "
                 "vidéo (BT.709 pour une vidéo HD).",
             ),
@@ -1079,6 +1103,30 @@ EXPORT_VIDEO = PageDeConseils(
     ),
 )
 
+CORRIGER_MOTS = PageDeConseils(
+    "Corriger les mots",
+    (
+        Rubrique(
+            "Corriger",
+            (
+                "Clique sur un mot : son texte, son début et sa fin se corrigent sans perdre son moment dans "
+                "l'audio. « Fusionner avec le suivant » réunit deux mots coupés par erreur ; « Couper en "
+                "deux » partage un mot selon ses lettres ; « Supprimer » retire un bruit transcrit.",
+                "Pour une prise, ▶ fait écouter la voix depuis le mot choisi.",
+                "« Enregistrer » garde tes corrections, « Annuler » les oublie. Les sous-titres suivent.",
+            ),
+        ),
+        Rubrique(
+            "Mots d'un fichier SRT",
+            (
+                "Un fichier SRT ne donne que le moment de chaque sous-titre : celui de chaque mot est estimé "
+                "selon sa longueur. Pour un mot actif parfaitement calé sur une vidéo, transcris-la dans le "
+                "module Transcription.",
+            ),
+        ),
+    ),
+)
+
 PAGES: dict[str, PageDeConseils] = {
     "script": SCRIPT,
     "voix": VOIX,
@@ -1103,4 +1151,5 @@ PAGES: dict[str, PageDeConseils] = {
     "prereglages": PREREGLAGES,
     "export": EXPORT,
     "export-video": EXPORT_VIDEO,
+    "corriger-mots": CORRIGER_MOTS,
 }

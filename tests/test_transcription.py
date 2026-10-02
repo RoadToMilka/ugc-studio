@@ -16,7 +16,6 @@ from ugc_studio.audio_source import (
 )
 from ugc_studio.fournisseurs.base import Adaptateur
 from ugc_studio.fournisseurs.stt import MotTranscrit, ResultatTranscription
-from ugc_studio.projets import FICHIER_AUDIO
 from ugc_studio.stt import (
     PREFERENCE_HESITATIONS,
     Options,
@@ -287,7 +286,8 @@ def test_sous_titres_d_une_prise_alignes_sur_son_script(services, tmp_path):
     transcription, wav = transcription_de_prise(projet, prise)
     assert (transcription.source, transcription.prise, transcription.langue) == (prise.nom, prise.identifiant, "fr-FR")
     assert transcription.script == "Ce sérum anti-rides est top !"  # sans balises, casse d'origine
-    assert transcription.audio == FICHIER_AUDIO and transcription.duree_s == pytest.approx(2.0)
+    # V3.1 : la piste son de la prise elle-même (celle du module Transcription ne change pas).
+    assert transcription.audio == prise.fichier and transcription.duree_s == pytest.approx(2.0)
     assert wav == projet.chemin(prise.fichier).read_bytes()
     resultat = transcrire_source(FauxTranscripteur(), wav, Options("gemini-3.5-transcribe", "fr-FR"))
     fini = terminer_transcription(services, transcription, Options("gemini-3.5-transcribe", "fr-FR"), resultat)
@@ -295,7 +295,9 @@ def test_sous_titres_d_une_prise_alignes_sur_son_script(services, tmp_path):
     assert [m.texte for m in fini.mots] == ["Ce", "sérum", "anti-rides", "est", "top !"]
     assert fini.mots[1].fin == 0.9 and fini.mots[0].fin <= fini.mots[1].debut
     assert fini.mots[2].debut == 0.9 and fini.mots[-1].fin == 1.5
-    assert services.projets.projet.transcription is fini
+    # Des mots importés, choisis pour les sous-titres ; le module Transcription garde les siens (aucun ici).
+    assert services.projets.projet.sous_titres_importes is fini and services.projets.projet.transcription is None
+    assert services.projets.projet.sources.sous_titres == "importee"
 
 
 def test_hesitations_selon_la_langue(services, tmp_path):

@@ -10,11 +10,15 @@
   relue a les mêmes images aux mêmes moments (fréquence variable comprise), le son copié, les
   étiquettes de couleurs, et le jaune des sous-titres est le bon ; en HDR, le blanc des sous-titres
   est au blanc de référence (75 % du signal en HLG, 58 % en PQ).
+- V3.1 (lot 6) : sous une vidéo importée muette, la voix des sous-titres (une prise), placée au
+  moment où elle commence dans la vidéo.
 """
 
+import array
 import struct
 import subprocess
 import zlib
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 
@@ -33,6 +37,7 @@ from ugc_studio.exports.ffmpeg import (
 from ugc_studio.exports.mov_png import EcritureMovPng
 from ugc_studio.exports.plan import Source
 from ugc_studio.exports.video import (
+    DEBIT_AAC,
     DEBIT_CONSEILLE,
     DEBIT_IDENTIQUE,
     DEBIT_PERSONNALISE,
@@ -44,6 +49,7 @@ from ugc_studio.exports.video import (
     PRORES,
     SON_AAC,
     SON_COPIE,
+    SON_VOIX,
     codecs_possibles,
     commande_video,
     couleurs_de_l_export,
@@ -228,6 +234,28 @@ def test_resume_de_la_video(tmp_path):
     assert (lignes["Couleurs"].source, lignes["Couleurs"].export, lignes["Couleurs"].differente) == ("SDR, 8 bits", "SDR (BT.709), 8 bits", False)
     assert lignes["Poids"].export.startswith("≈ ")
     assert resume.possible and not resume.avertissements
+
+
+def test_voix_des_sous_titres_sous_la_video_muette(tmp_path):
+    """V3.1, lot 6 : vidéo importée, « Son de la vidéo » décoché. La voix (3e entrée, au dernier
+    passage seulement) est précédée du silence qui la place à « La voix commence à » (adelay), puis
+    prolongée de silence (apad) ; « -shortest » arrête le fichier avec la dernière image."""
+    voix = tmp_path / "prise-002.wav"
+    source = replace(_source(tmp_path), voix=voix, decalage_s=1.5)
+    plan = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "montage (sous-titres).mp4")
+    assert (plan.son, plan.voix, plan.decalage_voix, plan.debit_son) == (SON_VOIX, voix, 1.5, DEBIT_AAC)
+    calque = tmp_path / "calque.mov"
+    premier = commande_video(Path("ffmpeg"), plan, calque, 1, tmp_path / "p")
+    assert str(voix) not in premier and "-an" in premier
+    texte = " ".join(commande_video(Path("ffmpeg"), plan, calque, 2, tmp_path / "p"))
+    assert f"-i {calque} -i {voix} -filter_complex" in texte
+    assert "-map [sortie] -map 2:a:0 -filter:a adelay=delays=1500:all=1,apad -c:a aac -b:a 320000 -shortest" in texte
+    prores = plan_video(source, MOV, PRORES, DEBIT_CONSEILLE, 0, tmp_path / "montage.mov")  # un seul passage
+    assert f"-i {voix}" in " ".join(commande_video(Path("ffmpeg"), prores, calque, 1, tmp_path / "p"))
+    son = {ligne.titre: ligne for ligne in resume_video(source, plan, "3 sous-titres", libre=10**12).lignes}["Son"]
+    assert (son.export, son.differente) == ("voix des sous-titres, en AAC, 320 kb/s", True)
+    # Sans voix (son de la vidéo coché, ou des mots d'un fichier SRT) : le son de la vidéo, comme avant.
+    assert plan_video(replace(source, voix=None), MP4, H264, DEBIT_CONSEILLE, 0, plan.sortie).son == SON_COPIE
 
 
 def test_resume_avertissements_et_erreurs(tmp_path):
@@ -569,6 +597,50 @@ def test_export_h265_mkv(tmp_path):
     _exporter(plan, tmp_path / "calque.mov", tmp_path)
     sortie = analyser(plan.en_cours)
     assert sortie.images.codec == "hevc" and sortie.images.nombre == 15 and sortie.son is None
+
+
+def _echantillons(video: Path, frequence: int = 48_000) -> array.array:
+    """Le son d'une vidéo, décodé en mono 16 bits."""
+    brut = executer(
+        [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video), "-map", "0:a:0",
+         "-ac", "1", "-ar", str(frequence), "-f", "s16le", "-"],
+        60, binaire=True,
+    ).stdout
+    return array.array("h", brut[: len(brut) // 2 * 2])
+
+
+def _niveau_et_passages(echantillons: array.array, debut: float, fin: float, frequence: int = 48_000) -> tuple[float, float]:
+    """Niveau moyen (0 à 32 767) et passages par zéro par seconde, entre deux moments."""
+    morceau = echantillons[round(debut * frequence) : round(fin * frequence)]
+    niveau = sum(abs(e) for e in morceau) / max(len(morceau), 1)
+    passages = sum(1 for a, b in zip(morceau, morceau[1:], strict=False) if (a < 0) != (b < 0))
+    return niveau, passages / (fin - debut)
+
+
+@avec_ffmpeg
+def test_export_avec_la_voix_des_sous_titres_reel(tmp_path):
+    """V3.1, lot 6 : le montage (1 s, avec son propre son à 440 Hz) et la voix d'une prise (0,4 s à
+    1 000 Hz, 24 kHz mono comme une prise) qui y commence à 0,3 s. L'export a le son de la voix, au
+    bon moment, et dure exactement la vidéo : silence avant et après la voix, plus le son du montage."""
+    montage = tmp_path / "montage.mp4"
+    _ffmpeg("-f", "lavfi", "-i", "testsrc2=size=64x48:rate=30", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+            "-t", "1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(montage))
+    voix = tmp_path / "prise-002.wav"
+    _ffmpeg("-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=24000", "-t", "0.4", "-ac", "1", "-c:a", "pcm_s16le", str(voix))
+    source = replace(_source_reelle(montage), voix=voix, decalage_s=0.3)
+    plan = plan_video(source, MP4, H264, DEBIT_CONSEILLE, 0, tmp_path / "montage (sous-titres).mp4")
+    _calque_jaune(plan, tmp_path / "calque.mov", 3)
+    _exporter(plan, tmp_path / "calque.mov", tmp_path)
+    sortie = analyser(plan.en_cours)
+    assert sortie.son is not None and sortie.son.codec == "aac" and sortie.images.nombre == 30
+    echantillons = _echantillons(plan.en_cours)
+    assert abs(len(echantillons) / 48_000 - 1.0) < 0.05  # le son s'arrête avec la vidéo
+    avant, _ = _niveau_et_passages(echantillons, 0.0, 0.25)
+    pendant, passages = _niveau_et_passages(echantillons, 0.35, 0.65)
+    apres, _ = _niveau_et_passages(echantillons, 0.75, 0.95)
+    # La sinusoïde de FFmpeg est au huitième du maximum : niveau moyen ≈ 4 096 × 2/π ≈ 2 600.
+    assert avant < 50 and apres < 50 and pendant > 1500, (avant, pendant, apres)
+    assert 1800 < passages < 2200  # 1 000 Hz : la voix, pas le son du montage (440 Hz)
 
 
 def _calque_blanc_et_jaune(plan, chemin: Path, seize_bits: bool = False) -> None:
