@@ -141,12 +141,15 @@ def test_fenetre_pas_assez_haute_la_video_garde_640_px(page, qtbot):
 
     atelier = page.atelier
     studio = atelier.studio
-    page.resize(1800, 1050)
+    page.resize(1800, 1300)
     qtbot.waitUntil(lambda: studio.mode == GRANDE, timeout=3000)
     apercu = atelier.bloc_apercu
     voulue = apercu.hauteur_pour_video(Dimensions.APERCU_HAUTEUR_GRANDE)
-    visible = studio.hauteur_visible()
-    assert voulue <= visible  # le bloc de l'aperçu avec sa vidéo de 640 px tient dans la page visible
+    # Une page visible un peu plus haute que le bloc de l'aperçu avec sa vidéo de 640 px, mais trop
+    # basse pour la frise en plus.
+    cible = voulue + (atelier.cadre_frise.height() + Dimensions.ESPACE_BLOCS) // 2
+    page.resize(1800, page.height() + cible - studio.hauteur_visible())
+    qtbot.waitUntil(lambda: studio.hauteur_visible() == cible and studio.mode == GRANDE, timeout=3000)
     assert studio.hauteur_des_colonnes(studio.width()) == voulue
     qtbot.waitUntil(lambda: apercu.height() == voulue and _a_la_taille_de_la_video(atelier), timeout=3000)
     assert abs(apercu.zone.height() - Dimensions.APERCU_HAUTEUR_GRANDE) <= 1
@@ -277,13 +280,12 @@ def test_bibliotheque_et_enregistrer_en_icones(page, qtbot):
     assert not any("Gérer" in texte for texte in textes)
 
 
-def test_un_reglage_par_ligne_dans_les_effets(page):
+def test_un_reglage_par_ligne_dans_les_effets(page, qtbot):
     """Contour : la couleur, puis l'épaisseur dessous (côte à côte jusqu'à la 3.1.3) ; de même pour
     les autres effets."""
     texte = page.atelier.panneau.texte
     texte.sections["Contour"].ouvrir()
     texte.contour.setChecked(True)
-    couleur = _position(texte.contour_couleur, texte).y()
-    epaisseur = _position(texte.contour_epaisseur.champ, texte).y()
-    assert epaisseur > couleur + texte.contour_couleur.height()
-    assert _position(texte.contour_epaisseur.champ, texte).x() <= _position(texte.contour_couleur, texte).x() + 1
+    couleur, epaisseur = texte.contour_couleur, texte.contour_epaisseur.champ
+    qtbot.waitUntil(lambda: _position(epaisseur, texte).y() > _position(couleur, texte).y() + couleur.height(), timeout=3000)
+    assert _position(epaisseur, texte).x() == _position(couleur, texte).x()  # alignés à gauche
