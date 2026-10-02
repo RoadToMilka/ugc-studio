@@ -22,14 +22,18 @@ from .theme import Couleurs, Dimensions
 ECHELLES = (1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0)
 
 
-def svg_colore(nom: str, couleur: str, taille: int | None = None, rempli: bool = False) -> str:
+def svg_colore(nom: str, couleur: str, taille: int | None = None, rempli: bool = False, trait: float | None = None) -> str:
     """Contenu SVG de l'icône `nom`, dessinée dans la couleur demandée.
 
     `rempli` : l'intérieur de l'icône est peint aussi (ex. étoile pleine pour une note).
+    `trait` : épaisseur du trait (2 dans les icônes Lucide, sur une grille de 24) ; ex. une coche
+    plus épaisse, lisible dans une petite case à cocher.
     """
     svg = (dossier_ressources() / "icones" / f"{nom}.svg").read_text(encoding="utf-8")
     if rempli:
         svg = svg.replace('fill="none"', 'fill="currentColor"', 1)
+    if trait is not None:
+        svg = re.sub(r'stroke-width="[\d.]+"', f'stroke-width="{trait}"', svg, count=1)
     svg = svg.replace("currentColor", couleur)
     if taille is not None:
         svg = re.sub(r'width="\d+"', f'width="{taille}"', svg, count=1)
@@ -96,15 +100,16 @@ def icone_menu(nom: str, couleur: str = Couleurs.TEXTE_SECONDAIRE) -> QIcon:
     return icone(nom, couleur, taille=Dimensions.ICONE_PETITE)
 
 
-def fichier_icone(nom: str, couleur: str, taille: int = Dimensions.ICONE_PETITE) -> str:
+def fichier_icone(nom: str, couleur: str, taille: int = Dimensions.ICONE_PETITE, trait: float | None = None) -> str:
     """Chemin d'un fichier SVG recoloré, pour la feuille de style (qui ne lit que des fichiers).
 
     Le fichier est rangé dans le dossier « cache » des données de l'app et recréé si besoin.
     """
     dossier = dossier_cache() / "icones"
     dossier.mkdir(parents=True, exist_ok=True)
-    chemin = dossier / f"{nom}-{couleur.lstrip('#').lower()}-{taille}.svg"
-    contenu = svg_colore(nom, couleur, taille)
+    epaisseur = "" if trait is None else f"-{trait}"
+    chemin = dossier / f"{nom}-{couleur.lstrip('#').lower()}-{taille}{epaisseur}.svg"
+    contenu = svg_colore(nom, couleur, taille, trait=trait)
     if not chemin.exists() or chemin.read_text(encoding="utf-8") != contenu:
         chemin.write_text(contenu, encoding="utf-8")
     return chemin.as_posix()
@@ -115,5 +120,6 @@ def icones_feuille_de_style() -> dict[str, str]:
     return {
         "fleche": fichier_icone("chevron-down", Couleurs.TEXTE_SECONDAIRE),
         "fleche_desactivee": fichier_icone("chevron-down", Couleurs.TEXTE_DESACTIVE),
-        "coche": fichier_icone("check", Couleurs.TEXTE, Dimensions.ICONE_PETITE),
+        # La coche remplit la case (sans sa bordure), d'un trait plus épais que les autres icônes.
+        "coche": fichier_icone("check", Couleurs.TEXTE, Dimensions.CASE_A_COCHER - 2 * Dimensions.BORDURE, Dimensions.COCHE_TRAIT),
     }

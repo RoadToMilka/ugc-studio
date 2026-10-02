@@ -37,7 +37,7 @@ from ...services import Services
 from ..composants.choix_voix import choisir
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import ZoneDefilante
-from ..composants.elements import bouton, champ_entier, info, libelle, liste_deroulante, vider_disposition
+from ..composants.elements import ChampNomme, bouton, champ_entier, info, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
 from ..theme import Dimensions, Espacements, Hauteurs
@@ -160,17 +160,12 @@ class DialogueVariantesScript(QDialog):
                 "le module Voix."
             )
         disposition.addWidget(info(explication, "secondaire"))
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.M)
-        ligne.addWidget(libelle("Nombre de variantes", retour_a_la_ligne=False))
         nombre = liste_deroulante()
         for valeur in range(VARIANTES_MIN, VARIANTES_MAX + 1):
             nombre.addItem(f"{valeur} variantes ({LETTRES[0]} à {LETTRES[valeur - 1]})", valeur)
         choisir(nombre, VARIANTES_PAR_DEFAUT)
         nombre.currentIndexChanged.connect(lambda _index: self._actualiser())
-        ligne.addWidget(nombre)
-        ligne.addStretch(1)
-        disposition.addLayout(ligne)
+        disposition.addWidget(ChampNomme("Nombre de variantes", nombre))  # sous son nom (V3.1)
         if mode == MEMES:
             self.nombre_memes = nombre
         else:

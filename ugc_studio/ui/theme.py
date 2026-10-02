@@ -167,7 +167,10 @@ class Dimensions:
     # latérale et les blocs, en haut, en bas, et entre deux blocs, l'un sous l'autre comme côte à côte.
     # À droite, la barre de défilement prend place dans cet espace (voir zone_defilante).
     ESPACE_BLOCS = Espacements.L
-    CASE_A_COCHER = 18
+    # Case à cocher, bordure comprise (V3.1) : la hauteur du texte courant (14 px), la même dans toute
+    # l'app (20 px jusqu'à la 3.0.0). La coche, plus épaisse que le trait des icônes, reste lisible.
+    CASE_A_COCHER = Typo.COURANT
+    COCHE_TRAIT = 3  # épaisseur du trait de la coche, sur la grille de 24 des icônes Lucide (2 d'habitude)
     BARRE_DEFILEMENT = 16
     POIGNEE_DEFILEMENT_MIN = 32
     # Barre fine (listes déroulantes, barre horizontale des tableaux) : 10 px, poignée de 6 px.
@@ -175,7 +178,10 @@ class Dimensions:
     MARGE_POIGNEE_FINE = 2
     FONDU = 24  # dégradé en haut et en bas d'une zone qui défile, quand du contenu y est caché
     LISTE_CHOIX_VISIBLES = 8  # choix visibles d'un coup dans une liste déroulante ouverte
-    RETRAIT_CHOIX = Espacements.XL  # les choix de la liste ouverte, décalés vers la droite
+    # Liste ouverte (V3.1) : 8 px d'écart avec le champ ; le texte des choix commence au même endroit
+    # que celui du champ : bordure (1) + 12 px dans le champ, bordure (1) + 4 + 8 px dans la liste.
+    ECART_LISTE = Espacements.S
+    RETRAIT_CHOIX = Espacements.M - Espacements.XS
     SEPARATEUR_LISTE = 2 * Espacements.XS + BORDURE  # séparation entre deux groupes de choix
     # (Les pages ne sont plus limitées en largeur depuis la 1.0.1 : en plein écran, les blocs
     # prennent toute la place disponible.)
@@ -627,30 +633,37 @@ QComboBox::down-arrow {
 QComboBox::down-arrow:disabled {
     image: url("$icone_fleche_desactivee");
 }
-/* Liste ouverte : sous le champ (combobox-popup: 0), bordée de mauve comme le champ ouvert ;
-   les choix sont décalés vers la droite (voir ui/composants/liste_deroulante.py). */
+/* Liste ouverte (V3.1) : 8 px sous le champ (combobox-popup: 0), coins arrondis et bordure fine
+   grise comme les menus ; la fenêtre autour est transparente. Les fonds du choix actuel (mauve) et
+   du choix survolé (gris) sont dessinés par ui/composants/liste_deroulante.py, arrondis. */
 QComboBox {
     combobox-popup: $liste_popup;
 }
 QComboBox:on {
     border-color: $accent;
 }
+QComboBoxPrivateContainer {
+    background: transparent;
+    border: none;
+}
 QComboBox QAbstractItemView {
     background: $surface_elevee;
     color: $texte;
-    border: ${bordure}px solid $accent;
-    padding: ${esp_xs}px 0px;
+    border: ${bordure}px solid $couleur_bordure;
+    border-radius: ${arrondi_controle}px;
+    padding: ${esp_xs}px;
     outline: none;
-    selection-background-color: $teinte;
+    selection-background-color: transparent;
     selection-color: $texte;
 }
 QComboBox QAbstractItemView::item {
     padding: 0px ${esp_m}px 0px ${retrait_choix}px;
     min-height: ${hauteur_choix}px;
     border: none;
+    background: transparent;
 }
 QComboBox QAbstractItemView::item:selected {
-    background: $teinte;
+    background: transparent;
     color: $texte;
 }
 QComboBox QAbstractItemView::item:disabled {
@@ -675,6 +688,10 @@ QCheckBox {
 }
 QCheckBox:disabled {
     color: $texte_desactive;
+}
+/* Effet changé (onglet Mots du studio) : le texte de la case en mauve, comme le nom d'un réglage. */
+QCheckBox[modifie="true"] {
+    color: $accent_survol;
 }
 QCheckBox::indicator {
     width: ${case_a_cocher}px;
@@ -846,7 +863,8 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         # Cette marge gauche pose l'icône à 12 px du bord et son texte à ECART_ICONE_TEXTE
         # après elle, comme partout ailleurs dans l'app.
         "marge_gauche_menu": Espacements.M + Dimensions.ECART_ICONE_TEXTE - _QT_ESPACE_APRES_ICONE_MENU,
-        "case_a_cocher": Dimensions.CASE_A_COCHER,
+        # Qt compte la taille de la case sans sa bordure : 14 px au total = 12 px + 2 × 1 px.
+        "case_a_cocher": Dimensions.CASE_A_COCHER - 2 * Dimensions.BORDURE,
         "barre_defilement": Dimensions.BARRE_DEFILEMENT,
         "poignee_min": Dimensions.POIGNEE_DEFILEMENT_MIN,
         "barre_fine": Dimensions.BARRE_DEFILEMENT_FINE,

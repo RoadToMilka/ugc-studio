@@ -28,7 +28,6 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QDialog,
     QFileDialog,
-    QGridLayout,
     QHBoxLayout,
     QLineEdit,
     QTableWidgetItem,
@@ -89,7 +88,7 @@ from ..composants.barre_avancement import BarreAvancement
 from ..composants.choix import ChoixEnBoutons
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
-from ..composants.elements import Info, bouton, case_a_cocher, champ_decimal, info, libelle, libelle_abrege
+from ..composants.elements import ChampNomme, Info, bouton, case_a_cocher, champ_decimal, info, libelle, libelle_abrege
 from ..composants.tableau import Colonne, Tableau
 from ..ouvrir import montrer_dans_l_explorateur, ouvrir_fichier
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, qcolor
@@ -227,16 +226,14 @@ class DialogueExport(QDialog):
     # --- Réglages -------------------------------------------------------------------------------
 
     def _zone_reglages(self) -> QWidget:
+        """Les réglages, chacun sous son nom (V3.1 ; à gauche jusqu'à la 3.0.0), l'un sous l'autre."""
         zone = QWidget()
-        grille = QGridLayout(zone)
-        grille.setContentsMargins(0, 0, 0, 0)
-        grille.setHorizontalSpacing(Espacements.L)
-        grille.setVerticalSpacing(Espacements.S)
-        grille.setColumnStretch(1, 1)
-        rang = self._ajouter_les_reglages(grille)
-        rang = self._ajouter_la_ligne_hdr(grille, rang)
+        reglages = QVBoxLayout(zone)
+        reglages.setContentsMargins(0, 0, 0, 0)
+        reglages.setSpacing(Espacements.M)
+        self._ajouter_les_reglages(reglages)
+        self._ajouter_la_ligne_hdr(reglages)
 
-        grille.addWidget(libelle("Dossier", "legende", retour_a_la_ligne=False), rang, 0, Qt.AlignmentFlag.AlignTop)
         colonne = QVBoxLayout()
         colonne.setSpacing(Espacements.S)
         choix = {}
@@ -260,10 +257,8 @@ class DialogueExport(QDialog):
         self.bouton_changer = bouton("Changer…", variante="contour", nom_icone="folder-open", action=self.changer_de_dossier)
         ligne.addWidget(self.bouton_changer)
         colonne.addLayout(ligne)
-        grille.addLayout(colonne, rang, 1)
-        rang += 1
+        reglages.addWidget(ChampNomme("Dossier", colonne, etire=True))
 
-        grille.addWidget(libelle("Nom", "legende", retour_a_la_ligne=False), rang, 0)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.nom = QLineEdit(nom_propose(self.source, self._projet, self.SUFFIXE))
@@ -272,26 +267,23 @@ class DialogueExport(QDialog):
         ligne.addWidget(self.nom, 1)
         self.texte_extension = libelle(self.extension(), "secondaire", retour_a_la_ligne=False)
         ligne.addWidget(self.texte_extension)
-        grille.addLayout(ligne, rang, 1)
+        reglages.addWidget(ChampNomme("Nom", ligne, etire=True))
         return zone
 
-    def _ajouter_les_reglages(self, grille: QGridLayout) -> int:
-        """Les réglages propres à l'export, en haut de la grille ; renvoie le rang suivant."""
-        return 0
+    def _ajouter_les_reglages(self, reglages: QVBoxLayout) -> None:
+        """Les réglages propres à l'export, en haut, chacun sous son nom."""
 
-    def _ajouter_la_ligne_hdr(self, grille: QGridLayout, rang: int) -> int:
+    def _ajouter_la_ligne_hdr(self, reglages: QVBoxLayout) -> None:
         """Vidéo HDR (lot 3) : le HDR est gardé ; « Convertir en SDR » le ramène en BT.709. La ligne
         n'apparaît que pour une vidéo HDR (d'après ce qu'en lit FFmpeg) ; le choix n'est pas retenu :
         le HDR suit la vidéo source (décision du 02/10/2026)."""
-        self.titre_hdr = libelle("Couleurs", "legende", retour_a_la_ligne=False)
-        grille.addWidget(self.titre_hdr, rang, 0, Qt.AlignmentFlag.AlignTop)
         self.zone_sdr, self.case_sdr = case_a_cocher("Convertir en SDR", " ")
         self.info_hdr = self.zone_sdr.findChild(Info)
         self.case_sdr.toggled.connect(lambda _coche: self._actualiser())
-        grille.addWidget(self.zone_sdr, rang, 1)
+        self.titre_hdr = ChampNomme("Couleurs", self.zone_sdr, etire=True)
+        reglages.addWidget(self.titre_hdr)
         self.titre_hdr.hide()
         self.zone_sdr.hide()
-        return rang + 1
 
     def norme_hdr(self) -> NormeHDR | None:
         """La norme HDR de la vidéo source (None : SDR, pas de vidéo, ou pas encore lue)."""
@@ -618,15 +610,11 @@ class DialogueExportCalque(DialogueExport):
     ENREGISTRE = "Calque enregistré"
     _frequence_apercu: Fraction | None = None  # vidéo d'aperçu d'un projet sans vidéo (une fois lue)
 
-    def _ajouter_les_reglages(self, grille: QGridLayout) -> int:
-        rang = 0
-        grille.addWidget(libelle("Format", "legende", retour_a_la_ligne=False), rang, 0)
+    def _ajouter_les_reglages(self, reglages: QVBoxLayout) -> None:
         format_ = libelle("MOV · ProRes 4444 avec transparence, lu par Premiere Pro", "secondaire")
         format_.setToolTip("Le format de montage d'Apple : sans perte visible, il garde la transparence")
-        grille.addWidget(format_, rang, 1)
-        rang += 1
+        reglages.addWidget(ChampNomme("Format", format_, etire=True))
 
-        grille.addWidget(libelle("Images par seconde", "legende", retour_a_la_ligne=False), rang, 0, Qt.AlignmentFlag.AlignTop)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.choix_frequence: ChoixEnBoutons | None = None  # projet sans vidéo (placé en tête de ligne)
@@ -639,10 +627,8 @@ class DialogueExportCalque(DialogueExport):
         ligne.addWidget(self.frequence_libre)
         ligne.addStretch(1)
         self._ligne_frequence = ligne
-        grille.addLayout(ligne, rang, 1)
-        rang += 1
+        reglages.addWidget(ChampNomme("Images par seconde", ligne, etire=True))
         self._preparer_la_frequence()
-        return rang
 
     def _preparer_la_frequence(self) -> None:
         """Avec une vidéo : sa fréquence exacte, sans choix (sinon le calque se décalerait peu à peu).
@@ -745,17 +731,12 @@ class DialogueExportVideo(DialogueExport):
     ENREGISTRE = "Vidéo enregistrée"
     AVEC_LECTURE = True
 
-    def _ajouter_les_reglages(self, grille: QGridLayout) -> int:
-        rang = 0
-        grille.addWidget(libelle("Format", "legende", retour_a_la_ligne=False), rang, 0)
+    def _ajouter_les_reglages(self, reglages: QVBoxLayout) -> None:
         self.choix_conteneur = ChoixEnBoutons(dict(CONTENEURS), "Le format du fichier (conteneur)")
         conteneur = self._preferences.lire(PREF_CONTENEUR, MP4)
         self.choix_conteneur.definir(conteneur if conteneur in CONTENEURS else MP4)
         self.choix_conteneur.change.connect(lambda _valeur: self._conteneur_choisi())
-        grille.addLayout(self._a_gauche(self.choix_conteneur), rang, 1)
-        rang += 1
 
-        grille.addWidget(libelle("Codec", "legende", retour_a_la_ligne=False), rang, 0)
         self.choix_codec = ChoixEnBoutons(dict(CODECS), "La façon de compresser l'image")
         codec = self._preferences.lire(PREF_CODEC, H264)
         # Le codec voulu (retenu, ou cliqué) : quand il n'est pas possible (ProRes hors MOV, H.264 en
@@ -763,10 +744,13 @@ class DialogueExportVideo(DialogueExport):
         self._codec_voulu = codec if codec in CODECS else H264
         self.choix_codec.definir(self._codec_voulu)
         self.choix_codec.change.connect(self._codec_choisi)
-        grille.addLayout(self._a_gauche(self.choix_codec), rang, 1)
-        rang += 1
+        rangee = QHBoxLayout()
+        rangee.setSpacing(Espacements.L)
+        rangee.addWidget(ChampNomme("Format", self.choix_conteneur))
+        rangee.addWidget(ChampNomme("Codec", self.choix_codec))
+        rangee.addStretch(1)
+        reglages.addLayout(rangee)
 
-        grille.addWidget(libelle("Débit", "legende", retour_a_la_ligne=False), rang, 0, Qt.AlignmentFlag.AlignTop)
         colonne = QVBoxLayout()
         colonne.setSpacing(Espacements.S)
         self.choix_debit = ChoixEnBoutons(
@@ -787,9 +771,7 @@ class DialogueExportVideo(DialogueExport):
         self.texte_debit = libelle("", "legende")
         ligne.addWidget(self.texte_debit, 1)
         colonne.addLayout(ligne)
-        grille.addLayout(colonne, rang, 1)
-        rang += 1
-        return rang
+        reglages.addWidget(ChampNomme("Débit", colonne, etire=True))
 
     @staticmethod
     def _a_gauche(element: QWidget) -> QHBoxLayout:

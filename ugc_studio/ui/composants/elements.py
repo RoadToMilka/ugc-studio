@@ -17,8 +17,10 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QSizePolicy,
     QSlider,
     QSpinBox,
@@ -32,9 +34,9 @@ from PySide6.QtWidgets import (
 
 from ..icones import icone
 from ..polices import police
-from ..theme import LISTES_INTEGREES, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
+from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .bouton import Bouton, dessiner_texte_centre_a_l_oeil
-from .liste_deroulante import DelegueChoix, VueChoix
+from .liste_deroulante import DelegueChoix, VueChoix, preparer_la_liste
 
 
 def libelle(
@@ -122,6 +124,92 @@ class EtiquetteAbregee(QLabel):
 def libelle_abrege(texte: str, role: str | None = None) -> EtiquetteAbregee:
     """Texte sur une seule ligne, abrégé par « … » s'il manque de place (voir EtiquetteAbregee)."""
     return EtiquetteAbregee(texte, role)
+
+
+class ChampNomme(QWidget):
+    """Un champ sous son nom (V3.1, §9.4 ter) : le nom en petit (12 px, gris), 4 px au-dessus du
+    champ, comme dans le brief du module Script. Le même partout dans l'app : un nom à gauche du
+    champ prenait une colonne de plus, et l'œil devait faire l'aller-retour.
+
+    - `element` : le champ (ou une rangée : un champ et son unité, une liste et sa durée…) ;
+    - `a_cote` : un petit bouton posé à droite du champ (ex. ↺) ;
+    - `etire` : le champ prend toute la largeur (ex. une glissière) ; sinon, sa largeur naturelle.
+    Griser le ChampNomme grise aussi son nom ; le cacher cache les deux."""
+
+    def __init__(
+        self,
+        nom: str | None,
+        element: QWidget | QLayout,
+        a_cote: QWidget | None = None,
+        etire: bool = False,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        disposition = QVBoxLayout(self)
+        disposition.setContentsMargins(0, 0, 0, 0)
+        disposition.setSpacing(Espacements.XS)
+        self.nom = libelle(nom, "legende", retour_a_la_ligne=False) if nom else None
+        if self.nom is not None:
+            disposition.addWidget(self.nom)
+        ligne = QHBoxLayout()
+        ligne.setContentsMargins(0, 0, 0, 0)
+        ligne.setSpacing(Espacements.S)
+        if isinstance(element, QWidget):
+            ligne.addWidget(element, 1 if etire else 0)
+        else:
+            ligne.addLayout(element, 1 if etire else 0)
+        if a_cote is not None:
+            ligne.addWidget(a_cote)
+        if not etire:
+            ligne.addStretch(1)
+        disposition.addLayout(ligne)
+        self.element = element
+        self.a_cote = a_cote
+        politique = QSizePolicy.Policy.Expanding if etire else QSizePolicy.Policy.Preferred
+        self.setSizePolicy(politique, QSizePolicy.Policy.Fixed)
+
+
+def champ_nomme(nom: str | None, element: QWidget | QLayout, etire: bool = False) -> ChampNomme:
+    """Un champ sous son nom (voir ChampNomme)."""
+    return ChampNomme(nom, element, etire=etire)
+
+
+TOUTE_LA_RANGEE = "toute la rangée"
+
+
+def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
+    """Champs sous leur nom, en colonnes de même largeur, comme le brief du module Script (16 px
+    entre deux colonnes, 12 px entre deux rangées) : pour des champs qui s'étirent (listes, textes).
+
+    `champs` : des couples (nom, champ), ou des triplets (nom, champ, TOUTE_LA_RANGEE) pour un champ
+    qui prend toute la rangée (ex. un texte de plusieurs lignes) ; None laisse une case vide.
+    Renvoie la grille ; chaque ChampNomme est dans `grille.champs` (par nom)."""
+    grille = QGridLayout()
+    grille.setContentsMargins(0, 0, 0, 0)
+    grille.setHorizontalSpacing(Espacements.L)
+    grille.setVerticalSpacing(Espacements.M)
+    grille.champs = {}
+    rang = colonne = 0
+    for entree in champs:
+        if entree is None:
+            colonne += 1
+        else:
+            nom, element, *options = entree
+            champ = ChampNomme(nom, element, etire=True)
+            grille.champs[nom] = champ
+            if TOUTE_LA_RANGEE in options:
+                if colonne:
+                    rang, colonne = rang + 1, 0
+                grille.addWidget(champ, rang, 0, 1, colonnes)
+                rang += 1
+                continue
+            grille.addWidget(champ, rang, colonne)
+            colonne += 1
+        if colonne >= colonnes:
+            rang, colonne = rang + 1, 0
+    for numero in range(colonnes):
+        grille.setColumnStretch(numero, 1)
+    return grille
 
 
 def minutes_secondes(secondes: float) -> str:
@@ -276,8 +364,9 @@ class _SansMolette:
 class ListeDeroulante(_SansMolette, QComboBox):
     """Liste déroulante de l'app (voir liste_deroulante()).
 
-    - Liste « intégrée au champ » (§9.4 quinquies) : elle s'ouvre sous le champ, sans le choix
-      actuel, que le champ montre déjà (voir composants/liste_deroulante.py).
+    - Liste « intégrée au champ » (§9.4 quinquies, revue en V3.1) : elle s'ouvre 8 px sous le champ,
+      coins arrondis, avec tous les choix, l'actuel sur un fond mauve léger (voir
+      composants/liste_deroulante.py).
     - Texte trop long pour le champ fermé : abrégé par « … » (Qt le coupait au milieu d'une lettre),
       avec le texte complet au survol."""
 
@@ -286,19 +375,7 @@ class ListeDeroulante(_SansMolette, QComboBox):
         self.setView(VueChoix())
         self.setItemDelegate(DelegueChoix(self))
         self.setMaxVisibleItems(Dimensions.LISTE_CHOIX_VISIBLES)
-
-    # --- Liste ouverte ---------------------------------------------------------------------------
-
-    def showPopup(self) -> None:  # noqa: N802 — nom imposé par Qt
-        vue, actuel = self.view(), self.currentIndex()
-        for rang in range(self.count()):
-            vue.setRowHidden(rang, LISTES_INTEGREES and rang == actuel)  # le champ le montre déjà
-        super().showPopup()
-
-    def hidePopup(self) -> None:  # noqa: N802 — nom imposé par Qt
-        super().hidePopup()
-        for rang in range(self.count()):
-            self.view().setRowHidden(rang, False)
+        preparer_la_liste(self)
 
     # --- Champ fermé : texte abrégé par « … » ----------------------------------------------------
 
@@ -398,11 +475,10 @@ def case_a_cocher(texte: str, explication: str | None = None) -> tuple[QWidget, 
     case = QCheckBox(texte)
     disposition.addWidget(case)
     if explication:
-        # La colonne de l'ampoule a la largeur de la case (18 px plus sa bordure de chaque côté,
-        # voir QCheckBox dans la feuille de style) : l'ampoule est centrée sous la case, et le
-        # texte commence au même endroit que celui de la case (même espace de 8 px avant).
-        largeur_case = Dimensions.CASE_A_COCHER + 2 * Dimensions.BORDURE
-        disposition.addWidget(Info(explication, largeur_ampoule=largeur_case))
+        # La colonne de l'ampoule a la largeur de la case (bordure comprise, voir QCheckBox dans la
+        # feuille de style) : l'ampoule est centrée sous la case, et le texte commence au même
+        # endroit que celui de la case (même espace de 8 px avant).
+        disposition.addWidget(Info(explication, largeur_ampoule=Dimensions.CASE_A_COCHER))
     return zone, case
 
 

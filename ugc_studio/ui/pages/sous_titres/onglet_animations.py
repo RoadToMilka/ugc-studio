@@ -31,12 +31,12 @@ from ....style_sous_titres import (
 )
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
-from ...composants.elements import champ_decimal, champ_entier, info, liste_deroulante
+from ...composants.elements import ChampNomme, champ_decimal, champ_entier, info, liste_deroulante
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements
 from .onglet_mots import GrilleEtat
 from .onglet_texte import HAUTEUR_PAR_DEFAUT, ChampExact, ChampPixels
-from .reglages_communs import nombre_lisible
+from .reglages_communs import GrilleDeReglages, nombre_lisible
 
 PAS_DUREE_MS = 10
 
@@ -71,10 +71,9 @@ class OngletAnimations(QWidget):
         grille.ligne("Animation", self.type)
         self.duree = _duree(AnimationMot.LIMITES["duree_ms"], "Durée de l'animation")
         self.duree.valueChanged.connect(lambda valeur: self._mot(duree_ms=valeur))
-        grille.ligne("Durée", self.duree)
         self.intensite = ChampExact(champ_decimal(*AnimationMot.LIMITES["intensite_pct"], 10, 0, " %", "Plus ou moins marquée"))
         self.intensite.champ.valueChanged.connect(lambda _valeur: self._mot(intensite_pct=self.intensite.valeur()))
-        grille.ligne("Intensité", self.intensite.champ)
+        self._champs_animes = (grille.ligne("Durée", self.duree), grille.ligne("Intensité", self.intensite.champ))
         avances = SectionRepliable("Réglages avancés")
         self.section_avancee = avances
         self.grille_avancee = GrilleEtat(avances.contenu, "Comme l'animation choisie")
@@ -100,24 +99,23 @@ class OngletAnimations(QWidget):
         # Retour à « déjà dit ».
         section = SectionRepliable("Retour à « déjà dit »", True)
         self.sections["Retour"] = section
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.M)
+        retour = GrilleDeReglages()
         self.retour = ChoixEnBoutons(RETOURS, "Quand le mot suivant devient actif")
         self.retour.change.connect(lambda valeur: self._modifier(retour=valeur))
-        ligne.addWidget(self.retour)
+        retour.ajouter("Transition", self.retour)
         self.retour_duree = _duree(Animations.LIMITES["retour_duree_ms"], "Durée du fondu")
         self.retour_duree.valueChanged.connect(lambda valeur: self._modifier(retour_duree_ms=valeur))
-        ligne.addWidget(self.retour_duree)
-        ligne.addStretch(1)
-        section.contenu.addLayout(ligne)
+        self._champ_retour_duree = retour.ajouter("Durée", self.retour_duree)
+        section.contenu.addLayout(retour)
         disposition.addWidget(section)
 
         # Le sous-titre entier.
         section = SectionRepliable("Sous-titre entier", True)
         self.sections["Sous-titre entier"] = section
-        grille = GrilleEtat(section.contenu)
-        self.apparition, self.apparition_duree = self._entree_sortie(grille, "Apparition", "apparition")
-        self.disparition, self.disparition_duree = self._entree_sortie(grille, "Disparition", "disparition")
+        entier = GrilleDeReglages()
+        section.contenu.addLayout(entier)
+        self.apparition, self.apparition_duree, self._champ_apparition_duree = self._entree_sortie(entier, "Apparition", "apparition")
+        self.disparition, self.disparition_duree, self._champ_disparition_duree = self._entree_sortie(entier, "Disparition", "disparition")
         section.contenu.addWidget(
             info("Les animations ne changent pas les temps : l'apparition commence au début du sous-titre, la disparition finit à sa fin.")
         )
@@ -132,19 +130,23 @@ class OngletAnimations(QWidget):
         champ.champ.valueChanged.connect(lambda _valeur: self._mot(**{attribut: champ.valeur()}))
         return champ
 
-    def _entree_sortie(self, grille: GrilleEtat, titre: str, attribut: str):
+    def _entree_sortie(self, grille: GrilleDeReglages, titre: str, attribut: str):
+        """L'animation et sa durée, chacune sous son nom ; la paire passe à la ligne d'un bloc."""
         liste = liste_deroulante(f"{titre} du sous-titre entier")
         for code, nom in ANIMATIONS_DU_SOUS_TITRE.items():
             liste.addItem(nom, code)
         liste.currentIndexChanged.connect(lambda _index: self._modifier(**{attribut: liste.currentData() or ANIM_AUCUNE}))
         duree = _duree(Animations.LIMITES[f"{attribut}_duree_ms"], f"Durée : {titre.lower()}")
         duree.valueChanged.connect(lambda valeur: self._modifier(**{f"{attribut}_duree_ms": valeur}))
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.S)
-        ligne.addWidget(liste)
-        ligne.addWidget(duree)
-        grille.ligne(titre, ligne)
-        return liste, duree
+        paire = QWidget()
+        ligne = QHBoxLayout(paire)
+        ligne.setContentsMargins(0, 0, 0, 0)
+        ligne.setSpacing(Espacements.L)
+        ligne.addWidget(ChampNomme(titre, liste))
+        champ_duree = ChampNomme("Durée", duree)
+        ligne.addWidget(champ_duree)
+        grille.addWidget(paire)
+        return liste, duree, champ_duree
 
     # --- Modifications --------------------------------------------------------------------------
 
@@ -198,11 +200,12 @@ class OngletAnimations(QWidget):
         for attribut in self.grille_avancee.marques:
             self.grille_avancee.marquer(attribut, getattr(mot, attribut) is not None)
         anime = mot.type != ANIM_AUCUNE
-        for champ in (self.duree, self.intensite.champ, self.section_avancee):
+        for champ in (*self._champs_animes, self.section_avancee):
             champ.setEnabled(anime)
-        self.retour_duree.setEnabled(animations.retour == RETOUR_FONDU)
-        self.apparition_duree.setEnabled(animations.apparition != ANIM_AUCUNE)
-        self.disparition_duree.setEnabled(animations.disparition != ANIM_AUCUNE)
+        # Une durée qui ne sert pas : grisée, son nom compris.
+        self._champ_retour_duree.setEnabled(animations.retour == RETOUR_FONDU)
+        self._champ_apparition_duree.setEnabled(animations.apparition != ANIM_AUCUNE)
+        self._champ_disparition_duree.setEnabled(animations.disparition != ANIM_AUCUNE)
         resume_mot = ANIMATIONS_DU_MOT.get(mot.type, "").lower()
         if anime:
             resume_mot += f", {mot.duree_ms} ms, {nombre_lisible(mot.intensite_pct)} %"

@@ -6,12 +6,12 @@ rôle ; l'app assemble une description de 1 à 2 phrases **en anglais**, avec sa
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QDialog, QHBoxLayout, QVBoxLayout
 
 from ...voice_design import ACCENTS, AGES, GENRES, PERSONAS, TEXTURES, TIMBRES, assembler_description, code_genre
 from ..composants.bouton import activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, info, libelle, liste_deroulante
+from ..composants.elements import bouton, champs_en_colonnes, info, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 AUCUN = "Aucun choix"
@@ -44,30 +44,23 @@ class DialogueAssistantVoix(QDialog):
             )
         )
 
-        grille = QGridLayout()
-        grille.setHorizontalSpacing(Espacements.M)
-        grille.setVerticalSpacing(Espacements.S)
         self.genre = _liste([ligne[0] for ligne in GENRES], avec_aucun=False)
         self.age = _liste([ligne[0] for ligne in AGES])
         self.timbre = _liste([ligne[0] for ligne in TIMBRES])
         self.texture = _liste([ligne[0] for ligne in TEXTURES])
         self.accent = _liste([ligne[0] for ligne in ACCENTS])
         self.persona = _liste([ligne[0] for ligne in PERSONAS])
-        for rang, (titre, liste) in enumerate(
-            (
-                ("Genre", self.genre),
-                ("Âge", self.age),
-                ("Timbre", self.timbre),
-                ("Texture de la voix", self.texture),
-                ("Accent", self.accent),
-                ("Rôle", self.persona),
-            )
-        ):
-            grille.addWidget(libelle(titre, "legende", retour_a_la_ligne=False), rang, 0)
-            grille.addWidget(liste, rang, 1)
+        champs = (
+            ("Genre", self.genre),
+            ("Âge", self.age),
+            ("Timbre", self.timbre),
+            ("Texture de la voix", self.texture),
+            ("Accent", self.accent),
+            ("Rôle", self.persona),
+        )
+        for _titre, liste in champs:
             liste.currentIndexChanged.connect(self._apercu)
-        grille.setColumnStretch(1, 1)
-        disposition.addLayout(grille)
+        disposition.addLayout(champs_en_colonnes(champs))  # sous leur nom, deux par rangée (V3.1)
 
         disposition.addWidget(libelle("Description envoyée à Google", "legende"))
         self.anglais = libelle("", "intitule", selectionnable=True)

@@ -75,6 +75,9 @@ def configurer_application(app) -> dict:
     app.setApplicationName(NOM_APP)
     app.setApplicationVersion(__version__)
     app.setStyle("Fusion")  # style de base neutre, que la feuille de style personnalise entièrement
+    # Listes déroulantes (V3.1) : pas d'effet de déroulement de Windows. Il rejouerait la liste collée
+    # au champ, avec des coins carrés, avant qu'elle ne s'affiche 8 px plus bas, coins arrondis.
+    app.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
     indications = app.styleHints()
     if hasattr(indications, "setColorScheme"):  # Qt 6.8+ : barre de titre Windows sombre
         indications.setColorScheme(Qt.ColorScheme.Dark)

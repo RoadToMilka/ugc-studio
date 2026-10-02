@@ -60,7 +60,7 @@ class LigneChoix(QFrame):
 
         # Détails, alignés sur le texte de la case (même retrait que les explications des cases).
         details = QVBoxLayout()
-        details.setContentsMargins(Dimensions.CASE_A_COCHER + 2 * Dimensions.BORDURE + Espacements.S, 0, 0, 0)
+        details.setContentsMargins(Dimensions.CASE_A_COCHER + Espacements.S, 0, 0, 0)
         details.setSpacing(0)
         capacites = connu.capacites if connu else deviner_capacites(identifiant)
         details.addWidget(libelle(" · ".join(LIBELLES[c] for c in sorted(capacites)), "legende"))

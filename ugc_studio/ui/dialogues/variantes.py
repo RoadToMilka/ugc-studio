@@ -52,7 +52,7 @@ from ...variantes import (
 from ..composants.choix_voix import choisir, remplir_modeles_voix, remplir_voix
 from ..composants.editeur_script import EditeurScript
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, info, libelle, liste_deroulante, vider_disposition
+from ..composants.elements import ChampNomme, bouton, info, libelle, liste_deroulante, vider_disposition
 from ..composants.montant_label import MontantLabel
 from ..composants.onglets import Onglets
 from ..composants.defilement import ZoneDefilante
@@ -162,17 +162,12 @@ class DialogueVariantes(QDialog):
                 "secondaire",
             )
         )
-        ligne = QHBoxLayout()
-        ligne.setSpacing(Espacements.M)
-        ligne.addWidget(libelle("Nombre de variantes", retour_a_la_ligne=False))
         self.nombre = liste_deroulante()
         for nombre in range(VARIANTES_MIN, VARIANTES_MAX + 1):
             self.nombre.addItem(f"{nombre} variantes ({LETTRES[0]} à {LETTRES[nombre - 1]})", nombre)
         choisir(self.nombre, VARIANTES_PAR_DEFAUT)
         self.nombre.currentIndexChanged.connect(lambda _index: self._actualiser())
-        ligne.addWidget(self.nombre)
-        ligne.addStretch(1)
-        disposition.addLayout(ligne)
+        disposition.addWidget(ChampNomme("Nombre de variantes", self.nombre))  # sous son nom (V3.1)
         disposition.addWidget(libelle(f"Réglages utilisés : {self._resume_base()}.", "legende"))
         disposition.addStretch(1)
         return onglet

@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLineEdit,
     QMenu,
@@ -33,7 +32,9 @@ from ..composants.champ_style import ChampStyle
 from ..composants.choix_voix import propose
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import (
+    TOUTE_LA_RANGEE,
     bouton,
+    champs_en_colonnes,
     conteneur_vertical,
     info,
     libelle,
@@ -43,7 +44,7 @@ from ..composants.elements import (
 )
 from ..icones import icone_menu
 from ..composants.defilement import zone_defilante
-from ..theme import Couleurs, Dimensions, Espacements, Hauteurs
+from ..theme import Couleurs, Dimensions, Espacements
 
 
 def description(style: Style) -> str:
@@ -95,10 +96,6 @@ class DialogueStyle(QDialog):
         disposition.setSpacing(Espacements.M)
         disposition.addLayout(entete_de_fenetre(titre, "style"))
 
-        formulaire = QGridLayout()
-        formulaire.setHorizontalSpacing(Espacements.M)
-        formulaire.setVerticalSpacing(Espacements.S)
-
         self.nom = QLineEdit(style.nom)
         self.nom.setPlaceholderText("ex. Hook énergique")
         self.categorie = liste_deroulante()
@@ -123,23 +120,20 @@ class DialogueStyle(QDialog):
         self.balises = QLineEdit(noms_de_balises(style.balises))
         self.balises.setPlaceholderText("ex. rire, pause courte")
 
-        for rang, (titre, element) in enumerate(
+        # Champs sous leur nom (V3.1), deux par rangée comme dans le brief du module Script ; le style
+        # et les balises prennent toute la rangée.
+        formulaire = champs_en_colonnes(
             (
                 ("Nom", self.nom),
                 ("Catégorie", self.categorie),
                 ("Modèle", self.modele),
                 ("Voix", self.voix),
                 ("Langue", self.langue),
-                ("Style", self.champ_style),
-                ("Balises souvent utilisées", self.balises),
+                None,
+                ("Style", self.champ_style, TOUTE_LA_RANGEE),
+                ("Balises souvent utilisées", self.balises, TOUTE_LA_RANGEE),
             )
-        ):
-            # Libellé centré sur la hauteur d'un champ (ligne du haut de l'élément).
-            etiquette = libelle(titre, "legende", retour_a_la_ligne=False)
-            etiquette.setFixedHeight(Hauteurs.CONTROLE)
-            formulaire.addWidget(etiquette, rang, 0, Qt.AlignmentFlag.AlignTop)
-            formulaire.addWidget(element, rang, 1, Qt.AlignmentFlag.AlignTop)
-        formulaire.setColumnStretch(1, 1)
+        )
         formulaire.setRowStretch(formulaire.rowCount(), 1)  # l'espace libre va sous les champs
         disposition.addLayout(formulaire, 1)
 

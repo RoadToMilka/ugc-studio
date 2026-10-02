@@ -6,12 +6,12 @@ montre sa traduction française. Aucun appel à l'API : les correspondances sont
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QDialog, QGridLayout, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QDialog, QHBoxLayout, QVBoxLayout
 
 from ...styles import EMOTIONS, INTENSITES, RYTHMES, assembler
 from ..composants.bouton import activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, info, libelle, liste_deroulante
+from ..composants.elements import bouton, champs_en_colonnes, info, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 AUCUN = "Aucun choix"
@@ -44,26 +44,19 @@ class DialogueAssistantStyle(QDialog):
             )
         )
 
-        grille = QGridLayout()
-        grille.setHorizontalSpacing(Espacements.M)
-        grille.setVerticalSpacing(Espacements.S)
         self.emotion = _liste(EMOTIONS, avec_aucun=True)
         self.emotion2 = _liste(EMOTIONS, avec_aucun=True)
         self.rythme = _liste(RYTHMES, avec_aucun=True)
         self.intensite = _liste(INTENSITES, avec_aucun=True)
-        for rang, (titre, liste) in enumerate(
-            (
-                ("Émotion ou attitude", self.emotion),
-                ("… et (facultatif)", self.emotion2),
-                ("Rythme (facultatif)", self.rythme),
-                ("Voix (facultatif)", self.intensite),
-            )
-        ):
-            grille.addWidget(libelle(titre, "legende", retour_a_la_ligne=False), rang, 0)
-            grille.addWidget(liste, rang, 1)
+        champs = (
+            ("Émotion ou attitude", self.emotion),
+            ("… et (facultatif)", self.emotion2),
+            ("Rythme (facultatif)", self.rythme),
+            ("Voix (facultatif)", self.intensite),
+        )
+        for _titre, liste in champs:
             liste.currentIndexChanged.connect(self._apercu)
-        grille.setColumnStretch(1, 1)
-        disposition.addLayout(grille)
+        disposition.addLayout(champs_en_colonnes(champs))  # sous leur nom, deux par rangée (V3.1)
 
         self.anglais = libelle("", "intitule", selectionnable=True)
         self.francais = libelle("", "legende")
