@@ -21,7 +21,7 @@ from .montant_label import MontantLabel
 
 
 class EnteteDePage(QWidget):
-    """Titre d'une page (« Voix / Sérum Glowzy »), son sous-titre dessous et, au bout de la ligne,
+    """Titre d'une page (« Voix • Sérum Glowzy »), son sous-titre dessous et, au bout de la ligne,
     le bouton « Conseils » de la page (`conseils` : la page de conseils_des_pages.PAGES à ouvrir).
     Titre et sous-titre s'abrègent par « … » quand la place manque, texte complet au survol."""
 

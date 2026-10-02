@@ -73,6 +73,7 @@ from ...composants.elements import (
     libelle,
     liste_deroulante,
     minutes_secondes,
+    titre_avec,
 )
 from ...composants.lecteur import Lecteur
 from ...composants.montant_label import MontantLabel
@@ -308,7 +309,7 @@ class AtelierTranscription(Page):
         self._source_en_cours = None
         if projet is None:
             return
-        self.titre.setText(f"Transcription / {projet.nom}")
+        self.titre.setText(titre_avec("Transcription", projet.nom))
         transcription = projet.transcription
         choisir(self.langue, transcription.langue if transcription and transcription.date else projet.langue)
         if transcription and transcription.modele:

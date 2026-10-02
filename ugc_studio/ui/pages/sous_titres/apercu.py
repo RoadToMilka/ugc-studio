@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 from ....preferences import Preferences
 from ...composants.apercu import FOND_GRIS, FOND_VIDEO, FONDS, ZOOM_AJUSTE, ZOOMS, ToileApercu, ZoneApercu
 from ...composants.choix import ChoixEnBoutons
-from ...composants.elements import bouton, case_a_cocher, glissiere, info, libelle
+from ...composants.elements import bouton, case_a_cocher, glissiere, info, libelle, marge_haute_titre
 from ...composants.flux import DispositionFlux
 from ...icones import icone
 from ...theme import Couleurs, Dimensions, Espacements
@@ -38,7 +38,7 @@ class BlocApercu(QFrame):
         self.setProperty("role", "bloc")
         self._preferences = preferences
         disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        disposition.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         disposition.addWidget(libelle("Aperçu", "titre-bloc"))
 

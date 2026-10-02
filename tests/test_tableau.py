@@ -36,13 +36,13 @@ def _tableau(qtbot, largeur: int, lignes=LIGNES) -> Tableau:
 def test_une_ligne_par_case(app_configuree, qtbot):
     tableau = _tableau(qtbot, 900)
     assert not tableau.wordWrap()
-    assert [tableau.rowHeight(rang) for rang in range(tableau.rowCount())] == [Hauteurs.CONTROLE] * 2
+    assert [tableau.rowHeight(rang) for rang in range(tableau.rowCount())] == [Hauteurs.LIGNE_TABLEAU] * 2
 
 
 def test_texte_ecrit_sur_deux_lignes(app_configuree, qtbot):
     """Seule exception : un texte écrit exprès sur 2 lignes (un sous-titre) garde ses 2 lignes."""
     tableau = _tableau(qtbot, 900, (("0:01", "Mais ce sérum\nGlowzy a vraiment", "", ""),))
-    assert tableau.rowHeight(0) > Hauteurs.CONTROLE
+    assert tableau.rowHeight(0) > Hauteurs.LIGNE_TABLEAU
 
 
 def test_les_colonnes_de_texte_se_resserrent_d_abord(app_configuree, qtbot):

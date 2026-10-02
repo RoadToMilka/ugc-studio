@@ -34,7 +34,7 @@ class GrilleDeReglages(DispositionFlux):
     ) -> ChampNomme:
         """Un réglage sous son nom. `etire` : il prend une rangée à lui seul, sur toute la largeur (ex.
         une glissière) ; sans nom (ex. une case à cocher qui active les réglages suivants) aussi.
-        `aide` : son explication, dans une icône « i » juste après le nom (V3.1)."""
+        `aide` : son explication, dans une icône « i » devant le nom (V3.1 ; après lui jusqu'à la 3.1.0)."""
         champ = ChampNomme(nom, element, a_cote=a_cote, etire=etire, aide=aide)
         if etire or nom is None:
             self.ajouter_sur_toute_la_largeur(champ)

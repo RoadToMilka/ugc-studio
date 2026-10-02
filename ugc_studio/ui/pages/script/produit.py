@@ -9,13 +9,13 @@ from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPlainTextEdit, QVBoxLayou
 from ....ecriture.affichage import date_lisible
 from ....ecriture.fiche import FicheProduit
 from ....ecriture.page_produit import GOOGLE, LIBELLES_SOURCES, PageLue
-from ...composants.elements import BoutonInfo, bloc, bouton, info, libelle, ligne_avec_aide, vider_disposition
+from ...composants.elements import SEPARATEUR_DE_TITRE, ChampNomme, bloc, bouton, info, libelle, vider_disposition
 from ...composants.montant_label import MontantLabel
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Dimensions, Espacements, Typo
 
 COPIE_ANCIENNE = "Google a pu lire une copie un peu ancienne de la page : vérifie le prix et la promo."
-# V3.1 : au survol de l'icône « i », après « Adresse de la page produit ».
+# V3.1 : au survol de l'icône « i », devant « Adresse de la page produit » (après lui jusqu'à la 3.1.0).
 AIDE_LECTURE = (
     "L'app lit d'abord la page elle-même : c'est gratuit et exact pour une boutique Shopify. Si le site "
     "bloque, Google la lit (coût minime) ; sinon, colle le texte du produit."
@@ -49,8 +49,6 @@ class BlocProduit(QWidget):
         self.cadre, d = bloc("Produit")
         disposition.addWidget(self.cadre)
 
-        self.aide_lecture = BoutonInfo(AIDE_LECTURE)
-        d.addLayout(ligne_avec_aide(libelle("Adresse de la page produit", "legende", retour_a_la_ligne=False), self.aide_lecture))
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.adresse = QLineEdit()
@@ -61,7 +59,10 @@ class BlocProduit(QWidget):
         self.bouton_lire = bouton("Lire la page", nom_icone="globe", action=self._lire)
         self.bouton_lire.setToolTip("L'app lit la page elle-même (gratuit) ; si le site bloque, Google la lit")
         ligne.addWidget(self.bouton_lire)
-        d.addLayout(ligne)
+        # Sous son nom, 8 px au-dessus (V3.2), comme les autres champs.
+        adresse = ChampNomme("Adresse de la page produit", ligne, etire=True, aide=AIDE_LECTURE)
+        self.aide_lecture = adresse.aide
+        d.addWidget(adresse)
         estimation = QHBoxLayout()
         estimation.setSpacing(Espacements.XS)
         estimation.addWidget(libelle("Analyse de la page par le modèle ≈", "legende", retour_a_la_ligne=False))
@@ -138,7 +139,7 @@ class BlocProduit(QWidget):
             return
         prix = fiche.prix + (f" au lieu de {fiche.prix_barre}" if fiche.prix and fiche.prix_barre else "")
         lignes = (
-            ("Nom", " / ".join(v for v in (fiche.nom, fiche.marque) if v)),
+            ("Nom", SEPARATEUR_DE_TITRE.join(v for v in (fiche.nom, fiche.marque) if v)),
             ("Type", fiche.type_produit),
             ("Prix", prix),
             ("Offre", fiche.offre),

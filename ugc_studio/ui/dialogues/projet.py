@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit, QVBo
 from ...chemins import dossier_projets_defaut
 from ...projets import LANGUE_PAR_DEFAUT, LANGUES, ErreurProjet, GestionnaireProjets, Projet
 from ..composants.bouton import activer_avec_entree
-from ..composants.elements import avec_aide, bouton, libelle, liste_deroulante
+from ..composants.elements import ChampNomme, avec_aide, bouton, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 
@@ -25,7 +25,7 @@ class DialogueNouveauProjet(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        # Ce qu'est un projet : au survol de l'icône « i » après le titre (V3.1).
+        # Ce qu'est un projet : au survol de l'icône « i » devant le titre (V3.1 ; après lui jusqu'à la 3.1.0).
         disposition.addLayout(
             avec_aide(
                 libelle("Nouveau projet", "titre-bloc", retour_a_la_ligne=False),
@@ -33,25 +33,23 @@ class DialogueNouveauProjet(QDialog):
             )
         )
 
-        disposition.addWidget(libelle("Nom du projet", "legende"))
+        # Chaque champ sous son nom, 8 px visibles au-dessus (V3.2).
         self.nom = QLineEdit()
         self.nom.setPlaceholderText("ex. « Sérum Glowzy, hook témoignage »")
-        disposition.addWidget(self.nom)
+        disposition.addWidget(ChampNomme("Nom du projet", self.nom, etire=True))
 
-        disposition.addWidget(libelle("Langue de la voix off", "legende"))
         self.langue = liste_deroulante()
         for code, nom in LANGUES.items():
             self.langue.addItem(nom, code)
         self.langue.setCurrentIndex(self.langue.findData(LANGUE_PAR_DEFAUT))
-        disposition.addWidget(self.langue)
+        disposition.addWidget(ChampNomme("Langue de la voix off", self.langue, etire=True))
 
-        disposition.addWidget(libelle("Emplacement", "legende"))
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.chemin = libelle(str(self._emplacement), "secondaire", selectionnable=True)
         ligne.addWidget(self.chemin, 1)
         ligne.addWidget(bouton("Changer…", variante="contour", nom_icone="folder-open", action=self._choisir_dossier))
-        disposition.addLayout(ligne)
+        disposition.addWidget(ChampNomme("Emplacement", ligne, etire=True))
 
         self.statut = libelle("", "erreur")
         self.statut.hide()

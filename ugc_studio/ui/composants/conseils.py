@@ -20,14 +20,14 @@ from ...sous_titres import typographie
 from ..theme import Dimensions, Espacements
 from .bouton import Bouton
 from .defilement import zone_defilante
-from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide
+from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide, titre_avec
 
 TEXTE_BOUTON = "Conseils"
 
 
 def titre_des_conseils(page: PageDeConseils) -> str:
-    """« Voix / Conseils » : la page, puis « Conseils » (comme « Voix / Sérum Glowzy »)."""
-    return f"{page.titre} / Conseils"
+    """« Voix • Conseils » : la page, puis « Conseils » (comme « Voix • Sérum Glowzy »)."""
+    return titre_avec(page.titre, "Conseils")
 
 
 def _francais(texte: str) -> str:
@@ -114,7 +114,7 @@ def bouton_conseils(cle: str) -> Bouton:
 
 def entete_de_fenetre(titre: str, conseils: str, aide: str | None = None) -> QHBoxLayout:
     """Titre d'une fenêtre, avec le bouton « Conseils » en haut à droite. `aide` : ce que fait la
-    fenêtre, dans une icône « i » juste après le titre (V3.1 : plus de phrase d'explication
+    fenêtre, dans une icône « i » devant le titre (V3.2 ; V3.1 : plus de phrase d'explication
     toujours affichée sous le titre). Le titre reste accessible (`entete.titre`), comme l'icône
     (`entete.aide`, None sans aide) et le bouton (`entete.conseils`)."""
     entete = QHBoxLayout()
@@ -125,7 +125,7 @@ def entete_de_fenetre(titre: str, conseils: str, aide: str | None = None) -> QHB
         entete.titre = libelle(titre, "titre-bloc")
         entete.addWidget(entete.titre, 1)
     else:
-        # Avec une icône, le titre garde sa largeur et l'icône le suit ; la place reste avant le bouton.
+        # Avec une icône, le titre garde sa largeur et l'icône le précède ; la place reste avant le bouton.
         entete.titre = libelle(titre, "titre-bloc", retour_a_la_ligne=False)
         entete.addLayout(ligne_avec_aide(entete.titre, entete.aide), 1)
     entete.conseils = bouton_conseils(conseils)

@@ -35,10 +35,11 @@ from ...composants.elements import (
     libelle,
     ligne_avec_aide,
     liste_deroulante,
+    marge_haute_titre,
 )
 from ...composants.montant_label import MontantLabel
 from ...composants.onglets import Onglets
-from ...theme import Espacements
+from ...theme import Dimensions, Espacements
 
 ONGLET_VIDEO, ONGLET_MOTS = range(2)
 DECALAGE_MAX_S = 3600.0  # « La voix commence à » : une heure au plus (comme VideoApercu.LIMITES)
@@ -79,7 +80,7 @@ class BlocSource(QFrame):
         super().__init__(parent)
         self.setProperty("role", "bloc")
         disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        disposition.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         self.titre = libelle("Source", "titre-bloc")
         disposition.addWidget(self.titre)
@@ -186,7 +187,7 @@ class BlocSource(QFrame):
         importes.setSpacing(Espacements.XS)
         grille = QGridLayout()
         grille.setHorizontalSpacing(Espacements.S)
-        grille.setVerticalSpacing(Espacements.XS)
+        grille.setVerticalSpacing(Dimensions.ECART_NOM_CHAMP)  # le nom au-dessus de la liste (V3.2)
         self.prises = liste_deroulante("Prise dont créer les sous-titres")
         grille.addLayout(
             ligne_avec_aide(

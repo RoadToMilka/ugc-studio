@@ -5,9 +5,19 @@ MAJUSCULES » dans l'interface."""
 
 from decimal import Decimal
 
-from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt
 from PySide6.QtGui import QHelpEvent
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QLineEdit, QPushButton, QToolTip
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QStyle,
+    QStyleOptionButton,
+    QToolTip,
+    QWidget,
+)
 
 from ugc_studio.conseils_des_pages import PAGES
 from ugc_studio.sous_titres import typographie
@@ -21,7 +31,9 @@ from ugc_studio.ui.composants.elements import (
     Info,
     bloc,
     bouton,
+    case_a_cocher,
     intitule,
+    ligne_avec_aide,
     texte_en_lignes,
 )
 from ugc_studio.ui.composants.section_repliable import SectionRepliable
@@ -128,36 +140,39 @@ def test_bouton_info(app_configuree, qtbot):
     assert aide.text() == "Autre explication."
 
 
-def _juste_apres(texte, aide) -> bool:
-    """L'icône est 4 px après le texte, centrée sur sa hauteur (à 1 px près)."""
-    racine = aide.window()
-    droite_du_texte = texte.mapTo(racine, QPoint(texte.width(), 0)).x()
-    centre_du_texte = texte.mapTo(racine, QPoint(0, texte.height() // 2)).y()
-    gauche_de_l_icone = aide.mapTo(racine, QPoint(0, 0)).x()
-    centre_de_l_icone = aide.mapTo(racine, QPoint(0, aide.height() // 2)).y()
-    return gauche_de_l_icone - droite_du_texte == Dimensions.ECART_INFO and abs(centre_de_l_icone - centre_du_texte) <= 1
+def _ecart_et_centres(gauche, droite) -> tuple[int, int]:
+    """L'écart entre deux éléments côte à côte, et l'écart entre leurs centres en hauteur."""
+    racine = gauche.window()
+    ecart = droite.mapTo(racine, QPoint(0, 0)).x() - gauche.mapTo(racine, QPoint(gauche.width(), 0)).x()
+    centre_gauche = gauche.mapTo(racine, QPoint(0, gauche.height() // 2)).y()
+    centre_droite = droite.mapTo(racine, QPoint(0, droite.height() // 2)).y()
+    return ecart, abs(centre_gauche - centre_droite)
 
 
-def test_icone_i_juste_apres_le_texte_qu_elle_explique(app_configuree, qtbot):
-    """Après le titre d'un bloc, le nom d'un champ, un petit titre, le titre d'une section repliable
-    ou d'une fenêtre ; sans aide, rien ne change."""
+def _juste_avant(texte, aide) -> bool:
+    """L'icône est 8 px avant le texte, centrée sur sa hauteur (à 1 px près)."""
+    ecart, centres = _ecart_et_centres(aide, texte)
+    return ecart == Dimensions.ECART_INFO and centres <= 1
+
+
+def test_icone_i_au_debut_du_texte_qu_elle_explique(app_configuree, qtbot):
+    """V3.2 : devant le titre d'un bloc, le nom d'un champ, un petit titre ou le titre d'une fenêtre,
+    8 px avant lui (jusqu'à la 3.1.0 : 4 px après) ; sans aide, rien ne change."""
+    assert Dimensions.ECART_INFO == Espacements.S
     cadre, _d = bloc("Frise", aide="Clic : aller à ce moment.")
     _montrer(qtbot, cadre)
-    assert cadre.titre.text() == "Frise" and _juste_apres(cadre.titre, cadre.aide)
+    assert cadre.titre.text() == "Frise" and _juste_avant(cadre.titre, cadre.aide)
     sans_aide, _d = bloc("Exporter")
     assert sans_aide.aide is None and sans_aide.findChildren(BoutonInfo) == []
 
     champ = ChampNomme("Avance de l'allumage", QLineEdit(), aide="Si les mots s'allument un peu tard.")
     _montrer(qtbot, champ)
-    assert _juste_apres(champ.nom, champ.aide)
+    assert _juste_avant(champ.nom, champ.aide)
+    assert champ.aide.mapTo(champ, QPoint(0, 0)).x() == champ.element.mapTo(champ, QPoint(0, 0)).x()  # au bord du champ
 
     titre = intitule("Réorganiser à la main", "Choisis un sous-titre dans la liste.")
     _montrer(qtbot, titre)
-    assert _juste_apres(titre.etiquette, titre.aide)
-
-    section = SectionRepliable("Sous-titre entier", True, aide="Les animations ne changent pas les temps.")
-    _montrer(qtbot, section)
-    assert section.aide.mapTo(section, QPoint(0, 0)).x() - section.titre.width() == Dimensions.ECART_INFO
+    assert _juste_avant(titre.etiquette, titre.aide)
 
     from PySide6.QtWidgets import QDialog
 
@@ -166,8 +181,73 @@ def test_icone_i_juste_apres_le_texte_qu_elle_explique(app_configuree, qtbot):
     fenetre.setLayout(entete)
     fenetre.resize(Dimensions.DIALOGUE_LARGEUR, Hauteurs.CONTROLE)
     _montrer(qtbot, fenetre)
-    assert _juste_apres(entete.titre, entete.aide)
+    assert _juste_avant(entete.titre, entete.aide)
     assert entete.conseils.mapTo(fenetre, QPoint(entete.conseils.width(), 0)).x() == fenetre.width()  # Conseils au bout
+
+
+def test_icone_i_entre_la_case_et_son_texte(app_configuree, qtbot):
+    """V3.2 : sur une case à cocher, la case, 8 px, l'icône, 8 px, le texte. Un clic sur l'icône
+    montre l'explication sans cocher la case ; un clic sur le texte la coche."""
+    zone, case = case_a_cocher("Séparer les voix", "Chaque mot reçoit la personne qui parle.")
+    _montrer(qtbot, zone)
+    aide = zone.aide
+    assert aide is case.aide and aide.parentWidget() is case and case.text() == "Séparer les voix"
+    option = QStyleOptionButton()
+    case.initStyleOption(option)
+    indicateur = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, case)
+    texte = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, option, case)
+    assert aide.x() - (indicateur.right() + 1) == Dimensions.ECART_INFO
+    assert texte.left() - (aide.x() + aide.width()) == Dimensions.ECART_INFO
+    assert abs((aide.y() + aide.height() / 2) - (indicateur.top() + indicateur.height() / 2)) <= 1
+    qtbot.mouseClick(aide, Qt.MouseButton.LeftButton)
+    assert not case.isChecked()
+    qtbot.mouseClick(case, Qt.MouseButton.LeftButton, pos=texte.center())
+    assert case.isChecked()
+    # Sans explication : la case, 8 px, le texte (rien ne change).
+    _zone, simple = case_a_cocher("Grille")
+    _montrer(qtbot, _zone)
+    option = QStyleOptionButton()
+    simple.initStyleOption(option)
+    indicateur = simple.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, simple)
+    texte = simple.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, option, simple)
+    assert simple.aide is None and texte.left() - (indicateur.right() + 1) == Espacements.S
+
+
+def test_icone_i_apres_un_bouton_et_dans_une_section(app_configuree, qtbot):
+    """Après un bouton, l'icône reste après lui, 8 px après. Sur le titre d'une section repliable :
+    la flèche, 8 px, l'icône, 8 px, le texte (comme sur une case à cocher)."""
+    zone = QWidget()
+    choisir = bouton("Choisir les modèles…")
+    ligne = ligne_avec_aide(choisir, BoutonInfo("Seuls les modèles chargés sont listés."), apres=True)
+    zone.setLayout(ligne)
+    _montrer(qtbot, zone)
+    ecart, centres = _ecart_et_centres(choisir, ligne.aide)
+    assert ecart == Dimensions.ECART_INFO and centres <= 1
+
+    section = SectionRepliable("Sous-titre entier", True, aide="Les animations ne changent pas les temps.")
+    _montrer(qtbot, section)
+    assert section.aide.parentWidget() is section.titre
+    assert section.aide.x() == Dimensions.ICONE_PETITE + Dimensions.ECART_INFO
+    assert section.titre._debut_du_texte() == section.aide.x() + section.aide.width() + Dimensions.ECART_INFO
+    assert abs(section.aide.y() + section.aide.height() / 2 - section.titre.height() / 2) <= 1
+    section.titre.click()  # le titre ouvre et ferme la section…
+    assert not section.est_ouverte()
+    qtbot.mouseClick(section.aide, Qt.MouseButton.LeftButton)  # … pas l'icône
+    assert not section.est_ouverte()
+
+
+def test_retablir_d_un_groupe_de_16_px(app_configuree, qtbot):
+    """V3.2 : le ↺ d'un groupe du studio fait 16 px de haut à l'écran (18 px jusqu'à la 3.1.0), 4 px
+    après le titre."""
+    section = SectionRepliable("Contour", True)
+    retablir = section.ajouter_retablir(lambda: None, "Revenir au préréglage")
+    retablir.show()
+    _montrer(qtbot, section)
+    assert retablir.iconSize() == QSize(Dimensions.ICONE_RETABLIR, Dimensions.ICONE_RETABLIR)
+    image = retablir.icon().pixmap(retablir.iconSize()).toImage()
+    lignes = [y for y in range(image.height()) if any(image.pixelColor(x, y).alpha() > 0 for x in range(image.width()))]
+    assert len(lignes) == 16  # du haut au bas du dessin, comme le mesure l'œil
+    assert retablir.mapTo(section, QPoint(0, 0)).x() - section.titre.width() == Espacements.XS
 
 
 # --- Dans l'app ------------------------------------------------------------------------------------

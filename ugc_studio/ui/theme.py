@@ -126,14 +126,18 @@ class Arrondis:
 class Hauteurs:
     """§9.4 — Hauteurs (px)."""
 
-    CONTROLE = 36  # boutons et champs
+    # Boutons et champs : 32 px, bordure comprise (V3.2 ; 36 px jusqu'à la 3.1.0). Aussi les entrées
+    # de la barre latérale et le bouton du projet, en haut de la barre latérale.
+    CONTROLE = 32
     # Bandeau du haut (V3.1) : titre du module, « Conseils » et coût de la session ; le haut de la
-    # barre latérale (bouton du projet) a la même hauteur, et la même ligne dessous. 69 px : 16 px,
-    # le bouton du projet (36 px), 16 px, puis la ligne de 1 px.
-    BANDEAU = 69
+    # barre latérale (bouton du projet) a la même hauteur, et la même ligne dessous : 16 px, le
+    # bouton du projet, 16 px, puis la ligne de 1 px (65 px depuis la V3.2, 69 px avant).
+    BANDEAU = Espacements.L + CONTROLE + Espacements.L + 1
     PETIT_BOUTON = 28  # petits boutons (icônes)
     PASTILLE = 20  # pastilles d'information (ex. « Étape 2 »)
     CHOIX_LISTE = 32  # un choix dans une liste déroulante ouverte
+    # Lignes des tableaux : 36 px (V3.2 : elles ne suivent pas les champs, passés à 32 px).
+    LIGNE_TABLEAU = 36
     LIGNE_RESUME = 30  # résumé avant export (V3) : tableau en lecture seule, lignes plus serrées
 
 
@@ -174,11 +178,25 @@ class Dimensions:
     # icônes des boutons, d'un trait de 2 px.
     ROUE = ICONE_PETITE
     ROUE_TRAIT = 2
-    # Icône « i » (V3.1) juste après le texte qu'elle explique (4 px après), à la hauteur du texte
-    # courant ; sa bulle, lue au survol, passe à la ligne tous les 60 caractères environ.
+    # Icône « i » (V3.1), à la hauteur du texte courant ; sa bulle, lue au survol, passe à la ligne
+    # tous les 60 caractères environ. V3.2 : devant le texte qu'elle explique (titre, nom d'un
+    # champ), 8 px avant lui ; sur une case à cocher, entre la case et son texte, 8 px de chaque
+    # côté ; après un bouton, 8 px après lui (jusqu'à la 3.1.0 : 4 px après le texte).
     ICONE_INFO = 14
-    ECART_INFO = Espacements.XS
+    ECART_INFO = Espacements.S
     BULLE_CARACTERES = 60
+    # Nom d'un champ au-dessus du champ (V3.2) : 8 px visibles entre le bas des lettres du nom et le
+    # champ (7 px jusqu'à la 3.1.0). Sous la ligne de base du nom (texte de 12 px), sa police garde
+    # 3 px pour les lettres qui descendent (p, q…) : il reste 5 px à mettre entre les deux.
+    DESCENTE_LEGENDE = 3
+    ECART_NOM_CHAMP = Espacements.S - DESCENTE_LEGENDE
+    # Titre en haut d'un bloc (V3.2) : 24 px visibles entre le bord du haut et le haut des majuscules,
+    # comme à gauche du titre (28 px jusqu'à la 3.1.0). Au-dessus des majuscules, la police du titre
+    # (16 px) garde 4 px pour les accents : la marge du haut du bloc a donc 4 px de moins.
+    RESERVE_TITRE_BLOC = 4
+    # ↺ des groupes du studio des sous-titres (V3.2) : l'icône de 18 px, dont le dessin fait 16 px de
+    # haut (18 px avec l'icône de 20 px des autres boutons-icônes, jusqu'à la 3.1.0).
+    ICONE_RETABLIR = 18
     # Espace autour des blocs d'une page et entre eux (V3.1) : le même partout, entre la barre
     # latérale et les blocs, en haut, en bas, et entre deux blocs, l'un sous l'autre comme côte à côte.
     # À droite, la barre de défilement prend place dans cet espace (voir zone_defilante).
@@ -713,6 +731,11 @@ QCheckBox {
     spacing: ${esp_s}px;
     background: transparent;
 }
+/* Case avec une icône « i » (V3.2) : l'icône se place entre la case et son texte, 8 px de chaque
+   côté (voir elements.CaseACocher). */
+QCheckBox[aide="true"] {
+    spacing: ${espace_case_aide}px;
+}
 QCheckBox:disabled {
     color: $texte_desactive;
 }
@@ -895,7 +918,7 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "poignee_glissiere": Dimensions.GLISSIERE_POIGNEE,
         "rayon_poignee_glissiere": Dimensions.GLISSIERE_POIGNEE // 2,
         "marge_poignee_glissiere": (Dimensions.GLISSIERE_POIGNEE - Dimensions.GLISSIERE_HAUTEUR) // 2,
-        # Qt compte la hauteur sans les bordures : 36 px au total = 34 px + 2 × 1 px de bordure.
+        # Qt compte la hauteur sans les bordures : 32 px au total = 30 px + 2 × 1 px de bordure.
         "hauteur_interne_controle": Hauteurs.CONTROLE - 2 * Dimensions.BORDURE,
         "hauteur_interne_petit_bouton": Hauteurs.PETIT_BOUTON - 2 * Dimensions.BORDURE,
         "icone_petite": Dimensions.ICONE_PETITE,
@@ -905,6 +928,8 @@ def feuille_de_style(icones: dict[str, str], familles: dict[int, str] | None = N
         "marge_gauche_menu": Espacements.M + Dimensions.ECART_ICONE_TEXTE - _QT_ESPACE_APRES_ICONE_MENU,
         # Qt compte la taille de la case sans sa bordure : 14 px au total = 12 px + 2 × 1 px.
         "case_a_cocher": Dimensions.CASE_A_COCHER - 2 * Dimensions.BORDURE,
+        # Entre la case et son texte : 8 px, l'icône « i », 8 px (V3.2).
+        "espace_case_aide": 2 * Dimensions.ECART_INFO + Dimensions.ICONE_INFO,
         "barre_defilement": Dimensions.BARRE_DEFILEMENT,
         "poignee_min": Dimensions.POIGNEE_DEFILEMENT_MIN,
         "barre_fine": Dimensions.BARRE_DEFILEMENT_FINE,

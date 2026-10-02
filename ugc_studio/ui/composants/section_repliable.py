@@ -4,7 +4,9 @@ Pour garder un long formulaire lisible (ex. le brief du module Script : « Produ
 « Clientèle »…). Fermée, la section peut afficher un court résumé à côté du titre (ex. « 3 champs
 remplis », seulement dans le brief depuis la V3.1). Le titre se dessine comme les boutons de l'app
 (icône et texte centrés en hauteur, même écart entre les deux), sans cadre : c'est un titre, pas une
-action. Juste après lui, une icône « i » (aide) et, dans le studio des sous-titres, le ↺ du groupe.
+action. Une icône « i » (aide) se place entre la flèche et le texte (V3.2, comme sur une case à
+cocher ; juste après le texte jusqu'à la 3.1.0) ; juste après le texte, dans le studio des
+sous-titres, le ↺ du groupe.
 """
 
 from __future__ import annotations
@@ -18,16 +20,19 @@ from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QSizePolicy, QVBoxLa
 from ..icones import icone
 from ..polices import police
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, Typo, qcolor
-from .bouton import Bouton, dessiner_icone_et_texte, largeur_icone_et_texte
-from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide
+from .bouton import Bouton, dessiner_icone_et_texte
+from .elements import BoutonInfo, bouton, libelle
 
 
 class TitreSection(QAbstractButton):
-    """Titre cliquable d'une section : flèche à droite (fermée) ou vers le bas (ouverte), puis le texte."""
+    """Titre cliquable d'une section : flèche à droite (fermée) ou vers le bas (ouverte), puis le texte.
+    Avec une icône « i » (`aide`) : la flèche, 8 px, l'icône, 8 px, le texte (V3.2) ; l'icône est posée
+    sur le titre, un clic sur elle montre l'explication sans ouvrir ni fermer la section."""
 
-    def __init__(self, texte: str, parent=None):
+    def __init__(self, texte: str, parent=None, aide: str | None = None):
         super().__init__(parent)
         self.setText(texte)
+        self.aide = BoutonInfo(aide, self) if aide else None
         self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
@@ -46,9 +51,20 @@ class TitreSection(QAbstractButton):
         }
         self.toggled.connect(lambda _ouverte: self.update())
 
+    def _debut_du_texte(self) -> int:
+        """Où commence le texte : après la flèche (et l'icône « i » s'il y en a une)."""
+        if self.aide is None:
+            return Dimensions.ICONE_PETITE + Dimensions.ECART_ICONE_TEXTE
+        return Dimensions.ICONE_PETITE + 2 * Dimensions.ECART_INFO + Dimensions.ICONE_INFO
+
     def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
-        largeur = largeur_icone_et_texte(QFontMetricsF(self._police), self.text(), Dimensions.ICONE_PETITE)
+        largeur = self._debut_du_texte() + QFontMetricsF(self._police).horizontalAdvance(self.text())
         return QSize(math.ceil(largeur), Hauteurs.PETIT_BOUTON)
+
+    def resizeEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
+        super().resizeEvent(evenement)
+        if self.aide is not None:  # entre la flèche et le texte, centrée en hauteur
+            self.aide.move(Dimensions.ICONE_PETITE + Dimensions.ECART_INFO, (self.height() - self.aide.height()) // 2)
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
         return self.sizeHint()
@@ -62,7 +78,9 @@ class TitreSection(QAbstractButton):
         super().leaveEvent(evenement)
 
     def paintEvent(self, _evenement) -> None:  # noqa: N802 — nom imposé par Qt
-        survol = self.isEnabled() and (self.underMouse() or self.hasFocus())
+        # La souris sur l'icône « i » n'éclaire pas le titre : un clic sur elle n'ouvre pas la section.
+        sur_l_aide = self.aide is not None and self.aide.underMouse()
+        survol = self.isEnabled() and ((self.underMouse() and not sur_l_aide) or self.hasFocus())
         couleur = Couleurs.ACCENT_SURVOL if survol else Couleurs.TEXTE
         image = self._fleches[(self.isChecked(), survol)].pixmap(
             QSize(Dimensions.ICONE_PETITE, Dimensions.ICONE_PETITE),
@@ -71,15 +89,16 @@ class TitreSection(QAbstractButton):
         )
         peintre = QPainter(self)
         peintre.setRenderHint(QPainter.RenderHint.Antialiasing)
-        dessiner_icone_et_texte(
-            peintre, QRectF(self.rect()), image, Dimensions.ICONE_PETITE, self.text(), self._police, qcolor(couleur), centrer=False
-        )
+        zone = QRectF(self.rect())
+        dessiner_icone_et_texte(peintre, zone, image, Dimensions.ICONE_PETITE, "", self._police, qcolor(couleur), centrer=False)
+        zone_texte = zone.adjusted(self._debut_du_texte(), 0, 0, 0)
+        dessiner_icone_et_texte(peintre, zone_texte, None, 0, self.text(), self._police, qcolor(couleur), centrer=False)
         peintre.end()
 
 
 class SectionRepliable(QWidget):
     """`contenu` : la disposition verticale où placer les éléments de la section. `aide` : explication
-    de la section, dans une icône « i » juste après le titre (V3.1), dans `self.aide`."""
+    de la section, dans une icône « i » entre la flèche et le texte du titre (V3.2), dans `self.aide`."""
 
     basculee = Signal(bool)  # ouverte ?
 
@@ -90,9 +109,12 @@ class SectionRepliable(QWidget):
         disposition.setSpacing(Espacements.S)
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
-        self.titre = TitreSection(titre)
-        self.aide = BoutonInfo(aide) if aide else None
-        self._ligne_titre = ligne_avec_aide(self.titre, self.aide, fin=False)
+        self.titre = TitreSection(titre, aide=aide)
+        self.aide = self.titre.aide  # entre la flèche et le texte du titre (V3.2)
+        # Le ↺ du groupe, 4 px après le titre (voir ajouter_retablir).
+        self._ligne_titre = QHBoxLayout()
+        self._ligne_titre.setSpacing(Espacements.XS)
+        self._ligne_titre.addWidget(self.titre)
         ligne.addLayout(self._ligne_titre)
         self.retablir: Bouton | None = None  # ↺ du groupe (V3.1), voir ajouter_retablir()
         self.resume = libelle("", "legende", retour_a_la_ligne=False)
@@ -112,8 +134,11 @@ class SectionRepliable(QWidget):
     def ajouter_retablir(self, action, infobulle: str) -> Bouton:
         """Le ↺ du groupe (V3.1, studio des sous-titres) : une icône seule, juste après le titre
         (« Police ↺ »), visible seulement quand le groupe s'écarte du préréglage (montrer_retablir) ;
-        un clic remet le groupe comme dans le préréglage, sans ouvrir la section."""
-        self.retablir = bouton("", variante="icone", nom_icone="rotate-ccw", action=action)
+        un clic remet le groupe comme dans le préréglage, sans ouvrir la section. V3.2 : son dessin
+        fait 16 px de haut (18 px jusqu'à la 3.1.0)."""
+        self.retablir = bouton("", variante="icone", action=action)
+        self.retablir.setIconSize(QSize(Dimensions.ICONE_RETABLIR, Dimensions.ICONE_RETABLIR))
+        self.retablir.definir_icone("rotate-ccw")
         self.retablir.setToolTip(infobulle)
         self.retablir.hide()
         self._ligne_titre.addWidget(self.retablir, 0, Qt.AlignmentFlag.AlignVCenter)

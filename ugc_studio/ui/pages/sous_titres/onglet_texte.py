@@ -186,7 +186,7 @@ class OngletTexte(QWidget):
         self.police.activated.connect(lambda _index: self._police_choisie())
         self.graisse = liste_deroulante("Graisse : les épaisseurs que propose la police")
         self.graisse.activated.connect(self._signaler)
-        # V3.1 : la licence des polices au survol de l'icône « i » après « Police ».
+        # V3.1 : la licence des polices au survol de l'icône « i » devant « Police ».
         aide_police = (
             "Polices fournies : libres pour la publicité (licence SIL OFL). Une police de Windows ou importée a "
             "sa propre licence : vérifie qu'elle autorise un usage commercial."

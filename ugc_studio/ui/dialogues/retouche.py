@@ -20,7 +20,7 @@ from ...estimation import MOTS_PAR_SECONDE
 from ...fournisseurs.capacites import modele_connu
 from ...services import Services
 from ..composants.choix_voix import choisir
-from ..composants.elements import avec_aide, bouton, champ_entier, libelle, liste_deroulante
+from ..composants.elements import ChampNomme, avec_aide, bouton, champ_entier, libelle, liste_deroulante
 from ..composants.montant_label import MontantLabel
 from ..theme import Dimensions, Espacements
 
@@ -70,13 +70,12 @@ class DialogueRetouche(QDialog):
         )
         disposition.addWidget(libelle(f"Accroche : « {script.accroche()} »", "legende"))
 
-        disposition.addWidget(libelle("Consigne", "legende", retour_a_la_ligne=False))
         self.consigne = QPlainTextEdit()
         self.consigne.setFixedHeight(Dimensions.CHAMP_BRIEF_HAUTEUR)
         self.consigne.setTabChangesFocus(True)
         self.consigne.setPlaceholderText("ex. plus court, plus drôle, finis sur le code promo")
         self.consigne.textChanged.connect(self._actualiser)
-        disposition.addWidget(self.consigne)
+        disposition.addWidget(ChampNomme("Consigne", self.consigne, etire=True))
         suggestions = QGridLayout()
         suggestions.setHorizontalSpacing(Espacements.S)
         suggestions.setVerticalSpacing(Espacements.S)
@@ -91,23 +90,15 @@ class DialogueRetouche(QDialog):
 
         reglages = QHBoxLayout()
         reglages.setSpacing(Espacements.L)
-        colonne = QVBoxLayout()
-        colonne.setSpacing(Espacements.XS)
-        colonne.addWidget(libelle("Durée visée", "legende", retour_a_la_ligne=False))
         self.duree = champ_entier(DUREE_MIN, DUREE_MAX, " s", "Durée du nouveau script")
         self.duree.setValue(min(max(script.duree_visee_s or brief.duree_visee(), DUREE_MIN), DUREE_MAX))
         self.duree.valueChanged.connect(lambda _valeur: self._actualiser())
-        colonne.addWidget(self.duree)
-        reglages.addLayout(colonne)
-        colonne = QVBoxLayout()
-        colonne.setSpacing(Espacements.XS)
-        colonne.addWidget(libelle("Tutoiement", "legende", retour_a_la_ligne=False))
+        reglages.addWidget(ChampNomme("Durée visée", self.duree))
         self.tutoiement = liste_deroulante("Façon de s'adresser à la personne qui regarde")
         for code, nom in TUTOIEMENTS_RETOUCHE.items():
             self.tutoiement.addItem(nom, code)
         choisir(self.tutoiement, script.tutoiement if script.tutoiement in TUTOIEMENTS_RETOUCHE else "tu")
-        colonne.addWidget(self.tutoiement)
-        reglages.addLayout(colonne)
+        reglages.addWidget(ChampNomme("Tutoiement", self.tutoiement))
         reglages.addStretch(1)
         disposition.addLayout(reglages)
 

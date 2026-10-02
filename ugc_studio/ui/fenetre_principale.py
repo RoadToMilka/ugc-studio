@@ -15,6 +15,7 @@ from ..projets import ErreurProjet, Projet, RepliqueProjet
 from ..services import Services
 from .actions_projet import remplir_menu_projet
 from .composants.barre_laterale import BarreLaterale, Module
+from .composants.elements import titre_avec
 from .composants.entete import Entete
 from .pages.base import Page
 from .pages.reglages import PageReglages
@@ -114,7 +115,7 @@ class FenetrePrincipale(QMainWindow):
 
     def _projet_change(self, projet: Projet | None) -> None:
         self.barre_laterale.definir_projet(projet.nom if projet else None)
-        self.setWindowTitle(f"{NOM_APP} / {projet.nom}" if projet else NOM_APP)
+        self.setWindowTitle(titre_avec(NOM_APP, projet.nom) if projet else NOM_APP)
 
     def _rouvrir_dernier_projet(self) -> None:
         """Au démarrage, le dernier projet utilisé est rouvert automatiquement."""

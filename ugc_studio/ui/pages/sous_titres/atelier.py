@@ -112,7 +112,9 @@ from ...composants.elements import (
     info,
     intitule,
     libelle,
+    marge_haute_titre,
     minutes_secondes,
+    titre_avec,
 )
 from ...composants.flux import DispositionFlux
 from ...composants.frise import FriseSousTitres
@@ -168,7 +170,7 @@ def bloc_en_colonne(titre: str, contenu) -> tuple:
     titre reste en haut, et la barre fine prend place dans la marge de droite du bloc (voir
     ColonneDefilante). Renvoie le bloc et la zone qui défile."""
     cadre, disposition = bloc(titre)
-    disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.S, Espacements.XL)
+    disposition.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.S, Espacements.XL)
     colonne = ColonneDefilante(contenu, marge_droite=Espacements.XL - Espacements.S)
     disposition.addWidget(colonne)
     return cadre, colonne
@@ -448,7 +450,7 @@ class AtelierSousTitres(Page):
         if projet is None:
             self._services.modeles.choisir(SOUS_TITRES, None)
             return
-        self.titre.setText(f"{TITRE} / {projet.nom}")
+        self.titre.setText(titre_avec(TITRE, projet.nom))
         self._afficher("", "secondaire")
         self._afficher("", "secondaire", self.statut_export)
         self._afficher("", "secondaire", self.statut_lecture)
