@@ -8,7 +8,7 @@ ce que tu le modifies ; l'app ne touche jamais à un champ que tu as tapé.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QCheckBox, QGridLayout, QHBoxLayout, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLineEdit, QPlainTextEdit, QVBoxLayout, QWidget
 
 from ....ecriture.brief import (
     ANGLES,
@@ -34,12 +34,23 @@ from ....modeles_charges import CHARGES
 from ....projets import LANGUES
 from ....services import Services
 from ...composants.choix_voix import choisir
-from ...composants.elements import bouton, champ_entier, info, libelle, liste_deroulante
+from ...composants.elements import bouton, case_a_cocher, champ_entier, info, libelle, liste_deroulante
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Dimensions, Espacements
 
 MARQUE_PAGE = "d'après la page"
 MARQUE_VOIX = "d'après la voix"
+
+# V3.1 : ces explications se lisent au survol d'une icône « i » (après le titre « Brief », après
+# chaque option d'écriture) au lieu d'être toujours affichées.
+AIDE_BRIEF = (
+    "Remplis ce que tu sais : le reste est déduit de la page produit. Rien n'est inventé : sans "
+    "information, le script reste sans chiffre."
+)
+_RETENU = " Ce choix est retenu pour les prochains scripts."
+AIDE_BALISES = "Rires, pauses… (celles de l'app)." + _RETENU
+AIDE_STYLES = "Seulement si l'émotion change." + _RETENU
+AIDE_ACCENTS = "Un mot au plus par réplique, dit avec plus de force." + _RETENU
 
 # Champs de chaque section repliable : (nom dans le brief, nom affiché, plusieurs lignes ?, exemple).
 SECTIONS = (
@@ -180,13 +191,6 @@ class FormulaireBrief(QWidget):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(
-            info(
-                "Remplis ce que tu sais : le reste est déduit de la page produit. Rien n'est inventé : sans "
-                "information, le script reste sans chiffre.",
-                "secondaire",
-            )
-        )
 
         # --- L'essentiel ---
         self.pays = liste_deroulante("Pays visé : il propose la langue, sa variante régionale et la devise")
@@ -289,20 +293,14 @@ class FormulaireBrief(QWidget):
         # --- Options d'écriture ---
         options = QHBoxLayout()
         options.setSpacing(Espacements.XL)
-        self.balises = QCheckBox("Balises")
-        self.styles = QCheckBox("Styles de jeu")
-        self.accents = QCheckBox("Accentuations")
-        for case in (self.balises, self.styles, self.accents):
-            options.addWidget(case)
+        # V3.1 : l'explication de chaque case dans une icône « i », juste après son texte.
+        zone_balises, self.balises = case_a_cocher("Balises", AIDE_BALISES)
+        zone_styles, self.styles = case_a_cocher("Styles de jeu", AIDE_STYLES)
+        zone_accents, self.accents = case_a_cocher("Accentuations", AIDE_ACCENTS)
+        for zone in (zone_balises, zone_styles, zone_accents):
+            options.addWidget(zone)
         options.addStretch(1)
         disposition.addLayout(options)
-        disposition.addWidget(
-            info(
-                "Balises : rires, pauses… (celles de l'app). Styles de jeu : seulement si l'émotion change. "
-                "Accentuations : un mot au plus par réplique, dit avec plus de force. Ces choix sont retenus "
-                "pour les prochains scripts."
-            )
-        )
         modele = QHBoxLayout()
         modele.setSpacing(Espacements.L)
         self.modele = liste_deroulante("Modèle de texte qui écrit les scripts (Réglages → Modèles et prix)")

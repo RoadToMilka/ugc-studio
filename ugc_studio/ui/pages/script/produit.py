@@ -9,12 +9,18 @@ from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPlainTextEdit, QVBoxLayou
 from ....ecriture.affichage import date_lisible
 from ....ecriture.fiche import FicheProduit
 from ....ecriture.page_produit import GOOGLE, LIBELLES_SOURCES, PageLue
-from ...composants.elements import bloc, bouton, info, libelle, vider_disposition
+from ...composants.elements import BoutonInfo, bloc, bouton, info, libelle, ligne_avec_aide, vider_disposition
 from ...composants.montant_label import MontantLabel
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Dimensions, Espacements, Typo
 
 COPIE_ANCIENNE = "Google a pu lire une copie un peu ancienne de la page : vérifie le prix et la promo."
+# V3.1 : au survol de l'icône « i », après « Adresse de la page produit ».
+AIDE_LECTURE = (
+    "L'app lit d'abord la page elle-même : c'est gratuit et exact pour une boutique Shopify. Si le site "
+    "bloque, Google la lit (coût minime) ; sinon, colle le texte du produit."
+)
+AIDE_FICHE = "Ces informations ont pré-rempli les champs vides du brief, où tu peux les corriger."
 
 
 def etat_de_la_page(page: PageLue | None) -> str:
@@ -43,7 +49,8 @@ class BlocProduit(QWidget):
         self.cadre, d = bloc("Produit")
         disposition.addWidget(self.cadre)
 
-        d.addWidget(libelle("Adresse de la page produit", "legende", retour_a_la_ligne=False))
+        self.aide_lecture = BoutonInfo(AIDE_LECTURE)
+        d.addLayout(ligne_avec_aide(libelle("Adresse de la page produit", "legende", retour_a_la_ligne=False), self.aide_lecture))
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.adresse = QLineEdit()
@@ -63,10 +70,10 @@ class BlocProduit(QWidget):
         estimation.addWidget(self.cout_lecture)
         estimation.addStretch(1)
         d.addLayout(estimation)
-        self.etat = info(
-            "L'app lit d'abord la page elle-même : c'est gratuit et exact pour une boutique Shopify. Si le site "
-            "bloque, Google la lit (coût minime) ; sinon, colle le texte du produit."
-        )
+        # L'état de la page lue (« Lu par l'app (données Shopify), aujourd'hui à 14:32. ») ou une
+        # erreur de lecture ; caché tant qu'il n'y a rien à dire.
+        self.etat = info()
+        self.etat.hide()
         d.addWidget(self.etat)
 
         # Dernier recours : le texte de la page collé à la main.
@@ -95,10 +102,7 @@ class BlocProduit(QWidget):
         d.addWidget(self.zone_texte)
 
         # Fiche « Ce que l'app a compris » (repliée : les champs du brief en reprennent l'essentiel).
-        self.section_fiche = SectionRepliable("Ce que l'app a compris")
-        self.section_fiche.contenu.addWidget(
-            info("Ces informations ont pré-rempli les champs vides du brief, où tu peux les corriger.")
-        )
+        self.section_fiche = SectionRepliable("Ce que l'app a compris", aide=AIDE_FICHE)
         self._lignes_fiche = QVBoxLayout()
         self._lignes_fiche.setSpacing(Espacements.XS)
         self.section_fiche.contenu.addLayout(self._lignes_fiche)
@@ -124,13 +128,7 @@ class BlocProduit(QWidget):
         self.adresse.setCursorPosition(0)
         if page is not None and page.source == "texte":
             self.texte.setPlainText(page.texte)
-        if page is not None:
-            self.etat.afficher_etat(etat_de_la_page(page))
-        else:
-            self.etat.setText(
-                "L'app lit d'abord la page elle-même : c'est gratuit et exact pour une boutique Shopify. Si le site "
-                "bloque, Google la lit (coût minime) ; sinon, colle le texte du produit."
-            )
+        self.afficher_etat(etat_de_la_page(page))  # rien (caché) tant qu'aucune page n'est lue
         self.definir_fiche(fiche)
 
     def definir_fiche(self, fiche: FicheProduit | None) -> None:
@@ -165,10 +163,12 @@ class BlocProduit(QWidget):
 
     def afficher_etat(self, message: str, erreur: bool = False) -> None:
         self.etat.afficher_etat(message, erreur)
+        self.etat.setVisible(bool(message))
 
-    def occupe(self, occupe: bool) -> None:
+    def occupe(self, occupe: bool, bouton_actif=None) -> None:
+        """Pendant un travail : tout est grisé, sauf le bouton qui l'a lancé (le cercle y tourne)."""
         for element in (self.bouton_lire, self.bouton_analyser, self.adresse):
-            element.setEnabled(not occupe)
+            element.setEnabled(not occupe or element is bouton_actif)
 
     def definir_estimation(self, montant) -> None:
         if montant is None:

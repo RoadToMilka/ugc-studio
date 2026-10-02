@@ -31,7 +31,7 @@ from ....style_sous_titres import (
 )
 from ...composants.choix import ChoixEnBoutons
 from ...composants.choix_voix import choisir
-from ...composants.elements import ChampNomme, champ_decimal, champ_entier, info, liste_deroulante
+from ...composants.elements import ChampNomme, champ_decimal, champ_entier, liste_deroulante
 from ...composants.section_repliable import SectionRepliable
 from ...theme import Espacements
 from .onglet_mots import GrilleEtat
@@ -110,15 +110,19 @@ class OngletAnimations(QWidget):
         disposition.addWidget(section)
 
         # Le sous-titre entier.
-        section = SectionRepliable("Sous-titre entier", True)
+        section = SectionRepliable(
+            "Sous-titre entier",
+            True,
+            aide=(
+                "Les animations ne changent pas les temps : l'apparition commence au début du sous-titre, la "
+                "disparition finit à sa fin."
+            ),
+        )
         self.sections["Sous-titre entier"] = section
         entier = GrilleDeReglages()
         section.contenu.addLayout(entier)
         self.apparition, self.apparition_duree, self._champ_apparition_duree = self._entree_sortie(entier, "Apparition", "apparition")
         self.disparition, self.disparition_duree, self._champ_disparition_duree = self._entree_sortie(entier, "Disparition", "disparition")
-        section.contenu.addWidget(
-            info("Les animations ne changent pas les temps : l'apparition commence au début du sous-titre, la disparition finit à sa fin.")
-        )
         disposition.addWidget(section)
         disposition.addStretch(1)
         self._afficher()

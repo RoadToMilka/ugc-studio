@@ -52,6 +52,7 @@ from ...composants.elements import (
     conteneur_vertical,
     glissiere,
     info,
+    intitule,
     libelle,
     liste_deroulante,
 )
@@ -190,17 +191,34 @@ class PanneauReglages(QWidget):
         ligne_fin.addWidget(self.bouton_reglage_fin)
         self.alignement = ChoixEnBoutons(ALIGNEMENTS, "Alignement des lignes")
         # La glissière prend toute la largeur de sa colonne (les autres champs gardent la leur).
+        # V3.1 : les explications au survol d'une icône « i », après le nom du réglage.
         contenu.addLayout(
-            grille((("Position", self.verticale), ("Réglage fin", ligne_fin), ("Alignement", self.alignement)), etirees=(1,))
-        )
-        contenu.addWidget(
-            info("« Haut » et « Bas » : juste à l'intérieur de la zone de sécurité de la plateforme. Tu peux aussi glisser le sous-titre dans l'aperçu.")
+            grille(
+                (
+                    (
+                        "Position",
+                        self.verticale,
+                        "« Haut » et « Bas » : juste à l'intérieur de la zone de sécurité de la plateforme. Tu peux "
+                        "aussi glisser le sous-titre dans l'aperçu.",
+                    ),
+                    ("Réglage fin", ligne_fin),
+                    ("Alignement", self.alignement),
+                ),
+                etirees=(1,),
+            )
         )
         self.avances_position = SectionRepliable("Réglages avancés")
         self.largeur_lignes = champ_decimal(*LIMITES["largeur_lignes_pct"], 1, 0, " %", "Largeur maximale des lignes")
-        self.avances_position.contenu.addLayout(grille((("Largeur des lignes", self.largeur_lignes),)))
-        self.avances_position.contenu.addWidget(
-            info("En % de la largeur utile (zone de sécurité, ou jusqu'à la marge maximum) : pour un bloc plus étroit.")
+        self.avances_position.contenu.addLayout(
+            grille(
+                (
+                    (
+                        "Largeur des lignes",
+                        self.largeur_lignes,
+                        "En % de la largeur utile (zone de sécurité, ou jusqu'à la marge maximum) : pour un bloc plus étroit.",
+                    ),
+                )
+            )
         )
         contenu.addWidget(self.avances_position)
         contenu.addStretch(1)
@@ -272,7 +290,9 @@ class PanneauReglages(QWidget):
         contenu.addLayout(self.grille_ecran)
         self.info_format = info()
         contenu.addWidget(self.info_format)
-        self.infos_ecran = info()
+        # Les mesures de l'écran (« Vidéo 1080 × 1920, texte de 81 px… ») : une ligne de données, sans
+        # ampoule (V3.1).
+        self.infos_ecran = libelle("", "legende")
         contenu.addWidget(self.infos_ecran)
         contenu.addWidget(self._zone_video_apercu())
         contenu.addStretch(1)
@@ -286,11 +306,11 @@ class PanneauReglages(QWidget):
         """Projet sans vidéo (prise de voix) : une vidéo choisie seulement pour l'aperçu (§7.7)."""
         self.zone_video, contenu = conteneur_vertical(Espacements.S)
         contenu.setContentsMargins(0, Espacements.S, 0, 0)
-        contenu.addWidget(libelle("Vidéo d'aperçu", "intitule"))
         contenu.addWidget(
-            info(
+            intitule(
+                "Vidéo d'aperçu",
                 "Par exemple ton montage exporté de Premiere Pro : tu vois tes sous-titres sur la vraie image. "
-                "Elle n'est pas copiée dans le projet, et elle impose son format."
+                "Elle n'est pas copiée dans le projet, et elle impose son format.",
             )
         )
         ligne = QHBoxLayout()

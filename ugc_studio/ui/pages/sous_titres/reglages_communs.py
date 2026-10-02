@@ -25,10 +25,13 @@ class GrilleDeReglages(DispositionFlux):
         super().__init__(espacement=Espacements.L, espacement_vertical=Espacements.M)
         self.champs: dict[str, ChampNomme] = {}
 
-    def ajouter(self, nom: str | None, element, a_cote: QWidget | None = None, etire: bool = False) -> ChampNomme:
+    def ajouter(
+        self, nom: str | None, element, a_cote: QWidget | None = None, etire: bool = False, aide: str | None = None
+    ) -> ChampNomme:
         """Un réglage sous son nom. `etire` : il prend une rangée à lui seul, sur toute la largeur (ex.
-        une glissière) ; sans nom (ex. une case à cocher qui active les réglages suivants) aussi."""
-        champ = ChampNomme(nom, element, a_cote=a_cote, etire=etire)
+        une glissière) ; sans nom (ex. une case à cocher qui active les réglages suivants) aussi.
+        `aide` : son explication, dans une icône « i » juste après le nom (V3.1)."""
+        champ = ChampNomme(nom, element, a_cote=a_cote, etire=etire, aide=aide)
         if etire or nom is None:
             self.ajouter_sur_toute_la_largeur(champ)
         else:
@@ -39,9 +42,10 @@ class GrilleDeReglages(DispositionFlux):
 
 
 def grille(lignes, etirees: tuple[int, ...] = ()) -> GrilleDeReglages:
-    """Réglages sous leur nom, côte à côte (voir GrilleDeReglages) ; les lignes `etirees` prennent une
-    rangée à elles seules, sur toute la largeur (ex. une glissière)."""
+    """Réglages sous leur nom, côte à côte (voir GrilleDeReglages) : des couples (nom, champ), ou des
+    triplets (nom, champ, aide) pour un réglage expliqué par une icône « i » ; les lignes `etirees`
+    prennent une rangée à elles seules, sur toute la largeur (ex. une glissière)."""
     disposition = GrilleDeReglages()
-    for rang, (texte, element) in enumerate(lignes):
-        disposition.ajouter(texte, element, etire=rang in etirees)
+    for rang, (texte, element, *aide) in enumerate(lignes):
+        disposition.ajouter(texte, element, etire=rang in etirees, aide=aide[0] if aide else None)
     return disposition

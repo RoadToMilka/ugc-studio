@@ -29,7 +29,7 @@ from ...style_sous_titres import style_de_depart
 from ...transcription import Mot
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
-from ..composants.elements import Pastille, bouton, info, libelle, libelle_abrege, pastille, vider_disposition
+from ..composants.elements import Pastille, bouton, libelle, libelle_abrege, pastille, vider_disposition
 from ..composants.flux import DispositionFlux
 from ..icones import icone_menu
 from ..theme import Arrondis, Couleurs, CouleursApercu, Dimensions, Espacements, Hauteurs, qcolor
@@ -179,12 +179,14 @@ class DialoguePrereglages(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Préréglages de sous-titres", "prereglages"))
-        disposition.addWidget(
-            info(
-                "Un préréglage garde tout le style : onglets Texte, Mots, Animations, Position et Découpage. "
-                "Le projet en garde sa propre copie : modifier un préréglage ne change pas les projets déjà faits.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Préréglages de sous-titres",
+                "prereglages",
+                aide=(
+                    "Un préréglage garde tout le style : onglets Texte, Mots, Animations, Position et Découpage. "
+                    "Le projet en garde sa propre copie : modifier un préréglage ne change pas les projets déjà faits."
+                ),
             )
         )
         self.zone, contenu = zone_defilante()  # les cartes défilent s'il y en a plus de 6

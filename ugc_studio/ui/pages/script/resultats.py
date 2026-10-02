@@ -24,7 +24,7 @@ from ....ecriture.variantes import ACCROCHES
 from ....estimation import MOTS_PAR_SECONDE
 from ....fournisseurs.capacites import modele_connu
 from ...composants.editeur_script import EditeurScript
-from ...composants.elements import bouton, info, libelle, pastille, vider_disposition
+from ...composants.elements import BoutonInfo, bouton, info, libelle, ligne_avec_aide, pastille, vider_disposition
 from ...composants.etoiles import boutons_etoiles
 from ...composants.montant_label import MontantLabel
 from ...icones import icone_menu
@@ -86,13 +86,14 @@ class ListeAccroches(QWidget):
         interieur = QVBoxLayout(self.cadre)
         interieur.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         interieur.setSpacing(Espacements.M)
-        interieur.addWidget(libelle("Accroches", "titre-bloc"))
-        interieur.addWidget(
-            info(
-                "Coche celles qui te plaisent, puis « Écrire le script » : un script complet par accroche cochée. "
-                "L'accroche est toujours la réplique 1.",
+        # V3.1 : ce qu'il faut faire reste écrit ; le reste de l'explication passe dans l'icône « i ».
+        interieur.addLayout(
+            ligne_avec_aide(
+                libelle("Accroches", "titre-bloc", retour_a_la_ligne=False),
+                BoutonInfo("Un script complet par accroche cochée. L'accroche est toujours la réplique 1."),
             )
         )
+        interieur.addWidget(info("Coche celles qui te plaisent, puis « Écrire le script »."))
         self._lignes_disposition = QVBoxLayout()
         self._lignes_disposition.setSpacing(0)
         interieur.addLayout(self._lignes_disposition)
@@ -280,14 +281,17 @@ class CarteScript(QFrame):
     def _afficher_relecture(self) -> None:
         vider_disposition(self._relecture)
         script = self.script
+        # « Relecture », avec sa limite au survol de l'icône « i » (V3.1 : une phrase de moins par carte).
+        self._relecture.addLayout(
+            ligne_avec_aide(libelle("Relecture", "intitule", retour_a_la_ligne=False), BoutonInfo(LIMITE_DE_LA_RELECTURE))
+        )
         for correction in script.corrections:
             self._relecture.addWidget(libelle(f"✓ Corrigé avant affichage : {correction}", "legende"))
         a_signaler = [p for p in script.relecture if p.gravite != "ok"]
         for point in a_signaler:
             self._relecture.addWidget(libelle(f"⚠ {texte_du_point(point)}", "legende-avertissement"))
         if not a_signaler:
-            self._relecture.addWidget(libelle("✓ Relecture : rien à signaler", "succes"))
-        self._relecture.addWidget(info(LIMITE_DE_LA_RELECTURE))
+            self._relecture.addWidget(libelle("✓ Rien à signaler", "succes"))
 
     def _texte_modifie(self, replique, editeur: EditeurScript) -> None:
         replique.script = editeur.segments()

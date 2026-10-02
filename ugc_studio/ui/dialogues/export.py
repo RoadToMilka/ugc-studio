@@ -88,7 +88,7 @@ from ..composants.barre_avancement import BarreAvancement
 from ..composants.choix import ChoixEnBoutons
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
-from ..composants.elements import ChampNomme, Info, bouton, case_a_cocher, champ_decimal, info, libelle, libelle_abrege
+from ..composants.elements import ChampNomme, bouton, case_a_cocher, champ_decimal, libelle, libelle_abrege
 from ..composants.tableau import Colonne, Tableau
 from ..ouvrir import montrer_dans_l_explorateur, ouvrir_fichier
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, qcolor
@@ -162,8 +162,8 @@ class DialogueExport(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre(self.TITRE, self.PAGE_CONSEILS))
-        disposition.addWidget(info(self.INFO, "secondaire"))
+        # Ce que fait l'export : au survol de l'icône « i » après le titre (V3.1).
+        disposition.addLayout(entete_de_fenetre(self.TITRE, self.PAGE_CONSEILS, aide=self.INFO))
         zone, contenu_zone = zone_defilante()
         contenu_zone.setSpacing(Espacements.L)
         self.reglages = self._zone_reglages()
@@ -277,8 +277,9 @@ class DialogueExport(QDialog):
         """Vidéo HDR (lot 3) : le HDR est gardé ; « Convertir en SDR » le ramène en BT.709. La ligne
         n'apparaît que pour une vidéo HDR (d'après ce qu'en lit FFmpeg) ; le choix n'est pas retenu :
         le HDR suit la vidéo source (décision du 02/10/2026)."""
+        # L'explication (propre à chaque export et à la norme HDR) est dans l'icône « i » de la case.
         self.zone_sdr, self.case_sdr = case_a_cocher("Convertir en SDR", " ")
-        self.info_hdr = self.zone_sdr.findChild(Info)
+        self.info_hdr = self.zone_sdr.aide
         self.case_sdr.toggled.connect(lambda _coche: self._actualiser())
         self.titre_hdr = ChampNomme("Couleurs", self.zone_sdr, etire=True)
         reglages.addWidget(self.titre_hdr)

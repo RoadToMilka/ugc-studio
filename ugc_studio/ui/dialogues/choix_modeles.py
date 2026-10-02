@@ -19,7 +19,7 @@ from ...modeles_charges import dans_l_ordre
 from ...services import Services
 from ..composants.bouton import activer_avec_entree
 from ..composants.defilement import zone_defilante
-from ..composants.elements import bouton, conteneur_vertical, info, libelle
+from ..composants.elements import avec_aide, bouton, conteneur_vertical, info, libelle
 from ..theme import Dimensions, Espacements
 
 
@@ -84,13 +84,12 @@ class DialogueChoixModeles(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Choisir les modèles", "titre-bloc"))
-        disposition.addWidget(
-            info(
+        disposition.addLayout(
+            avec_aide(
+                libelle("Choisir les modèles", "titre-bloc", retour_a_la_ligne=False),
                 "Coche les modèles à mettre à disposition : seuls ceux-là apparaissent dans les listes "
                 "« Modèle » des modules et dans « Modèles et prix ». Un modèle utilisé reste coché : aucun "
                 "module ne peut se retrouver sans modèle.",
-                "secondaire",
             )
         )
 

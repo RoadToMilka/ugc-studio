@@ -13,14 +13,14 @@ un bouton, avec ceux de chaque module et de chaque fenêtre.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ...conseils_des_pages import PAGES, PageDeConseils
 from ...sous_titres import typographie
 from ..theme import Dimensions, Espacements
 from .bouton import Bouton
 from .defilement import zone_defilante
-from .elements import bouton, libelle
+from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide
 
 TEXTE_BOUTON = "Conseils"
 
@@ -52,7 +52,9 @@ class _Conseil(QWidget):
 
 
 class DialogueConseils(QDialog):
-    """Fenêtre des conseils d'un module ou d'une fenêtre : des rubriques, chacune avec ses conseils."""
+    """Fenêtre des conseils d'un module ou d'une fenêtre : des rubriques, chacune dans une carte (V3.1,
+    §9.4 quater) : fond et contour d'un bloc, coins arrondis de 12 px, son titre en haut, ses conseils
+    dessous, 12 px entre deux cartes. On voit d'un coup d'œil où commence et finit chaque sujet."""
 
     def __init__(self, page: PageDeConseils, parent: QWidget | None = None):
         super().__init__(parent)
@@ -62,23 +64,35 @@ class DialogueConseils(QDialog):
         self.setMinimumWidth(Dimensions.DIALOGUE_LARGEUR)
         self.resize(Dimensions.DIALOGUE_CONSEILS_LARGEUR, Dimensions.DIALOGUE_LARGE_HAUTEUR)
 
+        # Les cartes défilent jusqu'au bord droit de la fenêtre : la barre de défilement prend place
+        # dans la marge de droite, comme dans les pages (les cartes ne bougent pas quand elle apparaît).
+        marges = (Espacements.XL, 0, Espacements.XL, 0)
         disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
+        disposition.setContentsMargins(0, Espacements.XL, 0, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle(titre, "titre-bloc"))
+        haut = QHBoxLayout()
+        haut.setContentsMargins(*marges)
+        haut.addWidget(libelle(titre, "titre-bloc"))
+        disposition.addLayout(haut)
 
-        zone, contenu = zone_defilante()
-        contenu.setSpacing(Espacements.XL)
+        zone, contenu = zone_defilante(marges=marges, barre_dans_la_marge=True)
+        contenu.setSpacing(Espacements.M)
+        self.cartes: list[QFrame] = []
         for rubrique in page.rubriques:
-            partie = QVBoxLayout()
+            carte = QFrame()
+            carte.setProperty("role", "bloc")
+            partie = QVBoxLayout(carte)
+            partie.setContentsMargins(Espacements.L, Espacements.L, Espacements.L, Espacements.L)
             partie.setSpacing(Espacements.S)
             partie.addWidget(libelle(_francais(rubrique.titre), "intitule"))
             for conseil in rubrique.conseils:
                 partie.addWidget(_Conseil(conseil))
-            contenu.addLayout(partie)
+            contenu.addWidget(carte)
+            self.cartes.append(carte)
         disposition.addWidget(zone, 1)
 
         bas = QHBoxLayout()
+        bas.setContentsMargins(*marges)
         bas.addStretch(1)
         bas.addWidget(bouton("Fermer", action=self.accept))
         disposition.addLayout(bas)
@@ -98,14 +112,22 @@ def bouton_conseils(cle: str) -> Bouton:
     return resultat
 
 
-def entete_de_fenetre(titre: str, conseils: str) -> QHBoxLayout:
-    """Titre d'une fenêtre, avec le bouton « Conseils » en haut à droite.
-    Le titre reste accessible (`entete.titre`), comme le bouton (`entete.conseils`)."""
+def entete_de_fenetre(titre: str, conseils: str, aide: str | None = None) -> QHBoxLayout:
+    """Titre d'une fenêtre, avec le bouton « Conseils » en haut à droite. `aide` : ce que fait la
+    fenêtre, dans une icône « i » juste après le titre (V3.1 : plus de phrase d'explication
+    toujours affichée sous le titre). Le titre reste accessible (`entete.titre`), comme l'icône
+    (`entete.aide`, None sans aide) et le bouton (`entete.conseils`)."""
     entete = QHBoxLayout()
     entete.setContentsMargins(0, 0, 0, 0)
     entete.setSpacing(Espacements.S)
-    entete.titre = libelle(titre, "titre-bloc")
-    entete.addWidget(entete.titre, 1)
+    entete.aide = BoutonInfo(aide) if aide else None
+    if entete.aide is None:
+        entete.titre = libelle(titre, "titre-bloc")
+        entete.addWidget(entete.titre, 1)
+    else:
+        # Avec une icône, le titre garde sa largeur et l'icône le suit ; la place reste avant le bouton.
+        entete.titre = libelle(titre, "titre-bloc", retour_a_la_ligne=False)
+        entete.addLayout(ligne_avec_aide(entete.titre, entete.aide), 1)
     entete.conseils = bouton_conseils(conseils)
     entete.addWidget(entete.conseils)
     return entete

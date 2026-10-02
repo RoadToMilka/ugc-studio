@@ -177,7 +177,7 @@ VOIX = PageDeConseils(
         Rubrique(
             "Accentuer et prononciation",
             (
-                "« Accentuer » met le mot sélectionné en MAJUSCULES : le modèle appuie dessus. Les "
+                "« Accentuer » écrit le mot sélectionné en majuscules pour la voix : le modèle appuie dessus. Les "
                 "sous-titres gardent l'écriture d'origine.",
                 "« Prononciation » : pour un nom de marque mal prononcé, écris comment le dire (ex. "
                 "« Glowzy » se dit « Glo-zi »). Seul le texte envoyé à la voix change : le script et les "
@@ -263,7 +263,7 @@ SOUS_TITRES = PageDeConseils(
             (
                 "Les sous-titres partent des mots de la transcription du projet, avec le moment de chaque mot.",
                 "Pour une prise du module Voix, « Créer les sous-titres » la transcrit, puis cale le texte "
-                "sur son script : l'orthographe du script est gardée (noms de marque, pas de MAJUSCULES "
+                "sur son script : l'orthographe du script est gardée (noms de marque, sans les majuscules "
                 "d'accentuation).",
                 "« Corriger les mots » ouvre le module Transcription ; un double-clic sur un sous-titre de la "
                 "frise l'ouvre directement sur son premier mot.",
@@ -278,7 +278,7 @@ SOUS_TITRES = PageDeConseils(
                 "L'app choisit le meilleur découpage : des sous-titres bien remplis, de longueurs proches, "
                 "qui finissent si possible sur une ponctuation.",
                 "La durée minimale allonge les sous-titres trop courts, sans chevaucher le suivant.",
-                "La casse (TOUT EN MAJUSCULES…) et la ponctuation ne changent que l'affichage : le moment des "
+                "La casse (tout en majuscules…) et la ponctuation ne changent que l'affichage : le moment des "
                 "mots ne bouge jamais.",
             ),
         ),

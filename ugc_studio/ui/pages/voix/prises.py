@@ -25,6 +25,7 @@ from ....fournisseurs.capacites import modele_connu
 from ....projets import Prise, copier_fichier
 from ....services import Services
 from ... import taches
+from ...composants.bouton import montrer_occupe
 from ...composants.elements import bouton, glissiere, libelle, minutes_secondes, pastille, vider_disposition
 from ...composants.etoiles import boutons_etoiles
 from ...composants.lecteur import Lecteur
@@ -112,7 +113,7 @@ class LignePrise(QFrame):
             lambda: liste.exporter(prise.identifiant, "wav")
         )
         menu.addAction(icone_menu("download"), "Exporter en MP3…").triggered.connect(
-            lambda: liste.exporter(prise.identifiant, "mp3")
+            lambda: liste.exporter(prise.identifiant, "mp3", plus)  # le cercle tourne dans ⋯ (V3.1)
         )
         menu.addAction(icone_menu("folder-open"), "Afficher dans le dossier").triggered.connect(
             lambda: ouvrir_dossier(liste.chemin(prise).parent)
@@ -216,7 +217,9 @@ class ListePrises(QWidget):
             self._services.projets.modifier_prise(identifiant, nom=" ".join(nom.split()))
             self.rafraichir()
 
-    def exporter(self, identifiant: str, format_audio: str) -> None:
+    def exporter(self, identifiant: str, format_audio: str, bouton_actions=None) -> None:
+        """Exporte une prise en WAV (copie) ou en MP3 (conversion, en tâche de fond : le cercle tourne
+        alors dans le bouton ⋯ de la prise, `bouton_actions`)."""
         projet = self._services.projets.projet
         prise = self._services.projets.prise(identifiant)
         proposition = dossier_documents() / f"{projet.nom} - {prise.nom}.{format_audio}"
@@ -229,10 +232,15 @@ class ListePrises(QWidget):
             copier_fichier(source, destination)
             return
 
+        def fin(_resultat) -> None:
+            montrer_occupe(bouton_actions, False)
+
         def echec(erreur: Exception) -> None:
+            montrer_occupe(bouton_actions, False)
             QMessageBox.warning(self.window(), "Export MP3", f"L'export MP3 a échoué : {erreur}")
 
-        taches.lancer(lambda: exporter_mp3(source, destination), lambda _r: None, echec)
+        montrer_occupe(bouton_actions, True)
+        taches.lancer(lambda: exporter_mp3(source, destination), fin, echec)
 
     def supprimer(self, identifiant: str) -> None:
         prise = self._services.projets.prise(identifiant)

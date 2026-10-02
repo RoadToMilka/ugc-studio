@@ -134,12 +134,14 @@ class DialogueMeilleursScripts(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Mes meilleurs scripts", "meilleurs-scripts"))
-        disposition.addWidget(
-            info(
-                "Le modèle s'en inspire (ton, rythme) pour écrire tes scripts, sans les recopier : jusqu'à 3 par "
-                "demande, les plus proches. Tes scripts passent avant les scripts fournis.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Mes meilleurs scripts",
+                "meilleurs-scripts",
+                aide=(
+                    "Le modèle s'en inspire (ton, rythme) pour écrire tes scripts, sans les recopier : jusqu'à 3 "
+                    "par demande, les plus proches. Tes scripts passent avant les scripts fournis."
+                ),
             )
         )
         zone, contenu = zone_defilante(largeur_max=None)

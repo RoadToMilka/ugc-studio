@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QHBoxLayout, QVBoxLayout
 from ...styles import EMOTIONS, INTENSITES, RYTHMES, assembler
 from ..composants.bouton import activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
-from ..composants.elements import bouton, champs_en_colonnes, info, libelle, liste_deroulante
+from ..composants.elements import bouton, champs_en_colonnes, libelle, liste_deroulante
 from ..theme import Dimensions, Espacements
 
 AUCUN = "Aucun choix"
@@ -35,12 +35,14 @@ class DialogueAssistantStyle(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Assistant de style", "assistant-style"))
-        disposition.addWidget(
-            info(
-                "Choisis en français : l'app écrit une consigne courte en anglais, comme Google le conseille "
-                "(émotion ou attitude, puis rythme).",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Assistant de style",
+                "assistant-style",
+                aide=(
+                    "Choisis en français : l'app écrit une consigne courte en anglais, comme Google le conseille "
+                    "(émotion ou attitude, puis rythme)."
+                ),
             )
         )
 

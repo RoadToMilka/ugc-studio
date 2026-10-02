@@ -79,8 +79,19 @@ from ....style_sous_titres import VideoApercu
 from ....transcription import Transcription, resolution_video
 from ... import taches
 from ...composants.apercu import LecteurApercu
+from ...composants.bouton import montrer_occupe
 from ...composants.choix_voix import choisir
-from ...composants.elements import bloc, bouton, info, libelle, liste_deroulante, minutes_secondes
+from ...composants.elements import (
+    BoutonInfo,
+    bloc,
+    bouton,
+    info,
+    intitule,
+    libelle,
+    ligne_avec_aide,
+    liste_deroulante,
+    minutes_secondes,
+)
 from ...composants.flux import DispositionFlux
 from ...composants.frise import FriseSousTitres
 from ...composants.montant_label import MontantLabel
@@ -216,20 +227,24 @@ class AtelierSousTitres(Page):
         ligne.addWidget(self.bouton_corriger)
         ligne.addStretch(1)
         d.addLayout(ligne)
-        d.addWidget(
-            info(
-                "Depuis une voix générée : la prise est transcrite (moment de chaque mot), puis calée sur son "
-                "script, dont l'orthographe exacte est gardée. Pour une vidéo, passe par le module Transcription.",
-                "legende",
-            )
-        )
-        # La liste des prises sous son nom (V3.1), le bouton sur sa ligne.
+        # La liste des prises sous son nom (V3.1), le bouton sur sa ligne ; l'explication au survol de
+        # l'icône « i » après « Prise ».
         ligne = QGridLayout()
         ligne.setHorizontalSpacing(Espacements.S)
         ligne.setVerticalSpacing(Espacements.XS)
         self.prises = liste_deroulante("Prise dont créer les sous-titres")
         self.prises.currentIndexChanged.connect(lambda _index: self._mettre_a_jour_estimation())
-        ligne.addWidget(libelle("Prise", "legende", retour_a_la_ligne=False), 0, 0)
+        ligne.addLayout(
+            ligne_avec_aide(
+                libelle("Prise", "legende", retour_a_la_ligne=False),
+                BoutonInfo(
+                    "Depuis une voix générée : la prise est transcrite (moment de chaque mot), puis calée sur son "
+                    "script, dont l'orthographe exacte est gardée. Pour une vidéo, passe par le module Transcription."
+                ),
+            ),
+            0,
+            0,
+        )
         ligne.addWidget(self.prises, 1, 0)
         self.bouton_creer = bouton(
             "Créer les sous-titres", variante="principal", nom_icone="captions", action=self.creer_depuis_la_prise_choisie
@@ -253,13 +268,12 @@ class AtelierSousTitres(Page):
 
     def _bloc_frise(self):
         """Frise des sous-titres (V2, lot 7), sur toute la largeur, sous l'aperçu et les réglages."""
-        self.cadre_frise, d = bloc("Frise")
-        d.addWidget(
-            info(
+        self.cadre_frise, d = bloc(
+            "Frise",
+            aide=(
                 "Clic : aller à ce moment, ou choisir un sous-titre. Glisse le bord commun de deux sous-titres : "
-                "des mots passent de l'un à l'autre. Double-clic : corriger ses mots. Ctrl + molette : zoom.",
-                "legende",
-            )
+                "des mots passent de l'un à l'autre. Double-clic : corriger ses mots. Ctrl + molette : zoom."
+            ),
         )
         self.frise = FriseSousTitres()
         d.addWidget(self.frise)
@@ -272,14 +286,13 @@ class AtelierSousTitres(Page):
         """Exporter (V3) : la vidéo avec sous-titres (bouton principal), le calque transparent pour
         Premiere Pro, et le fichier SRT. Chaque export vidéo passe par sa fenêtre (réglages, résumé
         avant export, avancement)."""
-        self.cadre_export, d = bloc("Exporter")
-        d.addWidget(
-            info(
+        self.cadre_export, d = bloc(
+            "Exporter",
+            aide=(
                 "Vidéo avec sous-titres : ta vidéo, sous-titres incrustés, prête à publier. Calque transparent : "
                 "les sous-titres seuls, à poser au-dessus de ton montage dans Premiere Pro. Fichier SRT : le texte "
-                "et le moment de chaque sous-titre, sans style.",
-                "legende",
-            )
+                "et le moment de chaque sous-titre, sans style."
+            ),
         )
         boutons = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la fenêtre est étroite
         self.bouton_video = bouton("Vidéo avec sous-titres…", variante="principal", nom_icone="clapperboard", action=self.exporter_video)
@@ -340,15 +353,12 @@ class AtelierSousTitres(Page):
 
     def _zone_reorganiser(self, d: QVBoxLayout) -> None:
         """« Réorganiser à la main » : les actions sur le sous-titre choisi dans la liste."""
-        self.titre_reorganiser = libelle("Réorganiser à la main", "intitule")
-        d.addWidget(self.titre_reorganiser)
-        d.addWidget(
-            info(
-                "Choisis un sous-titre dans la liste. Le moment des mots ne change jamais, et les réglages du "
-                "découpage s'appliquent toujours.",
-                "legende",
-            )
+        self.titre_reorganiser = intitule(
+            "Réorganiser à la main",
+            "Choisis un sous-titre dans la liste. Le moment des mots ne change jamais, et les réglages du "
+            "découpage s'appliquent toujours.",
         )
+        d.addWidget(self.titre_reorganiser)
         actions = DispositionFlux(espacement=Espacements.S)  # passe à la ligne si la fenêtre est étroite
         self.bouton_monter = bouton(
             "Monter le premier mot", variante="contour", nom_icone="arrow-up", action=self.monter_premier_mot
@@ -363,7 +373,8 @@ class AtelierSousTitres(Page):
         self.bouton_fusionner = bouton(
             "Fusionner avec le suivant", variante="contour", nom_icone="list-plus", action=self.fusionner_avec_le_suivant
         )
-        self.bouton_retablir = bouton("Rétablir", variante="contour", nom_icone="rotate-ccw")
+        # V3.1 : l'icône seule (la flèche qui revient), le sens au survol ; un clic ouvre le menu.
+        self.bouton_retablir = bouton("", variante="contour", nom_icone="rotate-ccw")
         self.bouton_retablir.setToolTip("Revenir au découpage automatique")
         menu = QMenu(self.bouton_retablir)
         self.action_retablir = menu.addAction("Rétablir le découpage automatique de ce sous-titre")
@@ -468,7 +479,7 @@ class AtelierSousTitres(Page):
         choisir(self.prises, actuel or (transcription.prise if transcription else ""))
         self.prises.setEnabled(bool(projet.prises))
         self.prises.blockSignals(False)
-        self.bouton_creer.setEnabled(bool(projet.prises) and not self._occupe)
+        self.bouton_creer.setEnabled((bool(projet.prises) and not self._occupe) or self.bouton_creer.est_occupe())
         self._mettre_a_jour_estimation()
 
     def _mettre_a_jour_estimation(self) -> None:
@@ -1182,9 +1193,13 @@ class AtelierSousTitres(Page):
         return boite.clickedButton() is remplacer
 
     def _occuper(self, occupe: bool) -> None:
+        """Pendant la création des sous-titres d'une prise : le cercle tourne dans « Créer les
+        sous-titres » (V3.1), qui garde son aspect ; la liste des prises est grisée."""
         self._occupe = occupe
-        self.bouton_creer.setEnabled(not occupe and bool(self._projet and self._projet.prises))
-        self.prises.setEnabled(not occupe and bool(self._projet and self._projet.prises))
+        a_prises = bool(self._projet and self._projet.prises)
+        montrer_occupe(self.bouton_creer, occupe)
+        self.bouton_creer.setEnabled(occupe or a_prises)
+        self.prises.setEnabled(not occupe and a_prises)
 
     # --- Export SRT (§8.1) --------------------------------------------------------------------
 

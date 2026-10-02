@@ -82,16 +82,19 @@ class DialogueRemplacements(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Dictionnaire de remplacements", "remplacements"))
-        disposition.addWidget(
-            info(
-                "Pour les mots que la transcription écrit mal (noms de marque, produits…) : écris-les tels "
-                "que transcrits, puis comment ils doivent apparaître. Ils sont remplacés après chaque "
-                "transcription, en gardant le moment de chaque mot (gratuit : c'est l'app qui remplace). "
-                "Pour une même entrée, le dictionnaire du projet l'emporte.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Dictionnaire de remplacements",
+                "remplacements",
+                aide=(
+                    "Pour les mots que la transcription écrit mal (noms de marque, produits…). Ils sont remplacés "
+                    "après chaque transcription, en gardant le moment de chaque mot (gratuit : c'est l'app qui "
+                    "remplace). Pour une même entrée, le dictionnaire du projet l'emporte."
+                ),
             )
         )
+        # Le mode d'emploi du tableau reste écrit (V3.1 : il dit quoi faire).
+        disposition.addWidget(info("Écris les mots tels que transcrits, puis comment ils doivent apparaître.", "secondaire"))
         self.onglets = Onglets()
         projet = services.projets.projet
         self.projet = TableauRemplacements(list(projet.remplacements) if projet else [])

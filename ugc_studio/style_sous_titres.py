@@ -75,7 +75,8 @@ NOIR = Couleur(0, 0, 0)
 CASSE_NORMALE = "normale"
 CASSE_MAJUSCULES = "majuscules"
 CASSE_MINUSCULES = "minuscules"
-CASSES = {CASSE_NORMALE: "Comme écrit", CASSE_MAJUSCULES: "TOUT EN MAJUSCULES", CASSE_MINUSCULES: "tout en minuscules"}
+# Écrits normalement (V3.1) : jamais « TOUT EN MAJUSCULES » dans l'interface (demande de l'utilisateur).
+CASSES = {CASSE_NORMALE: "Comme écrit", CASSE_MAJUSCULES: "Tout en majuscules", CASSE_MINUSCULES: "Tout en minuscules"}
 
 # Position verticale (§7.3, §7.4) : le point fixe du bloc est son haut, son milieu ou son bas.
 HAUT, CENTRE, BAS = "haut", "centre", "bas"

@@ -2,10 +2,10 @@
 
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
-from PySide6.QtWidgets import QApplication, QLabel, QStyle, QStyleOptionButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 from ugc_studio.ui.composants.elements import (
-    Info,
+    BoutonInfo,
     case_a_cocher,
     champ_decimal,
     champ_entier,
@@ -68,28 +68,21 @@ def test_champs_de_nombre(app_configuree, qtbot):
 
 
 def test_case_a_cocher_avec_explication(app_configuree, qtbot):
-    """L'explication d'une case est une info : ampoule sous la case, texte aligné sur celui de la case."""
+    """V3.1 : l'explication d'une case est une icône « i », 4 px après le texte de la case, centrée
+    sur sa hauteur ; plus de phrase toujours affichée dessous."""
     zone, case = case_a_cocher("Séparer les voix", "Chaque mot reçoit la personne qui parle.")
     qtbot.addWidget(zone)
     zone.resize(zone.sizeHint())
     zone.show()
-    (explication,) = zone.findChildren(Info)
-    (legende,) = zone.findChildren(QLabel)
-    assert case.text() == "Séparer les voix"
-    assert legende.wordWrap() and explication.text() == "Chaque mot reçoit la personne qui parle."
-    option = QStyleOptionButton()
-    case.initStyleOption(option)
-    debut_texte_case = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxContents, option, case).left()
-    assert legende.mapTo(zone, QPoint(0, 0)).x() == case.x() + debut_texte_case  # même début de texte
-    indicateur = case.style().subElementRect(QStyle.SubElement.SE_CheckBoxIndicator, option, case)
-    centre_case = case.x() + indicateur.x() + indicateur.width() / 2
-    centre_ampoule = explication.ampoule.mapTo(zone, QPoint(0, 0)).x() + explication.ampoule.width() / 2
-    assert abs(centre_ampoule - centre_case) <= 0.5  # ampoule centrée sous la case
-    zone.setEnabled(False)  # griser la zone grise la case et son explication
-    assert not case.isEnabled() and not legende.isEnabled() and not explication.ampoule.isEnabled()
+    assert isinstance(zone.aide, BoutonInfo) and zone.aide.text() == "Chaque mot reçoit la personne qui parle."
+    assert case.text() == "Séparer les voix" and zone.findChildren(QLabel) == []  # aucune phrase visible
+    assert zone.aide.x() == case.x() + case.width() + Dimensions.ECART_INFO  # juste après le texte
+    assert abs(zone.aide.geometry().center().y() - case.geometry().center().y()) <= 1
+    zone.setEnabled(False)  # griser la zone grise la case et son icône
+    assert not case.isEnabled() and not zone.aide.isEnabled()
     zone, case = case_a_cocher("Tout en majuscules")
     qtbot.addWidget(zone)
-    assert zone.findChildren(QLabel) == []
+    assert zone.aide is None and zone.findChildren(BoutonInfo) == []
 
 
 def test_info_avec_ampoule(app_configuree, qtbot):

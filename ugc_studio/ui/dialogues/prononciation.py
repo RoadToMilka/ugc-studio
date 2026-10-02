@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLineEdit, QVBo
 
 from ...prononciation import Prononciation, nettoyer
 from ...services import Services
-from ..composants.bouton import activer_avec_entree
+from ..composants.bouton import Bouton, activer_avec_entree
 from ..composants.conseils import entete_de_fenetre
 from ..composants.elements import bouton, info, libelle
 from ..composants.onglets import Onglets
@@ -25,7 +25,7 @@ from ..theme import Dimensions, Espacements
 class TableauPrononciations(QWidget):
     """Lignes « mot écrit | se prononce | ▶ | ✕ », et un bouton pour ajouter un mot."""
 
-    def __init__(self, entrees: list[Prononciation], tester: Callable[[str], None] | None, parent=None):
+    def __init__(self, entrees: list[Prononciation], tester: Callable[[str, Bouton], None] | None, parent=None):
         super().__init__(parent)
         self._tester = tester
         self._lignes: list[tuple[QLineEdit, QLineEdit, list[QWidget]]] = []
@@ -56,7 +56,8 @@ class TableauPrononciations(QWidget):
         mot.setPlaceholderText("ex. Glowzy")
         dit = QLineEdit(entree.dit if entree else "")
         dit.setPlaceholderText("ex. Glo-zi")
-        ecouter = bouton("", variante="icone", nom_icone="play", action=lambda: self._ecouter(dit))
+        ecouter = bouton("", variante="icone", nom_icone="play")
+        ecouter.clicked.connect(lambda: self._ecouter(dit, ecouter))
         ecouter.setToolTip("Écouter cette prononciation avec la voix choisie (coût minime)")
         ecouter.setEnabled(self._tester is not None)
         retirer = bouton("", variante="icone", nom_icone="trash")
@@ -75,9 +76,10 @@ class TableauPrononciations(QWidget):
             element.deleteLater()
         self._lignes = [ligne for ligne in self._lignes if ligne[2] is not elements]
 
-    def _ecouter(self, dit: QLineEdit) -> None:
+    def _ecouter(self, dit: QLineEdit, ecouter: Bouton) -> None:
+        # Le cercle tourne dans ce ▶ pendant que la voix prépare la prononciation (V3.1).
         if self._tester is not None and dit.text().strip():
-            self._tester(dit.text().strip())
+            self._tester(dit.text().strip(), ecouter)
 
     def entrees(self) -> list[Prononciation]:
         return nettoyer([Prononciation(mot.text(), dit.text()) for mot, dit, _elements in self._lignes])
@@ -91,7 +93,7 @@ class DialoguePrononciation(QDialog):
     def __init__(
         self,
         services: Services,
-        tester: Callable[[str], None] | None = None,
+        tester: Callable[[str, Bouton], None] | None = None,
         parent=None,
         mots_proposes: list[str] | None = None,
     ):
@@ -103,15 +105,19 @@ class DialoguePrononciation(QDialog):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addLayout(entete_de_fenetre("Dictionnaire de prononciation", "prononciation"))
-        disposition.addWidget(
-            info(
-                "Pour les mots que la voix prononce mal (noms de marque…) : écris le mot comme dans le script, "
-                "puis comment le dire. Seul le texte envoyé à la voix change : le script et les sous-titres "
-                "gardent la bonne orthographe. Pour un même mot, le dictionnaire du projet l'emporte.",
-                "secondaire",
+        disposition.addLayout(
+            entete_de_fenetre(
+                "Dictionnaire de prononciation",
+                "prononciation",
+                aide=(
+                    "Pour les mots que la voix prononce mal (noms de marque…). Seul le texte envoyé à la voix "
+                    "change : le script et les sous-titres gardent la bonne orthographe. Pour un même mot, le "
+                    "dictionnaire du projet l'emporte."
+                ),
             )
         )
+        # Le mode d'emploi du tableau reste écrit (V3.1 : il dit quoi faire).
+        disposition.addWidget(info("Écris le mot comme dans le script, puis comment le dire.", "secondaire"))
 
         self.onglets = Onglets()
         projet = services.projets.projet

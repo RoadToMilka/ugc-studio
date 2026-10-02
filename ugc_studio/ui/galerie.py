@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLine
 from ..script import depuis_texte
 from .composants.barre_avancement import BarreAvancement
 from .composants.editeur_script import EditeurScript
-from .composants.elements import bloc, bouton, champ_decimal, champ_entier, info, libelle, liste_deroulante, pastille
+from .composants.elements import avec_aide, bloc, bouton, champ_decimal, champ_entier, info, libelle, liste_deroulante, pastille
 from .composants.montant_label import MontantLabel
 from .theme import Dimensions, Espacements, Typo
 
@@ -72,7 +72,14 @@ class GalerieComposants(QFrame):
             ligne.addWidget(inactif)
         ligne.addStretch(1)
         d.addLayout(ligne)
-        d.addWidget(info("Info : une phrase d'aide, toujours précédée de l'ampoule."))
+        d.addWidget(info("Info indispensable : une phrase qui dit quoi faire, précédée de l'ampoule."))
+        d.addLayout(avec_aide(libelle("Titre avec icône « i »", "intitule", retour_a_la_ligne=False), "L'explication, au survol."))
+        occupe = bouton("Bouton occupé", variante="principal", nom_icone="audio-lines")
+        occupe.definir_occupe(True)
+        ligne = QHBoxLayout()
+        ligne.addWidget(occupe)
+        ligne.addStretch(1)
+        d.addLayout(ligne)
         d.addStretch(1)
         grille.addWidget(cadre, 0, 1)
 

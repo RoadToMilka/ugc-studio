@@ -10,6 +10,7 @@ parlant : le coût d'une minute de voix ou d'une minute transcrite, en euros.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 
 from PySide6.QtCore import Qt, Signal
@@ -26,7 +27,18 @@ from ....modeles_charges import CHARGES, USAGES
 from ....prix import lire_decimal, recuperer_taux_bce
 from ....services import Services
 from ... import taches
-from ...composants.elements import bloc, bouton, info, libelle, libelle_abrege, separateur, vider_disposition
+from ...composants.bouton import montrer_occupe
+from ...composants.elements import (
+    BoutonInfo,
+    bloc,
+    bouton,
+    info,
+    libelle,
+    libelle_abrege,
+    ligne_avec_aide,
+    separateur,
+    vider_disposition,
+)
 from ...dialogues.choix_modeles import DialogueChoixModeles
 from ...composants.montant_label import MontantLabel
 from ...ouvrir import ouvrir_page_web
@@ -41,6 +53,14 @@ NB_COLONNES = len(COLONNES)
 
 def _texte(valeur: Decimal | None) -> str:
     return "" if valeur is None else format(valeur, "f")
+
+
+def _date_lisible(jour: str) -> str:
+    """« 2026-10-01 » (tel qu'enregistré) → « 01/10/2026 », comme les autres dates de l'app."""
+    try:
+        return date.fromisoformat(jour).strftime("%d/%m/%Y")
+    except ValueError:
+        return jour
 
 
 def _prix_lisibles(entree: Decimal | None, sortie: Decimal | None) -> str:
@@ -86,8 +106,7 @@ class OngletModeles(QWidget):
         contenu = contenu_d_onglet(self)  # la page Réglages défile : pas de zone à part (V3.1)
 
         # --- Taux de change ---
-        cadre, d = bloc("Taux de change")
-        d.addWidget(info("Les prix des fournisseurs sont en dollars ; l'app affiche les coûts en euros.", "secondaire"))
+        cadre, d = bloc("Taux de change", aide="Les prix des fournisseurs sont en dollars ; l'app affiche les coûts en euros.")
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         # « 1 $ = … € » se lit d'un trait : les mots restent de part et d'autre du champ, en 12 px
@@ -104,47 +123,42 @@ class OngletModeles(QWidget):
         ligne.addWidget(self.bouton_bce)
         ligne.addStretch(1)
         d.addLayout(ligne)
+        # La date du taux (une donnée), ou ce qu'il reste à faire avec le taux de départ (une info).
         self.info_taux = info()
         d.addWidget(self.info_taux)
         contenu.addWidget(cadre)
 
         # --- Modèles ---
-        cadre, d = bloc("Modèles et prix")
-        d.addWidget(
-            info(
+        # V3.1 : les explications au survol des icônes « i » (après le titre, après « Choisir les
+        # modèles… ») au lieu de trois paragraphes toujours affichés.
+        cadre, d = bloc(
+            "Modèles et prix",
+            aide=(
                 "Tarifs officiels de Google (tarif « Standard », paiement à l'usage), vérifiés le "
                 f"{PRIX_VERIFIES_LE:%d/%m/%Y}, en dollars par million de tokens. Coût d'un appel = tokens × prix "
                 "÷ 1 000 000 × taux de change ; les nombres de tokens sont ceux renvoyés par l'API. Quand Google "
-                "annonce un nouveau tarif, l'app l'applique automatiquement à sa date.",
-                "secondaire",
-            )
+                "annonce un nouveau tarif, l'app l'applique automatiquement à sa date.\n\n"
+                "Niveau gratuit de Google (clé sans moyen de paiement) : ces modèles n'y sont pas facturés, avec des "
+                "limites d'utilisation plus basses. L'app affiche quand même le coût au tarif payant."
+            ),
         )
-        d.addWidget(
-            info(
+        # En haut du bloc : en bas, avec les deux autres boutons, la rangée dépassait de la partie
+        # visible à la largeur minimale de la fenêtre (960 px).
+        choisir = ligne_avec_aide(
+            bouton("Choisir les modèles…", nom_icone="list-plus", action=self.choisir_les_modeles),
+            BoutonInfo(
                 "Seuls les modèles chargés sont listés ici et proposés dans les modules : « Choisir les "
                 "modèles… » en ajoute ou en retire. Un modèle utilisé (colonne « Utilisé dans ») ne peut "
-                "pas être retiré.",
-                "secondaire",
-            )
+                "pas être retiré."
+            ),
         )
-        # Le bouton suit l'explication qui le cite. En bas, avec les deux autres, la rangée dépassait
-        # de la partie visible à la largeur minimale de la fenêtre (960 px).
-        choisir = QHBoxLayout()
-        choisir.addWidget(bouton("Choisir les modèles…", nom_icone="list-plus", action=self.choisir_les_modeles))
-        choisir.addStretch(1)
+        choisir.setSpacing(Espacements.S)  # après un bouton, l'écart habituel entre deux éléments
         d.addLayout(choisir)
         self._grille = QGridLayout()
         self._grille.setHorizontalSpacing(Espacements.L)
         self._grille.setVerticalSpacing(0)
         self._grille.setColumnStretch(0, 1)
         d.addLayout(self._grille)
-        d.addWidget(
-            info(
-                "Niveau gratuit de Google (clé sans moyen de paiement) : ces modèles n'y sont pas facturés, avec des "
-                "limites d'utilisation plus basses. L'app affiche quand même le coût au tarif payant.",
-                "legende",
-            )
-        )
         actions = QHBoxLayout()
         actions.setSpacing(Espacements.S)
         actions.addWidget(bouton("Rétablir les prix par défaut", variante="contour", nom_icone="rotate-ccw", action=self._retablir))
@@ -189,13 +203,13 @@ class OngletModeles(QWidget):
         prix = self._services.prix
         if not self.champ_taux.hasFocus():
             self.champ_taux.setText(_texte(prix.taux_usd_eur))
+        # La date d'un taux est une donnée (sans ampoule), au format 01/10/2026 comme partout (V3.1).
         if prix.taux_source == "BCE":
-            info = f"Taux de la Banque centrale européenne du {prix.taux_date}."
+            self.info_taux.afficher_etat(f"Taux de la Banque centrale européenne du {_date_lisible(prix.taux_date)}.")
         elif prix.taux_source == "manuel":
-            info = f"Taux saisi à la main le {prix.taux_date}."
+            self.info_taux.afficher_etat(f"Taux saisi à la main le {_date_lisible(prix.taux_date)}.")
         else:
-            info = "Taux de départ, à vérifier : saisis le taux du jour ou récupère-le auprès de la BCE."
-        self.info_taux.setText(info)
+            self.info_taux.setText("Taux de départ, à vérifier : saisis le taux du jour ou récupère-le auprès de la BCE.")
 
     def _taux_saisi(self) -> None:
         try:
@@ -210,16 +224,16 @@ class OngletModeles(QWidget):
             self._services.prix.definir_taux(taux)
 
     def taux_du_jour(self) -> None:
-        self.bouton_bce.setEnabled(False)
+        montrer_occupe(self.bouton_bce, True)  # le cercle tourne dans le bouton (V3.1)
         self.info_taux.afficher_etat("Récupération du taux auprès de la BCE…")
 
         def fin(resultat) -> None:
             taux, jour = resultat
-            self.bouton_bce.setEnabled(True)
+            montrer_occupe(self.bouton_bce, False)
             self._services.prix.definir_taux(taux, source="BCE", le=jour)
 
         def echec(erreur: Exception) -> None:
-            self.bouton_bce.setEnabled(True)
+            montrer_occupe(self.bouton_bce, False)
             self.info_taux.afficher_etat(f"Taux non récupéré : {getattr(erreur, 'message', erreur)}", erreur=True)
 
         taches.lancer(recuperer_taux_bce, fin, echec)
