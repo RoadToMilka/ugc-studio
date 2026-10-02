@@ -397,12 +397,42 @@ def test_fenetre_de_la_video(app_configuree, qtbot, services, projet_video):
     assert dialogue.debit_personnalise.isVisible() and dialogue.plan().debit == 7_500_000
 
 
-def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_video):
+def _diagnostic_du_calque(calque: Path, temps_relatif: float, point: tuple[int, int], sortie: Path) -> dict:
+    """Pour comprendre un sous-titre absent : l'image du calque provisoire à ce moment (transparence et
+    couleur au point), et la luminance du point dans chaque image de la vidéo exportée."""
+    import subprocess
+
+    moments = subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-i", str(calque), "-fps_mode", "passthrough", "-f", "framecrc", "-"],
+                             capture_output=True, text=True, timeout=60).stdout
+    pts = [int(ligne.split(",")[2]) for ligne in moments.splitlines() if ligne and ligne[0].isdigit()]
+    base = next((ligne.split(":")[1].strip() for ligne in moments.splitlines() if ligne.startswith("#tb 0")), "")
+    brut = subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-i", str(calque), "-fps_mode", "passthrough",
+                           "-f", "rawvideo", "-pix_fmt", "rgba", "-"], capture_output=True, timeout=60).stdout
+    taille = LARGEUR * HAUTEUR * 4
+    numerateur, _, denominateur = base.partition("/")
+    secondes = [p * int(numerateur or 1) / int(denominateur or 1) for p in pts]
+    avant = [i for i, s in enumerate(secondes) if s <= temps_relatif + 1e-6]
+    image = avant[-1] if avant else 0
+    debut = image * taille + (point[1] * LARGEUR + point[0]) * 4
+    luminances = []
+    for numero in range(0, 60, 3):
+        luminances.append(_luminances(sortie, numero, 8)[point[1] * LARGEUR + point[0]])
+    return {
+        "images_du_calque": len(brut) // taille, "moments": secondes[:12], "image_choisie": image,
+        "rgba_au_point": list(brut[debut : debut + 4]), "export_au_point_toutes_les_3_images": luminances,
+    }
+
+
+def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_video, monkeypatch):
     """Une vraie vidéo, depuis la fenêtre : mêmes images aux mêmes moments, son copié, étiquettes
     BT.709 ; les sous-titres sont dans l'image ; « Lire la vidéo » à la fin ; les choix sont retenus."""
+    from ugc_studio.exports import composition
+
+    monkeypatch.setattr(composition.shutil, "rmtree", lambda *_a, **_k: None)  # garde le calque provisoire (diagnostic)
     dialogue = _dialogue_video(services, projet_video, qtbot)
     plan = dialogue.plan()
     dialogue.exporter()
+    calque_provisoire = dialogue._export.calque_provisoire
     assert dialogue.en_cours() and dialogue.bouton_arreter.isVisible() and not dialogue.reglages.isEnabled()
     qtbot.waitUntil(lambda: not dialogue.en_cours(), timeout=120_000)
     assert dialogue.statut.text().startswith("Vidéo enregistrée en "), dialogue.statut.text()
@@ -419,7 +449,10 @@ def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_v
     assert point is not None
     avant, apres = _luminances(Path(projet_video.transcription.source), numero, 8), _luminances(plan.sortie, numero, 8)
     blanc = apres[point[1] * LARGEUR + point[0]]
-    assert abs(blanc - 235) <= 6, (point, blanc, avant[point[1] * LARGEUR + point[0]])  # le blanc d'une vidéo : 235
+    if abs(blanc - 235) > 6:
+        temps = float((source.images.moments[numero] - source.images.moments[0]) * source.images.base_de_temps)
+        diagnostic = _diagnostic_du_calque(calque_provisoire, temps, point, plan.sortie)
+        raise AssertionError(f"point {point} : {blanc} (source {avant[point[1] * LARGEUR + point[0]]}) ; {diagnostic} ; {plan.images.moments[:4]}")
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
     assert ecarts[len(ecarts) // 2] < 6  # le reste de l'image intact
     assert services.preferences.lire("export_video_conteneur") == "mp4" and services.preferences.lire("export_video_debit") == "identique"
