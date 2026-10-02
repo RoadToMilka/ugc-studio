@@ -1,7 +1,8 @@
 """Fenêtres d'export (V3, §8.5) : une seule fenêtre par export, toujours obligatoire.
 
 1. Réglages en haut : calque transparent (lot 1 : images par seconde d'un projet sans vidéo) ou
-   vidéo avec sous-titres (lot 2 : format, codec, débit) ; puis dossier et nom.
+   vidéo avec sous-titres (lot 2 : format, codec, débit) ; pour une vidéo HDR, « Convertir en SDR »
+   (lot 3 : sinon, le HDR est gardé) ; puis dossier et nom.
 2. Dessous, le **résumé avant export**, mis à jour à chaque réglage changé : la source et l'export
    côte à côte ; toute valeur différente de la source est en mauve (comme les valeurs modifiées des
    variantes A/B), les avertissements en orange, ce qui empêche l'export en rouge.
@@ -36,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...exports.cadence import FREQUENCE_MAX, FREQUENCE_MIN, FREQUENCE_SANS_VIDEO, frequence_exacte, texte_frequence
-from ...exports.ffmpeg import analyser, ffmpeg_a_preparer, preparer_ffmpeg, programme_ffmpeg
+from ...exports.ffmpeg import NormeHDR, analyser, ffmpeg_a_preparer, norme_hdr, preparer_ffmpeg, programme_ffmpeg
 from ...exports.plan import (
     DOSSIER_AUTRE,
     DOSSIER_PROJET,
@@ -73,7 +74,9 @@ from ...exports.video import (
     PRORES,
     SUFFIXE_VIDEO,
     PlanVideo,
+    codecs_possibles,
     debit_conseille,
+    debit_hdr_de_youtube,
     debit_par_defaut,
     debit_prores,
     plan_video,
@@ -86,7 +89,7 @@ from ..composants.barre_avancement import BarreAvancement
 from ..composants.choix import ChoixEnBoutons
 from ..composants.conseils import entete_de_fenetre
 from ..composants.defilement import zone_defilante
-from ..composants.elements import bouton, champ_decimal, info, libelle, libelle_abrege
+from ..composants.elements import Info, bouton, case_a_cocher, champ_decimal, info, libelle, libelle_abrege
 from ..composants.tableau import Colonne, Tableau
 from ..ouvrir import montrer_dans_l_explorateur, ouvrir_fichier
 from ..theme import Couleurs, Dimensions, Espacements, Hauteurs, qcolor
@@ -231,6 +234,7 @@ class DialogueExport(QDialog):
         grille.setVerticalSpacing(Espacements.S)
         grille.setColumnStretch(1, 1)
         rang = self._ajouter_les_reglages(grille)
+        rang = self._ajouter_la_ligne_hdr(grille, rang)
 
         grille.addWidget(libelle("Dossier", "legende", retour_a_la_ligne=False), rang, 0, Qt.AlignmentFlag.AlignTop)
         colonne = QVBoxLayout()
@@ -274,6 +278,38 @@ class DialogueExport(QDialog):
     def _ajouter_les_reglages(self, grille: QGridLayout) -> int:
         """Les réglages propres à l'export, en haut de la grille ; renvoie le rang suivant."""
         return 0
+
+    def _ajouter_la_ligne_hdr(self, grille: QGridLayout, rang: int) -> int:
+        """Vidéo HDR (lot 3) : le HDR est gardé ; « Convertir en SDR » le ramène en BT.709. La ligne
+        n'apparaît que pour une vidéo HDR (d'après ce qu'en lit FFmpeg) ; le choix n'est pas retenu :
+        le HDR suit la vidéo source (décision du 02/10/2026)."""
+        self.titre_hdr = libelle("Couleurs", "legende", retour_a_la_ligne=False)
+        grille.addWidget(self.titre_hdr, rang, 0, Qt.AlignmentFlag.AlignTop)
+        self.zone_sdr, self.case_sdr = case_a_cocher("Convertir en SDR", " ")
+        self.info_hdr = self.zone_sdr.findChild(Info)
+        self.case_sdr.toggled.connect(lambda _coche: self._actualiser())
+        grille.addWidget(self.zone_sdr, rang, 1)
+        self.titre_hdr.hide()
+        self.zone_sdr.hide()
+        return rang + 1
+
+    def norme_hdr(self) -> NormeHDR | None:
+        """La norme HDR de la vidéo source (None : SDR, pas de vidéo, ou pas encore lue)."""
+        return norme_hdr(self.source.couleurs) if self.source.video else None
+
+    def convertir_en_sdr(self) -> bool:
+        return self.norme_hdr() is not None and self.case_sdr.isChecked()
+
+    def _explication_hdr(self, norme: NormeHDR) -> str:
+        """L'explication sous « Convertir en SDR » (propre à chaque export)."""
+        return ""
+
+    def _actualiser_la_ligne_hdr(self) -> None:
+        norme = self.norme_hdr()
+        self.titre_hdr.setVisible(norme is not None)
+        self.zone_sdr.setVisible(norme is not None)
+        if norme is not None and self.info_hdr is not None:
+            self.info_hdr.setText(self._explication_hdr(norme))
 
     def extension(self) -> str:
         return EXTENSION_CALQUE
@@ -393,6 +429,7 @@ class DialogueExport(QDialog):
         """Les réglages propres à la fenêtre fille (textes, choix possibles…)."""
 
     def _actualiser(self) -> None:
+        self._actualiser_la_ligne_hdr()
         self._actualiser_les_reglages()
         self.texte_extension.setText(self.extension())
         resume = self.resume()
@@ -424,6 +461,7 @@ class DialogueExport(QDialog):
         while self.messages.count():
             element = self.messages.takeAt(0).widget()
             if element is not None:
+                element.hide()  # tout de suite : il n'est effacé qu'au prochain passage de la boucle de Qt
                 element.deleteLater()
         for texte, role in [*((t, "erreur") for t in resume.erreurs), *((t, "avertissement") for t in resume.avertissements)]:
             message = libelle(texte, role)
@@ -651,8 +689,17 @@ class DialogueExportCalque(DialogueExport):
             self._frequence_apercu = analyse.images.frequence
             self._preparer_la_frequence()
 
+    def _explication_hdr(self, norme: NormeHDR) -> str:
+        return (
+            f"Ta vidéo est en HDR ({norme.nom}) : le calque aussi, sous-titres au blanc de référence (ils "
+            "n'éblouissent pas) ; pose-le dans une séquence HDR de Premiere Pro. Coche pour une séquence SDR (BT.709)."
+        )
+
     def plan(self) -> PlanCalque:
-        return plan_du_calque(self.source, self._contenu.largeur, self._contenu.hauteur, self.frequence_choisie(), self.sortie())
+        return plan_du_calque(
+            self.source, self._contenu.largeur, self._contenu.hauteur, self.frequence_choisie(), self.sortie(),
+            self.convertir_en_sdr(),
+        )
 
     def resume(self) -> Resume:
         plan = self.plan()
@@ -711,8 +758,11 @@ class DialogueExportVideo(DialogueExport):
         grille.addWidget(libelle("Codec", "legende", retour_a_la_ligne=False), rang, 0)
         self.choix_codec = ChoixEnBoutons(dict(CODECS), "La façon de compresser l'image")
         codec = self._preferences.lire(PREF_CODEC, H264)
-        self.choix_codec.definir(codec if codec in CODECS else H264)
-        self.choix_codec.change.connect(lambda _valeur: self._actualiser())
+        # Le codec voulu (retenu, ou cliqué) : quand il n'est pas possible (ProRes hors MOV, H.264 en
+        # HDR), un autre est choisi, et le voulu revient dès qu'il redevient possible.
+        self._codec_voulu = codec if codec in CODECS else H264
+        self.choix_codec.definir(self._codec_voulu)
+        self.choix_codec.change.connect(self._codec_choisi)
         grille.addLayout(self._a_gauche(self.choix_codec), rang, 1)
         rang += 1
 
@@ -749,9 +799,21 @@ class DialogueExportVideo(DialogueExport):
         return ligne
 
     def _conteneur_choisi(self) -> None:
-        if self.choix_codec.valeur() not in CODECS_POSSIBLES[self.choix_conteneur.valeur()]:
-            self.choix_codec.definir(H264)
         self._actualiser()
+
+    def _codec_choisi(self, codec: str) -> None:
+        self._codec_voulu = codec
+        self._actualiser()
+
+    def _hdr_garde(self) -> bool:
+        return self.norme_hdr() is not None and not self.case_sdr.isChecked()
+
+    def _explication_hdr(self, norme: NormeHDR) -> str:
+        return (
+            f"Ta vidéo est en HDR ({norme.nom}) : elle le reste (H.265 en 10 bits, ou ProRes), sous-titres au "
+            "blanc de référence (ils n'éblouissent pas). Coche pour une plateforme ou un écran qui affiche mal "
+            "le HDR : couleurs ramenées en SDR (BT.709)."
+        )
 
     def extension(self) -> str:
         return EXTENSIONS[self.choix_conteneur.valeur()] if hasattr(self, "choix_conteneur") else EXTENSIONS[MP4]
@@ -768,12 +830,13 @@ class DialogueExportVideo(DialogueExport):
             images = analyse.images if analyse is not None else None
             if images is not None:
                 largeur, hauteur = analyse.taille_affichee
-                self.debit_personnalise.setValue(debit_conseille(largeur, hauteur, images.frequence) / 1_000_000)
+                conseille = debit_conseille(largeur, hauteur, images.frequence, self._hdr_garde())
+                self.debit_personnalise.setValue(conseille / 1_000_000)
 
     def plan(self) -> PlanVideo | None:
         return plan_video(
             self.source, self.choix_conteneur.valeur(), self.choix_codec.valeur(), self.choix_debit.valeur(),
-            self.debit_personnalise.value(), self.sortie(),
+            self.debit_personnalise.value(), self.sortie(), self.convertir_en_sdr(),
         )
 
     def resume(self) -> Resume:
@@ -785,10 +848,19 @@ class DialogueExportVideo(DialogueExport):
 
     def _actualiser_les_reglages(self) -> None:
         conteneur = self.choix_conteneur.valeur()
+        hdr = self._hdr_garde()
+        possibles = codecs_possibles(conteneur, hdr)
         for codec in CODECS:
-            possible = codec in CODECS_POSSIBLES[conteneur]
+            possible = codec in possibles
+            if possible:
+                explication = ""
+            elif codec not in CODECS_POSSIBLES[conteneur]:
+                explication = "Le ProRes ne va que dans un MOV"
+            else:
+                explication = "Pas de HDR en H.264 : coche « Convertir en SDR » pour l'utiliser"
             self.choix_codec.bouton(codec).setEnabled(possible)
-            self.choix_codec.bouton(codec).setToolTip("" if possible else "Le ProRes ne va que dans un MOV")
+            self.choix_codec.bouton(codec).setToolTip(explication)
+        self.choix_codec.definir(self._codec_voulu if self._codec_voulu in possibles else possibles[0])
         prores = self.choix_codec.valeur() == PRORES
         self.choix_debit.setVisible(not prores)
         self.debit_personnalise.setVisible(not prores and self.choix_debit.valeur() == DEBIT_PERSONNALISE)
@@ -800,8 +872,10 @@ class DialogueExportVideo(DialogueExport):
             self.texte_debit.setText("ProRes 422 HQ : débit fixé par le format")
         elif self.choix_debit.valeur() == DEBIT_CONSEILLE and analyse is not None and analyse.images is not None:
             largeur, hauteur = analyse.taille_affichee
-            conseille = debit_conseille(largeur, hauteur, analyse.images.frequence)
-            self.texte_debit.setText(f"{debit_lisible(conseille)} pour la publication : le double du débit conseillé par YouTube")
+            conseille = debit_conseille(largeur, hauteur, analyse.images.frequence, hdr)
+            en_hdr = hdr and debit_hdr_de_youtube(largeur, hauteur)  # sous la 720p, YouTube n'en donne qu'en SDR
+            youtube = "le double du débit conseillé par YouTube" + (" en HDR" if en_hdr else "")
+            self.texte_debit.setText(f"{debit_lisible(conseille)} pour la publication : {youtube}")
         elif self.choix_debit.valeur() == DEBIT_IDENTIQUE and analyse is not None and analyse.images is not None and analyse.images.debit:
             plan = self.plan()
             debit = debit_lisible(plan.debit) if plan is not None and plan.debit else ""
@@ -815,7 +889,10 @@ class DialogueExportVideo(DialogueExport):
 
     def _retenir_les_choix(self) -> None:
         self._preferences.ecrire(PREF_CONTENEUR, self.choix_conteneur.valeur())
-        self._preferences.ecrire(PREF_CODEC, self.choix_codec.valeur())
+        codec = self.choix_codec.valeur()
+        if self._codec_voulu in CODECS_POSSIBLES[self.choix_conteneur.valeur()]:
+            codec = self._codec_voulu  # écarté seulement par le HDR (H.264) : il reviendra pour une vidéo SDR
+        self._preferences.ecrire(PREF_CODEC, codec)
         self._preferences.ecrire(PREF_DEBIT, self.choix_debit.valeur())
         if self.choix_debit.valeur() == DEBIT_PERSONNALISE:
             self._preferences.ecrire(PREF_DEBIT_PERSONNALISE, self.debit_personnalise.value())

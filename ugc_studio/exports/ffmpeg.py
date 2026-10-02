@@ -255,6 +255,7 @@ class InfosFFmpeg:
     version: str  # ex. « 9.0.2-essentials_build-www.gyan.dev »
     encodeurs: frozenset[str]
     formats_x265: tuple[str, ...]  # formats d'image acceptés par x265 (10 bits : « yuv420p10le »)
+    dolby_vision_x265: bool = False  # x265 reprend Dolby Vision (option « -dolbyvision », lot 3)
 
     @property
     def x265_10_bits(self) -> bool:
@@ -305,7 +306,23 @@ def infos_ffmpeg(chemin: Path | None = None) -> InfosFFmpeg | None:
         lire_version(version.stdout),
         lire_encodeurs(encodeurs.stdout),
         lire_formats_d_encodeur(x265.stdout),
+        "-dolbyvision" in x265.stdout,
     )
+
+
+def version_de_x265(chemin: Path) -> str:
+    """Version de x265 (« 4.1+… »), qu'il écrit lui-même en encodant une image ; vide si inconnue.
+    Dolby Vision 8.4 (iPhone) demande x265 3.6 ou plus récent (notes de version de x265)."""
+    try:
+        resultat = executer(
+            [str(chemin), "-hide_banner", "-nostdin", "-f", "lavfi", "-i", "color=black:s=64x64:d=0.04",
+             "-frames:v", "1", "-c:v", "libx265", "-f", "null", "-"],
+            60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    trouve = re.search(r"HEVC encoder version (\S+)", resultat.stderr)
+    return trouve.group(1) if trouve else ""
 
 
 # --- Analyse d'une vidéo : moment exact de chaque image, débits, codecs ------------------------
@@ -360,6 +377,12 @@ class SonDeLaVideo:
         return round(self.octets * 8 / self.duree) if self.duree > 0 and self.octets else None
 
 
+# Les deux courbes du HDR (noms de FFmpeg) : HLG (iPhone, télévision) et PQ (HDR10, la plupart des
+# téléphones Android).
+HLG, PQ = "arib-std-b67", "smpte2084"
+COURBES_HDR = {HLG: "HLG", PQ: "PQ"}
+
+
 @dataclass(frozen=True)
 class CouleursDeLaVideo:
     """Les couleurs d'une vidéo, telles que FFmpeg les décrit (« yuv420p10le(tv, bt2020nc/bt2020/
@@ -385,11 +408,11 @@ class CouleursDeLaVideo:
 
     @property
     def hlg(self) -> bool:
-        return self.transfert == "arib-std-b67"
+        return self.transfert == HLG
 
     @property
     def pq(self) -> bool:
-        return self.transfert == "smpte2084"
+        return self.transfert == PQ
 
     @property
     def hdr(self) -> bool:
@@ -435,25 +458,44 @@ def lire_couleurs(texte: str) -> CouleursDeLaVideo | None:
     return None
 
 
-def lire_rotation(texte: str) -> int:
-    """Rotation de la première image (vidéo de téléphone filmée debout, enregistrée « couchée ») :
-    0, 90, 180 ou 270 degrés, d'après la description de FFmpeg (« rotation of -90.00 degrees »,
-    dans les « Side data » de l'image). FFmpeg redresse lui-même les images en les lisant."""
+def _lignes_de_l_image(texte: str):
+    """Les lignes qui décrivent la première image de la source (rubrique « Input #0 ») : sa ligne
+    « Stream #0:0: Video: … » et ses « Side data » (rotation, Dolby Vision…), jusqu'au flux suivant."""
     dans_l_entree = dans_l_image = False
     for ligne in texte.splitlines():
         if ligne.startswith("Input #"):
             dans_l_entree = True
             continue
         if ligne.startswith(("Output #", "Stream mapping")):
-            break
+            return
         if not dans_l_entree:
             continue
         if re.match(r"\s*Stream #", ligne):
             if dans_l_image:
-                break  # le flux suivant : la première image n'a pas de rotation
+                return
             dans_l_image = ": Video: " in ligne and "(attached pic)" not in ligne
-            continue
-        trouve = re.search(r"rotation of (-?\d+(?:\.\d+)?) degrees", ligne) if dans_l_image else None
+        if dans_l_image:
+            yield ligne
+
+
+def lire_dolby_vision(texte: str) -> str:
+    """Profil Dolby Vision de la vidéo (« 8.4 » pour un iPhone en HDR : profil 8, compatible HLG ;
+    « 8.1 » : compatible HDR10), d'après la description de FFmpeg (« DOVI configuration record:
+    version: 1.0, profile: 8, level: 4, …, compatibility id: 4 »). Vide : pas de Dolby Vision."""
+    for ligne in _lignes_de_l_image(texte):
+        trouve = re.search(r"DOVI configuration record:.*?profile: (\d+).*?compatibility id: (\d+)", ligne)
+        if trouve:
+            profil, compatibilite = trouve.groups()
+            return f"{profil}.{compatibilite}" if compatibilite != "0" else profil
+    return ""
+
+
+def lire_rotation(texte: str) -> int:
+    """Rotation de la première image (vidéo de téléphone filmée debout, enregistrée « couchée ») :
+    0, 90, 180 ou 270 degrés, d'après la description de FFmpeg (« rotation of -90.00 degrees »,
+    dans les « Side data » de l'image). FFmpeg redresse lui-même les images en les lisant."""
+    for ligne in _lignes_de_l_image(texte):
+        trouve = re.search(r"rotation of (-?\d+(?:\.\d+)?) degrees", ligne)
         if trouve:
             return round(float(trouve.group(1)) / 90) * 90 % 360
     return 0
@@ -462,12 +504,13 @@ def lire_rotation(texte: str) -> int:
 @dataclass(frozen=True)
 class Analyse:
     """Ce que FFmpeg lit d'une source : son image (None : un audio), son son (None : muette), les
-    couleurs de son image et sa rotation."""
+    couleurs de son image, sa rotation et son profil Dolby Vision (vide : aucun)."""
 
     images: ImagesDeLaVideo | None
     son: SonDeLaVideo | None
     couleurs: CouleursDeLaVideo | None = None
     rotation: int = 0
+    dolby_vision: str = ""
 
     @property
     def taille_affichee(self) -> tuple[int, int]:
@@ -604,7 +647,10 @@ def analyser(source: Path, ffmpeg: Path | None = None) -> Analyse | None:
         return None
     if analyse.images is None:
         return analyse
-    return replace(analyse, couleurs=lire_couleurs(resultat.stderr), rotation=lire_rotation(resultat.stderr))
+    return replace(
+        analyse, couleurs=lire_couleurs(resultat.stderr), rotation=lire_rotation(resultat.stderr),
+        dolby_vision=lire_dolby_vision(resultat.stderr),
+    )
 
 
 # --- Commandes des exports --------------------------------------------------------------------
@@ -617,13 +663,102 @@ def analyser(source: Path, ffmpeg: Path | None = None) -> Analyse | None:
 # Depuis FFmpeg 8, l'encodeur reprend les étiquettes portées par les images : les options
 # « -color_primaries » et « -color_trc » seules ne suffisent plus (vérifié dans le code de FFmpeg
 # 9.0.2, fftools/ffmpeg_enc.c, et par les tests). Le filtre setparams les pose donc sur les images.
-CONVERSION_BT709 = "scale=out_color_matrix=bt709:out_range=tv"
+
+
+def conversion_des_sous_titres(matrice: str = "bt709") -> str:
+    """Les sous-titres (dessinés en RGB, en SDR) dans la norme d'une vidéo SDR (matrice, nom de FFmpeg :
+    « bt709 », « smpte170m »…), en plage limitée, par le filtre zscale (bibliothèque zimg) : le même
+    filtre qu'en HDR, au calcul exact que les images aient 8 ou 16 bits par couleur (vérifié par les
+    tests). Les primaires et la courbe ne changent pas (pin=p, tin=t) : seule la matrice compte ici."""
+    return f"zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m={matrice}:r=limited"
+
+
+def lecture_en_rgb(matrice: str = "bt709") -> str:
+    """L'inverse (vérifications) : une image d'une vidéo SDR relue en RGB, plage complète, par zscale."""
+    return f"zscale=min={matrice}:rin=limited:pin=bt709:tin=bt709:p=bt709:t=bt709:m=gbr:r=full"
+
+
+CONVERSION_BT709 = conversion_des_sous_titres("bt709")
 ETIQUETAGE_BT709 = "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv"
 ETIQUETTES_BT709 = ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"]
 
+# HDR (V3, lot 3, §8.3) : le HDR suit la vidéo source. Normes d'une vidéo HDR que les conversions
+# savent suivre (noms de FFmpeg, que son filtre zscale comprend aussi) ; une autre (rare) : celle du
+# HDR, BT.2020.
+MATRICES_HDR = {"bt2020nc", "bt2020c", "bt709"}
+PRIMAIRES_HDR = {"bt2020", "bt709", "smpte432", "smpte431"}
+# Blanc des graphismes (texte, logos) dans une vidéo HDR : le « blanc de référence » de la norme
+# ITU-R BT.2408 (version de mars 2026), 203 cd/m², soit 75 % du signal en HLG et 58 % en PQ. Un
+# sous-titre blanc posé tel quel monterait au maximum de l'écran (jusqu'à 1 000 cd/m²) : il éblouirait.
+BLANC_DE_REFERENCE = 203  # cd/m²
+
+
+@dataclass(frozen=True)
+class NormeHDR:
+    """Norme des couleurs d'une vidéo HDR (noms de FFmpeg) : matrice, primaires et courbe."""
+
+    matrice: str  # « bt2020nc » le plus souvent
+    primaires: str  # « bt2020 »
+    courbe: str  # HLG ou PQ
+
+    @property
+    def nom(self) -> str:
+        """« HLG » ou « PQ »."""
+        return COURBES_HDR[self.courbe]
+
+
+def norme_hdr(couleurs: CouleursDeLaVideo | None) -> NormeHDR | None:
+    """La norme d'une vidéo HDR (None : vidéo SDR, ou couleurs inconnues)."""
+    if couleurs is None or not couleurs.hdr:
+        return None
+    return NormeHDR(
+        couleurs.matrice if couleurs.matrice in MATRICES_HDR else "bt2020nc",
+        couleurs.primaires if couleurs.primaires in PRIMAIRES_HDR else "bt2020",
+        couleurs.transfert,
+    )
+
+
+def conversion_vers_le_hdr(norme: NormeHDR) -> str:
+    """Les sous-titres (RGB, SDR, norme BT.709) convertis dans les couleurs d'une vidéo HDR, par le
+    filtre zscale (bibliothèque zimg) : « npl=203 » place le blanc du SDR au blanc de référence
+    (75 % du signal en HLG, 58 % en PQ), et chaque couleur à son équivalent : le jaune des mots actifs
+    reste le même jaune, à la luminosité qu'il a à côté du blanc. La transparence n'est pas touchée."""
+    return (
+        f"zscale=rin=full:pin=bt709:tin=bt709:p={norme.primaires}:t={norme.courbe}:m={norme.matrice}"
+        f":r=limited:npl={BLANC_DE_REFERENCE}"
+    )
+
+
+def etiquetage(primaires: str, courbe: str, matrice: str) -> str:
+    """Les étiquettes de couleurs posées sur les images (voir ETIQUETAGE_BT709), en plage limitée."""
+    return f"setparams=color_primaries={primaires}:color_trc={courbe}:colorspace={matrice}:range=tv"
+
+
+# Défaut de FFmpeg 8.1 et plus (filtre zscale ; toujours là dans la 9.0.2 de l'application, et dans
+# la version en préparation de septembre 2026) : pour aller plus vite, zscale découpe l'image en
+# bandes horizontales, une par cœur du processeur (chaque bande fait au moins 64 lignes). Quand
+# l'image garde sa transparence et que sa couleur est réduite en hauteur (4:2:0 : une valeur de
+# couleur pour deux lignes), il range la transparence de chaque bande, sauf la première, à
+# mi-hauteur de sa place (celle d'une bande qui commence à la ligne 480 part de la ligne 240) : des
+# sous-titres du bas de l'image disparaissent, et des bandes sombres apparaissent plus haut. Vu sur
+# la fabrication (lot 3 : images de 480 lignes, quatre cœurs), puis dans le code de FFmpeg
+# (libavfilter/vf_zscale.c, filter_slice : le décalage prévu pour la couleur est aussi appliqué à la
+# transparence ; FFmpeg 8.0 la traitait à part, sans ce défaut). En un seul morceau (option
+# « threads=1 » du filtre), tout est juste ; le calcul reste rapide (mesuré : moins de 30 ms par
+# image en 4K), l'encodage restant l'étape la plus longue.
+FORMATS_A_TRANSPARENCE_REDUITS_EN_HAUTEUR = ("yuva420p", "yuva420p10le")
+
+
+def vers_le_format(conversion: str, format_des_pixels: str) -> str:
+    """Une conversion par zscale (conversion_des_sous_titres, conversion_vers_le_hdr) suivie du format
+    voulu ; en un seul morceau pour un format touché par le défaut décrit ci-dessus."""
+    un_seul_morceau = ":threads=1" if format_des_pixels in FORMATS_A_TRANSPARENCE_REDUITS_EN_HAUTEUR else ""
+    return f"{conversion}{un_seul_morceau},format={format_des_pixels}"
+
 
 def commande_calque(
-    ffmpeg: Path, largeur: int, hauteur: int, frequence: Fraction, nombre_images: int, sortie: Path
+    ffmpeg: Path, largeur: int, hauteur: int, frequence: Fraction, nombre_images: int, sortie: Path,
+    hdr: NormeHDR | None = None,
 ) -> list[str]:
     """Calque transparent (§8.2) : les images arrivent par l'entrée standard (« pipe:0 »), brutes,
     en RGBA de 16 bits (rgba64le). FFmpeg les écrit en ProRes 4444 avec transparence, dans un MOV.
@@ -633,7 +768,9 @@ def commande_calque(
     - ProRes 4444 (encodeur prores_ks, profil « 4444 ») : le format de montage d'Apple qui garde la
       transparence ; « yuva444p10le » : couleurs en 10 bits sans réduction de leur finesse (4:4:4),
       plus la transparence (le « a ») ; « -alpha_bits 16 » : transparence gardée sur 16 bits.
-    - « setparams » : les étiquettes BT.709 posées sur les images (voir ETIQUETAGE_BT709).
+    - Couleurs : BT.709 (SDR) ; pour une vidéo HDR (`hdr`), celles de la vidéo, sous-titres au blanc
+      de référence (conversion_vers_le_hdr, lot 3).
+    - « setparams » : les étiquettes de couleurs posées sur les images (voir ETIQUETAGE_BT709).
     - « -vendor apl0 » : le fichier se présente comme un ProRes d'Apple (certains logiciels le
       demandent), comme le recommande le guide ProRes de l'Academy Software Foundation.
     - « -qscale:v 1 » : la compression la plus fine, partout. Sans lui, prores_ks cherche pour chaque
@@ -643,14 +780,20 @@ def commande_calque(
       ce réglage pour aller vite (« Speed considerations »).
     - « -frames:v » : exactement le nombre d'images prévu ; « -an » : pas de son.
     - « -progress pipe:1 » : FFmpeg dit où il en est (images écrites), 4 fois par seconde."""
+    if hdr is None:
+        filtres = f"{vers_le_format(CONVERSION_BT709, 'yuva444p10le')},{ETIQUETAGE_BT709}"
+        etiquettes = ETIQUETTES_BT709
+    else:
+        filtres = f"{vers_le_format(conversion_vers_le_hdr(hdr), 'yuva444p10le')},{etiquetage(hdr.primaires, hdr.courbe, hdr.matrice)}"
+        etiquettes = ["-color_primaries", hdr.primaires, "-color_trc", hdr.courbe, "-colorspace", hdr.matrice, "-color_range", "tv"]
     return [
         str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y",
         "-progress", "pipe:1", "-stats_period", PERIODE_DES_NOUVELLES_S,
         "-f", "rawvideo", "-pixel_format", FORMAT_DES_IMAGES, "-video_size", f"{largeur}x{hauteur}",
         "-framerate", texte_ffmpeg(frequence), "-i", "pipe:0",
-        "-vf", f"{CONVERSION_BT709},format=yuva444p10le,{ETIQUETAGE_BT709}",
+        "-vf", filtres,
         "-c:v", "prores_ks", "-profile:v", "4444", "-alpha_bits", "16", "-vendor", "apl0", "-qscale:v", "1",
-        *ETIQUETTES_BT709,
+        *etiquettes,
         "-frames:v", str(nombre_images), "-an",
         "-f", "mov", str(sortie),
     ]
@@ -658,10 +801,10 @@ def commande_calque(
 
 def commande_lire_une_image(ffmpeg: Path, video: Path, numero: int) -> list[str]:
     """Une image d'une vidéo exportée, décodée en RGBA 16 bits (vérifications de l'autotest) : la
-    conversion inverse utilise la même norme BT.709 que l'export."""
+    conversion inverse utilise la même norme BT.709 que l'export (zscale, puis RGBA rangé autrement)."""
     return [
         str(ffmpeg), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video),
-        "-vf", f"select=eq(n\\,{numero}),scale=in_color_matrix=bt709:in_range=tv,format={FORMAT_DES_IMAGES}",
+        "-vf", f"select=eq(n\\,{numero}),{lecture_en_rgb()},format=gbrap16le,format={FORMAT_DES_IMAGES}",
         "-frames:v", "1", "-f", "rawvideo", "-",
     ]
 

@@ -451,6 +451,8 @@ SOUS_TITRES = PageDeConseils(
                 "(MOV, ProRes 4444). Pose-le dans Premiere Pro sur une piste au-dessus de ton montage, au même "
                 "point de départ : il tombe juste, image par image.",
                 "Les deux sont dessinés par le moteur de l'aperçu : ce que tu vois dans le studio est ce qui sort.",
+                "Une vidéo HDR (iPhone réglé en HDR) reste en HDR, sous-titres au blanc de référence (ils "
+                "n'éblouissent pas) ; « Convertir en SDR » la ramène en couleurs normales si besoin.",
                 "« Fichier SRT… » : le texte et le moment de chaque sous-titre, sans style. Premiere Pro et la "
                 "plupart des logiciels le lisent, accents compris.",
                 "Chaque export passe par sa fenêtre : réglages, résumé avant export (ta source et l'export côte à "
@@ -472,6 +474,17 @@ EXPORT = PageDeConseils(
                 "endroit que ta vidéo ou ta voix, il ne se décale jamais, même au bout de 10 minutes.",
                 "Sans vidéo (sous-titres d'une voix) : choisis le nombre d'images par seconde de ta séquence "
                 "Premiere Pro (30 au départ) ; avec une vidéo d'aperçu, c'est le sien qui est proposé.",
+            ),
+        ),
+        Rubrique(
+            "Vidéo HDR",
+            (
+                "Avec une vidéo HDR (iPhone réglé en HDR), le calque l'est aussi : mêmes couleurs que ta vidéo, "
+                "sous-titres au « blanc de référence » de la norme du HDR, pour qu'ils n'éblouissent pas. Pose-le "
+                "dans une séquence HDR (HLG) de Premiere Pro.",
+                "Pour une séquence en SDR (BT.709, le réglage habituel de Premiere Pro), coche « Convertir en "
+                "SDR » : le calque est alors en SDR, comme tout graphisme importé.",
+                "Sans vidéo (sous-titres d'une voix), le calque est en SDR (BT.709).",
             ),
         ),
         Rubrique(
@@ -1008,8 +1021,22 @@ EXPORT_VIDEO = PageDeConseils(
                 "non compressé vers un MP4), il est converti en AAC à 320 kb/s, et le résumé l'indique en mauve.",
                 "Les couleurs des sous-titres sont celles de l'aperçu : elles sont converties avec la norme de ta "
                 "vidéo (BT.709 pour une vidéo HD).",
-                "Une vidéo HDR (iPhone réglé en HDR) arrivera avec la version 3.0.0 ; en attendant, exporte le "
-                "calque transparent.",
+            ),
+        ),
+        Rubrique(
+            "Vidéo HDR (iPhone)",
+            (
+                "Une vidéo HDR (iPhone réglé en HDR, ou téléphone Android en HDR10) le reste : H.265 en 10 bits "
+                "(ou ProRes), mêmes couleurs. H.264 n'est proposé qu'en SDR.",
+                "Les sous-titres y sont posés au « blanc de référence » de la norme du HDR (ITU-R BT.2408) : sur "
+                "un écran HDR, ils ont l'éclat d'un texte blanc normal, au lieu d'éblouir au maximum de l'écran.",
+                "Dolby Vision (iPhone) est gardé en MP4 et en MKV, avec H.265. En MOV, ta vidéo reste en HDR, lue "
+                "partout en HDR.",
+                "« Convertir en SDR » : pour une plateforme ou un écran qui affiche mal le HDR. Les couleurs sont "
+                "ramenées en BT.709, les reflets les plus lumineux adoucis ; les sous-titres gardent exactement "
+                "leurs couleurs.",
+                "Dans l'aperçu, une vidéo HDR paraît un peu terne : c'est l'affichage de Qt. L'export, lui, garde "
+                "ses vraies couleurs.",
             ),
         ),
         Rubrique(

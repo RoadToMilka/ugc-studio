@@ -1,6 +1,7 @@
-"""V3, lot 1 (§8.2, §8.5) : calque transparent. Moteur en 16 bits (identique à l'aperçu à 8 bits
-près), images au moment exact, fenêtre d'export (réglages, résumé, avancement, « Arrêter »), bloc
-« Exporter » de la page Sous-titres, et un vrai calque écrit par FFmpeg, relu image par image."""
+"""V3, lots 1 à 3 (§8.2, §8.3, §8.5) : calque transparent. Moteur en 16 bits (identique à l'aperçu à
+8 bits près), images au moment exact, fenêtre d'export (réglages, résumé, avancement, « Arrêter »),
+bloc « Exporter » de la page Sous-titres, et un vrai calque écrit par FFmpeg, relu image par image ;
+vidéo avec sous-titres (lot 2) ; vidéo HDR (lot 3) : « Convertir en SDR », codecs, vrai export."""
 
 import struct
 import time
@@ -163,6 +164,7 @@ def test_fenetre_du_calque_d_une_prise(app_configuree, qtbot, services, projet_p
     # Pas de vidéo source : le dossier du projet ; le nom vient du projet.
     assert dialogue.choix_dossier.valeur() == DOSSIER_PROJET
     assert dialogue.plan().sortie == projet_prise.dossier / "Voix Glowzy (calque).mov"
+    assert dialogue.zone_sdr.isHidden() and dialogue.plan().hdr is None  # sans vidéo : SDR, pas de choix
     autre = tmp_path / "exports"
     autre.mkdir()
     dialogue._demander_un_dossier = lambda _depart: autre
@@ -323,6 +325,39 @@ def projet_video(services, tmp_path):
     return projet
 
 
+def _point_blanc(contenu: SousTitresAExporter, temps: float) -> tuple[int, int] | None:
+    """Un point au milieu d'un mot blanc (3 × 3 points blancs opaques autour), dans l'image des
+    sous-titres à ce moment, dessinée en 8 bits à la taille de la vidéo de test."""
+    from PySide6.QtGui import QImage
+
+    from ugc_studio.exports.composition import CalqueDeLaVideo
+
+    calque = CalqueDeLaVideo(contenu.reglages, LARGEUR, HAUTEUR, contenu.sous_titres, contenu.mots, False)
+    image = calque.image(calque.cle(temps), temps).convertToFormat(QImage.Format.Format_RGBA8888)
+    octets, par_ligne = bytes(image.constBits()), image.bytesPerLine()
+
+    def blanc(x: int, y: int) -> bool:
+        rouge, vert, bleu, alpha = octets[y * par_ligne + x * 4 : y * par_ligne + x * 4 + 4]
+        return alpha == 255 and min(rouge, vert, bleu) >= 250
+
+    for y in range(1, HAUTEUR - 1):
+        for x in range(1, LARGEUR - 1):
+            if all(blanc(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                return x, y
+    return None
+
+
+def _luminances(video: Path, numero: int, bits: int) -> list[int]:
+    """La luminance (Y) de chaque point de l'image `numero`, telle qu'elle est dans la vidéo (sans
+    conversion : le premier plan de l'image en 4:2:0, de 8 ou 10 bits)."""
+    format_ = "yuv420p" if bits == 8 else "yuv420p10le"
+    brut = executer([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(video),
+                     "-vf", f"select=eq(n\\,{numero})", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", format_, "-"], 60, binaire=True).stdout
+    if bits == 8:
+        return list(brut[: LARGEUR * HAUTEUR])
+    return [valeur for (valeur,) in struct.iter_unpack("<H", brut[: LARGEUR * HAUTEUR * 2])]
+
+
 def _dialogue_video(services, projet, qtbot):
     from ugc_studio.ui.dialogues.export import DialogueExportVideo
 
@@ -377,14 +412,18 @@ def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_v
     assert sortie.images.codec == "h264" and sortie.images.nombre == source.images.nombre == 60
     assert [m * sortie.images.base_de_temps for m in sortie.images.moments] == [m * source.images.base_de_temps for m in source.images.moments]
     assert sortie.son.codec == "aac" and (sortie.couleurs.matrice, sortie.couleurs.transfert) == ("bt709", "bt709")
-    # Pendant « sérum » (0,42 à 0,80 s) : l'image exportée diffère de la source là où sont les sous-titres.
+    # Pendant « sérum » (0,42 à 0,80 s) : un point d'un mot blanc est blanc (235 sur 255, le blanc d'une
+    # vidéo) dans l'image exportée ; le reste de l'image est celui de la vidéo. Le point est au milieu
+    # de l'image (480 lignes) : pendant le lot 3, zscale découpé en bandes rangeait sa transparence
+    # ailleurs (défaut de FFmpeg, voir vers_le_format), et le mot manquait.
     numero = 18  # 0,60 s
-    commande = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", "", "-vf", f"select=eq(n\\,{numero}),format=rgb24",
-                "-frames:v", "1", "-f", "rawvideo", "-"]
-    avant = executer([*commande[:6], str(projet_video.transcription.source), *commande[7:]], 60, binaire=True).stdout
-    apres = executer([*commande[:6], str(plan.sortie), *commande[7:]], 60, binaire=True).stdout
+    point = _point_blanc(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
+    assert point is not None
+    avant, apres = _luminances(Path(projet_video.transcription.source), numero, 8), _luminances(plan.sortie, numero, 8)
+    blanc = apres[point[1] * LARGEUR + point[0]]
+    assert abs(blanc - 235) <= 6, (point, blanc, avant[point[1] * LARGEUR + point[0]])
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
-    assert ecarts[-1] > 100 and ecarts[len(ecarts) // 2] < 6  # des sous-titres, et le reste de l'image intact
+    assert ecarts[len(ecarts) // 2] < 6  # le reste de l'image intact
     assert services.preferences.lire("export_video_conteneur") == "mp4" and services.preferences.lire("export_video_debit") == "identique"
 
 
@@ -412,3 +451,150 @@ def test_bouton_video_grise_sans_video(app_configuree, qtbot, services, projet_p
     assert atelier.bouton_video.text() == "Vidéo avec sous-titres…" and not atelier.bouton_video.isEnabled()
     assert atelier.info_video.isVisible() and atelier.dialogue_video() is None
     assert atelier.bouton_calque.isEnabled()
+
+
+# --- Images du calque d'une vidéo en 10 bits : PNG de 16 bits écrits par Qt (V3, lot 3) ------------
+
+
+@avec_ffmpeg
+def test_png_de_16_bits_relu_par_ffmpeg(app_configuree, tmp_path):
+    """Pour une vidéo en 10 bits (HDR, ProRes), les images du calque partent en PNG de 16 bits par
+    couleur, écrits par Qt : relus par FFmpeg, seuls ou dans le calque provisoire (MOV), ils ont la
+    transparence et les couleurs de l'image dessinée (à un niveau sur 255 près)."""
+    import subprocess
+
+    from PySide6.QtGui import QImage
+
+    from ugc_studio.exports.composition import CalqueDeLaVideo, png_de
+    from ugc_studio.exports.mov_png import EcritureMovPng
+
+    reglages = _reglages()
+    contenu = _contenu(reglages)
+    calque = CalqueDeLaVideo(reglages, LARGEUR, HAUTEUR, contenu.sous_titres, contenu.mots, True)
+    serum = next(m for m in contenu.mots if m.texte == "sérum")
+    temps = serum.debut + 0.3  # le pop du mot actif est fini
+    image = calque.image(calque.cle(temps), temps)
+    assert image.format() == QImage.Format.Format_RGBA64
+    png = png_de(image)
+    assert (png[24], png[25]) == (16, 6)  # 16 bits, RGBA
+    attendu = _pixels(image)
+
+    def relu(commande: list[str], entree: bytes | None = None) -> list[tuple[int, int, int, int]]:
+        sortie = subprocess.run(commande, input=entree, capture_output=True, timeout=60).stdout
+        assert len(sortie) == LARGEUR * HAUTEUR * 8
+        return _depuis_octets(sortie)
+
+    seul = relu([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-f", "png_pipe", "-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"], png)
+    alpha, couleur = _ecarts(attendu, seul)
+    assert alpha <= 257 and couleur <= 257, (alpha / 257, couleur / 257)
+    vide = png_de(calque.image(None, 0.0))
+    ecriture = EcritureMovPng(tmp_path / "calque.mov", LARGEUR, HAUTEUR, 600)
+    for donnees in (vide, png, vide):
+        ecriture.ajouter(donnees, 20)
+    ecriture.fermer()
+    dans_le_mov = relu([str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "error", "-i", str(tmp_path / "calque.mov"),
+                        "-vf", "select=eq(n\\,1)", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgba64le", "-"])
+    alpha, couleur = _ecarts(attendu, dans_le_mov)
+    assert alpha <= 257 and couleur <= 257, (alpha / 257, couleur / 257)
+
+
+# --- Vidéo HDR (V3, lot 3) ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def projet_hdr(services, tmp_path):
+    """Un projet dont les sous-titres viennent d'une vidéo HDR comme celles d'un iPhone (H.265, 10 bits,
+    BT.2020, HLG), 270 × 480 à 30, avec son AAC."""
+    if FFMPEG is None:
+        pytest.skip("FFmpeg absent de cet ordinateur")
+    video = tmp_path / "Vidéos" / "IMG_0420.mov"
+    video.parent.mkdir()
+    resultat = executer(
+        [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"testsrc2=size={LARGEUR}x{HAUTEUR}:rate=30",
+         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2",
+         "-vf", "zscale=rin=limited:pin=bt709:tin=bt709:min=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,"
+                "format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv",
+         "-c:v", "libx265", "-x265-params", "log-level=error", "-tag:v", "hvc1", "-c:a", "aac", str(video)],
+        120,
+    )
+    assert resultat.returncode == 0, resultat.stderr
+    projet = services.projets.creer("IMG 0420", tmp_path / "projets")
+    projet.sous_titres = _reglages()
+    projet.transcription = Transcription(
+        source=str(video), duree_s=2.0, mots=[Mot(t, d, f) for t, d, f in MOTS],
+        infos={"duree_s": 2.0, "video": True, "resolution": [LARGEUR, HAUTEUR], "images_par_seconde": 30, "codec_video": "H265",
+               "codec_audio": "AAC", "format": "QuickTime", "hdr": True},
+    )
+    services.projets.enregistrer()
+    return projet
+
+
+def _lignes_du_resume(dialogue) -> dict[str, tuple[str, str]]:
+    tableau = dialogue.tableau
+    return {tableau.item(rang, 0).text(): (tableau.item(rang, 1).text(), tableau.item(rang, 2).text()) for rang in range(tableau.rowCount())}
+
+
+def test_fenetre_de_la_video_hdr(app_configuree, qtbot, services, projet_hdr):
+    """Vidéo HDR : « Convertir en SDR » apparaît, décoché (le HDR est gardé) ; H.264 est grisé (pas de
+    HDR), H.265 choisi en 10 bits ; cochée, H.264 (le codec retenu) revient, en SDR 8 bits."""
+    from ugc_studio.exports.video import DEBIT_CONSEILLE, H264, H265, MOV, MP4, PRORES
+
+    dialogue = _dialogue_video(services, projet_hdr, qtbot)
+    assert dialogue.zone_sdr.isVisible() and not dialogue.case_sdr.isChecked()
+    assert dialogue.info_hdr.text().startswith("Ta vidéo est en HDR (HLG)")
+    assert not dialogue.choix_codec.bouton(H264).isEnabled() and "Convertir en SDR" in dialogue.choix_codec.bouton(H264).toolTip()
+    assert dialogue.choix_conteneur.valeur() == MP4 and dialogue.choix_codec.valeur() == H265
+    plan = dialogue.plan()
+    assert (plan.codec, plan.bits) == (H265, 10) and plan.couleurs.hdr
+    assert _lignes_du_resume(dialogue)["Couleurs"] == ("HDR (HLG), 10 bits", "HDR (HLG), 10 bits")
+    assert dialogue.bouton_exporter.isEnabled() and not dialogue.messages_affiches()
+    dialogue.choix_debit.bouton(DEBIT_CONSEILLE).click()
+    # 270 × 480 : YouTube ne donne pas de débit HDR sous la 720p, celui du SDR (2 × 1 Mb/s) sert.
+    assert dialogue.plan().debit == 2_000_000 and dialogue.texte_debit.text().endswith("le double du débit conseillé par YouTube")
+    dialogue.case_sdr.setChecked(True)
+    assert dialogue.choix_codec.bouton(H264).isEnabled() and dialogue.choix_codec.valeur() == H264
+    plan = dialogue.plan()
+    assert (plan.codec, plan.bits) == (H264, 8) and not plan.couleurs.hdr
+    assert _lignes_du_resume(dialogue)["Couleurs"] == ("HDR (HLG), 10 bits", "SDR (BT.709), 8 bits")
+    dialogue.case_sdr.setChecked(False)
+    assert dialogue.choix_codec.valeur() == H265
+    dialogue.choix_conteneur.bouton(MOV).click()
+    dialogue.choix_codec.bouton(PRORES).click()
+    assert dialogue.plan().codec == PRORES and dialogue.plan().couleurs.hdr  # le ProRes garde aussi le HDR
+
+
+def test_calque_d_une_video_hdr(app_configuree, qtbot, services, projet_hdr):
+    """Le calque d'une vidéo HDR l'est aussi (sous-titres au blanc de référence) ; « Convertir en
+    SDR » le remet en BT.709."""
+    dialogue = _dialogue(services, projet_hdr, qtbot)
+    assert dialogue.zone_sdr.isVisible() and "séquence HDR de Premiere Pro" in dialogue.info_hdr.text()
+    assert dialogue.plan().hdr is not None and dialogue.plan().hdr.nom == "HLG"
+    assert _lignes_du_resume(dialogue)["Couleurs"][1] == "HDR (HLG), 10 bits + transparence"
+    dialogue.case_sdr.setChecked(True)
+    assert dialogue.plan().hdr is None and _lignes_du_resume(dialogue)["Couleurs"][1].startswith("SDR (BT.709)")
+
+
+def test_export_hdr_depuis_la_fenetre(app_configuree, qtbot, services, projet_hdr):
+    """Une vraie vidéo HDR exportée depuis la fenêtre (dessin en 16 bits, deux passages) : H.265 10 bits,
+    étiquettes HLG, mêmes images aux mêmes moments, son copié ; les sous-titres sont dans l'image."""
+    dialogue = _dialogue_video(services, projet_hdr, qtbot)
+    plan = dialogue.plan()
+    assert plan.calque_16_bits
+    dialogue.exporter()
+    qtbot.waitUntil(lambda: not dialogue.en_cours(), timeout=180_000)
+    assert dialogue.statut.text().startswith("Vidéo enregistrée en "), dialogue.statut.text()
+    source, sortie = analyser(Path(projet_hdr.transcription.source)), analyser(plan.sortie)
+    assert sortie.images.codec == "hevc" and sortie.images.nombre == source.images.nombre == 60
+    assert [m * sortie.images.base_de_temps for m in sortie.images.moments] == [m * source.images.base_de_temps for m in source.images.moments]
+    couleurs = sortie.couleurs
+    assert (couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("yuv420p10le", "bt2020nc", "bt2020", "arib-std-b67")
+    assert sortie.son.codec == "aac"
+    numero = 18  # 0,60 s, pendant « sérum »
+    point = _point_blanc(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
+    assert point is not None
+    avant = _luminances(Path(projet_hdr.transcription.source), numero, 10)
+    apres = _luminances(plan.sortie, numero, 10)
+    blanc = apres[point[1] * LARGEUR + point[0]]
+    assert abs(blanc - 721) <= 8, (point, blanc, avant[point[1] * LARGEUR + point[0]])  # blanc de référence (HLG : 75 %)
+    ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
+    assert ecarts[len(ecarts) // 2] < 24  # le reste de l'image intact (sur 1 023)
