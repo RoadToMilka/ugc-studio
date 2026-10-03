@@ -1,0 +1,17 @@
+{
+  "apercu_sous_titres": {
+    "fond": "video",
+    "zoom": "ajuste",
+    "reperes": [
+      true,
+      true,
+      false
+    ],
+    "boucle": false
+  },
+  "version_format": 1,
+  "export_dossier": "source",
+  "export_video_conteneur": "mp4",
+  "export_video_codec": "h264",
+  "export_video_debit": "conseille"
+}

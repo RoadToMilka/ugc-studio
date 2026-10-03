@@ -1,0 +1,114 @@
+2026-10-03 14:38:27 | INFO     | ugc_studio.app | Démarrage de UGC Studio 3.3.0 (Python 3.12.10, Windows-2025Server-10.0.26100-SP0)
+2026-10-03 14:38:28 | INFO     | ugc_studio.ui.polices | Polices chargées : Anton, Bebas Neue, Inter, Montserrat, Poppins — graisses : {500: 'Inter', 600: 'Inter'}
+2026-10-03 14:38:28 | INFO     | ugc_studio.connexions | Clé ajoutée : Google perso (google, AIza…4f2c)
+2026-10-03 14:38:28 | INFO     | ugc_studio.connexions | Clé ajoutée : Ancienne clé (google, AIza…9a1b)
+2026-10-03 14:38:28 | INFO     | ugc_studio.couts | Appel google gemini-3.8-flash (script : relecture) : 5120 + 1940 tokens, 0.00955890 €
+2026-10-03 14:38:28 | INFO     | ugc_studio.couts | Appel google gemini-3.8-flash (script : écriture) : 4310 + 2280 tokens, 0.010132950 €
+2026-10-03 14:38:28 | INFO     | ugc_studio.couts | Appel google gemini-3.8-flash-tts (voix) : 412 + 18950 tokens, 0.14685016 €
+2026-10-03 14:38:28 | INFO     | ugc_studio.couts | Appel google gemini-3.8-flash-tts (voix) : 398 + 17400 tokens, 0.13484714 €
+2026-10-03 14:38:28 | INFO     | ugc_studio.couts | Appel google gemini-3.8-flash-lite-tts (essai de voix) : 24 + 1150 tokens, 0.00594432 €
+2026-10-03 14:38:28 | INFO     | ugc_studio.couts | Appel google gemini-3.5-transcribe (transcription) : 7680 + 612 tokens, 0.01952544 €
+2026-10-03 14:38:28 | INFO     | ugc_studio.projets | Projet créé : Sérum Glowzy (D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\Projets\Sérum Glowzy)
+2026-10-03 14:38:30 | INFO     | qt | Using Qt multimedia with FFmpeg version 7.1.5 LGPL version 2.1 or later
+2026-10-03 14:38:37 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:38:37 | WARNING  | qt | class QRhi *__cdecl `anonymous-namespace'::ThreadLocalRhiHolder::ensureRhi(enum QRhi::Implementation) : No RHI backend. Using CPU conversion.
+2026-10-03 14:38:40 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:38:42 | WARNING  | qt | This plugin does not support raise()
+2026-10-03 14:38:42 | WARNING  | qt | This plugin does not support grabbing the keyboard
+2026-10-03 14:38:43 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:38:43 | WARNING  | qt | This plugin does not support raise()
+2026-10-03 14:38:43 | WARNING  | qt | This plugin does not support raise()
+2026-10-03 14:38:50 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:39:26 | INFO     | ugc_studio.exports.ffmpeg | Recopie de FFmpeg 9.0.2 depuis l'app : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe
+2026-10-03 14:39:29 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:30 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:30 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -loglevel error -y -progress pipe:1 -stats_period 0.25 -f rawvideo -pixel_format rgba64le -video_size 1080x1920 -framerate 10/1 -i pipe:0 -vf zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv -c:v prores_ks -profile:v 4444 -alpha_bits 16 -vendor apl0 -qscale:v 1 -color_primaries bt709 -color_trc bt709 -colorspace bt709 -color_range tv -frames:v 74 -an -f mov D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (calque).mov.en-cours
+2026-10-03 14:39:30 | INFO     | ugc_studio.exports.calque | Export du calque : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (calque).mov (74 images à 10 i/s, SDR)
+2026-10-03 14:39:37 | INFO     | ugc_studio.exports.calque | Calque écrit en 6.1 s (dessin : 1.3 s) : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (calque).mov (65 images redessinées sur 74)
+2026-10-03 14:39:37 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:39 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:39 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:39 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -loglevel error -y -progress pipe:1 -stats_period 0.25 -f rawvideo -pixel_format rgba64le -video_size 1080x1920 -framerate 10/1 -i pipe:0 -vf zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited,format=yuva444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv -c:v prores_ks -profile:v 4444 -alpha_bits 16 -vendor apl0 -qscale:v 1 -color_primaries bt709 -color_trc bt709 -colorspace bt709 -color_range tv -frames:v 74 -an -f mov D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (calque).mov.en-cours
+2026-10-03 14:39:39 | INFO     | ugc_studio.exports.calque | Export du calque : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (calque).mov (74 images à 10 i/s, SDR)
+2026-10-03 14:39:39 | INFO     | ugc_studio.exports.calque | Export du calque arrêté : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (calque).mov
+2026-10-03 14:39:39 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:40 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:41 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:41 | INFO     | ugc_studio.exports.composition | Export de la vidéo : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4 (74 images, mp4, h264, SDR, 8 bits)
+2026-10-03 14:39:42 | INFO     | ugc_studio.exports.composition | Calque provisoire : 67 PNG pour 74 images, dessin 0.4 s
+2026-10-03 14:39:42 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1.avi -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export jlgusips\calque.mov -filter_complex [0:v]scale=in_range=pc:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt470bg:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:r=limited:threads=1,format=yuva420p[calque];[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie] -map [sortie] -an -fps_mode passthrough -enc_time_base:v demux -c:v libx264 -preset medium -profile:v high -pix_fmt yuv420p -b:v 1087332 -pass 1 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export jlgusips\passages -f null -
+2026-10-03 14:39:43 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1.avi -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export jlgusips\calque.mov -filter_complex [0:v]scale=in_range=pc:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt470bg:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:r=limited:threads=1,format=yuva420p[calque];[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie] -map [sortie] -an -fps_mode passthrough -enc_time_base:v demux -c:v libx264 -preset medium -profile:v high -pix_fmt yuv420p -b:v 1087332 -pass 2 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export jlgusips\passages -movflags +faststart -f mp4 D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4.en-cours
+2026-10-03 14:39:44 | INFO     | ugc_studio.exports.composition | Vidéo écrite en 3.7 s (dessin : 0.4 s, 67 PNG) : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4
+2026-10-03 14:39:44 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:46 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:46 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:46 | INFO     | ugc_studio.exports.composition | Export de la vidéo : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4 (74 images, mp4, h264, SDR, 8 bits)
+2026-10-03 14:39:46 | INFO     | ugc_studio.exports.composition | Export de la vidéo arrêté : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4
+2026-10-03 14:39:46 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:48 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:49 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:39:49 | INFO     | ugc_studio.exports.composition | Export de la vidéo : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (sous-titres).mp4 (74 images, mp4, h265, HDR (HLG), 10 bits)
+2026-10-03 14:39:52 | INFO     | ugc_studio.exports.composition | Calque provisoire : 67 PNG pour 74 images, dessin 0.4 s
+2026-10-03 14:39:52 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg.mov -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export zg9ldis9\calque.mov -filter_complex [0:v]format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203:threads=1,format=yuva420p10le[calque];[video][calque]overlay=format=yuv420p10:alpha=straight:eof_action=repeat[sortie] -map [sortie] -an -fps_mode passthrough -enc_time_base:v demux -c:v libx265 -preset medium -pix_fmt yuv420p10le -b:v 5000000 -x265-params log-level=error -pass 1 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export zg9ldis9\passages -tag:v hvc1 -f null -
+2026-10-03 14:39:56 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg.mov -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export zg9ldis9\calque.mov -filter_complex [0:v]format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203:threads=1,format=yuva420p10le[calque];[video][calque]overlay=format=yuv420p10:alpha=straight:eof_action=repeat[sortie] -map [sortie] -an -fps_mode passthrough -enc_time_base:v demux -c:v libx265 -preset medium -pix_fmt yuv420p10le -b:v 5000000 -x265-params log-level=error -pass 2 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export zg9ldis9\passages -tag:v hvc1 -movflags +faststart -f mp4 D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (sous-titres).mp4.en-cours
+2026-10-03 14:40:00 | INFO     | ugc_studio.exports.composition | Vidéo écrite en 11.0 s (dessin : 0.4 s, 67 PNG) : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (sous-titres).mp4
+2026-10-03 14:40:00 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:02 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:03 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:03 | INFO     | ugc_studio.exports.composition | Export de la vidéo : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (sous-titres).mp4 (74 images, mp4, h264, SDR, converti du HDR, 8 bits)
+2026-10-03 14:40:04 | INFO     | ugc_studio.exports.composition | Calque provisoire : 67 PNG pour 74 images, dessin 0.4 s
+2026-10-03 14:40:04 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg.mov -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export 9_v81jto\calque.mov -filter_complex [0:v]zscale=min=bt2020nc:pin=bt2020:tin=arib-std-b67:rin=limited:t=linear:npl=203,format=gbrpf32le,zscale=pin=bt2020:tin=linear:p=bt709,tonemap=tonemap=mobius:param=0.5:peak=4.926:desat=0,zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited:threads=1,format=yuva420p[calque];[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie] -map [sortie] -an -fps_mode passthrough -enc_time_base:v demux -c:v libx264 -preset medium -profile:v high -pix_fmt yuv420p -b:v 5000000 -pass 1 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export 9_v81jto\passages -f null -
+2026-10-03 14:40:06 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg.mov -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export 9_v81jto\calque.mov -filter_complex [0:v]zscale=min=bt2020nc:pin=bt2020:tin=arib-std-b67:rin=limited:t=linear:npl=203,format=gbrpf32le,zscale=pin=bt2020:tin=linear:p=bt709,tonemap=tonemap=mobius:param=0.5:peak=4.926:desat=0,zscale=pin=bt709:tin=linear:t=bt709:m=bt709:r=limited,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt709:r=limited:threads=1,format=yuva420p[calque];[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie] -map [sortie] -an -fps_mode passthrough -enc_time_base:v demux -c:v libx264 -preset medium -profile:v high -pix_fmt yuv420p -b:v 5000000 -pass 2 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export 9_v81jto\passages -movflags +faststart -f mp4 D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (sous-titres).mp4.en-cours
+2026-10-03 14:40:08 | INFO     | ugc_studio.exports.composition | Vidéo écrite en 5.1 s (dessin : 0.4 s, 67 PNG) : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (sous-titres).mp4
+2026-10-03 14:40:08 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:08 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:09 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:09 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -loglevel error -y -progress pipe:1 -stats_period 0.25 -f rawvideo -pixel_format rgba64le -video_size 1080x1920 -framerate 10/1 -i pipe:0 -vf zscale=rin=full:pin=bt709:tin=bt709:p=bt2020:t=arib-std-b67:m=bt2020nc:r=limited:npl=203,format=yuva444p10le,setparams=color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc:range=tv -c:v prores_ks -profile:v 4444 -alpha_bits 16 -vendor apl0 -qscale:v 1 -color_primaries bt2020 -color_trc arib-std-b67 -colorspace bt2020nc -color_range tv -frames:v 74 -an -f mov D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (calque).mov.en-cours
+2026-10-03 14:40:09 | INFO     | ugc_studio.exports.calque | Export du calque : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (calque).mov (74 images à 10 i/s, HDR (HLG))
+2026-10-03 14:40:14 | INFO     | ugc_studio.exports.calque | Calque écrit en 4.5 s (dessin : 0.9 s) : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1-hlg (calque).mov (65 images redessinées sur 74)
+2026-10-03 14:40:14 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:16 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:40:18 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:19 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:40:20 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:21 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:21 | INFO     | ugc_studio.exports.composition | Export de la vidéo : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4 (74 images, mp4, h264, SDR, 8 bits)
+2026-10-03 14:40:22 | INFO     | ugc_studio.exports.composition | Calque provisoire : 57 PNG pour 74 images, dessin 0.2 s
+2026-10-03 14:40:22 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1.avi -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export ptne9709\calque.mov -filter_complex [0:v]scale=in_range=pc:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt470bg:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:r=limited:threads=1,format=yuva420p[calque];[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie] -map [sortie] -an -fps_mode passthrough -enc_time_base:v demux -c:v libx264 -preset medium -profile:v high -pix_fmt yuv420p -b:v 5000000 -pass 1 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export ptne9709\passages -f null -
+2026-10-03 14:40:23 | INFO     | ugc_studio.exports.ffmpeg | FFmpeg : C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio autotest\programmes\ffmpeg\9.0.2\ffmpeg.exe -hide_banner -nostdin -loglevel error -y -progress pipe:1 -stats_period 0.25 -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1.avi -i C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export ptne9709\calque.mov -i D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\Projets\Sérum Glowzy\prises\prise-001.wav -filter_complex [0:v]scale=in_range=pc:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt470bg:range=tv[video];[1:v]zscale=rin=full:pin=bt709:tin=bt709:p=bt709:t=bt709:m=bt470bg:r=limited:threads=1,format=yuva420p[calque];[video][calque]overlay=format=yuv420:alpha=straight:eof_action=repeat[sortie] -map [sortie] -map 2:a:0 -filter:a adelay=delays=1000:all=1,apad -c:a aac -b:a 320000 -shortest -fps_mode passthrough -enc_time_base:v demux -c:v libx264 -preset medium -profile:v high -pix_fmt yuv420p -b:v 5000000 -pass 2 -passlogfile C:\Users\RUNNER~1\AppData\Local\Temp\UGC Studio export ptne9709\passages -movflags +faststart -f mp4 D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4.en-cours
+2026-10-03 14:40:25 | INFO     | ugc_studio.exports.composition | Vidéo écrite en 3.8 s (dessin : 0.2 s, 57 PNG) : D:\a\ugc-studio\ugc-studio\rapport\captures\donnees\videos\pub-glowzy-v1 (sous-titres).mp4
+2026-10-03 14:40:25 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:25 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:40:26 | WARNING  | qt | This plugin does not support raise()
+2026-10-03 14:40:26 | WARNING  | qt | This plugin does not support grabbing the keyboard
+2026-10-03 14:40:29 | WARNING  | qt | This plugin does not support raise()
+2026-10-03 14:40:29 | WARNING  | qt | This plugin does not support grabbing the keyboard
+2026-10-03 14:40:30 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:30 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:30 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:30 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:33 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:35 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:36 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:36 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:37 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:37 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:38 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:39 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:39 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:40 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:40 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:41 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:42 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:43 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:43 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:44 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:44 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:44 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:45 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:45 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:47 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:40:50 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:40:53 | INFO     | qt | "No HW decoder found"
+2026-10-03 14:40:55 | WARNING  | qt | This plugin does not support propagateSizeHints()
+2026-10-03 14:40:55 | INFO     | ugc_studio.app | Fermeture de l'app (code 0)

@@ -1,0 +1,1503 @@
+{
+  "version_app": "3.3.0",
+  "python": "3.12.10",
+  "qt": "6.11.2",
+  "pyside6": "6.11.2",
+  "systeme": "Windows-2025Server-10.0.26100-SP0",
+  "plateforme_qt": "windows",
+  "echelle_ecran": 1.0,
+  "polices_chargees": [
+    "Anton",
+    "Bebas Neue",
+    "Inter",
+    "Inter Medium",
+    "Inter SemiBold",
+    "Montserrat",
+    "Montserrat Black",
+    "Montserrat ExtraBold",
+    "Montserrat Medium",
+    "Montserrat SemiBold",
+    "Poppins",
+    "Poppins Black",
+    "Poppins ExtraBold",
+    "Poppins Medium",
+    "Poppins SemiBold"
+  ],
+  "formats_images": [
+    "bmp",
+    "cur",
+    "gif",
+    "icns",
+    "ico",
+    "jfif",
+    "jpeg",
+    "jpg",
+    "pbm",
+    "pdf",
+    "pgm",
+    "png",
+    "ppm",
+    "svg",
+    "svgz",
+    "tga",
+    "tif",
+    "tiff",
+    "wbmp",
+    "webp",
+    "xbm",
+    "xpm"
+  ],
+  "verifications": {
+    "police_inter_chargee": true,
+    "police_inter_utilisee": true,
+    "traduction_fr": true,
+    "icones_navigation": true,
+    "icones_feuille_de_style": true,
+    "journal_ecrit": true,
+    "feuille_de_style_appliquee": true,
+    "coffre_windows": true,
+    "liste_deroulante": true,
+    "bulle_v32": true,
+    "aides_v31": true,
+    "editeur_badges": true,
+    "lecture_audio": true,
+    "module_script": true,
+    "decodage_audio": true,
+    "lecture_video": true,
+    "sous_titres": true,
+    "studio": true,
+    "style_texte": true,
+    "mots_du_studio": true,
+    "animations": true,
+    "frise_et_prereglages": true,
+    "disposition_studio": true,
+    "ffmpeg_integre": true,
+    "calque": true,
+    "video_avec_sous_titres": true,
+    "video_hdr": true,
+    "zone_source": true,
+    "reorganisation": true,
+    "menu_v32": true,
+    "script_lot2": true,
+    "fenetres_v32": true,
+    "disposition_v31": true,
+    "sans_debordement": true,
+    "place_en_trop": true,
+    "captures": true
+  },
+  "captures": [
+    "module-script.png",
+    "module-voix.png",
+    "module-transcription.png",
+    "module-sous-titres.png",
+    "module-reglages.png",
+    "voix-2.png",
+    "voix-3.png",
+    "liste-deroulante-ouverte.png",
+    "bulle-frise.png",
+    "bouton-occupe.png",
+    "script-2.png",
+    "script-3.png",
+    "script-4.png",
+    "script-5.png",
+    "script-6.png",
+    "script-7.png",
+    "script-8.png",
+    "script-9.png",
+    "script-10.png",
+    "script-11.png",
+    "script-12.png",
+    "script-13.png",
+    "transcription-2.png",
+    "studio-video.png",
+    "studio-damier-grille.png",
+    "studio-100.png",
+    "studio-onglet-1.png",
+    "studio-onglet-2.png",
+    "studio-onglet-3.png",
+    "studio-onglet-4.png",
+    "studio-haut-gauche.png",
+    "studio-texte-reglages.png",
+    "style-1-contour.png",
+    "style-2-fond-par-mot.png",
+    "style-3-degrade.png",
+    "style-4-grand-contour.png",
+    "style-5-bandeau.png",
+    "style-6-lueur.png",
+    "studio-texte.png",
+    "studio-pipette.png",
+    "mots-surlignage.png",
+    "studio-mots.png",
+    "mots-karaoke.png",
+    "mots-apparition.png",
+    "mots-fond-qui-glisse.png",
+    "studio-animations.png",
+    "animation-pop.png",
+    "animation-apparition.png",
+    "frise.png",
+    "frise-glissement.png",
+    "prereglage-1-par-defaut.png",
+    "prereglage-2-blanc-contour-noir.png",
+    "prereglage-3-surligneur.png",
+    "prereglage-4-karaoke.png",
+    "prereglage-5-mot-par-mot.png",
+    "prereglage-6-bandeau.png",
+    "prereglage-7-attenue.png",
+    "studio-decoupage-modifie.png",
+    "studio-prereglage-modifie.png",
+    "studio-retablir-groupe.png",
+    "dialogue-prereglages.png",
+    "sous-titres-tres-grande-fenetre.png",
+    "dialogue-export-calque.png",
+    "dialogue-export-calque-avancement.png",
+    "dialogue-export-calque-fin.png",
+    "calque-relu-sur-damier.png",
+    "calque-apercu-sur-damier.png",
+    "dialogue-export-video.png",
+    "dialogue-export-video-avancement.png",
+    "dialogue-export-video-fin.png",
+    "dialogue-export-video-hdr.png",
+    "dialogue-export-video-hdr-fin.png",
+    "video-hdr-relue-en-sdr.png",
+    "dialogue-export-video-hdr-en-sdr.png",
+    "dialogue-export-calque-hdr.png",
+    "source-module.png",
+    "source-module-video.png",
+    "source-srt.png",
+    "dialogue-corriger-mots.png",
+    "source-video-importee.png",
+    "dialogue-export-video-voix.png",
+    "sous-titres-2.png",
+    "sous-titres-3.png",
+    "sous-titres-4.png",
+    "sous-titres-5.png",
+    "sous-titres-6.png",
+    "sous-titres-reorganises.png",
+    "menu-couper.png",
+    "reglages-1.png",
+    "reglages-2.png",
+    "reglages-2-bas.png",
+    "reglages-3.png",
+    "reglages-3-bas.png",
+    "reglages-4.png",
+    "menu-projet.png",
+    "dialogue-ajout-cle.png",
+    "bibliotheque-styles.png",
+    "dialogue-style.png",
+    "assistant-style.png",
+    "dialogue-prononciation.png",
+    "bibliotheque-voix.png",
+    "bibliotheque-voix-mes-voix.png",
+    "dialogue-voice-design.png",
+    "assistant-voix.png",
+    "dialogue-variantes.png",
+    "dialogue-variantes-memes-reglages.png",
+    "dialogue-comparaison.png",
+    "conseils-voix.png",
+    "conseils-script.png",
+    "dialogue-prononciation-noms.png",
+    "conseils-creer-une-voix.png",
+    "dialogue-choix-modeles.png",
+    "dialogue-variantes-script.png",
+    "dialogue-variantes-script-accroches.png",
+    "dialogue-comparer-scripts.png",
+    "dialogue-retouche.png",
+    "dialogue-bibliotheque-briefs.png",
+    "dialogue-meilleurs-scripts.png",
+    "dialogue-ajout-exemple.png",
+    "dialogue-variantes-accroches.png",
+    "conseils-variantes-script.png",
+    "dialogue-nouveau-projet.png",
+    "message-question.png",
+    "message-nom.png",
+    "message-erreur.png",
+    "dialogue-autre-couleur.png",
+    "reglages-couts-etroit.png",
+    "sous-titres-etroit.png",
+    "galerie-composants.png"
+  ],
+  "erreurs": [],
+  "police_utilisee": "Inter",
+  "familles_par_graisse": {
+    "400": "Inter",
+    "500": "Inter",
+    "600": "Inter"
+  },
+  "rendu_des_graisses": {
+    "400": "Inter / Regular / 400",
+    "500": "Inter / Medium / 500",
+    "600": "Inter / SemiBold / 600"
+  },
+  "coffre_windows": "relu=True efface=True",
+  "taille_fenetre": [
+    960,
+    662
+  ],
+  "liste_ouverte": {
+    "choix_actuel_visible": true,
+    "ouverte_vers": "le bas",
+    "ecart_avec_le_champ": 8,
+    "coins_arrondis": true
+  },
+  "bulle_v32": {
+    "marges": [
+      16,
+      16
+    ],
+    "coin_transparent": true,
+    "fond": "#17171f"
+  },
+  "aides_v31": {
+    "modules": {
+      "script": {
+        "phrases_visibles": [
+          "Coche celles qui te plaisent, puis « Écrire le script ».",
+          "Voix générée par l'IA : active l'étiquette « contenu généré par l'IA » quand tu publies la pub (règle TikTok).",
+          "Voix générée par l'IA : active l'étiquette « contenu généré par l'IA » quand tu publies la pub (règle TikTok).",
+          "Voix générée par l'IA : active l'étiquette « contenu généré par l'IA » quand tu publies la pub (règle TikTok).",
+          "Voix générée par l'IA : active l'étiquette « contenu généré par l'IA » quand tu publies la pub (règle TikTok).",
+          "Voix générée par l'IA : active l'étiquette « contenu généré par l'IA » quand tu publies la pub (règle TikTok).",
+          "Voix générée par l'IA : active l'étiquette « contenu généré par l'IA » quand tu publies la pub (règle TikTok)."
+        ],
+        "icones_i_visibles": 13
+      },
+      "voix": {
+        "phrases_visibles": [],
+        "icones_i_visibles": 2
+      },
+      "transcription": {
+        "phrases_visibles": [
+          "Clique sur un mot pour le corriger (son moment dans l'audio est gardé)."
+        ],
+        "icones_i_visibles": 3
+      },
+      "sous-titres": {
+        "phrases_visibles": [],
+        "icones_i_visibles": 7
+      },
+      "reglages": {
+        "phrases_visibles": [],
+        "icones_i_visibles": 1
+      }
+    },
+    "phrases_imprevues": [],
+    "bulle_visible": true,
+    "bouton_occupe": true
+  },
+  "texte_api_demo": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glowzy a VRAIMENT changé ma peau en deux semaines ! <laugh>",
+  "voix_lot2": {
+    "nombres_visibles": true,
+    "nombres": "À la française",
+    "estimation": "149 caractères  ·  ≈ 0:11  ·  ≈",
+    "aide_estimation": "Durée estimée avec la vitesse de Kore mesurée sur 3 prises : 2,6 mots/s"
+  },
+  "script_demo": {
+    "produit": "Sérum éclat Glowzy",
+    "marque_d_apres_la_page": true,
+    "accroches": 6,
+    "scripts": [
+      "Script 6 : Témoignage  ·  ≈ 14 s pour 12 visées  ·  36 mots  ·  TikTok  ·  Gemini 3.8 Flash  ·  aujourd'hui à 14:23",
+      "Script 3 (variante A) : Témoignage  ·  ≈ 27 s pour 25 visées  ·  69 mots  ·  TikTok  ·  Gemini 3.8 Flash  ·  aujourd'hui à 14:05",
+      "Script 4 (variante B) : Témoignage  ·  ≈ 26 s pour 25 visées  ·  67 mots  ·  TikTok  ·  Gemini 3.8 Flash  ·  aujourd'hui à 14:05",
+      "Script 5 (variante C) : Témoignage  ·  ≈ 25 s pour 25 visées  ·  65 mots  ·  TikTok  ·  Gemini 3.8 Flash  ·  aujourd'hui à 14:05",
+      "Script 2 : Témoignage  ·  ≈ 27 s pour 25 visées  ·  69 mots  ·  TikTok  ·  Gemini 3.8 Flash  ·  aujourd'hui à 13:54",
+      "Script 1 : Témoignage  ·  ≈ 27 s pour 25 visées  ·  70 mots  ·  TikTok  ·  Gemini 3.8 Flash  ·  aujourd'hui à 13:51"
+    ],
+    "origines": [
+      "Retouche du script 1 : « Plus court »",
+      "Série « Accroches seulement » : variante A sur 3",
+      "Série « Accroches seulement » : variante B sur 3",
+      "Série « Accroches seulement » : variante C sur 3",
+      "",
+      ""
+    ],
+    "bouton_ecrire": "Écrire les 2 scripts",
+    "duree_et_vitesse": "25 s ≈ 66 mots (durée conseillée pour TikTok)  ·  vitesse de Kore mesurée sur 3 prises : 2,6 mots/s"
+  },
+  "decodage_audio": "1.00 s, 16000 Hz, 1 canal",
+  "lecture_video": {
+    "video": "D:\\a\\ugc-studio\\ugc-studio\\rapport\\autotest-ecran\\donnees\\videos\\pub-glowzy-v1.avi",
+    "taille": [
+      540,
+      960
+    ],
+    "couleur_haut": [
+      0,
+      114,
+      127
+    ],
+    "en_lecture": true,
+    "temps_avance_s": 1.4,
+    "ok": true
+  },
+  "sous_titres_demo": [
+    "Franchement,",
+    "je n'y\ncroyais pas…",
+    "Mais ce\nSérum Glowzy",
+    "a vraiment\nchangé ma",
+    "peau en deux\nsemaines !",
+    "Le lien est juste",
+    "en dessous."
+  ],
+  "studio_disposition": "petite",
+  "studio_largeur_deux_colonnes": 880,
+  "studio": {
+    "colonnes_selon_la_largeur": true,
+    "sous_titre_affiche": true,
+    "taille_video": [
+      1080,
+      1920
+    ],
+    "video_en_fond": true,
+    "zoom_100": true,
+    "en_haut": true,
+    "a_gauche": true,
+    "changements_appliques": true,
+    "retour_au_depart": true
+  },
+  "polices_sous_titres": {
+    "Montserrat 800": "Montserrat / ExtraBold / 800",
+    "Montserrat 700": "Montserrat / Bold / 700",
+    "Poppins 700": "Poppins / Bold / 700",
+    "Poppins 800": "Poppins / ExtraBold / 800",
+    "Anton 400": "Anton / Regular / 400",
+    "Bebas Neue 400": "Bebas Neue / Regular / 400"
+  },
+  "styles_appliques": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "style_texte": {
+    "polices_fournies": true,
+    "style_du_prereglage": true,
+    "onglet_texte_tient_dans_sa_colonne": true,
+    "styles_appliques": true,
+    "pipette": true,
+    "retour_au_style_de_depart": true
+  },
+  "mots_actifs": {
+    "surlignage": 7,
+    "karaoke": 7,
+    "apparition": 7
+  },
+  "mots_du_studio": {
+    "mot_actif": true,
+    "raccourci_enregistre": true,
+    "fond_qui_glisse": true,
+    "retour_au_depart": true
+  },
+  "animations": {
+    "enregistrees": true,
+    "en_mouvement": true,
+    "retour_au_depart": true
+  },
+  "frise_message": "« je » passe au sous-titre 1.",
+  "prereglages_appliques": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "prereglages_debordements": [],
+  "frise_et_prereglages": {
+    "etoile_sur_par_defaut": true,
+    "projet_avec_son_prereglage": true,
+    "aucun_retablir_au_depart": true,
+    "un_bloc_par_sous_titre": true,
+    "clic_choisit_dans_la_liste": true,
+    "bord_glisse": true,
+    "decoupage_automatique_retabli": true,
+    "prereglages_appliques": true,
+    "decoupage_en_tete_de_l_onglet_texte": true,
+    "masquer_dans_sous_titres": true,
+    "modifie_affiche": true,
+    "nom_en_mauve": true,
+    "retablir_du_groupe_seul": true,
+    "retablir_remet_le_prereglage": true,
+    "retablir_texte_visible": true,
+    "retablir_texte_remet": true,
+    "fenetre_prereglages": true,
+    "deux_rangees_sans_defiler": true,
+    "noms_entiers": true,
+    "retour_au_depart": true
+  },
+  "disposition_studio": {
+    "etat": {
+      "apercu_a_la_taille_de_la_video": true,
+      "coins_arrondis": true,
+      "tres_grande_tout_visible": true,
+      "tres_grande_video_plus_haute": true,
+      "retour_a_la_taille_de_depart": true,
+      "sans_debordement": true,
+      "place_en_trop_en_bas": true
+    },
+    "mesures": {
+      "depart": {
+        "disposition": "petite",
+        "zone": [
+          304,
+          540
+        ]
+      },
+      "grande": "non mesurée : fenêtre de 1028 × 749 au plus sur cet écran",
+      "tres_grande": {
+        "zone": [
+          377,
+          670
+        ],
+        "defilement_page": 0
+      },
+      "debordements": [],
+      "place_en_trop": {}
+    }
+  },
+  "ffmpeg": {
+    "chemin": "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\UGC Studio autotest\\programmes\\ffmpeg\\9.0.2\\ffmpeg.exe",
+    "dans_le_exe": true,
+    "pas_recopie_au_demarrage": true,
+    "a_preparer": true,
+    "preparation_s": 2.5,
+    "empreinte_verifiee": true,
+    "pret_ensuite": true,
+    "version": "9.0.2-essentials_build-www.gyan.dev",
+    "encodeurs": {
+      "prores_ks": true,
+      "libx264": true,
+      "libx265": true,
+      "ffv1": true,
+      "aac": true
+    },
+    "x265_10_bits": true,
+    "x265_dolby_vision": true,
+    "x265_version": "4.3+45-116b875",
+    "poids_mo": 100.5
+  },
+  "calque_debordements": [],
+  "calque_plan": {
+    "sortie": "pub-glowzy-v1 (calque).mov",
+    "taille": [
+      1080,
+      1920
+    ],
+    "frequence": "10",
+    "images": 74,
+    "source_images": 74,
+    "source_codec": "Motion JPEG",
+    "messages": []
+  },
+  "calque_duree_s": 4.53,
+  "calque_dessin_s": 1.35,
+  "calque_images_dessinees": 65,
+  "calque_message": "Calque enregistré en 4 s : pub-glowzy-v1 (calque).mov (7,1 Mo).",
+  "calque_poids_mo": 7.1,
+  "calque_poids_max_mo": 97.13,
+  "calque_relu": {
+    "codec": "prores",
+    "images": 74,
+    "frequence": "10",
+    "taille": [
+      1080,
+      1920
+    ],
+    "son": false,
+    "couleurs": [
+      "yuva444p12le",
+      "bt709",
+      "bt709",
+      "bt709"
+    ]
+  },
+  "calque_ecarts_sur_255": {
+    "relu_transparence": 0,
+    "relu_couleur": 2,
+    "apercu_transparence": 3,
+    "apercu_couleur": 3
+  },
+  "calque": {
+    "analyse_finie": true,
+    "sans_debordement": true,
+    "plan_de_la_video": true,
+    "export_fini": true,
+    "fichier_ecrit": true,
+    "fichier_relu": true,
+    "image_relue_fidele": true,
+    "image_comme_l_apercu": true,
+    "arreter_ne_garde_rien": true
+  },
+  "video_debordements": [],
+  "video_plan": {
+    "sortie": "pub-glowzy-v1 (sous-titres).mp4",
+    "taille": [
+      540,
+      960
+    ],
+    "debit": 1087332,
+    "son": null,
+    "images": 74,
+    "messages": [],
+    "resume": [
+      [
+        "Taille",
+        "540 × 960",
+        "540 × 960"
+      ],
+      [
+        "Images par seconde",
+        "10",
+        "10"
+      ],
+      [
+        "Débit vidéo",
+        "988 kb/s",
+        "1,1 Mb/s"
+      ],
+      [
+        "Format et codec",
+        "AVI, Motion JPEG",
+        "MP4, H.264"
+      ],
+      [
+        "Son",
+        "aucun",
+        "aucun"
+      ],
+      [
+        "Couleurs",
+        "SDR, 8 bits (plage complète)",
+        "SDR, 8 bits"
+      ],
+      [
+        "Durée",
+        "0:07",
+        "0:07"
+      ],
+      [
+        "Poids",
+        "895 Ko",
+        "≈ 992 Ko"
+      ],
+      [
+        "Sous-titres",
+        "",
+        "7 sous-titres, préréglage « Blanc contour noir »"
+      ]
+    ]
+  },
+  "video_duree_s": 3.86,
+  "video_dessin_s": 0.56,
+  "video_images_dessinees": 65,
+  "video_message": "Vidéo enregistrée en 4 s : pub-glowzy-v1 (sous-titres).mp4 (795 Ko).",
+  "video_poids_mo": 0.78,
+  "video_relue": {
+    "codec": "h264",
+    "images": 74,
+    "taille": [
+      540,
+      960
+    ],
+    "son": false,
+    "couleurs": [
+      "yuv420p",
+      "tv",
+      "bt470bg",
+      "bt709",
+      "bt709"
+    ],
+    "memes_moments": true
+  },
+  "video_jaune": {
+    "attendu": [
+      255,
+      212,
+      59
+    ],
+    "point": [
+      114,
+      602
+    ],
+    "image": 26,
+    "norme": "bt470bg",
+    "lu": [
+      255,
+      212,
+      58
+    ]
+  },
+  "video_avec_sous_titres": {
+    "analyse_finie": true,
+    "sans_debordement": true,
+    "prores_grise_en_mp4": true,
+    "avertissement_mkv": true,
+    "prores_possible_en_mov": true,
+    "plan": true,
+    "export_fini": true,
+    "fichier_ecrit": true,
+    "lire_la_video": true,
+    "fichier_relu": true,
+    "jaune_exact": true,
+    "arreter_ne_garde_rien": true
+  },
+  "video_hdr_debordements": [],
+  "video_hdr_plan": {
+    "codec": "h265",
+    "bits": 10,
+    "debit": 5000000,
+    "couleurs": [
+      "HDR (HLG), 10 bits",
+      "HDR (HLG), 10 bits"
+    ],
+    "messages": [],
+    "info": "Ta vidéo est en HDR (HLG) : elle le reste (H.265 en 10 bits, ou ProRes), sous-titres au blanc de référence (ils n'éblouissent pas). Coche pour une plateforme ou un écran qui affiche mal le HDR : couleurs ramenées en SDR (BT.709)."
+  },
+  "video_hdr_duree_s": 12.61,
+  "video_hdr_relue": {
+    "codec": "hevc",
+    "images": 74,
+    "memes_moments": true,
+    "couleurs": [
+      "yuv420p10le",
+      "tv",
+      "bt2020nc",
+      "bt2020",
+      "arib-std-b67"
+    ]
+  },
+  "video_hdr_mesures": {
+    "image": 26,
+    "point_blanc": [
+      196,
+      550
+    ],
+    "point_jaune": [
+      114,
+      602
+    ],
+    "y_blanc": 721,
+    "jaune_ramene_en_sdr": [
+      255,
+      212,
+      59
+    ],
+    "jaune_attendu": [
+      255,
+      212,
+      59
+    ]
+  },
+  "video_hdr_en_sdr": {
+    "blanc": {
+      "attendu": [
+        255,
+        255,
+        255
+      ],
+      "lu": [
+        255,
+        255,
+        255
+      ]
+    },
+    "jaune": {
+      "attendu": [
+        255,
+        212,
+        59
+      ],
+      "lu": [
+        254,
+        212,
+        58
+      ]
+    }
+  },
+  "calque_hdr": {
+    "couleurs": [
+      "bt2020nc",
+      "bt2020",
+      "arib-std-b67"
+    ],
+    "point_blanc": [
+      520,
+      1088
+    ],
+    "y_blanc": 721
+  },
+  "video_hdr": {
+    "video_hlg_fabriquee": true,
+    "analyse_finie": true,
+    "sans_debordement": true,
+    "fenetre": true,
+    "export_hdr_fini": true,
+    "fichier_hdr_ecrit": true,
+    "fichier_hdr_relu": true,
+    "blanc_de_reference": true,
+    "jaune_hdr": true,
+    "conversion_prevue": true,
+    "export_sdr_fini": true,
+    "fichier_sdr_relu": true,
+    "blanc_sdr_exact": true,
+    "jaune_sdr_exact": true,
+    "calque_hdr_prevu": true,
+    "calque_hdr_fini": true,
+    "calque_hdr_relu": true
+  },
+  "zone_source": {
+    "etat": {
+      "depart_du_module": true,
+      "srt_importe": true,
+      "srt_voix_a_caler": true,
+      "fenetre_corriger": true,
+      "video_importee_muette": true,
+      "export_prevoit_la_voix": true,
+      "export_voix_fini": true,
+      "export_voix_au_bon_moment": true,
+      "retour_au_depart": true,
+      "sans_debordement": true
+    },
+    "mesures": {
+      "mots": "Les sous-titres viennent de la transcription de pub-glowzy-v1.avi (25 mots, 03/10/2026).",
+      "video": "pub-glowzy-v1.avi  ·  0:07  ·  1080 × 1920  ·  10 images/s  ·  MJPEG",
+      "srt": {
+        "message": "Sous-titres importés de sous-titres-demo.srt : 7 sous-titres, 24 mots (moment de chaque mot estimé, puis ton découpage appliqué).",
+        "sous_titres": [
+          "Franchement,",
+          "je n'y\ncroyais pas…",
+          "Mais ce\nSérum Glowzy",
+          "a vraiment\nchangé ma",
+          "peau en deux\nsemaines !",
+          "Le lien est juste",
+          "en dessous."
+        ]
+      },
+      "corriger": [
+        [
+          "Corriger les mots",
+          2,
+          false
+        ]
+      ],
+      "export_plan": {
+        "son": "voix",
+        "voix": "D:\\a\\ugc-studio\\ugc-studio\\rapport\\autotest-ecran\\donnees\\Projets\\Sérum Glowzy\\prises\\prise-001.wav",
+        "decalage": 1.0,
+        "resume_son": [
+          "aucun",
+          "voix des sous-titres, en AAC, 320 kb/s"
+        ]
+      },
+      "export_relu": {
+        "son": "aac",
+        "duree_video_s": 7.4,
+        "duree_son_s": 7.381,
+        "niveau_avant_la_voix": 0,
+        "niveau_de_la_voix": 4171
+      },
+      "debordements": []
+    }
+  },
+  "sous_titres_reorganises": {
+    "sous_titres": [
+      "Franchement,",
+      "je n'y\ncroyais pas…",
+      "Mais ce Sérum\nGlowzy a",
+      "vraiment\nchangé ma",
+      "peau en deux\nsemaines !",
+      "Le lien est juste",
+      "en dessous."
+    ],
+    "ajustes": [
+      "Mais ce Sérum\nGlowzy a",
+      "vraiment\nchangé ma"
+    ],
+    "message": "Impossible : le sous-titre 5 ferait 26 caractères, et « Caractères au plus » est réglé sur 24."
+  },
+  "menu_v32": {
+    "ecart_avec_le_bouton": 8,
+    "coin_transparent": true
+  },
+  "script_lot2": {
+    "dialogue-variantes-script": true,
+    "dialogue-comparer-scripts": true,
+    "dialogue-retouche": true,
+    "dialogue-bibliotheque-briefs": true,
+    "dialogue-meilleurs-scripts": true,
+    "dialogue-variantes-accroches": true
+  },
+  "fenetres_v32": {
+    "dialogue-ajout-cle": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Tester et enregistrer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "bibliotheque-styles": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Nouveau style",
+        "Enregistrer le style actuel",
+        "Fermer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-style": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Enregistrer le style"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "assistant-style": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Utiliser ce style"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-prononciation": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Enregistrer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F",
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "bibliotheque-voix": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Fermer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F",
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "bibliotheque-voix-mes-voix": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Fermer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F",
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-voice-design": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Fermer",
+        "Créer la voix"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "assistant-voix": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Utiliser cette description"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-variantes": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Générer les 2 variantes"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-variantes-memes-reglages": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Générer les 3 variantes"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-comparaison": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Fermer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "conseils-voix": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "fondus": [
+        "#0F0F14"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "conseils-script": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "fondus": [
+        "#0F0F14"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-prononciation-noms": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Enregistrer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F",
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "conseils-creer-une-voix": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "fondus": [
+        "#0F0F14"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-choix-modeles": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Enregistrer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-variantes-script": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Écrire les 2 scripts"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-variantes-script-accroches": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Écrire les 3 scripts"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-comparer-scripts": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Fermer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-retouche": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Retoucher"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-bibliotheque-briefs": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Fermer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-meilleurs-scripts": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Ajouter un script qui a marché…",
+        "Fermer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-ajout-exemple": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Ajouter"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-variantes-accroches": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Générer les 3 variantes"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [
+        "#17171F"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "conseils-variantes-script": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "fondus": [
+        "#0F0F14"
+      ],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-nouveau-projet": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Créer le projet"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "message-question": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Supprimer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "message-nom": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Renommer"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "message-erreur": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Ouvrir le journal",
+        "OK"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    },
+    "dialogue-autre-couleur": {
+      "fond": "#0F0F14",
+      "fond_de_l_app": true,
+      "bloc": [
+        16,
+        16
+      ],
+      "bloc_a_16_px": true,
+      "boutons_du_bas": [
+        "Annuler",
+        "Choisir cette couleur"
+      ],
+      "boutons_sous_le_bloc": true,
+      "fondus": [],
+      "fondus_couleur_du_fond": true,
+      "ok": true
+    }
+  },
+  "disposition_v31": {
+    "standard": {
+      "largeur_fenetre": 960,
+      "barre_laterale": 200,
+      "modules": {
+        "script": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Script • Sérum Glowzy",
+          "conseils": "script",
+          "x_titre": 216
+        },
+        "voix": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Voix • Sérum Glowzy",
+          "conseils": "voix",
+          "x_titre": 216
+        },
+        "transcription": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Transcription • Sérum Glowzy",
+          "conseils": "transcription",
+          "x_titre": 216
+        },
+        "sous-titres": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Sous-titres • Sérum Glowzy",
+          "conseils": "sous-titres",
+          "x_titre": 216
+        },
+        "reglages": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": false,
+          "barre_au_bord": null,
+          "titre": "Réglages",
+          "conseils": "reglages",
+          "x_titre": 216
+        }
+      },
+      "droite_cout": 16,
+      "ecarts": []
+    },
+    "etroite": {
+      "largeur_fenetre": 960,
+      "barre_laterale": 200,
+      "modules": {
+        "script": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Script • Sérum Glowzy",
+          "conseils": "script",
+          "x_titre": 216
+        },
+        "voix": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Voix • Sérum Glowzy",
+          "conseils": "voix",
+          "x_titre": 216
+        },
+        "transcription": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Transcription • Sérum Glowzy",
+          "conseils": "transcription",
+          "x_titre": 216
+        },
+        "sous-titres": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": true,
+          "barre_au_bord": 960,
+          "titre": "Sous-titres • Sérum Glowzy",
+          "conseils": "sous-titres",
+          "x_titre": 216
+        },
+        "reglages": {
+          "bloc": [
+            216,
+            81,
+            16
+          ],
+          "barre_visible": false,
+          "barre_au_bord": null,
+          "titre": "Réglages",
+          "conseils": "reglages",
+          "x_titre": 216
+        }
+      },
+      "droite_cout": 16,
+      "ecarts": []
+    }
+  },
+  "debordements": [],
+  "place_en_trop": {
+    "zones_verifiees": 77
+  },
+  "succes": true
+}

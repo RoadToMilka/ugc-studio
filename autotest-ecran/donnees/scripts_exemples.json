@@ -1,0 +1,77 @@
+{
+  "version_format": 1,
+  "exemples": [
+    {
+      "identifiant": "script-fb1944614bf9",
+      "titre": "Sérum éclat Glowzy",
+      "langue": "fr-FR",
+      "reseau": "tiktok",
+      "angle": "temoignage",
+      "tutoiement": "tu",
+      "duree_s": 25,
+      "brief": "29,90 € ; code GLOW20 (-20 %)",
+      "repliques": [
+        {
+          "roles": [
+            "accroche"
+          ],
+          "texte": "J'ai arrêté le fond de teint la semaine dernière.",
+          "style": "intrigued and conspiratorial, a little fast",
+          "style_fr": "intriguée et complice, un peu rapide"
+        },
+        {
+          "roles": [
+            "probleme",
+            "solution",
+            "preuve"
+          ],
+          "texte": "J'avais ce teint gris, fatigué, même après une bonne nuit. Une collègue m'a fait tester le sérum Glowzy : trois gouttes, ça pénètre direct, ça colle pas. Et hier, ma sœur me demande : « T'as changé quoi ? » <chuckle>",
+          "style": "warm and natural, like talking to a friend",
+          "style_fr": "chaleureuse et naturelle, comme à une amie"
+        },
+        {
+          "roles": [
+            "offre",
+            "appel_action"
+          ],
+          "texte": "Il est à moins de 30 euros, et avec mon code GLOW20, t'as 20 % en moins. Le lien est en dessous.",
+          "style": "upbeat and direct",
+          "style_fr": "enjouée et directe"
+        }
+      ],
+      "pourquoi": "",
+      "note": "CPA 9 €",
+      "fourni": false
+    },
+    {
+      "identifiant": "colle-2c64e16bf102",
+      "titre": "Gourde isotherme",
+      "langue": "fr-FR",
+      "reseau": "tiktok",
+      "angle": "temoignage",
+      "tutoiement": "tu",
+      "duree_s": 10,
+      "brief": "",
+      "repliques": [
+        {
+          "roles": [
+            "accroche"
+          ],
+          "texte": "J'ai arrêté d'acheter des bouteilles d'eau.",
+          "style": "",
+          "style_fr": ""
+        },
+        {
+          "roles": [],
+          "texte": "Cette gourde garde mon eau froide toute la journée, même dans la voiture. Le lien est en dessous.",
+          "style": "",
+          "style_fr": ""
+        }
+      ],
+      "pourquoi": "",
+      "note": "Meilleur ROAS de septembre",
+      "fourni": false
+    }
+  ],
+  "fournis_retires": []
+}

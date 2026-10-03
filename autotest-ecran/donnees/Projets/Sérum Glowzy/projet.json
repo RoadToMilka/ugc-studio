@@ -1,0 +1,1342 @@
+{
+  "version_format": 8,
+  "nom": "Sérum Glowzy",
+  "langue": "fr-FR",
+  "cree_le": "2026-10-03T14:35:29+00:00",
+  "modifie_le": "2026-10-03T14:38:17+00:00",
+  "voix": {
+    "modele": "gemini-3.8-flash-tts",
+    "voix": "Kore",
+    "nombres": "fr"
+  },
+  "repliques": [
+    {
+      "script": [
+        {
+          "texte": "Franchement, je n'y croyais pas… "
+        },
+        {
+          "balise": "short pause"
+        },
+        {
+          "texte": " Mais ce sérum Glowzy a "
+        },
+        {
+          "texte": "vraiment",
+          "accentue": true
+        },
+        {
+          "texte": " changé ma peau en deux semaines ! "
+        },
+        {
+          "balise": "laugh"
+        }
+      ],
+      "style": "excited and playful, fast-paced",
+      "style_fr": "excité et complice, débit rapide"
+    },
+    {
+      "script": [
+        {
+          "texte": "Le lien est juste en dessous."
+        }
+      ],
+      "style": "warm and reassuring",
+      "style_fr": "chaleureux et rassurant"
+    }
+  ],
+  "prononciations": [
+    {
+      "mot": "Glowzy",
+      "dit": "Glo-zi"
+    }
+  ],
+  "prises": [
+    {
+      "identifiant": "3ba2364c4cfe",
+      "nom": "Prise 1",
+      "fichier": "prises/prise-001.wav",
+      "date": "2026-10-03T14:35:30+00:00",
+      "modele": "gemini-3.8-flash-tts",
+      "voix": "Kore",
+      "style": "styles par réplique",
+      "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>\nLe lien est juste en dessous.",
+      "script": [
+        {
+          "texte": "Franchement, je n'y croyais pas… "
+        },
+        {
+          "balise": "short pause"
+        },
+        {
+          "texte": " Mais ce sérum Glowzy a "
+        },
+        {
+          "texte": "vraiment",
+          "accentue": true
+        },
+        {
+          "texte": " changé ma peau en deux semaines ! "
+        },
+        {
+          "balise": "laugh"
+        },
+        {
+          "texte": " Le lien est juste en dessous."
+        }
+      ],
+      "duree_s": 10.2,
+      "tokens_entree": 120,
+      "tokens_sortie": 254,
+      "cout_eur": "0.0021",
+      "note": 4,
+      "repliques": [
+        {
+          "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>",
+          "style": "excited and playful, fast-paced"
+        },
+        {
+          "texte_api": "Le lien est juste en dessous.",
+          "style": "warm and reassuring"
+        }
+      ],
+      "serie": 0,
+      "variante": "",
+      "retenue": false
+    },
+    {
+      "identifiant": "6eb28ca7e4a0",
+      "nom": "Prise 2",
+      "fichier": "prises/prise-002.wav",
+      "date": "2026-10-03T14:35:30+00:00",
+      "modele": "gemini-3.8-flash-tts",
+      "voix": "Leda",
+      "style": "styles par réplique",
+      "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>\nLe lien est juste en dessous.",
+      "script": [
+        {
+          "texte": "Franchement, je n'y croyais pas… "
+        },
+        {
+          "balise": "short pause"
+        },
+        {
+          "texte": " Mais ce sérum Glowzy a "
+        },
+        {
+          "texte": "vraiment",
+          "accentue": true
+        },
+        {
+          "texte": " changé ma peau en deux semaines ! "
+        },
+        {
+          "balise": "laugh"
+        },
+        {
+          "texte": " Le lien est juste en dessous."
+        }
+      ],
+      "duree_s": 10.8,
+      "tokens_entree": 120,
+      "tokens_sortie": 270,
+      "cout_eur": "0.0021",
+      "note": 0,
+      "repliques": [
+        {
+          "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>",
+          "style": "excited and playful, fast-paced"
+        },
+        {
+          "texte_api": "Le lien est juste en dessous.",
+          "style": "warm and reassuring"
+        }
+      ],
+      "serie": 0,
+      "variante": "",
+      "retenue": false
+    },
+    {
+      "identifiant": "ce229c531113",
+      "nom": "Prise 3 (variante A)",
+      "fichier": "prises/prise-003.wav",
+      "date": "2026-10-03T14:35:30+00:00",
+      "modele": "gemini-3.8-flash-tts",
+      "voix": "Kore",
+      "style": "styles par réplique",
+      "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>\nLe lien est juste en dessous.",
+      "script": [
+        {
+          "texte": "Franchement, je n'y croyais pas… "
+        },
+        {
+          "balise": "short pause"
+        },
+        {
+          "texte": " Mais ce sérum Glowzy a "
+        },
+        {
+          "texte": "vraiment",
+          "accentue": true
+        },
+        {
+          "texte": " changé ma peau en deux semaines ! "
+        },
+        {
+          "balise": "laugh"
+        },
+        {
+          "texte": " Le lien est juste en dessous."
+        }
+      ],
+      "duree_s": 9.8,
+      "tokens_entree": 120,
+      "tokens_sortie": 245,
+      "cout_eur": "0.0021",
+      "note": 3,
+      "repliques": [
+        {
+          "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>",
+          "style": "excited and playful, fast-paced"
+        },
+        {
+          "texte_api": "Le lien est juste en dessous.",
+          "style": "warm and reassuring"
+        }
+      ],
+      "serie": 1,
+      "variante": "A",
+      "retenue": false
+    },
+    {
+      "identifiant": "9f72bd3fa73f",
+      "nom": "Prise 4 (variante B)",
+      "fichier": "prises/prise-004.wav",
+      "date": "2026-10-03T14:35:30+00:00",
+      "modele": "gemini-3.8-flash-tts",
+      "voix": "Puck",
+      "style": "styles par réplique",
+      "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>\nLe lien est juste en dessous.",
+      "script": [
+        {
+          "texte": "Franchement, je n'y croyais pas… "
+        },
+        {
+          "balise": "short pause"
+        },
+        {
+          "texte": " Mais ce sérum Glowzy a "
+        },
+        {
+          "texte": "vraiment",
+          "accentue": true
+        },
+        {
+          "texte": " changé ma peau en deux semaines ! "
+        },
+        {
+          "balise": "laugh"
+        },
+        {
+          "texte": " Le lien est juste en dessous."
+        }
+      ],
+      "duree_s": 10.5,
+      "tokens_entree": 120,
+      "tokens_sortie": 262,
+      "cout_eur": "0.0021",
+      "note": 5,
+      "repliques": [
+        {
+          "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>",
+          "style": "excited and playful, fast-paced"
+        },
+        {
+          "texte_api": "Le lien est juste en dessous.",
+          "style": "warm and reassuring"
+        }
+      ],
+      "serie": 1,
+      "variante": "B",
+      "retenue": true
+    },
+    {
+      "identifiant": "fa853cdf14a1",
+      "nom": "Prise 5 (variante C)",
+      "fichier": "prises/prise-005.wav",
+      "date": "2026-10-03T14:35:31+00:00",
+      "modele": "gemini-3.8-flash-tts",
+      "voix": "Kore",
+      "style": "styles par réplique",
+      "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>\nLe lien est juste en dessous.",
+      "script": [
+        {
+          "texte": "Franchement, je n'y croyais pas… "
+        },
+        {
+          "balise": "short pause"
+        },
+        {
+          "texte": " Mais ce sérum Glowzy a "
+        },
+        {
+          "texte": "vraiment",
+          "accentue": true
+        },
+        {
+          "texte": " changé ma peau en deux semaines ! "
+        },
+        {
+          "balise": "laugh"
+        },
+        {
+          "texte": " Le lien est juste en dessous."
+        }
+      ],
+      "duree_s": 11.6,
+      "tokens_entree": 120,
+      "tokens_sortie": 290,
+      "cout_eur": "0.0021",
+      "note": 0,
+      "repliques": [
+        {
+          "texte_api": "Franchement, je n'y croyais pas… <short pause> Mais ce sérum Glo-zi a VRAIMENT changé ma peau en deux semaines ! <laugh>",
+          "style": "calm and intimate, slow-paced"
+        },
+        {
+          "texte_api": "Le lien est juste en dessous.",
+          "style": "warm and reassuring"
+        }
+      ],
+      "serie": 1,
+      "variante": "C",
+      "retenue": false
+    }
+  ],
+  "transcription": {
+    "source": "D:\\a\\ugc-studio\\ugc-studio\\rapport\\autotest-ecran\\donnees\\videos\\pub-glowzy-v1.avi",
+    "audio": "sources/audio.wav",
+    "duree_s": 7.4,
+    "infos": {
+      "duree_s": 7.4,
+      "video": true,
+      "resolution": [
+        1080,
+        1920
+      ],
+      "images_par_seconde": 10,
+      "codec_video": "MJPEG"
+    },
+    "modele": "gemini-3.5-transcribe",
+    "langue": "fr-FR",
+    "separation_voix": false,
+    "mode": "verbatim",
+    "texte": "Franchement, euh je n'y croyais pas… Mais ce Sérum Glowzy a vraiment changé ma peau en deux semaines ! Le lien est juste en dessous.",
+    "mots": [
+      {
+        "texte": "Franchement,",
+        "debut": 0.2,
+        "fin": 0.442,
+        "locuteur": ""
+      },
+      {
+        "texte": "euh",
+        "debut": 0.485,
+        "fin": 0.727,
+        "locuteur": ""
+      },
+      {
+        "texte": "je",
+        "debut": 0.769,
+        "fin": 1.011,
+        "locuteur": ""
+      },
+      {
+        "texte": "n'y",
+        "debut": 1.054,
+        "fin": 1.296,
+        "locuteur": ""
+      },
+      {
+        "texte": "croyais",
+        "debut": 1.338,
+        "fin": 1.58,
+        "locuteur": ""
+      },
+      {
+        "texte": "pas…",
+        "debut": 1.623,
+        "fin": 1.865,
+        "locuteur": ""
+      },
+      {
+        "texte": "Mais",
+        "debut": 1.908,
+        "fin": 2.15,
+        "locuteur": ""
+      },
+      {
+        "texte": "ce",
+        "debut": 2.192,
+        "fin": 2.434,
+        "locuteur": ""
+      },
+      {
+        "texte": "Sérum",
+        "debut": 2.477,
+        "fin": 2.719,
+        "locuteur": ""
+      },
+      {
+        "texte": "Glowzy",
+        "debut": 2.762,
+        "fin": 3.003,
+        "locuteur": ""
+      },
+      {
+        "texte": "a",
+        "debut": 3.046,
+        "fin": 3.288,
+        "locuteur": ""
+      },
+      {
+        "texte": "vraiment",
+        "debut": 3.331,
+        "fin": 3.573,
+        "locuteur": ""
+      },
+      {
+        "texte": "changé",
+        "debut": 3.615,
+        "fin": 3.857,
+        "locuteur": ""
+      },
+      {
+        "texte": "ma",
+        "debut": 3.9,
+        "fin": 4.142,
+        "locuteur": ""
+      },
+      {
+        "texte": "peau",
+        "debut": 4.185,
+        "fin": 4.427,
+        "locuteur": ""
+      },
+      {
+        "texte": "en",
+        "debut": 4.469,
+        "fin": 4.711,
+        "locuteur": ""
+      },
+      {
+        "texte": "deux",
+        "debut": 4.754,
+        "fin": 4.996,
+        "locuteur": ""
+      },
+      {
+        "texte": "semaines",
+        "debut": 5.038,
+        "fin": 5.28,
+        "locuteur": ""
+      },
+      {
+        "texte": "!",
+        "debut": 5.323,
+        "fin": 5.565,
+        "locuteur": ""
+      },
+      {
+        "texte": "Le",
+        "debut": 5.608,
+        "fin": 5.85,
+        "locuteur": ""
+      },
+      {
+        "texte": "lien",
+        "debut": 5.892,
+        "fin": 6.134,
+        "locuteur": ""
+      },
+      {
+        "texte": "est",
+        "debut": 6.177,
+        "fin": 6.419,
+        "locuteur": ""
+      },
+      {
+        "texte": "juste",
+        "debut": 6.462,
+        "fin": 6.703,
+        "locuteur": ""
+      },
+      {
+        "texte": "en",
+        "debut": 6.746,
+        "fin": 6.988,
+        "locuteur": ""
+      },
+      {
+        "texte": "dessous.",
+        "debut": 7.031,
+        "fin": 7.273,
+        "locuteur": ""
+      }
+    ],
+    "date": "2026-10-03T14:35:31+00:00",
+    "cout_eur": "0.0019",
+    "masquer_hesitations": true,
+    "prise": "",
+    "script": "",
+    "ajustements_sous_titres": [
+      [
+        1.908,
+        3.288
+      ],
+      [
+        3.331,
+        4.142
+      ]
+    ],
+    "corrigee": false
+  },
+  "remplacements": [
+    {
+      "cherche": "sérum glowzy",
+      "remplace": "Sérum Glowzy"
+    }
+  ],
+  "sous_titres": {
+    "style": {
+      "texte": {
+        "police": "Montserrat",
+        "graisse": 800,
+        "taille_pct": 4.2,
+        "casse": "normale",
+        "ponctuation": true,
+        "couleur": {
+          "code": "#FFFFFF",
+          "opacite": 100.0
+        },
+        "degrade": {
+          "actif": false,
+          "couleur": {
+            "code": "#FACC15",
+            "opacite": 100.0
+          },
+          "direction": "vertical"
+        },
+        "contour": {
+          "actif": true,
+          "couleur": {
+            "code": "#000000",
+            "opacite": 100.0
+          },
+          "epaisseur_pct": 0.312,
+          "angles": "arrondis"
+        },
+        "ombre": {
+          "active": false,
+          "couleur": {
+            "code": "#000000",
+            "opacite": 55.0
+          },
+          "flou_pct": 0.4,
+          "decalage_x_pct": 0.0,
+          "decalage_y_pct": 0.2,
+          "portee": "texte"
+        },
+        "lueur": {
+          "active": false,
+          "couleur": {
+            "code": "#F59E0B",
+            "opacite": 100.0
+          },
+          "taille_pct": 1.0,
+          "intensite_pct": 80.0
+        },
+        "fond": {
+          "mode": "aucun",
+          "couleur": {
+            "code": "#000000",
+            "opacite": 60.0
+          },
+          "marge_x_pct": 0.8,
+          "marge_y_pct": 0.3,
+          "arrondi_pct": 0.6,
+          "bordure": false,
+          "bordure_couleur": {
+            "code": "#FFFFFF",
+            "opacite": 100.0
+          },
+          "bordure_epaisseur_pct": 0.15
+        },
+        "espaces": {
+          "interligne_pct": 100.0,
+          "lettres_pct": 0.0,
+          "mots_pct": 0.0
+        }
+      },
+      "mots": {
+        "a_venir": {
+          "visible": true,
+          "opacite_pct": null,
+          "couleur": null,
+          "degrade": null,
+          "contour": null,
+          "lueur": null,
+          "fond": null,
+          "soulignement": null,
+          "taille_pct": null,
+          "decalage_y_pct": null
+        },
+        "actif": {
+          "visible": true,
+          "opacite_pct": null,
+          "couleur": {
+            "code": "#FFD43B",
+            "opacite": 100.0
+          },
+          "degrade": null,
+          "contour": null,
+          "lueur": null,
+          "fond": null,
+          "soulignement": null,
+          "taille_pct": 108.0,
+          "decalage_y_pct": null
+        },
+        "dits": {
+          "visible": true,
+          "opacite_pct": null,
+          "couleur": null,
+          "degrade": null,
+          "contour": null,
+          "lueur": null,
+          "fond": null,
+          "soulignement": null,
+          "taille_pct": null,
+          "decalage_y_pct": null
+        },
+        "accentues_actifs": false,
+        "accentues": {
+          "visible": true,
+          "opacite_pct": null,
+          "couleur": {
+            "code": "#FFD43B",
+            "opacite": 100.0
+          },
+          "degrade": null,
+          "contour": null,
+          "lueur": null,
+          "fond": null,
+          "soulignement": null,
+          "taille_pct": null,
+          "decalage_y_pct": null
+        },
+        "avance_ms": 0
+      },
+      "animations": {
+        "mot": {
+          "type": "pop",
+          "duree_ms": 180,
+          "intensite_pct": 100.0,
+          "taille_depart_pct": null,
+          "taille_sommet_pct": null,
+          "taille_arrivee_pct": null,
+          "opacite_depart_pct": null,
+          "decalage_depart_pct": null,
+          "courbe": null
+        },
+        "retour": "instantane",
+        "retour_duree_ms": 150,
+        "apparition": "aucune",
+        "apparition_duree_ms": 200,
+        "disparition": "aucune",
+        "disparition_duree_ms": 200
+      },
+      "position": {
+        "verticale": "centre",
+        "decalage_pct": 11.0,
+        "alignement": "centre",
+        "largeur_lignes_pct": 100.0
+      },
+      "decoupage": {
+        "caracteres_max": 24,
+        "mots_max": 5,
+        "lignes_max": 2,
+        "couper_sur_ponctuation": true,
+        "duree_min_s": 0.6
+      }
+    },
+    "ecran": {
+      "format": "auto",
+      "largeur": 1080,
+      "hauteur": 1920,
+      "plateforme": "tiktok",
+      "marge_max_pct": 5.0
+    },
+    "apercu": {
+      "chemin": "",
+      "decalage_s": 0.0,
+      "largeur": 0,
+      "hauteur": 0,
+      "son_de_la_video": true
+    },
+    "prereglage": {
+      "identifiant": "fourni-blanc-contour-noir",
+      "nom": "Blanc contour noir"
+    }
+  },
+  "ecriture": {
+    "brief": {
+      "pays": "FR",
+      "langue": "fr-FR",
+      "reseau": "tiktok",
+      "duree_s": 0,
+      "angle": "auto",
+      "tutoiement": "auto",
+      "produit": "Sérum éclat Glowzy",
+      "type_produit": "Sérum visage",
+      "prix": "29,90 €",
+      "promo": "Code GLOW20 : 20 % de remise",
+      "offre": "Livraison offerte dès 25 € ; satisfaite ou remboursée pendant 30 jours",
+      "benefices": "Teint plus lumineux dès le matin\nTexture fluide qui ne colle pas\n3 gouttes suffisent",
+      "distinction": "Un sérum éclat léger, seul ou sous le maquillage.",
+      "description": "",
+      "age": "",
+      "clientele": "Femmes de 25 à 40 ans",
+      "problemes": "Teint terne et fatigué",
+      "objections": "Peur que ça colle\nLe prix",
+      "preuves": "4,7/5 sur 1 280 avis",
+      "genre": "femme",
+      "age_personne": "",
+      "profil": "",
+      "appel_action": "Clique sur le lien en dessous",
+      "mentions": "Code GLOW20",
+      "mots_interdits": "",
+      "consigne": "",
+      "balises": true,
+      "styles": true,
+      "accents": false,
+      "modele": "gemini-3.8-flash",
+      "nombre_accroches": 6,
+      "pre_remplis": [
+        "produit",
+        "type_produit",
+        "prix",
+        "offre",
+        "benefices",
+        "distinction",
+        "clientele",
+        "problemes",
+        "objections",
+        "preuves",
+        "genre"
+      ]
+    },
+    "adresse": "https://glowzy.example/products/serum-eclat",
+    "page": {
+      "adresse": "https://glowzy.example/products/serum-eclat",
+      "source": "shopify",
+      "lu_le": "2026-10-03T14:10:29+00:00",
+      "texte": "Données de la boutique (Shopify, exactes) :\n- Nom : Sérum éclat Glowzy\n- Marque : Glowzy\n- Prix : 29,90 €",
+      "nom": "Sérum éclat Glowzy",
+      "marque": "Glowzy",
+      "prix": "29,90 €",
+      "prix_barre": "",
+      "devise": "EUR"
+    },
+    "fiche": {
+      "nom": "Sérum éclat Glowzy",
+      "marque": "Glowzy",
+      "type_produit": "Sérum visage",
+      "prix": "29,90 €",
+      "prix_barre": "",
+      "offre": "Livraison offerte dès 25 € ; satisfaite ou remboursée pendant 30 jours",
+      "benefices": [
+        "Teint plus lumineux dès le matin",
+        "Texture fluide qui ne colle pas",
+        "3 gouttes suffisent"
+      ],
+      "distinction": "Un sérum éclat léger, seul ou sous le maquillage.",
+      "problemes": [
+        "Teint terne et fatigué"
+      ],
+      "objections": [
+        "Peur que ça colle",
+        "Le prix"
+      ],
+      "preuves": [
+        "4,7/5 sur 1 280 avis"
+      ],
+      "clientele": "Femmes de 25 à 40 ans",
+      "noms_a_prononcer": [
+        "Glowzy"
+      ]
+    },
+    "accroches": [
+      {
+        "texte": "J'ai arrêté le fond de teint la semaine dernière.",
+        "angle": "temoignage",
+        "pourquoi": "Surprend : on attend du maquillage, c'est l'inverse.",
+        "alerte": "",
+        "cochee": true
+      },
+      {
+        "texte": "Trois gouttes, et ma sœur m'a demandé ce que j'avais changé.",
+        "angle": "temoignage",
+        "pourquoi": "La preuve vient d'une autre personne.",
+        "alerte": "",
+        "cochee": true
+      },
+      {
+        "texte": "POV : ton teint a l'air d'avoir dormi huit heures.",
+        "angle": "pov",
+        "pourquoi": "Projette dans le résultat.",
+        "alerte": "",
+        "cochee": false
+      },
+      {
+        "texte": "Tu as le teint terne le matin ?",
+        "angle": "probleme_solution",
+        "pourquoi": "Question directe sur un souci courant.",
+        "alerte": "Sur Facebook et Instagram, Meta refuse une question qui suppose une caractéristique de la personne.",
+        "cochee": false
+      },
+      {
+        "texte": "Le sérum que je mets avant même mon café.",
+        "angle": "routine",
+        "pourquoi": "Ancre le produit dans un geste du matin.",
+        "alerte": "",
+        "cochee": false
+      },
+      {
+        "texte": "Trois raisons pour lesquelles je ne sors plus sans lui.",
+        "angle": "liste",
+        "pourquoi": "La liste retient l'attention.",
+        "alerte": "",
+        "cochee": false
+      }
+    ],
+    "scripts": [
+      {
+        "identifiant": "fb1944614bf9",
+        "date": "2026-10-03T13:51:29+00:00",
+        "modele": "gemini-3.8-flash",
+        "reseau": "tiktok",
+        "langue": "fr-FR",
+        "angle": "temoignage",
+        "duree_visee_s": 25,
+        "repliques": [
+          {
+            "roles": [
+              "accroche"
+            ],
+            "script": [
+              {
+                "texte": "J'ai arrêté le fond de teint la semaine dernière."
+              }
+            ],
+            "style": "intrigued and conspiratorial, a little fast",
+            "style_fr": "intriguée et complice, un peu rapide"
+          },
+          {
+            "roles": [
+              "probleme",
+              "solution",
+              "preuve"
+            ],
+            "script": [
+              {
+                "texte": "J'avais ce teint gris, fatigué, même après une bonne nuit. Une collègue m'a fait tester le sérum Glowzy : trois gouttes, ça pénètre direct, ça colle pas. Et hier, ma sœur me demande : « T'as changé quoi ? » "
+              },
+              {
+                "balise": "chuckle"
+              }
+            ],
+            "style": "warm and natural, like talking to a friend",
+            "style_fr": "chaleureuse et naturelle, comme à une amie"
+          },
+          {
+            "roles": [
+              "offre",
+              "appel_action"
+            ],
+            "script": [
+              {
+                "texte": "Il est à moins de 30 euros, et avec mon code GLOW20, t'as 20 % en moins. Le lien est en dessous."
+              }
+            ],
+            "style": "upbeat and direct",
+            "style_fr": "enjouée et directe"
+          }
+        ],
+        "tutoiement": "tu",
+        "accroche_imposee": "J'ai arrêté le fond de teint la semaine dernière.",
+        "balises": true,
+        "styles": true,
+        "accents": false,
+        "relecture": [
+          {
+            "critere": "duree",
+            "gravite": "ok",
+            "explication": "≈ 27 s pour 25 visées",
+            "par": "app"
+          },
+          {
+            "critere": "mentions",
+            "gravite": "ok",
+            "explication": "Mentions obligatoires présentes",
+            "par": "app"
+          },
+          {
+            "critere": "produit_3s",
+            "gravite": "leger",
+            "explication": "Le produit n'est nommé qu'à la réplique 2, vers 6 secondes.",
+            "par": "modele"
+          }
+        ],
+        "corrections": [],
+        "tokens_entree": 9430,
+        "tokens_sortie": 4220,
+        "cout_eur": "0.0161",
+        "envoye_le": "2026-10-03T13:53:29+00:00",
+        "garde_comme_exemple": true,
+        "numero": 1,
+        "note": 4,
+        "retenu": true,
+        "serie": "",
+        "lettre": "",
+        "mode": "",
+        "origine": "",
+        "consigne_retouche": ""
+      },
+      {
+        "identifiant": "420ba106d6b0",
+        "date": "2026-10-03T13:54:29+00:00",
+        "modele": "gemini-3.8-flash",
+        "reseau": "tiktok",
+        "langue": "fr-FR",
+        "angle": "temoignage",
+        "duree_visee_s": 25,
+        "repliques": [
+          {
+            "roles": [
+              "accroche"
+            ],
+            "script": [
+              {
+                "texte": "Trois gouttes, et ma sœur m'a demandé ce que j'avais changé."
+              }
+            ],
+            "style": "amused and intrigued",
+            "style_fr": "amusée et intriguée"
+          },
+          {
+            "roles": [
+              "solution",
+              "preuve"
+            ],
+            "script": [
+              {
+                "texte": "C'est le sérum éclat Glowzy. Je le mets le matin, ça pénètre direct, ça colle pas, et mon teint a l'air reposé. Il a 4,7 sur 5 sur plus de mille avis, donc c'est pas que moi. "
+              },
+              {
+                "balise": "chuckle"
+              }
+            ],
+            "style": "warm and natural, like talking to a friend",
+            "style_fr": "chaleureuse et naturelle, comme à une amie"
+          },
+          {
+            "roles": [
+              "offre",
+              "appel_action"
+            ],
+            "script": [
+              {
+                "texte": "Avec mon code GLOW20, t'as 20 % en moins. Clique sur le lien en dessous."
+              }
+            ],
+            "style": "upbeat and direct",
+            "style_fr": "enjouée et directe"
+          }
+        ],
+        "tutoiement": "tu",
+        "accroche_imposee": "Trois gouttes, et ma sœur m'a demandé ce que j'avais changé.",
+        "balises": true,
+        "styles": true,
+        "accents": false,
+        "relecture": [
+          {
+            "critere": "duree",
+            "gravite": "ok",
+            "explication": "≈ 27 s pour 25 visées",
+            "par": "app"
+          },
+          {
+            "critere": "mentions",
+            "gravite": "ok",
+            "explication": "Mentions obligatoires présentes",
+            "par": "app"
+          }
+        ],
+        "corrections": [
+          "« Résultat garanti dès le premier jour » remplacé par « mon teint a l'air reposé » (promesse invérifiable)."
+        ],
+        "tokens_entree": 9430,
+        "tokens_sortie": 4220,
+        "cout_eur": "0.0174",
+        "envoye_le": "",
+        "garde_comme_exemple": false,
+        "numero": 2,
+        "note": 0,
+        "retenu": false,
+        "serie": "",
+        "lettre": "",
+        "mode": "",
+        "origine": "",
+        "consigne_retouche": ""
+      },
+      {
+        "identifiant": "267fd0612188",
+        "date": "2026-10-03T14:05:29+00:00",
+        "modele": "gemini-3.8-flash",
+        "reseau": "tiktok",
+        "langue": "fr-FR",
+        "angle": "temoignage",
+        "duree_visee_s": 25,
+        "repliques": [
+          {
+            "roles": [
+              "accroche"
+            ],
+            "script": [
+              {
+                "texte": "Trois gouttes, et ma sœur m'a demandé ce que j'avais changé."
+              }
+            ],
+            "style": "amused and intrigued",
+            "style_fr": "amusée et intriguée"
+          },
+          {
+            "roles": [
+              "solution",
+              "preuve"
+            ],
+            "script": [
+              {
+                "texte": "C'est le sérum éclat Glowzy. Je le mets le matin, ça pénètre direct, ça colle pas, et mon teint a l'air reposé. Il a 4,7 sur 5 sur plus de mille avis, donc c'est pas que moi. "
+              },
+              {
+                "balise": "chuckle"
+              }
+            ],
+            "style": "warm and natural, like talking to a friend",
+            "style_fr": "chaleureuse et naturelle, comme à une amie"
+          },
+          {
+            "roles": [
+              "offre",
+              "appel_action"
+            ],
+            "script": [
+              {
+                "texte": "Avec mon code GLOW20, t'as 20 % en moins. Clique sur le lien en dessous."
+              }
+            ],
+            "style": "upbeat and direct",
+            "style_fr": "enjouée et directe"
+          }
+        ],
+        "tutoiement": "tu",
+        "accroche_imposee": "Trois gouttes, et ma sœur m'a demandé ce que j'avais changé.",
+        "balises": true,
+        "styles": true,
+        "accents": false,
+        "relecture": [
+          {
+            "critere": "duree",
+            "gravite": "ok",
+            "explication": "≈ 27 s pour 25 visées",
+            "par": "app"
+          },
+          {
+            "critere": "mentions",
+            "gravite": "ok",
+            "explication": "Mentions obligatoires présentes",
+            "par": "app"
+          }
+        ],
+        "corrections": [
+          "« Résultat garanti dès le premier jour » remplacé par « mon teint a l'air reposé » (promesse invérifiable)."
+        ],
+        "tokens_entree": 0,
+        "tokens_sortie": 0,
+        "cout_eur": "0.0068",
+        "envoye_le": "",
+        "garde_comme_exemple": false,
+        "numero": 3,
+        "note": 0,
+        "retenu": false,
+        "serie": "serie-demo",
+        "lettre": "A",
+        "mode": "accroches",
+        "origine": "",
+        "consigne_retouche": ""
+      },
+      {
+        "identifiant": "891a97020b3d",
+        "date": "2026-10-03T14:05:29+00:00",
+        "modele": "gemini-3.8-flash",
+        "reseau": "tiktok",
+        "langue": "fr-FR",
+        "angle": "temoignage",
+        "duree_visee_s": 25,
+        "repliques": [
+          {
+            "roles": [
+              "accroche"
+            ],
+            "script": [
+              {
+                "texte": "POV : ton teint a l'air d'avoir dormi huit heures."
+              }
+            ],
+            "style": "amused and intrigued",
+            "style_fr": "amusée et intriguée"
+          },
+          {
+            "roles": [
+              "solution",
+              "preuve"
+            ],
+            "script": [
+              {
+                "texte": "C'est le sérum éclat Glowzy. Je le mets le matin, ça pénètre direct, ça colle pas, et mon teint a l'air reposé. Il a 4,7 sur 5 sur plus de mille avis, donc c'est pas que moi. "
+              },
+              {
+                "balise": "chuckle"
+              }
+            ],
+            "style": "warm and natural, like talking to a friend",
+            "style_fr": "chaleureuse et naturelle, comme à une amie"
+          },
+          {
+            "roles": [
+              "offre",
+              "appel_action"
+            ],
+            "script": [
+              {
+                "texte": "Avec mon code GLOW20, t'as 20 % en moins. Clique sur le lien en dessous."
+              }
+            ],
+            "style": "upbeat and direct",
+            "style_fr": "enjouée et directe"
+          }
+        ],
+        "tutoiement": "tu",
+        "accroche_imposee": "POV : ton teint a l'air d'avoir dormi huit heures.",
+        "balises": true,
+        "styles": true,
+        "accents": false,
+        "relecture": [
+          {
+            "critere": "duree",
+            "gravite": "ok",
+            "explication": "≈ 26 s pour 25 visées",
+            "par": "app"
+          },
+          {
+            "critere": "mentions",
+            "gravite": "ok",
+            "explication": "Mentions obligatoires présentes",
+            "par": "app"
+          }
+        ],
+        "corrections": [],
+        "tokens_entree": 0,
+        "tokens_sortie": 0,
+        "cout_eur": "0.0068",
+        "envoye_le": "",
+        "garde_comme_exemple": false,
+        "numero": 4,
+        "note": 5,
+        "retenu": false,
+        "serie": "serie-demo",
+        "lettre": "B",
+        "mode": "accroches",
+        "origine": "",
+        "consigne_retouche": ""
+      },
+      {
+        "identifiant": "018682035175",
+        "date": "2026-10-03T14:05:29+00:00",
+        "modele": "gemini-3.8-flash",
+        "reseau": "tiktok",
+        "langue": "fr-FR",
+        "angle": "temoignage",
+        "duree_visee_s": 25,
+        "repliques": [
+          {
+            "roles": [
+              "accroche"
+            ],
+            "script": [
+              {
+                "texte": "Le sérum que je mets avant même mon café."
+              }
+            ],
+            "style": "amused and intrigued",
+            "style_fr": "amusée et intriguée"
+          },
+          {
+            "roles": [
+              "solution",
+              "preuve"
+            ],
+            "script": [
+              {
+                "texte": "C'est le sérum éclat Glowzy. Je le mets le matin, ça pénètre direct, ça colle pas, et mon teint a l'air reposé. Il a 4,7 sur 5 sur plus de mille avis, donc c'est pas que moi. "
+              },
+              {
+                "balise": "chuckle"
+              }
+            ],
+            "style": "warm and natural, like talking to a friend",
+            "style_fr": "chaleureuse et naturelle, comme à une amie"
+          },
+          {
+            "roles": [
+              "offre",
+              "appel_action"
+            ],
+            "script": [
+              {
+                "texte": "Avec mon code GLOW20, t'as 20 % en moins. Clique sur le lien en dessous."
+              }
+            ],
+            "style": "upbeat and direct",
+            "style_fr": "enjouée et directe"
+          }
+        ],
+        "tutoiement": "tu",
+        "accroche_imposee": "Le sérum que je mets avant même mon café.",
+        "balises": true,
+        "styles": true,
+        "accents": false,
+        "relecture": [
+          {
+            "critere": "duree",
+            "gravite": "ok",
+            "explication": "≈ 25 s pour 25 visées",
+            "par": "app"
+          },
+          {
+            "critere": "mentions",
+            "gravite": "ok",
+            "explication": "Mentions obligatoires présentes",
+            "par": "app"
+          },
+          {
+            "critere": "regles",
+            "gravite": "leger",
+            "explication": "Accroche : Évite de promettre un résultat immédiat dans la suite du script.",
+            "par": "modele"
+          }
+        ],
+        "corrections": [],
+        "tokens_entree": 0,
+        "tokens_sortie": 0,
+        "cout_eur": "0.0068",
+        "envoye_le": "",
+        "garde_comme_exemple": false,
+        "numero": 5,
+        "note": 3,
+        "retenu": false,
+        "serie": "serie-demo",
+        "lettre": "C",
+        "mode": "accroches",
+        "origine": "",
+        "consigne_retouche": ""
+      },
+      {
+        "identifiant": "ee5b8b69d93f",
+        "date": "2026-10-03T14:23:29+00:00",
+        "modele": "gemini-3.8-flash",
+        "reseau": "tiktok",
+        "langue": "fr-FR",
+        "angle": "temoignage",
+        "duree_visee_s": 12,
+        "repliques": [
+          {
+            "roles": [
+              "accroche"
+            ],
+            "script": [
+              {
+                "texte": "J'ai arrêté le fond de teint."
+              }
+            ],
+            "style": "intrigued and conspiratorial",
+            "style_fr": "intriguée et complice"
+          },
+          {
+            "roles": [
+              "solution",
+              "offre",
+              "appel_action"
+            ],
+            "script": [
+              {
+                "texte": "Trois gouttes de sérum Glowzy le matin, et mon teint a l'air reposé. Avec mon code GLOW20, t'as 20 % en moins. Clique sur le lien en dessous."
+              }
+            ],
+            "style": "warm and upbeat",
+            "style_fr": "chaleureuse et enjouée"
+          }
+        ],
+        "tutoiement": "tu",
+        "accroche_imposee": "",
+        "balises": true,
+        "styles": true,
+        "accents": false,
+        "relecture": [
+          {
+            "critere": "duree",
+            "gravite": "leger",
+            "explication": "≈ 14 s pour 12 visées : trop long de 13 %",
+            "par": "app"
+          },
+          {
+            "critere": "mentions",
+            "gravite": "ok",
+            "explication": "Mentions obligatoires présentes",
+            "par": "app"
+          }
+        ],
+        "corrections": [],
+        "tokens_entree": 0,
+        "tokens_sortie": 0,
+        "cout_eur": "0.0119",
+        "envoye_le": "",
+        "garde_comme_exemple": false,
+        "numero": 6,
+        "note": 0,
+        "retenu": false,
+        "serie": "",
+        "lettre": "",
+        "mode": "",
+        "origine": "fb1944614bf9",
+        "consigne_retouche": "Plus court"
+      }
+    ]
+  },
+  "sous_titres_importes": null,
+  "sources": {
+    "video": "transcription",
+    "sous_titres": "transcription"
+  }
+}

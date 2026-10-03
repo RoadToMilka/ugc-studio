@@ -1,0 +1,138 @@
+{
+  "version_format": 1,
+  "briefs": [
+    {
+      "identifiant": "f1d027c2f4e0",
+      "nom": "Sérum éclat Glowzy (TikTok)",
+      "date": "2026-10-03T14:35:32+00:00",
+      "brief": {
+        "pays": "FR",
+        "langue": "fr-FR",
+        "reseau": "tiktok",
+        "duree_s": 0,
+        "angle": "auto",
+        "tutoiement": "auto",
+        "produit": "Sérum éclat Glowzy",
+        "type_produit": "Sérum visage",
+        "prix": "29,90 €",
+        "promo": "Code GLOW20 : 20 % de remise",
+        "offre": "Livraison offerte dès 25 € ; satisfaite ou remboursée pendant 30 jours",
+        "benefices": "Teint plus lumineux dès le matin\nTexture fluide qui ne colle pas\n3 gouttes suffisent",
+        "distinction": "Un sérum éclat léger, seul ou sous le maquillage.",
+        "description": "",
+        "age": "",
+        "clientele": "Femmes de 25 à 40 ans",
+        "problemes": "Teint terne et fatigué",
+        "objections": "Peur que ça colle\nLe prix",
+        "preuves": "4,7/5 sur 1 280 avis",
+        "genre": "femme",
+        "age_personne": "",
+        "profil": "",
+        "appel_action": "Clique sur le lien en dessous",
+        "mentions": "Code GLOW20",
+        "mots_interdits": "",
+        "consigne": "",
+        "balises": true,
+        "styles": true,
+        "accents": false,
+        "modele": "gemini-3.8-flash",
+        "nombre_accroches": 6,
+        "pre_remplis": [
+          "produit",
+          "type_produit",
+          "prix",
+          "offre",
+          "benefices",
+          "distinction",
+          "clientele",
+          "problemes",
+          "objections",
+          "preuves",
+          "genre"
+        ]
+      },
+      "adresse": "https://glowzy.example/products/serum-eclat",
+      "page": {
+        "adresse": "https://glowzy.example/products/serum-eclat",
+        "source": "shopify",
+        "lu_le": "2026-10-03T14:10:29+00:00",
+        "texte": "Données de la boutique (Shopify, exactes) :\n- Nom : Sérum éclat Glowzy\n- Marque : Glowzy\n- Prix : 29,90 €",
+        "nom": "Sérum éclat Glowzy",
+        "marque": "Glowzy",
+        "prix": "29,90 €",
+        "prix_barre": "",
+        "devise": "EUR"
+      },
+      "fiche": {
+        "nom": "Sérum éclat Glowzy",
+        "marque": "Glowzy",
+        "type_produit": "Sérum visage",
+        "prix": "29,90 €",
+        "prix_barre": "",
+        "offre": "Livraison offerte dès 25 € ; satisfaite ou remboursée pendant 30 jours",
+        "benefices": [
+          "Teint plus lumineux dès le matin",
+          "Texture fluide qui ne colle pas",
+          "3 gouttes suffisent"
+        ],
+        "distinction": "Un sérum éclat léger, seul ou sous le maquillage.",
+        "problemes": [
+          "Teint terne et fatigué"
+        ],
+        "objections": [
+          "Peur que ça colle",
+          "Le prix"
+        ],
+        "preuves": [
+          "4,7/5 sur 1 280 avis"
+        ],
+        "clientele": "Femmes de 25 à 40 ans",
+        "noms_a_prononcer": [
+          "Glowzy"
+        ]
+      }
+    },
+    {
+      "identifiant": "de0cb389b485",
+      "nom": "Brosse lissante (Facebook et Instagram)",
+      "date": "2026-10-03T14:35:32+00:00",
+      "brief": {
+        "pays": "FR",
+        "langue": "fr-FR",
+        "reseau": "meta",
+        "duree_s": 20,
+        "angle": "auto",
+        "tutoiement": "vous",
+        "produit": "Brosse lissante chauffante",
+        "type_produit": "",
+        "prix": "",
+        "promo": "",
+        "offre": "",
+        "benefices": "",
+        "distinction": "",
+        "description": "",
+        "age": "35-44",
+        "clientele": "",
+        "problemes": "",
+        "objections": "",
+        "preuves": "",
+        "genre": "",
+        "age_personne": "",
+        "profil": "",
+        "appel_action": "",
+        "mentions": "",
+        "mots_interdits": "",
+        "consigne": "",
+        "balises": false,
+        "styles": true,
+        "accents": false,
+        "modele": "gemini-3.8-flash",
+        "nombre_accroches": 6,
+        "pre_remplis": []
+      },
+      "adresse": "",
+      "page": null,
+      "fiche": null
+    }
+  ]
+}

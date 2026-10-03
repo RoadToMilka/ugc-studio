@@ -1,0 +1,81 @@
+{
+  "version_format": 1,
+  "date": "2026-10-03T14:38:28+00:00",
+  "voix": [
+    {
+      "identifiant": "demo-camille",
+      "nom": "Camille (démo)",
+      "description": "Warm and friendly narrator with a clear, smiling delivery.",
+      "langue": "fr-FR",
+      "region": "FR",
+      "accent": "Parisian",
+      "genre": "female",
+      "hauteur": "medium",
+      "persona": "Warm, Friendly",
+      "contexte": "Commercial",
+      "type": "prebuilt",
+      "modele": "",
+      "expire_le": ""
+    },
+    {
+      "identifiant": "demo-hugo",
+      "nom": "Hugo (démo)",
+      "description": "Deep, confident voice for premium product launches.",
+      "langue": "fr-FR",
+      "region": "FR",
+      "accent": "Standard French",
+      "genre": "male",
+      "hauteur": "low",
+      "persona": "Confident",
+      "contexte": "Narration",
+      "type": "prebuilt",
+      "modele": "",
+      "expire_le": ""
+    },
+    {
+      "identifiant": "demo-ines",
+      "nom": "Inès (démo)",
+      "description": "Bright and playful voice, perfect for social media hooks.",
+      "langue": "fr-FR",
+      "region": "FR",
+      "accent": "Southern French",
+      "genre": "female",
+      "hauteur": "high",
+      "persona": "Playful",
+      "contexte": "Social media",
+      "type": "prebuilt",
+      "modele": "",
+      "expire_le": ""
+    },
+    {
+      "identifiant": "demo-lucas",
+      "nom": "Lucas (démo)",
+      "description": "Relaxed, conversational voice with a soft Belgian accent.",
+      "langue": "fr-BE",
+      "region": "BE",
+      "accent": "Belgian",
+      "genre": "male",
+      "hauteur": "medium",
+      "persona": "Friendly",
+      "contexte": "Conversational",
+      "type": "prebuilt",
+      "modele": "",
+      "expire_le": ""
+    },
+    {
+      "identifiant": "demo-ava",
+      "nom": "Ava (démo)",
+      "description": "Energetic American voice for upbeat ads.",
+      "langue": "en-US",
+      "region": "US",
+      "accent": "American",
+      "genre": "female",
+      "hauteur": "medium",
+      "persona": "Energetic",
+      "contexte": "Commercial",
+      "type": "prebuilt",
+      "modele": "",
+      "expire_le": ""
+    }
+  ]
+}

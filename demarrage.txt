@@ -1,0 +1,5 @@
+Démarrage jusqu'à la fenêtre, le plus rapide de 5 lancements (les trois .exe à tour de rôle) : 2.0.0 = 4.51 s ; 2.2.0 = 4.50 s ; cette version = 6.32 s ; écart avec la 2.0.0 = 1.81 s
+Médianes : 2.0.0 = 4.84 s ; 2.2.0 = 4.67 s ; cette version = 6.64 s
+  2.0.0 : 5.61 ; 6.39 ; 4.61 ; 4.84 ; 4.51
+  2.2.0 : 6.74 ; 5.35 ; 4.59 ; 4.67 ; 4.50
+  cette version : 8.72 ; 6.32 ; 6.36 ; 6.66 ; 6.64

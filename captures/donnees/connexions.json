@@ -1,0 +1,42 @@
+{
+  "version_format": 1,
+  "connexions": [
+    {
+      "identifiant": "4ad5653deaf6",
+      "fournisseur": "google",
+      "nom": "Google perso",
+      "apercu": "AIza…4f2c",
+      "par_defaut": true,
+      "ajoutee_le": "2026-10-03T14:38:28+00:00",
+      "dernier_test": {
+        "date": "2026-10-03T14:38:28+00:00",
+        "ok": true,
+        "message": "Clé valide, 42 modèles accessibles."
+      },
+      "modeles": [
+        "gemini-3.1-flash-tts-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3.5-flash",
+        "gemini-3.5-transcribe",
+        "gemini-3.5-transcribe-live",
+        "gemini-3.8-flash",
+        "gemini-3.8-flash-lite-tts",
+        "gemini-3.8-flash-tts"
+      ]
+    },
+    {
+      "identifiant": "46fcfe33ac38",
+      "fournisseur": "google",
+      "nom": "Ancienne clé",
+      "apercu": "AIza…9a1b",
+      "par_defaut": false,
+      "ajoutee_le": "2026-10-03T14:38:28+00:00",
+      "dernier_test": {
+        "date": "2026-10-03T14:38:28+00:00",
+        "ok": false,
+        "message": "Google refuse cette clé : elle n'est pas valide. Vérifie qu'elle a été copiée en entier."
+      },
+      "modeles": []
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "version_format": 1,
+  "mesures": [
+    {
+      "prise": "3ba2364c4cfe",
+      "voix": "Kore",
+      "mots": 25,
+      "secondes": 9.1,
+      "date": "2026-10-03T14:35:32+00:00"
+    },
+    {
+      "prise": "6eb28ca7e4a0",
+      "voix": "Leda",
+      "mots": 25,
+      "secondes": 9.7,
+      "date": "2026-10-03T14:35:32+00:00"
+    },
+    {
+      "prise": "ce229c531113",
+      "voix": "Kore",
+      "mots": 25,
+      "secondes": 8.7,
+      "date": "2026-10-03T14:35:32+00:00"
+    },
+    {
+      "prise": "9f72bd3fa73f",
+      "voix": "Puck",
+      "mots": 25,
+      "secondes": 9.4,
+      "date": "2026-10-03T14:35:32+00:00"
+    },
+    {
+      "prise": "fa853cdf14a1",
+      "voix": "Kore",
+      "mots": 25,
+      "secondes": 10.5,
+      "date": "2026-10-03T14:35:32+00:00"
+    }
+  ]
+}

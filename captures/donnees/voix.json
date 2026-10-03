@@ -1,0 +1,29 @@
+{
+  "version_format": 2,
+  "favoris": [
+    "Puck",
+    "demo-camille"
+  ],
+  "noms": {},
+  "descriptions_fr": {
+    "voice_demo_lea": "Jeune femme d'environ 25 ans, voix chaleureuse et légèrement voilée, accent parisien. Spontanée et complice, comme face caméra avec une amie."
+  },
+  "voix_creees": [
+    {
+      "identifiant": "voice_demo_lea",
+      "nom": "Léa, créatrice UGC (démo)",
+      "description": "A young woman in her mid-20s with a warm, slightly husky voice and a Parisian French accent. Spontaneous and playful, like a creator talking to a friend on camera.",
+      "langue": "fr-FR",
+      "region": "",
+      "accent": "",
+      "genre": "female",
+      "hauteur": "",
+      "persona": "",
+      "contexte": "",
+      "type": "prompted",
+      "modele": "gemini-3.8-flash-tts",
+      "expire_le": "2027-10-03T14:38:28+00:00"
+    }
+  ],
+  "voix_creees_date": "2026-10-03T14:38:28+00:00"
+}
