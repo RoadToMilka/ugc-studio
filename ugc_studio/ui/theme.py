@@ -266,6 +266,9 @@ class Dimensions:
     STUDIO_DEUX_COLONNES_MIN = 880  # aperçu et apparence côte à côte (fenêtre moyenne)
     STUDIO_TROIS_COLONNES_MIN = 1270  # aperçu, apparence et sous-titres côte à côte (grande fenêtre)
     STUDIO_COLONNE_LARGEUR_MIN = 400  # apparence et sous-titres, en trois colonnes
+    # Grande fenêtre (V3.3) : la place à côté de l'aperçu, en parts : Apparence 2, Sous-titres 3 (2/5 et
+    # 3/5 ; à parts égales jusqu'à la 3.2.3). La liste a besoin de place pour le texte et les remarques.
+    STUDIO_PARTS_APPARENCE_SOUS_TITRES = (2, 3)
     # Hauteur des trois colonnes : au moins 640 px de page visible (sinon, fenêtre trop basse :
     # disposition moyenne). V3.2 : elles prennent la hauteur qu'il faut pour une vidéo de 640 px de
     # haut (APERCU_HAUTEUR_GRANDE), quitte à laisser la frise sous elles (voir disposition.py) ; jusqu'à
