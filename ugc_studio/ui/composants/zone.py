@@ -36,12 +36,16 @@ def remplit(element: QLayoutItem, etirement: int = 0) -> bool:
 
 
 def hauteur_du_contenu(disposition: QLayout, largeur: int) -> int:
-    """Hauteur dont le contenu d'une disposition a besoin à cette largeur, marges comprises (les
-    textes qui passent à la ligne comptent)."""
+    """Hauteur où chaque élément d'une disposition a sa hauteur naturelle, à cette largeur (marges
+    comprises ; les textes qui passent à la ligne comptent) : la hauteur que Qt lui donne pour cette
+    largeur, ou sa hauteur souhaitée.
+
+    Pas sa hauteur minimale : Qt calcule celle d'un champ qui dépend de sa largeur (un chemin qui
+    passe à la ligne, sous son nom) sur sa hauteur souhaitée, qui peut dépasser sa hauteur réelle à
+    cette largeur. La zone donnerait alors à son contenu un peu trop de place, qu'un titre prendrait :
+    le test de la fenêtre « Nouveau projet » agrandie l'a montré (34 px de plus pour son titre)."""
     hauteur = disposition.heightForWidth(largeur) if disposition.hasHeightForWidth() else -1
-    if hauteur < 0:
-        hauteur = disposition.sizeHint().height()
-    return max(hauteur, disposition.minimumSize().height())
+    return hauteur if hauteur >= 0 else disposition.sizeHint().height()
 
 
 class DispositionDeZone(QVBoxLayout):
@@ -125,10 +129,11 @@ def description_de_zone(zone: QWidget) -> str:
 
 def ecarts_de_place(zone: QWidget) -> list[str]:
     """Étire la disposition de la zone de ETIREMENT_VERIFIE px de plus que son contenu, et relève ce
-    qui bouge : un élément qui descend (du vide au-dessus de lui) ou qui devient plus haut (son texte
-    se décale vers le milieu). Seuls grandissent les éléments faits pour remplir (voir remplit) ; ceux
-    qui les suivent descendent d'autant, pas plus. Renvoie les écarts (aucun : la règle est
-    respectée) ; la zone est remise en place ensuite."""
+    qui bouge par rapport à la place que Qt donne à chaque élément à la hauteur du contenu : un élément
+    qui descend (du vide au-dessus de lui) ou qui devient plus haut (son texte se décale vers le
+    milieu). Seuls grandissent les éléments faits pour remplir (voir remplit) ; ceux qui les suivent
+    descendent d'autant, pas plus. Renvoie les écarts (aucun : la règle est respectée) ; la zone est
+    remise en place ensuite."""
     disposition = zone.layout()
     if not isinstance(disposition, QBoxLayout):
         return []
@@ -141,12 +146,17 @@ def ecarts_de_place(zone: QWidget) -> list[str]:
         if disposition.itemAt(rang).spacerItem() is None and not disposition.itemAt(rang).isEmpty()
     ]
 
-    def releve(hauteur: int) -> list[QRect]:
-        disposition.setGeometry(QRect(cadre.x(), cadre.y(), largeur, hauteur))
+    def releve(hauteur: int, comme_qt: bool = False) -> list[QRect]:
+        place = QRect(cadre.x(), cadre.y(), largeur, hauteur)
+        if comme_qt:
+            # La disposition de Qt elle-même (sans DispositionDeZone) : la place naturelle de chacun.
+            QBoxLayout.setGeometry(disposition, place)
+        else:
+            disposition.setGeometry(place)
         return [QRect(element.geometry()) for _rang, element in elements]
 
     try:
-        avant = releve(naturelle)
+        avant = releve(naturelle, comme_qt=True)
         apres = releve(naturelle + ETIREMENT_VERIFIE)
     finally:
         disposition.setGeometry(cadre)  # la zone reprend sa place
