@@ -1,23 +1,27 @@
 """Apparence des sous-titres (V2, lot 3 ; cahier des charges §7.9 ; « Réglages » jusqu'à la 3.0.4) :
-un préréglage, puis cinq onglets. Le découpage, qui fait aussi partie d'un préréglage, est en haut du
-bloc Sous-titres depuis la V3.1 (lot 5) : ce panneau le construit (zone_decoupage) et le lit avec le
-reste, la page le place.
+un préréglage, puis quatre onglets (cinq jusqu'à la 3.2.4). V3.3, lot 3 : le Découpage, qui fait partie
+du préréglage, ouvre l'onglet Texte (en haut du bloc Sous-titres de la V3.1 à la 3.2.4), et le groupe
+Position quitte son onglet pour l'onglet Texte, entre « Taille et casse » et « Remplissage ». Ce
+panneau construit les deux groupes et les lit ; « Masquer les hésitations », hors du préréglage, est
+construit ici et placé par la page dans le bloc Sous-titres (zone_masquer).
 
 - Préréglage (lot 7) : la liste des préréglages (choisir l'un l'applique), « (modifié) » quand le style
   du projet s'en écarte, puis trois boutons en icône (V3.2) : la bibliothèque des préréglages,
   « Enregistrer » (nouveau préréglage) et le menu ⋯ (mettre à jour, revenir). Jusqu'à la 3.1.3, la
   bibliothèque était dans le menu ⋯ (« Gérer les préréglages… ») et « Enregistrer… » avait son texte.
 
-- Texte (onglet_texte.py) : police, graisse, taille, casse, ponctuation, remplissage, contour,
-  ombre, lueur, fond, espaces (lot 4).
+- Texte (onglet_texte.py) : Découpage (ci-dessous), police, graisse, taille, casse, ponctuation,
+  Position (ci-dessous), remplissage, contour, ombre, lueur, fond, espaces (lot 4).
 - Mots (onglet_mots.py) : états des mots (à venir, actif, déjà dits, accentués), raccourcis,
   avance de l'allumage (lot 5).
 - Animations (onglet_animations.py) : le mot qui devient actif, son retour à « déjà dit »,
   l'apparition et la disparition du sous-titre (lot 6).
-- Position : haut, centre ou bas, réglage fin, alignement ; avancé : largeur maximale des lignes.
-- Découpage (zone_decoupage, dans le bloc Sous-titres) : caractères, mots et lignes au plus, durée
-  minimale, coupure sur la ponctuation ; hésitations masquées (réglage partagé avec la transcription,
-  hors du préréglage : le ↺ du groupe ne le touche pas).
+- Position (groupe de l'onglet Texte) : haut, centre ou bas, réglage fin, alignement ; avancé :
+  largeur maximale des lignes.
+- Découpage (groupe en tête de l'onglet Texte) : caractères, mots et lignes au plus, durée minimale,
+  coupure sur la ponctuation. « Masquer les hésitations » (zone_masquer, dans le bloc Sous-titres) :
+  réglage partagé avec la transcription, hors du préréglage (il était dans le groupe Découpage, que
+  son ↺ ne touchait pas, jusqu'à la 3.2.4).
 
 V3.1 : la référence est le préréglage du projet tel qu'il est enregistré (sans lui, le style de
 départ) ; dans chaque onglet (sauf Écran, qui dépend de la vidéo) et dans le Découpage, un réglage
@@ -74,7 +78,7 @@ from .onglet_mots import OngletMots
 from .onglet_texte import RETABLIR, OngletTexte
 from .reglages_communs import grille, marque_de, marquer, meme_valeur, nombre_lisible
 
-ONGLET_TEXTE, ONGLET_MOTS, ONGLET_ANIMATIONS, ONGLET_POSITION, ONGLET_ECRAN = range(5)
+ONGLET_TEXTE, ONGLET_MOTS, ONGLET_ANIMATIONS, ONGLET_ECRAN = range(4)  # « Position » : un onglet jusqu'à la 3.2.4
 PAS_REGLAGE_FIN = 10  # la glissière du réglage fin compte en dixièmes de % de la hauteur
 SANS_PREREGLAGE = ""  # choix « Aucun préréglage » de la liste
 MODIFIE = " (modifié)"
@@ -103,7 +107,7 @@ class PanneauReglages(QWidget):
         disposition.addSpacing(Espacements.S)
         disposition.addWidget(self.statut_prereglage)
         disposition.addSpacing(Espacements.S)
-        self.onglets = Onglets(hauteur_selon_l_onglet=True, en_flux=True)  # cinq onglets : sur deux lignes si besoin
+        self.onglets = Onglets(hauteur_selon_l_onglet=True, en_flux=True)  # sur deux lignes si besoin
         self.texte = OngletTexte()
         self.texte.change.connect(self.change.emit)
         self.onglets.addTab(self.texte, "Texte")
@@ -113,11 +117,13 @@ class PanneauReglages(QWidget):
         self.animations = OngletAnimations()
         self.animations.change.connect(self.change.emit)
         self.onglets.addTab(self.animations, "Animations")
-        self.onglets.addTab(self._onglet_position(), "Position")
         self.onglets.addTab(self._onglet_ecran(), "Écran")
         disposition.addWidget(self.onglets)
-        # Le découpage (V3.1, lot 5) : construit ici, placé par la page en haut du bloc Sous-titres.
-        self.zone_decoupage = self._zone_decoupage()
+        # V3.3 : le Découpage en tête de l'onglet Texte (il concerne tout le texte), la Position entre
+        # « Taille et casse » et « Remplissage » ; tous deux font partie du préréglage.
+        self.texte.inserer_groupe(self._groupe_decoupage())
+        self.texte.inserer_groupe(self._groupe_position(), avant="Remplissage")
+        self.zone_masquer = self._zone_masquer()  # hors du préréglage : la page le met dans le bloc Sous-titres
         self._resolution_imposee: tuple[int, int] | None | bool = False  # False : liste des formats pas encore remplie
         self._reference: ReglagesSousTitres | None = None  # le préréglage du projet (V3.1), donné par la page
 
@@ -127,7 +133,7 @@ class PanneauReglages(QWidget):
         ligne = QHBoxLayout()
         ligne.setSpacing(Espacements.S)
         self.prereglage = liste_deroulante(
-            "Un style complet (onglets Texte, Mots, Animations et Position, et le Découpage) : en choisir un l'applique"
+            "Un style complet (onglets Texte, Mots et Animations, le Découpage et la Position compris) : en choisir un l'applique"
         )
         self.prereglage.activated.connect(lambda _index: self._prereglage_active())
         ligne.addWidget(self.prereglage, 1)
@@ -185,9 +191,9 @@ class PanneauReglages(QWidget):
         contenu.setContentsMargins(0, Espacements.L, 0, 0)
         return page, contenu
 
-    def _onglet_position(self) -> QWidget:
-        page, contenu = self._onglet()
-        # Un seul groupe (V3.1), avec le ↺ qui remet la position du préréglage, réglage fin compris.
+    def _groupe_position(self) -> SectionRepliable:
+        """Le groupe « Position » (un onglet à lui seul jusqu'à la 3.2.4), avec le ↺ qui remet la
+        position du préréglage, réglage fin compris."""
         self.section_position = SectionRepliable("Position", True)
         self.section_position.ajouter_retablir(self._retablir_position, RETABLIR)
         groupe = self.section_position.contenu
@@ -229,25 +235,21 @@ class PanneauReglages(QWidget):
         )
         self.avances_position.contenu.addLayout(largeur)
         groupe.addWidget(self.avances_position)
-        contenu.addWidget(self.section_position)
         self._marques_position = [
             (marque_de(reglages.champs["Position"]), "verticale"),
             (marque_de(reglages.champs["Réglage fin"]), "decalage_pct"),
             (marque_de(reglages.champs["Alignement"]), "alignement"),
             (marque_de(largeur.champs["Largeur des lignes"]), "largeur_lignes_pct"),
         ]
-        contenu.addStretch(1)
         self.verticale.change.connect(lambda _valeur: self.position_change.emit())
         self.reglage_fin.valueChanged.connect(self._reglage_fin_bouge)
         self.alignement.change.connect(lambda _valeur: self.change.emit())
         self.largeur_lignes.valueChanged.connect(lambda _valeur: self.change.emit())
-        return page
+        return self.section_position
 
-    def _zone_decoupage(self) -> QWidget:
-        """Le groupe « Découpage » (V3.1 : en haut du bloc Sous-titres, replié au départ), avec son ↺.
-        « Masquer les hésitations » y est aussi, en dernier : réglage partagé avec la transcription, il
-        ne fait pas partie d'un préréglage (son icône « i » le dit), et le ↺ ne le touche pas."""
-        zone, contenu = conteneur_vertical(Espacements.M)
+    def _groupe_decoupage(self) -> SectionRepliable:
+        """Le groupe « Découpage » (en tête de l'onglet Texte depuis la V3.3 ; en haut du bloc
+        Sous-titres de la V3.1 à la 3.2.4), replié au départ, avec son ↺."""
         self.section_decoupage = SectionRepliable("Découpage")
         self.section_decoupage.ajouter_retablir(self._retablir_decoupage, RETABLIR)
         groupe = self.section_decoupage.contenu
@@ -268,7 +270,6 @@ class PanneauReglages(QWidget):
             "Couper de préférence après la ponctuation", "Une fin de phrase termine alors toujours le sous-titre."
         )
         groupe.addWidget(zone_ponctuation)
-        contenu.addWidget(self.section_decoupage)
         self._marques_decoupage = [
             (marque_de(reglages.champs["Caractères au plus"]), "caracteres_max"),
             (marque_de(reglages.champs["Mots au plus"]), "mots_max"),
@@ -276,15 +277,20 @@ class PanneauReglages(QWidget):
             (marque_de(reglages.champs["Durée minimale"]), "duree_min_s"),
             (self.couper_ponctuation, "couper_sur_ponctuation"),
         ]
-        self.zone_masquer, self.masquer = case_a_cocher(
+        for champ in (self.caracteres, self.mots_max, self.lignes, self.duree_min):
+            champ.valueChanged.connect(lambda _valeur: self.change.emit())
+        self.couper_ponctuation.toggled.connect(lambda _coche: self.change.emit())
+        return self.section_decoupage
+
+    def _zone_masquer(self) -> QWidget:
+        """« Masquer les hésitations » : réglage partagé avec la transcription (chaque source de mots a le
+        sien), hors du préréglage (son icône « i » le dit). V3.3 : seul dans le bloc Sous-titres, sous la
+        ligne de résumé, où son effet se voit dans la liste (dans le groupe Découpage jusqu'à la 3.2.4)."""
+        zone, self.masquer = case_a_cocher(
             "Masquer les hésitations",
             "« euh », « hum »… Pour les mots du module Transcription, le même réglage que là-bas ; chaque "
             "source a le sien. Il ne fait pas partie d'un préréglage.",
         )
-        groupe.addWidget(self.zone_masquer)
-        for champ in (self.caracteres, self.mots_max, self.lignes, self.duree_min):
-            champ.valueChanged.connect(lambda _valeur: self.change.emit())
-        self.couper_ponctuation.toggled.connect(lambda _coche: self.change.emit())
         self.masquer.toggled.connect(lambda coche: self.masquer_change.emit(coche))
         return zone
 

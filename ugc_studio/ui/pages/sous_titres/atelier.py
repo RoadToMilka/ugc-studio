@@ -12,11 +12,12 @@ fenêtre ; aperçu et apparence côte à côte, puis la liste, en fenêtre moyen
    importés dans la fenêtre « Corriger les mots » (la même correction).
 2. Aperçu (apercu.py) : la vidéo, ou un fond gris ou un damier, et les sous-titres dessinés par le
    moteur de dessin, le même que l'export de la V3 ; la zone a la taille de la vidéo affichée.
-3. Apparence (reglages.py ; « Réglages » jusqu'à la 3.0.4) : préréglage, onglets Texte, Mots,
-   Animations, Position et Écran. Les sous-titres sont recalculés à chaque changement ; la position
-   (haut, centre, bas, réglage fin) ne change que l'aperçu, jamais le découpage.
-4. Sous-titres : le Découpage (groupe repliable, en haut depuis la V3.1), puis la liste ; ceux où un
-   mot a dû être rapetissé sont signalés en orange. Réorganiser à la main (V1.1) : sur le sous-titre
+3. Apparence (reglages.py ; « Réglages » jusqu'à la 3.0.4) : préréglage, onglets Texte (le
+   Découpage en tête, la Position dedans depuis la V3.3), Mots, Animations et Écran. Les sous-titres
+   sont recalculés à chaque changement ; la position (haut, centre, bas, réglage fin) ne change que
+   l'aperçu, jamais le découpage.
+4. Sous-titres : « Masquer les hésitations » (V3.3 ; le Découpage était en haut de ce bloc de la V3.1
+   à la 3.2.4), puis la liste ; ceux où un mot a dû être rapetissé sont signalés en orange. Réorganiser à la main (V1.1) : sur le sous-titre
    choisi, monter son premier mot, descendre son dernier mot, le couper, le fusionner avec le suivant,
    ou revenir au découpage automatique. Les réglages du découpage s'appliquent toujours (une action
    qui ne les respecte pas est refusée, avec la raison) ; un réglage qui défait un ajustement demande
@@ -280,13 +281,14 @@ class AtelierSousTitres(Page):
         return source
 
     def _bloc_sous_titres(self):
-        """Sous-titres : le Découpage (V3.1, lot 5 : il quitte les onglets de l'apparence, replié au
-        départ), la réorganisation à la main et la liste. En grande fenêtre, le bloc défile seul et la
-        liste prend la place qui reste."""
+        """Sous-titres : la ligne de résumé, « Masquer les hésitations » (V3.3, seul ici : il ne fait pas
+        partie d'un préréglage ; le Découpage, en haut de ce bloc de la V3.1 à la 3.2.4, est retourné en
+        tête de l'onglet Texte de l'apparence), la réorganisation à la main et la liste. En grande
+        fenêtre, le bloc défile seul et la liste prend la place qui reste."""
         contenu, d = conteneur_vertical(Espacements.M)
         self.resume = libelle("", "legende")
         d.addWidget(self.resume)
-        d.addWidget(self.panneau.zone_decoupage)
+        d.addWidget(self.panneau.zone_masquer)
         self._zone_reorganiser(d)
         self.tableau = self._tableau()
         d.addWidget(self.tableau, 1)

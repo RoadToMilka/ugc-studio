@@ -154,7 +154,7 @@ class ReglagesSousTitres:
 
     - Découpage (§7.3) : caractères, mots et lignes au plus, coupure sur la ponctuation, durée minimale.
     - Style : texte (§7.4, style_sous_titres.StyleTexte), mots et animations (§7.5, onglets « Mots » et
-      « Animations ») et position (onglet « Position »).
+      « Animations ») et position (groupe « Position » de l'onglet « Texte » ; son propre onglet jusqu'à la 3.2.4).
     - Écran (§7.1, §7.3) : format, zone de sécurité de la plateforme, marge maximum.
     - Vidéo choisie seulement pour l'aperçu (projet sans vidéo).
     - Préréglage d'origine (lot 7) : celui dont le style vient, pour afficher « (modifié) » quand le

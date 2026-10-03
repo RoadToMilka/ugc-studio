@@ -1,8 +1,8 @@
 """Préréglages de style des sous-titres (V2, lot 7 ; cahier des charges §7.6 et §7.13).
 
-Un préréglage = un nom et un style complet : les réglages des onglets Texte, Mots, Animations et
-Position, et le Découpage (en haut du bloc Sous-titres depuis la V3.1), sous la même forme écrite que
-la partie « style » d'un projet. Ni le format ni la plateforme : ils dépendent de la vidéo et de
+Un préréglage = un nom et un style complet : les réglages des onglets Texte (le Découpage et la
+Position compris, depuis la V3.3), Mots et Animations, sous la même forme écrite que la partie
+« style » d'un projet. Ni le format ni la plateforme : ils dépendent de la vidéo et de
 l'endroit où passe la pub.
 
 - **Fournis** : « Par défaut » (V3.1 : neutre, le style de départ) et les 6 styles du document V2
@@ -140,8 +140,8 @@ def contenu_d_export(prereglages: list[Prereglage]) -> dict:
     """Forme écrite d'un fichier exporté : lisible, un style par préréglage."""
     return {
         "description": (
-            "Préréglages de sous-titres exportés par UGC Studio : style complet (onglets Texte, Mots, "
-            "Animations et Position, et le Découpage). Tailles en % de la hauteur de la vidéo ; couleurs "
+            "Préréglages de sous-titres exportés par UGC Studio : style complet (onglets Texte, Mots et "
+            "Animations, le Découpage et la Position compris). Tailles en % de la hauteur de la vidéo ; couleurs "
             "« #RRGGBB » avec leur opacité (0 à 100 %). À importer depuis la fenêtre « Préréglages de sous-titres »."
         ),
         "type": TYPE_DE_FICHIER,

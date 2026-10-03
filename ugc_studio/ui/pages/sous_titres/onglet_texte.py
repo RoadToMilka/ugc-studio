@@ -147,6 +147,15 @@ class OngletTexte(QWidget):
         disposition.addStretch(1)
         self._actualiser_etats()
 
+    def inserer_groupe(self, groupe: QWidget, avant: str | None = None) -> None:
+        """Place un groupe construit ailleurs (V3.3 : le Découpage et la Position, que le panneau de
+        l'apparence construit et règle) juste avant le groupe `avant` (ex. « Remplissage »), ou en tête
+        de l'onglet (`avant=None`). Ces groupes ne sont pas dans `sections` : leurs réglages, leurs noms
+        en mauve et leur ↺ restent ceux du panneau."""
+        disposition = self.layout()
+        rang = 0 if avant is None else disposition.indexOf(self.sections[avant])
+        disposition.insertWidget(rang, groupe)
+
     # --- Construction --------------------------------------------------------------------------
 
     def _signaler(self, *_arguments) -> None:
