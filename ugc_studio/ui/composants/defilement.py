@@ -3,7 +3,8 @@ et en bas (V1.1, §9.4 sexies).
 
 Le fondu : quand du contenu est caché en haut ou en bas, un dégradé de 24 px de la couleur du fond
 adoucit ce bord, pour qu'on devine qu'il y a une suite. Il n'apparaît que de ce côté-là (pas de
-fondu en haut quand on est tout en haut), et il laisse passer les clics.
+fondu en haut quand on est tout en haut), et il laisse passer les clics. Sa couleur est celle du
+fond derrière la zone (couleur_du_fond) : le contenu se fond dans le bloc ou dans le fond de l'app.
 """
 
 from __future__ import annotations
@@ -12,7 +13,6 @@ from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt
 from PySide6.QtGui import QLinearGradient, QPainter
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
-    QDialog,
     QFrame,
     QHBoxLayout,
     QScrollArea,
@@ -25,12 +25,19 @@ from ..theme import Couleurs, Dimensions, Espacements, qcolor
 
 
 def couleur_du_fond(element: QWidget) -> str:
-    """Couleur du fond derrière `element` : celle des fenêtres de dialogue, sinon celle de l'app
-    (voir QDialog et QMainWindow dans la feuille de style)."""
+    """Couleur du fond derrière `element` (la couleur de ses fondus) : celle des blocs quand il est
+    dans un bloc (une liste dans le bloc d'une fenêtre ou d'une page), sinon celle de l'app, fenêtres
+    comprises (voir QFrame[role="bloc"], QDialog et QMainWindow dans la feuille de style).
+
+    V3.2 (3.2.1) : les fenêtres ont le fond de l'app, et leur contenu est dans un bloc. Jusqu'à la
+    3.2.0, toute zone d'une fenêtre prenait le gris des menus (le fond des fenêtres jusqu'à la 3.1.2) :
+    ses fondus ne se fondaient plus dans rien."""
     parent = element
     while parent is not None:
-        if isinstance(parent, QDialog):
-            return Couleurs.SURFACE_ELEVEE
+        if parent.property("role") == "bloc":
+            return Couleurs.SURFACE
+        if parent.isWindow():
+            break
         parent = parent.parentWidget()
     return Couleurs.FOND
 

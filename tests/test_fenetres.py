@@ -223,3 +223,52 @@ def test_autre_couleur_echap_ferme_la_fenetre(app_configuree, qtbot):
     champ = dialogue.selecteur.findChildren(QLineEdit)[0]
     qtbot.keyClick(champ, Qt.Key.Key_Escape)
     assert not dialogue.isVisible() and dialogue.result() == 0
+
+
+# --- Fondus des zones qui défilent (3.2.1) ---------------------------------------------------------
+
+
+def test_fondus_de_la_couleur_du_fond(app_configuree, qtbot):
+    """Les fondus en haut et en bas d'une zone qui défile ont la couleur du fond derrière elle : celle
+    des blocs dans le bloc d'une fenêtre (ex. la liste des voix, les cartes des préréglages), celle de
+    l'app sur le fond d'une fenêtre (ex. la fenêtre « Conseils »). Jusqu'à la 3.2.0, toute zone d'une
+    fenêtre prenait encore le gris des menus, l'ancien fond des fenêtres."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QDialog
+
+    from ugc_studio.ui.composants.defilement import ZoneDefilante, zone_defilante
+    from ugc_studio.ui.composants.elements import libelle
+    from ugc_studio.ui.composants.fenetre import fenetre_en_bloc
+
+    sans_bloc = QDialog()
+    qtbot.addWidget(sans_bloc)
+    _fenetre, _cadre, _disposition = fenetre_en_bloc(sans_bloc)
+    sur_la_fenetre, _contenu = zone_defilante()
+    _fenetre.addWidget(sur_la_fenetre)
+    assert sur_la_fenetre.fondus.couleur() == Couleurs.FOND  # le fond de l'app, celui des fenêtres
+    conseils = DialogueConseils(PAGES["voix"])
+    qtbot.addWidget(conseils)
+    assert conseils.findChild(ZoneDefilante).fondus.couleur() == Couleurs.FOND
+
+    dialogue = QDialog()
+    _fenetre, _cadre, disposition = fenetre_en_bloc(dialogue)
+    dans_le_bloc, contenu = zone_defilante()
+    disposition.addWidget(dans_le_bloc)
+    assert dans_le_bloc.fondus.couleur() == Couleurs.SURFACE  # la couleur des blocs
+    for numero in range(60):
+        contenu.addWidget(libelle(f"Ligne {numero}"))
+    dialogue.resize(Dimensions.DIALOGUE_LARGEUR, 400)
+    _montrer(qtbot, dialogue)
+    barre = dans_le_bloc.verticalScrollBar()
+    qtbot.waitUntil(lambda: barre.maximum() > 0, timeout=2000)
+    barre.setValue(barre.maximum() // 2)
+    fondus = dans_le_bloc.fondus
+    qtbot.waitUntil(lambda: fondus.haut.isVisible() and fondus.bas.isVisible(), timeout=2000)
+    # Le bas du fondu, presque opaque, là où il n'y a pas de texte : la couleur du bloc, sans bande.
+    image = dialogue.grab().toImage()
+    echelle = image.width() / dialogue.width()
+    fenetre_visible = dans_le_bloc.viewport()
+    bas = fenetre_visible.mapTo(dialogue, QPoint(fenetre_visible.width() - 4, fenetre_visible.height() - 1))
+    pixel, attendu = image.pixelColor(round(bas.x() * echelle), round(bas.y() * echelle)), QColor(Couleurs.SURFACE)
+    ecart = max(abs(pixel.red() - attendu.red()), abs(pixel.green() - attendu.green()), abs(pixel.blue() - attendu.blue()))
+    assert ecart <= 2, pixel.name()

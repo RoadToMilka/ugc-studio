@@ -29,6 +29,7 @@ from .ui.composants.bouton import Bouton
 from .ui.composants.bulle import bulle as la_bulle
 from .ui.composants.bulle import bulle_visible, cacher_bulle
 from .ui.composants.conseils import DialogueConseils
+from .ui.composants.defilement import ZoneDefilante
 from .ui.composants.elements import BoutonInfo, Info
 from .ui.composants.menu import position_du_menu
 from .ui.composants.tableau import Tableau
@@ -181,7 +182,14 @@ def _fenetre_comme_une_page(dialogue) -> dict:
         resultat["boutons_sous_le_bloc"] = bool(boutons) and all(
             b.geometry().top() >= cadre.geometry().bottom() + marge for b in boutons
         )
-    resultat["ok"] = all(valeur for cle, valeur in resultat.items() if cle in ("fond_de_l_app", "bloc_a_16_px", "boutons_sous_le_bloc"))
+    # 3.2.1 : les fondus des zones qui défilent ont la couleur du fond derrière elles (le bloc, ou le
+    # fond de l'app pour une zone posée sur la fenêtre, comme dans « Conseils »).
+    zones = dialogue.findChildren(ZoneDefilante)
+    attendues = [Couleurs.SURFACE if cadre is not None and cadre.isAncestorOf(zone) else Couleurs.FOND for zone in zones]
+    resultat["fondus"] = [zone.fondus.couleur() for zone in zones]
+    resultat["fondus_couleur_du_fond"] = resultat["fondus"] == attendues
+    verifiees = ("fond_de_l_app", "bloc_a_16_px", "boutons_sous_le_bloc", "fondus_couleur_du_fond")
+    resultat["ok"] = all(valeur for cle, valeur in resultat.items() if cle in verifiees)
     return resultat
 
 
