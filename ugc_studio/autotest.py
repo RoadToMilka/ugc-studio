@@ -631,6 +631,9 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
       fenêtre moyenne, les groupes de l'onglet Texte fermés (le cas signalé après la 3.2.2), Apparence
       est plus courte que l'Aperçu et s'étire à sa hauteur : son titre reste en haut, à la hauteur de
       celui de l'Aperçu (jusqu'à la 3.2.2, un grand vide au-dessus et sous lui).
+    - V3.3, lot 2 : en fenêtre moyenne, tous les groupes de l'onglet Texte ouverts, Apparence garde la
+      hauteur de l'Aperçu et défile seule ; la liste des sous-titres est au-dessus de la frise. En
+      grande fenêtre, Sous-titres a 3/5 et Apparence 2/5 de la place à côté de l'Aperçu.
     Sur l'écran de la fabrication (1024 × 768), la fenêtre ne peut pas grandir autant : ces deux
     mesures-là sont notées « non mesurée » (les captures sans écran, elles, les font)."""
     from .ui.pages.sous_titres.disposition import GRANDE, MOYENNE
@@ -676,8 +679,27 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
         mesures["moyenne_groupes_fermes"] = {"apparence": atelier.cadre_apparence.height(), "apercu": apercu.height()}
         place["moyenne_groupes_fermes"] = ecarts_dans(atelier)
         capturer(fenetre, "studio-moyenne-groupes-fermes")
-        for section in ouvertes:
+        # V3.3, lot 2 : tous les groupes ouverts, Apparence garde la hauteur de l'Aperçu et défile seule.
+        sections = list(atelier.panneau.texte.sections.values())
+        for section in sections:
             section.ouvrir()
+        _laisser_afficher()
+        barre = atelier.colonne_apparence.verticalScrollBar()
+        etat["moyenne_apparence_defile_a_la_hauteur_de_l_apercu"] = (
+            atelier.colonne_apparence.defile and atelier.cadre_apparence.height() == apercu.height() and barre.maximum() > 0
+        )
+        etat["moyenne_sous_titres_au_dessus_de_la_frise"] = (
+            position(atelier.cadre_sous_titres).y() < position(atelier.cadre_frise).y()
+        )
+        mesures["moyenne_groupes_ouverts"] = {
+            "apparence": atelier.cadre_apparence.height(),
+            "apercu": apercu.height(),
+            "defilement_apparence": barre.maximum(),
+        }
+        place["moyenne_groupes_ouverts"] = ecarts_dans(atelier)
+        capturer(fenetre, "studio-moyenne-apparence-defile")
+        for section in sections:
+            section.ouvrir(section in ouvertes)  # comme au départ
         _laisser_afficher()
 
     if agrandir(GRANDE_FENETRE):
@@ -716,6 +738,13 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
         cases = (apercu.repere_zone, apercu.repere_marge, apercu.repere_grille)
         etat["grande_reperes_sur_une_ligne"] = len({position(case).y() for case in cases}) == 1
         place["grande"] = ecarts_dans(atelier)
+        # V3.3, lot 2 : Sous-titres 3/5 et Apparence 2/5 de la place à côté de l'Aperçu.
+        part_apparence, part_sous_titres = Dimensions.STUDIO_PARTS_APPARENCE_SOUS_TITRES
+        largeurs = (atelier.cadre_apparence.width(), atelier.cadre_sous_titres.width())
+        etat["grande_sous_titres_plus_large"] = (
+            abs(largeurs[0] * part_sous_titres - largeurs[1] * part_apparence) <= part_apparence + part_sous_titres
+            and largeurs[1] > largeurs[0]
+        )
         capturer(fenetre, "sous-titres-grande-fenetre")
         debordements += _debordements(fenetre, "page Sous-titres en grande fenêtre")
         # L'apparence défile seule : l'aperçu reste où il est.

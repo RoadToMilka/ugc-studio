@@ -7,10 +7,15 @@ dispositions, selon la place :
   gauche et Exporter à droite ; dessous, trois colonnes, Aperçu | Apparence | Sous-titres, à la même
   hauteur, qui défilent chacune seule : l'aperçu reste visible pendant qu'on règle l'apparence en bas
   d'un long onglet, ou qu'on parcourt la liste. La frise en bas, sur toute la largeur. V3.2 : la
-  hauteur des colonnes est choisie pour une vidéo de 640 px de haut (voir hauteur_des_colonnes).
-- Fenêtre moyenne : la bande du haut, puis l'aperçu et l'apparence côte à côte, puis la frise et la
-  liste des sous-titres ; c'est la page qui défile.
-- Petite fenêtre : tout l'un sous l'autre (Source et Exporter aussi, sous 880 px).
+  hauteur des colonnes est choisie pour une vidéo de 640 px de haut (voir hauteur_des_colonnes). V3.3 :
+  Sous-titres plus large qu'Apparence (2/5 et 3/5 de la place à côté de l'aperçu, à parts égales
+  jusqu'à la 3.2.3).
+- Fenêtre moyenne : la bande du haut, puis l'aperçu et l'apparence côte à côte, puis la liste des
+  sous-titres et la frise ; c'est la page qui défile. V3.3 : Apparence a la hauteur de l'aperçu,
+  jamais plus, et défile seule (en ouvrant des groupes, l'aperçu ne grandit plus) ; la liste passe
+  au-dessus de la frise (dessous jusqu'à la 3.2.3).
+- Petite fenêtre : tout l'un sous l'autre (Source et Exporter aussi, sous 880 px), la liste au-dessus
+  de la frise ; Apparence garde la hauteur de son contenu (pas de voisin à suivre).
 
 Les blocs restent tous enfants de cette disposition : seules leurs places changent (des dispositions
 imbriquées). Changer un bloc de widget parent le ferait disparaître le temps de le replacer.
@@ -26,9 +31,10 @@ from ...theme import Dimensions, Espacements
 from .apercu import BlocApercu
 
 PETITE, MOYENNE, GRANDE = "petite", "moyenne", "grande"
-# Places dans la disposition principale : la bande du haut, la rangée des colonnes, la frise, la
-# liste des sous-titres quand elle est sous la frise, puis la place en trop.
-BANDE, RANGEE, FRISE, BAS, RESTE = range(5)
+# Places dans la disposition principale : la bande du haut, la rangée des colonnes, la liste des
+# sous-titres quand elle n'est pas dans la rangée (fenêtre moyenne ou petite ; sous la frise jusqu'à la
+# 3.2.3), la frise, puis la place en trop.
+BANDE, RANGEE, BAS, FRISE, RESTE = range(5)
 
 
 class DispositionStudio(QWidget):
@@ -49,7 +55,7 @@ class DispositionStudio(QWidget):
         super().__init__(parent)
         self._source, self._export, self._apercu = source, export, apercu
         self._apparence, self._sous_titres, self._frise = apparence, sous_titres, frise
-        self._colonnes = colonnes  # contenus des blocs qui défilent seuls en grande fenêtre
+        self._colonnes = colonnes  # contenus des blocs qui défilent seuls (voir _placer)
         self._defilement = defilement  # la page, qui défile ; sa hauteur visible compte en grande fenêtre
         espace = Dimensions.ESPACE_BLOCS  # 16 px entre deux blocs, dans les deux sens (V3.1)
 
@@ -66,8 +72,8 @@ class DispositionStudio(QWidget):
         self._bas.setSpacing(espace)
         self._principale.addLayout(self._bande)
         self._principale.addLayout(self._rangee)
-        self._principale.addWidget(frise)
         self._principale.addLayout(self._bas)
+        self._principale.addWidget(frise)
         self._principale.addStretch(1)
 
         self._mode: str | None = None
@@ -222,10 +228,13 @@ class DispositionStudio(QWidget):
             bas.removeWidget(bloc)
         rangee.setDirection(QBoxLayout.Direction.TopToBottom if mode == PETITE else QBoxLayout.Direction.LeftToRight)
         rangee.addWidget(self._apercu, 0)
-        rangee.addWidget(self._apparence, 0 if mode == PETITE else 1)
         if mode == GRANDE:
-            rangee.addWidget(self._sous_titres, 1)
+            # V3.3 : Sous-titres plus large qu'Apparence (voir _repartir, appelée par _dimensionner).
+            part_apparence, part_sous_titres = Dimensions.STUDIO_PARTS_APPARENCE_SOUS_TITRES
+            rangee.addWidget(self._apparence, part_apparence)
+            rangee.addWidget(self._sous_titres, part_sous_titres)
         else:
+            rangee.addWidget(self._apparence, 0 if mode == PETITE else 1)
             bas.addWidget(self._sous_titres)
         # Grande fenêtre : la rangée prend la hauteur qui reste ; sinon, la place en trop va en bas.
         self._principale.setStretch(RANGEE, 1 if mode == GRANDE else 0)
@@ -234,7 +243,12 @@ class DispositionStudio(QWidget):
         horizontale = QSizePolicy.Policy.Preferred if mode == PETITE else QSizePolicy.Policy.Fixed
         self._apercu.setSizePolicy(horizontale, QSizePolicy.Policy.Preferred)
         for colonne in self._colonnes:
-            colonne.definir_defilement(mode == GRANDE)
+            # Grande fenêtre : chaque colonne défile seule. Fenêtre moyenne (V3.3) : celle d'Apparence
+            # aussi, à la hauteur de l'aperçu, à côté de lui (sa hauteur souhaitée, modeste, ne compte
+            # pas : c'est l'aperçu qui donne la hauteur de la rangée) ; la liste, elle, est dessous, et
+            # c'est la page qui défile.
+            apparence = self._apparence.isAncestorOf(colonne)
+            colonne.definir_defilement(mode == GRANDE or (mode == MOYENNE and apparence))
 
     def _dimensionner(self, largeur: int) -> None:
         """Grande fenêtre : la hauteur des colonnes, et la largeur de l'aperçu qui va avec ; sinon,
@@ -243,6 +257,7 @@ class DispositionStudio(QWidget):
             hauteur = self.hauteur_des_colonnes(largeur) or Dimensions.STUDIO_COLONNES_HAUTEUR_MIN
             self._apercu.definir_hauteur_imposee(hauteur)
             self._apercu.definir_largeur_voulue(self._apercu.largeur_pour_hauteur(hauteur))
+            self._repartir(largeur)
             espace = self._principale.spacing()
             frise = self._hauteur(self._frise, largeur)
             total = self._hauteur(self._bande, largeur) + espace + hauteur + (frise + espace if frise else 0)
@@ -252,3 +267,22 @@ class DispositionStudio(QWidget):
             total = 0
         if self.minimumHeight() != total:
             self.setMinimumHeight(total)
+
+    def _repartir(self, largeur: int) -> None:
+        """Grande fenêtre (V3.3) : Apparence 2/5 et Sous-titres 3/5 de la place à côté de l'aperçu ; la
+        liste a besoin de place pour le texte et les remarques, Apparence (un réglage par ligne) beaucoup
+        moins. Près de la limite des trois colonnes, ces 2/5 feraient moins de STUDIO_COLONNE_LARGEUR_MIN :
+        Apparence garde alors ce minimum (ou celui de son contenu, s'il est plus large), et la liste
+        prend le reste. Les parts sont des facteurs d'étirement : Qt donne à chaque colonne sa part de
+        la place, jamais moins que son contenu (une largeur imposée, elle, pourrait le couper)."""
+        reste = largeur - self._apercu.sizeHint().width() - 2 * self._rangee.spacing()
+        plancher = max(Dimensions.STUDIO_COLONNE_LARGEUR_MIN, self._apparence.minimumSizeHint().width())
+        parts = Dimensions.STUDIO_PARTS_APPARENCE_SOUS_TITRES
+        if reste * parts[0] < plancher * sum(parts):
+            parts = (plancher, max(1, reste - plancher))  # en pixels : Apparence a juste son minimum
+        for bloc, part in zip((self._apparence, self._sous_titres), parts):
+            rang = self._rangee.indexOf(bloc)
+            # Seulement si la part change : changer un facteur refait la disposition, qui rappellerait
+            # cette fonction sans fin.
+            if rang >= 0 and self._rangee.stretch(rang) != part:
+                self._rangee.setStretch(rang, part)

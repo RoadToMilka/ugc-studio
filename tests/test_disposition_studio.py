@@ -66,19 +66,20 @@ def test_taille_de_la_zone_d_apercu(app_configuree):
 
 
 def test_fenetre_moyenne(page):
-    """1100 px : Source à gauche d'Exporter ; l'aperçu et l'apparence côte à côte ; la frise, puis la
-    liste des sous-titres ; la zone de l'aperçu à la taille de la vidéo (304 × 540 pour du 9:16)."""
+    """1100 px : Source à gauche d'Exporter ; l'aperçu et l'apparence côte à côte (Apparence défile
+    seule, V3.3) ; la liste des sous-titres, puis la frise (V3.3 : la frise était au-dessus de la liste
+    jusqu'à la 3.2.3) ; la zone de l'aperçu à la taille de la vidéo (304 × 540 pour du 9:16)."""
     from ugc_studio.ui.pages.sous_titres.disposition import MOYENNE
 
     atelier = page.atelier
     studio = atelier.studio
-    assert studio.mode == MOYENNE and not atelier.colonne_apparence.defile
+    assert studio.mode == MOYENNE and atelier.colonne_apparence.defile and not atelier.colonne_sous_titres.defile
     source, export = _position(atelier.cadre_source, studio), _position(atelier.cadre_export, studio)
     assert source.y() == export.y() and source.x() < export.x()
     apercu, apparence = _position(atelier.bloc_apercu, studio), _position(atelier.cadre_apparence, studio)
     assert apercu.y() == apparence.y() and apercu.x() < apparence.x()
     frise, sous_titres = _position(atelier.cadre_frise, studio), _position(atelier.cadre_sous_titres, studio)
-    assert apercu.y() < frise.y() < sous_titres.y()
+    assert apercu.y() < sous_titres.y() < frise.y()
     assert (atelier.bloc_apercu.zone.width(), atelier.bloc_apercu.zone.height()) == (304, 540)
     assert _a_la_taille_de_la_video(atelier)
     # La colonne de l'aperçu a la largeur de la vidéo (plus ses marges), pas 400 px comme avant.
@@ -175,7 +176,8 @@ def test_fenetre_trop_basse_pas_de_trois_colonnes(page, qtbot):
     qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
     page.resize(1800, 650)
     qtbot.waitUntil(lambda: atelier.studio.mode == MOYENNE, timeout=3000)
-    assert not atelier.colonne_apparence.defile and not atelier.colonne_sous_titres.defile
+    # V3.3 : Apparence défile aussi en fenêtre moyenne (à côté de l'aperçu) ; la liste, dessous, non.
+    assert atelier.colonne_apparence.defile and not atelier.colonne_sous_titres.defile
 
 
 def test_decoupage_en_haut_des_sous_titres(page, services):
@@ -382,3 +384,65 @@ def test_un_long_chemin_introuvable_n_elargit_pas_l_apercu(page, qtbot, services
     assert apercu.ligne_introuvable.isVisibleTo(apercu) and "Publicités_TikTok" in apercu.message_video.text()
     _attendre_les_marges(qtbot, apercu)
     assert (apercu.zone.width(), apercu.zone.height()) == (304, 540)
+
+
+# --- V3.3, lot 2 : Apparence qui défile en fenêtre moyenne, Sous-titres plus large en grande fenêtre ---
+
+
+def test_en_fenetre_moyenne_apparence_defile_a_la_hauteur_de_l_apercu(page, qtbot):
+    """À côté de l'aperçu, Apparence prend sa hauteur, jamais plus : ouvrir tous les groupes de
+    l'onglet Texte fait apparaître la barre de défilement d'Apparence, et l'aperçu ne grandit pas
+    (jusqu'à la 3.2.3, la rangée prenait la hauteur d'Apparence, et l'aperçu s'allongeait d'autant)."""
+    from ugc_studio.ui.pages.sous_titres.disposition import MOYENNE
+
+    atelier = page.atelier
+    apercu, apparence = atelier.bloc_apercu, atelier.cadre_apparence
+    assert atelier.studio.mode == MOYENNE
+    sections = atelier.panneau.texte.sections.values()
+    for section in sections:
+        section.ouvrir(False)
+    qtbot.waitUntil(lambda: apparence.height() == apercu.height(), timeout=3000)
+    hauteur = apercu.height()
+    for section in sections:
+        section.ouvrir()
+    barre = atelier.colonne_apparence.verticalScrollBar()
+    qtbot.waitUntil(lambda: barre.maximum() > 0, timeout=3000)
+    assert apercu.height() == hauteur and apparence.height() == hauteur
+
+
+def test_en_petite_fenetre_tout_l_un_sous_l_autre(page, qtbot):
+    """Apparence sous l'aperçu garde la hauteur de son contenu (pas de voisin à suivre : c'est la
+    page qui défile) ; la liste des sous-titres au-dessus de la frise (V3.3)."""
+    from ugc_studio.ui.pages.sous_titres.disposition import PETITE
+
+    atelier = page.atelier
+    studio = atelier.studio
+    page.resize(700, 900)
+    qtbot.waitUntil(lambda: studio.mode == PETITE, timeout=3000)
+    assert not atelier.colonne_apparence.defile and not atelier.colonne_sous_titres.defile
+    apparence, sous_titres, frise = (_position(bloc, studio) for bloc in (atelier.cadre_apparence, atelier.cadre_sous_titres, atelier.cadre_frise))
+    assert apparence.y() < sous_titres.y() < frise.y()
+
+
+def test_en_grande_fenetre_sous_titres_plus_large_qu_apparence(page, qtbot):
+    """V3.3 : Apparence 2/5 et Sous-titres 3/5 de la place à côté de l'aperçu (à parts égales jusqu'à la
+    3.2.3) ; près de la limite des trois colonnes, Apparence garde au moins 400 px."""
+    from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
+    from ugc_studio.ui.theme import Dimensions
+
+    atelier = page.atelier
+    apparence, sous_titres = atelier.cadre_apparence, atelier.cadre_sous_titres
+    part_apparence, part_sous_titres = Dimensions.STUDIO_PARTS_APPARENCE_SOUS_TITRES
+    page.resize(1800, 1300)
+    qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
+
+    def en_parts() -> bool:
+        ecart = abs(apparence.width() * part_sous_titres - sous_titres.width() * part_apparence)
+        return ecart <= part_apparence + part_sous_titres and sous_titres.width() > apparence.width()
+
+    qtbot.waitUntil(en_parts, timeout=3000)
+    assert apparence.width() >= Dimensions.STUDIO_COLONNE_LARGEUR_MIN
+    page.resize(1340, 1300)  # encore trois colonnes, mais les 2/5 feraient moins de 400 px
+    plancher = max(Dimensions.STUDIO_COLONNE_LARGEUR_MIN, apparence.minimumSizeHint().width())
+    qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE and apparence.width() == plancher, timeout=3000)
+    assert sous_titres.width() >= Dimensions.STUDIO_COLONNE_LARGEUR_MIN

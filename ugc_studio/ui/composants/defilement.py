@@ -189,10 +189,10 @@ class ColonneDefilante(QScrollArea):
     """Contenu d'un bloc qui défile seul, ou pas (V3.1, lot 5 : colonnes Apparence et Sous-titres du
     studio des sous-titres).
 
-    - Avec `definir_defilement(True)` (grande fenêtre), la zone prend la hauteur que le bloc lui
-      laisse et son contenu défile dedans, avec une barre fine et les fondus. Quand il reste de la
-      place, le contenu s'étire : un élément ajouté avec un facteur d'étirement la prend (ex. la liste
-      des sous-titres).
+    - Avec `definir_defilement(True)` (grande fenêtre ; Apparence aussi en fenêtre moyenne, V3.3), la
+      zone prend la hauteur que le bloc lui laisse et son contenu défile dedans, avec une barre fine
+      et les fondus. Quand il reste de la place, le contenu s'étire : un élément ajouté avec un
+      facteur d'étirement la prend (ex. la liste des sous-titres) ; sinon, il reste en haut.
     - Avec `definir_defilement(False)`, la zone prend toute la hauteur de son contenu, comme si elle
       n'était pas là : c'est la page qui défile.
 
