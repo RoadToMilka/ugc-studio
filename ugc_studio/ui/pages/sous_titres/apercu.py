@@ -174,13 +174,23 @@ class BlocApercu(QFrame):
 
     def largeur_pour_hauteur(self, hauteur: int) -> int:
         """Grande fenêtre : la largeur du bloc pour que la vidéo, entière, prenne la hauteur qui reste
-        quand le bloc a cette hauteur. Les repères passent à la ligne selon la largeur : le calcul est
-        refait une fois avec la largeur trouvée."""
+        quand le bloc a cette hauteur.
+
+        Les repères passent à la ligne quand la colonne est étroite, et chaque ligne de plus prend de
+        la hauteur à la vidéo, qui devient alors moins large. Le calcul part donc de la colonne la plus
+        large (STUDIO_APERCU_LARGEUR_MAX), où les repères tiennent sur une ligne, et la resserre tant
+        que la vidéo et ses commandes ne tiennent pas : il trouve ainsi la plus grande vidéo possible.
+        En partant de la colonne la plus étroite, il pouvait s'arrêter sur des repères à la ligne,
+        alors qu'ils tiennent sur une ligne à côté d'une vidéo plus grande (612 px de haut au lieu de
+        640)."""
         largeur_video, hauteur_video = self.toile.taille_video()
-        largeur = self.largeur_min()
-        for _passage in range(2):
+        largeur = max(self.largeur_min(), Dimensions.STUDIO_APERCU_LARGEUR_MAX)
+        for _passage in range(8):  # quelques passages : un par ligne de repères en plus, au plus
             reste = max(Dimensions.APERCU_HAUTEUR_MIN, hauteur - self._hauteur_sans_la_video(largeur))
-            largeur = self._bornee(round(reste * largeur_video / hauteur_video))
+            suivante = self._bornee(round(reste * largeur_video / hauteur_video))
+            if suivante == largeur:
+                break
+            largeur = suivante
         return largeur
 
     def hauteur_pour_video(self, hauteur_video_voulue: int) -> int:
