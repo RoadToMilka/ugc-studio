@@ -15,10 +15,12 @@ La disposition de la page : disposition.py.
 V3.1 (lot 6) : sans vidéo ni son (des sous-titres d'un fichier SRT, sans vidéo), la lecture est
 grisée ; un clic sur un sous-titre le montre toujours.
 
-V3.2 (lot 4) : « Fond » et « Zoom » au-dessus de leurs boutons, comme le nom d'un champ (à gauche
+V3.2 (lot 4) : « Fond » et « Zoom » au-dessus de leurs choix, comme le nom d'un champ (à gauche
 jusqu'à la 3.1.3), côte à côte quand la place le permet ; « Repères » au-dessus de ses cases, sur une
 ligne quand la place le permet. En grande fenêtre, la vidéo vise 640 px de haut (hauteur_pour_video,
-utilisée par disposition.py), et le bloc est assez large pour « Fond » et « Zoom » côte à côte.
+utilisée par disposition.py). 3.2.2 : « Fond » et « Zoom » en listes déroulantes (en boutons de la
+3.0.0 à la 3.2.1) : moins larges, ils tiennent côte à côte sous la vidéo sans élargir la colonne, et
+la vidéo garde les mêmes marges que le titre à gauche et à droite (24 px du bord du bloc).
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 
 from ....preferences import Preferences
 from ...composants.apercu import FOND_GRIS, FOND_VIDEO, FONDS, ZOOM_AJUSTE, ZOOMS, ToileApercu, ZoneApercu
-from ...composants.choix import ChoixEnBoutons
+from ...composants.choix import ChoixEnListe
 from ...composants.elements import ChampNomme, bouton, case_a_cocher, glissiere, info, libelle, marge_haute_titre
 from ...composants.flux import DispositionFlux
 from ...icones import icone
@@ -45,7 +47,8 @@ class BlocApercu(QFrame):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
-        disposition.addWidget(libelle("Aperçu", "titre-bloc"))
+        self.titre = libelle("Aperçu", "titre-bloc")
+        disposition.addWidget(self.titre)
 
         self.toile = ToileApercu()
         self.zone = ZoneApercu(self.toile)
@@ -91,11 +94,11 @@ class BlocApercu(QFrame):
         self._lecture_possible, self._en_lecture = True, False
         self.definir_lecture(False)
 
-        # Fond et zoom : chacun sous son nom (V3.2), côte à côte quand la place le permet, 16 px entre
-        # eux comme entre deux réglages.
+        # Fond et zoom : chacun sous son nom (V3.2), en liste déroulante (3.2.2), côte à côte quand la
+        # place le permet, 16 px entre eux comme entre deux réglages.
         options = DispositionFlux(espacement=Espacements.L, espacement_vertical=Espacements.M)
-        self.fond = ChoixEnBoutons(FONDS, "Fond de l'aperçu : la vidéo, un gris neutre, ou un damier (calque transparent)")
-        self.zoom = ChoixEnBoutons(ZOOMS, "« 100 % » : un pixel de la vidéo par pixel de l'écran, pour juger la netteté")
+        self.fond = ChoixEnListe(FONDS, "Fond de l'aperçu : la vidéo, un gris neutre, ou un damier (calque transparent)")
+        self.zoom = ChoixEnListe(ZOOMS, "« 100 % » : un pixel de la vidéo par pixel de l'écran, pour juger la netteté")
         self.champ_fond, self.champ_zoom = ChampNomme("Fond", self.fond), ChampNomme("Zoom", self.zoom)
         options.addWidget(self.champ_fond)
         options.addWidget(self.champ_zoom)
@@ -140,15 +143,14 @@ class BlocApercu(QFrame):
         return cadre.left() + cadre.right() + marges.left() + marges.right()
 
     def largeur_min(self, sur_une_ligne: bool = False) -> int:
-        """Largeur du bloc sous laquelle les commandes ne tiennent plus (la plus longue rangée qui ne
-        passe pas à la ligne : « Fond » et ses trois choix). `sur_une_ligne` (grande fenêtre, V3.2) :
-        assez large pour « Fond » et « Zoom » côte à côte, et les trois repères sur une ligne ; le bloc
-        garde ainsi sa hauteur la plus basse, et la vidéo la place la plus haute."""
-        options, reperes = self._options, self._reperes
-        if sur_une_ligne:
-            commandes = max(self._lecture.minimumSize().width(), options.largeur_sur_une_ligne(), reperes.largeur_sur_une_ligne())
-        else:
-            commandes = max(self._lecture.minimumSize().width(), options.minimumSize().width(), reperes.minimumSize().width())
+        """Largeur du bloc sous laquelle ses commandes ne tiennent plus (la plus large de leurs rangées
+        qui ne passent pas à la ligne). `sur_une_ligne` (grande fenêtre, V3.2) : assez large aussi pour
+        « Fond » et « Zoom » côte à côte, le bloc garde ainsi sa hauteur la plus basse. Les repères, eux,
+        passent à la ligne si la vidéo est plus étroite qu'eux (3.2.2) : la colonne garde la largeur de
+        la vidéo, qui a les mêmes marges que le titre (de la 3.2.0 à la 3.2.1, la colonne s'élargissait
+        pour « Fond », « Zoom » et les repères sur une ligne, et la vidéo flottait au milieu)."""
+        options = self._options.largeur_sur_une_ligne() if sur_une_ligne else self._options.minimumSize().width()
+        commandes = max(self._lecture.minimumSize().width(), options, self._reperes.minimumSize().width())
         return commandes + self._bords()
 
     def _bornee(self, largeur_video: int, sur_une_ligne: bool = False) -> int:
@@ -253,12 +255,12 @@ class BlocApercu(QFrame):
 
     def definir_video_possible(self, possible: bool) -> None:
         """Sans vidéo (ou vidéo introuvable), le choix « Vidéo » est grisé et l'aperçu montre le gris."""
-        self.fond.bouton(FOND_VIDEO).setEnabled(possible)
+        self.fond.activer(FOND_VIDEO, possible)
         self._appliquer_options(retenir=False)
 
     def _fond_affiche(self) -> str:
         fond = self.fond.valeur()
-        if fond == FOND_VIDEO and not self.fond.bouton(FOND_VIDEO).isEnabled():
+        if fond == FOND_VIDEO and not self.fond.est_actif(FOND_VIDEO):
             return FOND_GRIS
         return fond
 

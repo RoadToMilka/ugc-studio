@@ -298,3 +298,33 @@ def test_un_reglage_par_ligne_dans_les_effets(page, qtbot):
     couleur, epaisseur = texte.contour_couleur, texte.contour_epaisseur.champ
     qtbot.waitUntil(lambda: _position(epaisseur, texte).y() > _position(couleur, texte).y() + couleur.height(), timeout=3000)
     assert _position(epaisseur, texte).x() == _position(couleur, texte).x()  # alignés à gauche
+
+
+def test_video_aux_memes_marges_que_le_titre(page, qtbot):
+    """3.2.2 : « Fond » et « Zoom » en listes déroulantes, côte à côte sous la vidéo ; la colonne de
+    l'aperçu a la largeur de la vidéo, qui commence au bord gauche du titre et finit à la même
+    distance du bord droit du bloc (en grande fenêtre comme en fenêtre moyenne). De la 3.2.0 à la
+    3.2.1, la colonne s'élargissait pour les boutons de « Fond » et « Zoom », et la vidéo flottait au
+    milieu, avec plus d'espace sur les côtés qu'à gauche du titre."""
+    from ugc_studio.ui.composants.choix import ChoixEnListe
+    from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
+    from ugc_studio.ui.theme import Dimensions
+
+    atelier = page.atelier
+    apercu = atelier.bloc_apercu
+    assert isinstance(apercu.fond, ChoixEnListe) and isinstance(apercu.zoom, ChoixEnListe)
+
+    def marges() -> tuple[int, int, int]:
+        zone = _position(apercu.zone, apercu)
+        return _position(apercu.titre, apercu).x(), zone.x(), apercu.width() - (zone.x() + apercu.zone.width())
+
+    def homogene() -> bool:
+        titre, gauche, droite = marges()
+        return gauche == titre and abs(droite - gauche) <= 1
+
+    qtbot.waitUntil(homogene, timeout=3000)  # fenêtre moyenne
+    assert _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y()
+    page.resize(1800, 1300)
+    qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
+    qtbot.waitUntil(lambda: homogene() and apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE, timeout=3000)
+    assert _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y()

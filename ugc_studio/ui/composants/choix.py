@@ -1,19 +1,25 @@
 """Choix en boutons (V2, lot 3) : quelques choix exclusifs côte à côte, par exemple « Haut, Centre,
-Bas » ou « Ajusté, 100 % ».
+Bas ».
 
 Le bouton choisi a l'allure « sélectionné » des boutons (contour mauve, fond mauve très léger),
 comme un onglet actif ou le module actif de la barre latérale ; les autres ont le style
 « contour ». Pourquoi pas une liste déroulante ? Pour deux ou trois choix, tous restent visibles et
 se changent d'un seul clic.
+
+Choix en liste (V3.2, 3.2.2) : les mêmes choix exclusifs dans une liste déroulante, quand la place
+manque pour les boutons (« Fond » et « Zoom » sous l'aperçu des sous-titres : en boutons, ils
+élargissaient la colonne de l'aperçu, et la vidéo y flottait avec trop d'espace sur les côtés).
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
 
-from ..theme import Espacements
+from ..theme import Dimensions, Espacements
 from .bouton import Bouton
+from .elements import ListeDeroulante
 
 
 class ChoixEnBoutons(QWidget):
@@ -52,3 +58,49 @@ class ChoixEnBoutons(QWidget):
     def bouton(self, valeur: str) -> Bouton:
         """Le bouton d'un choix (pour les tests, ou pour griser un choix impossible)."""
         return self._boutons[valeur]
+
+
+class ChoixEnListe(ListeDeroulante):
+    """Choix exclusifs dans une liste déroulante de l'app (voir en haut du fichier), qui se règle comme
+    ChoixEnBoutons : valeur(), definir(), et le signal `change` quand on choisit dans la liste."""
+
+    change = Signal(str)  # la valeur choisie (seulement quand on choisit : pas avec definir())
+
+    def __init__(self, choix: dict[str, str], info: str | None = None):
+        super().__init__()
+        # Comme liste_deroulante() : largeur du plus long choix, molette seulement après un clic.
+        self.setMinimumContentsLength(Dimensions.LISTE_CARACTERES_MIN)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        if info:
+            self.setToolTip(info)
+        for valeur, texte in choix.items():
+            self.addItem(texte, valeur)
+        self.activated.connect(lambda rang: self.change.emit(self.itemData(rang)))
+
+    def valeur(self) -> str:
+        return self.currentData() or ""
+
+    def definir(self, valeur: str) -> None:
+        """Choisit cette valeur sans prévenir (valeur relue dans les préférences, par exemple)."""
+        rang = self.findData(valeur)
+        if rang >= 0:
+            self.setCurrentIndex(rang)
+
+    def choisir(self, valeur: str) -> None:
+        """Comme un choix fait dans la liste : la valeur change, et `change` prévient (autotest, tests)."""
+        rang = self.findData(valeur)
+        if rang >= 0 and self.est_actif(valeur):
+            self.setCurrentIndex(rang)
+            self.change.emit(valeur)
+
+    def activer(self, valeur: str, actif: bool) -> None:
+        """Grise un choix impossible (ex. « Vidéo » sans vidéo), ou le rend à nouveau possible."""
+        modele, rang = self.model(), self.findData(valeur)
+        if isinstance(modele, QStandardItemModel) and rang >= 0:
+            modele.item(rang).setEnabled(actif)
+
+    def est_actif(self, valeur: str) -> bool:
+        modele, rang = self.model(), self.findData(valeur)
+        if isinstance(modele, QStandardItemModel) and rang >= 0:
+            return modele.item(rang).isEnabled()
+        return rang >= 0
