@@ -213,10 +213,12 @@ def test_une_colonne_qui_ne_defile_pas_suit_son_contenu(page, qtbot):
 def test_commandes_de_l_apercu_sous_leur_nom(page, qtbot):
     """« Fond » et « Zoom » au-dessus de leur liste, comme le nom d'un champ (8 px visibles) ;
     « Repères » au-dessus de ses cases. En grande fenêtre, « Fond » et « Zoom » côte à côte, 16 px
-    entre eux, et les trois repères sur une ligne (la vidéo, de 360 px, est assez large pour eux)."""
+    entre eux, et, sous une vidéo de 640 px de haut ou plus (360 px de large ou plus), les trois
+    repères sur une ligne. Sous une vidéo plus étroite, ils passent à la ligne : la colonne garde la
+    largeur de la vidéo (3.2.2 ; voir test_video_aux_memes_marges_que_le_titre)."""
     from ugc_studio.ui.composants.elements import ChampNomme
     from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
-    from ugc_studio.ui.theme import Espacements
+    from ugc_studio.ui.theme import Dimensions, Espacements
 
     atelier = page.atelier
     apercu = atelier.bloc_apercu
@@ -227,12 +229,14 @@ def test_commandes_de_l_apercu_sous_leur_nom(page, qtbot):
     cases = (apercu.repere_zone, apercu.repere_marge, apercu.repere_grille)
     nom = apercu.nom_reperes
     assert nom.text() == "Repères" and all(_position(nom, apercu).y() + nom.height() <= _position(c, apercu).y() for c in cases)
-    page.resize(1800, 1050)
+    page.resize(1800, 1300)
     qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
+    qtbot.waitUntil(lambda: apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE, timeout=3000)
     qtbot.waitUntil(lambda: _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y(), timeout=3000)
     fond, zoom = apercu.champ_fond, apercu.champ_zoom
     assert _position(zoom, apercu).x() - (_position(fond, apercu).x() + fond.width()) == Espacements.L
-    assert len({_position(case, apercu).y() for case in cases}) == 1  # les repères sur une ligne
+    # Les repères sur une ligne (attendu : ils se replacent quand la disposition du bloc est refaite).
+    qtbot.waitUntil(lambda: len({_position(case, apercu).y() for case in cases}) == 1, timeout=3000)
 
 
 def test_coins_arrondis_de_l_apercu_a_l_ecran_seulement(page, qtbot):
