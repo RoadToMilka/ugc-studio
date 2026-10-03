@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QDialog, QFileDialog, QFrame, QHBoxLayout, QWidget
 
 from ...chemins import dossier_documents
 from ...prereglages import EXTENSION, ErreurPrereglage, Prereglage, appliquer
@@ -40,6 +40,7 @@ from ..composants.elements import (
 from ..composants.fenetre import fenetre_en_bloc
 from ..composants.flux import DispositionFlux
 from ..composants.menu import Menu
+from ..composants.zone import DispositionDeZone
 from ..icones import icone_menu
 from ..theme import Arrondis, Couleurs, CouleursApercu, Dimensions, Espacements, Hauteurs, qcolor
 from . import messages
@@ -113,7 +114,7 @@ class CartePrereglage(QFrame):
         super().__init__()
         self.setProperty("role", "bloc")
         self.prereglage = prereglage
-        disposition = QVBoxLayout(self)
+        disposition = DispositionDeZone(self)  # la place en trop en bas de la carte (V3.3)
         disposition.setContentsMargins(Espacements.M, Espacements.M, Espacements.M, Espacements.M)
         disposition.setSpacing(Espacements.S)
         self.vignette = VignettePrereglage(prereglage)
