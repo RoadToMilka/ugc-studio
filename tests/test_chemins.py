@@ -55,3 +55,16 @@ def test_dossier_des_programmes(dossier_donnees_temporaire, monkeypatch, tmp_pat
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     monkeypatch.setattr(chemins.sys, "platform", "win32")
     assert chemins.dossier_programmes() == tmp_path / "Local" / "UGC Studio"
+
+
+def test_chemin_a_afficher_peut_passer_a_la_ligne():
+    """3.2.2 : une coupure invisible après chaque « \\ » ou « / » ; le chemin reste le même à l'œil
+    (sans les coupures, on retrouve exactement le chemin de départ)."""
+    windows = r"C:\Users\Coco\Vidéos\pub-glowzy-v1.mp4"
+    affiche = chemins.chemin_a_afficher(windows)
+    assert affiche.count(chemins.COUPURE_INVISIBLE) == 4
+    assert affiche.replace(chemins.COUPURE_INVISIBLE, "") == windows
+    assert "\\" + chemins.COUPURE_INVISIBLE + "Vidéos" in affiche  # la coupure suit le séparateur
+    posix = "/home/coco/pub.mp4"
+    assert chemins.chemin_a_afficher(posix).replace(chemins.COUPURE_INVISIBLE, "") == posix
+    assert chemins.chemin_a_afficher("pub.mp4") == "pub.mp4"  # un nom seul : rien à couper

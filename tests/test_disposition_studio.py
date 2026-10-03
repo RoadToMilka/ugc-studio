@@ -300,6 +300,44 @@ def test_un_reglage_par_ligne_dans_les_effets(page, qtbot):
     assert _position(epaisseur, texte).x() == _position(couleur, texte).x()  # alignés à gauche
 
 
+def _marges_de_l_apercu(apercu) -> tuple[int, int, int]:
+    """Dans le bloc de l'aperçu : le bord gauche du titre, puis l'espace à gauche et à droite de la
+    vidéo."""
+    zone = _position(apercu.zone, apercu)
+    return _position(apercu.titre, apercu).x(), zone.x(), apercu.width() - (zone.x() + apercu.zone.width())
+
+
+def _aux_marges_du_titre(apercu) -> bool:
+    titre, gauche, droite = _marges_de_l_apercu(apercu)
+    return gauche == titre and abs(droite - gauche) <= 1
+
+
+def _texte(element) -> str:
+    texte = getattr(element, "text", None)
+    return texte()[:60] if callable(texte) else ""
+
+
+def _attendre_les_marges(qtbot, apercu, et_aussi=lambda: True) -> None:
+    """Attend que la vidéo soit aux marges du titre (et `et_aussi`). Sinon, l'échec donne les mesures,
+    et les éléments du bloc les plus larges : celui qui élargit la colonne est en tête."""
+    from PySide6.QtWidgets import QWidget
+
+    try:
+        qtbot.waitUntil(lambda: _aux_marges_du_titre(apercu) and et_aussi(), timeout=3000)
+    except Exception as erreur:  # pytestqt.exceptions.TimeoutError
+        visibles = [enfant for enfant in apercu.findChildren(QWidget) if enfant.isVisibleTo(apercu)]
+        larges = sorted(
+            ((e.minimumSizeHint().width(), type(e).__name__, _texte(e)) for e in visibles),
+            key=lambda mesure: mesure[0],
+            reverse=True,
+        )[:4]
+        raise AssertionError(
+            f"(titre, gauche, droite) = {_marges_de_l_apercu(apercu)} ; bloc {apercu.width()} px "
+            f"(voulu {apercu.sizeHint().width()}, minimum {apercu.minimumSizeHint().width()}) ; vidéo "
+            f"{apercu.zone.width()} × {apercu.zone.height()} ; les plus larges : {larges}"
+        ) from erreur
+
+
 def test_video_aux_memes_marges_que_le_titre(page, qtbot):
     """3.2.2 : « Fond » et « Zoom » en listes déroulantes, côte à côte sous la vidéo ; la colonne de
     l'aperçu a la largeur de la vidéo, qui commence au bord gauche du titre et finit à la même
@@ -313,18 +351,24 @@ def test_video_aux_memes_marges_que_le_titre(page, qtbot):
     atelier = page.atelier
     apercu = atelier.bloc_apercu
     assert isinstance(apercu.fond, ChoixEnListe) and isinstance(apercu.zoom, ChoixEnListe)
-
-    def marges() -> tuple[int, int, int]:
-        zone = _position(apercu.zone, apercu)
-        return _position(apercu.titre, apercu).x(), zone.x(), apercu.width() - (zone.x() + apercu.zone.width())
-
-    def homogene() -> bool:
-        titre, gauche, droite = marges()
-        return gauche == titre and abs(droite - gauche) <= 1
-
-    qtbot.waitUntil(homogene, timeout=3000)  # fenêtre moyenne
+    _attendre_les_marges(qtbot, apercu)  # fenêtre moyenne
     assert _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y()
     page.resize(1800, 1300)
     qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
-    qtbot.waitUntil(lambda: homogene() and apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE, timeout=3000)
+    _attendre_les_marges(qtbot, apercu, lambda: apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE)
     assert _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y()
+
+
+def test_un_long_chemin_introuvable_n_elargit_pas_l_apercu(page, qtbot, services):
+    """3.2.2 : dans « Vidéo introuvable : … », le chemin passe à la ligne après chaque « \\ ». D'un
+    seul tenant (Qt ne coupe une ligne qu'aux espaces et aux tirets), un long chemin élargissait la
+    colonne de l'aperçu, et la vidéo n'était plus aux marges du titre."""
+    atelier = page.atelier
+    apercu = atelier.bloc_apercu
+    services.projets.projet.transcription.source = (
+        "C:\\Utilisateurs\\Coco\\Vidéos_de_la_marque_Glowzy\\Publicités_TikTok_et_Instagram\\Octobre_2026\\pub_v1.mp4"
+    )
+    atelier.rafraichir()
+    assert apercu.ligne_introuvable.isVisibleTo(apercu) and "Publicités_TikTok" in apercu.message_video.text()
+    _attendre_les_marges(qtbot, apercu)
+    assert (apercu.zone.width(), apercu.zone.height()) == (304, 540)
