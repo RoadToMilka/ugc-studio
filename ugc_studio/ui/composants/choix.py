@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QWidget
 
-from ..theme import Dimensions, Espacements
+from ..theme import Espacements
 from .bouton import Bouton
 from .elements import ListeDeroulante
 
@@ -68,8 +68,10 @@ class ChoixEnListe(ListeDeroulante):
 
     def __init__(self, choix: dict[str, str], info: str | None = None):
         super().__init__()
-        # Comme liste_deroulante() : largeur du plus long choix, molette seulement après un clic.
-        self.setMinimumContentsLength(Dimensions.LISTE_CARACTERES_MIN)
+        # Ses choix sont courts et connus d'avance : la liste a la largeur du plus long, sans le
+        # minimum de 10 caractères des autres listes (prévu pour des choix qui peuvent être longs,
+        # comme le nom d'une voix). Avec lui, « Fond » et « Zoom » ne tenaient pas côte à côte sous
+        # une vidéo de 304 px. La molette ne change le choix qu'après un clic, comme liste_deroulante().
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         if info:
             self.setToolTip(info)

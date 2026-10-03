@@ -19,8 +19,9 @@ V3.2 (lot 4) : « Fond » et « Zoom » au-dessus de leurs choix, comme le nom d
 jusqu'à la 3.1.3), côte à côte quand la place le permet ; « Repères » au-dessus de ses cases, sur une
 ligne quand la place le permet. En grande fenêtre, la vidéo vise 640 px de haut (hauteur_pour_video,
 utilisée par disposition.py). 3.2.2 : « Fond » et « Zoom » en listes déroulantes (en boutons de la
-3.0.0 à la 3.2.1) : moins larges, ils tiennent côte à côte sous la vidéo sans élargir la colonne, et
-la vidéo garde les mêmes marges que le titre à gauche et à droite (24 px du bord du bloc).
+3.0.0 à la 3.2.1), côte à côte, chacune la moitié de la largeur de la vidéo : elles n'élargissent plus
+la colonne, et la vidéo garde les mêmes marges que le titre à gauche et à droite (24 px du bord du
+bloc).
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 from ....preferences import Preferences
 from ...composants.apercu import FOND_GRIS, FOND_VIDEO, FONDS, ZOOM_AJUSTE, ZOOMS, ToileApercu, ZoneApercu
 from ...composants.choix import ChoixEnListe
-from ...composants.elements import ChampNomme, bouton, case_a_cocher, glissiere, info, libelle, marge_haute_titre
+from ...composants.elements import bouton, case_a_cocher, champs_en_colonnes, glissiere, info, libelle, marge_haute_titre
 from ...composants.flux import DispositionFlux
 from ...icones import icone
 from ...theme import Couleurs, Dimensions, Espacements
@@ -94,14 +95,13 @@ class BlocApercu(QFrame):
         self._lecture_possible, self._en_lecture = True, False
         self.definir_lecture(False)
 
-        # Fond et zoom : chacun sous son nom (V3.2), en liste déroulante (3.2.2), côte à côte quand la
-        # place le permet, 16 px entre eux comme entre deux réglages.
-        options = DispositionFlux(espacement=Espacements.L, espacement_vertical=Espacements.M)
+        # Fond et zoom : chacun sous son nom (V3.2), en liste déroulante (3.2.2), côte à côte en deux
+        # colonnes de même largeur, 16 px entre elles, comme les champs d'une fenêtre : sous la vidéo,
+        # elles vont de son bord gauche à son bord droit.
         self.fond = ChoixEnListe(FONDS, "Fond de l'aperçu : la vidéo, un gris neutre, ou un damier (calque transparent)")
         self.zoom = ChoixEnListe(ZOOMS, "« 100 % » : un pixel de la vidéo par pixel de l'écran, pour juger la netteté")
-        self.champ_fond, self.champ_zoom = ChampNomme("Fond", self.fond), ChampNomme("Zoom", self.zoom)
-        options.addWidget(self.champ_fond)
-        options.addWidget(self.champ_zoom)
+        options = champs_en_colonnes([("Fond", self.fond), ("Zoom", self.zoom)])
+        self.champ_fond, self.champ_zoom = options.champs["Fond"], options.champs["Zoom"]
         disposition.addLayout(options)
         self._options = options
 
@@ -142,23 +142,23 @@ class BlocApercu(QFrame):
         cadre, marges = self.contentsMargins(), self.layout().contentsMargins()
         return cadre.left() + cadre.right() + marges.left() + marges.right()
 
-    def largeur_min(self, sur_une_ligne: bool = False) -> int:
-        """Largeur du bloc sous laquelle ses commandes ne tiennent plus (la plus large de leurs rangées
-        qui ne passent pas à la ligne). `sur_une_ligne` (grande fenêtre, V3.2) : assez large aussi pour
-        « Fond » et « Zoom » côte à côte, le bloc garde ainsi sa hauteur la plus basse. Les repères, eux,
-        passent à la ligne si la vidéo est plus étroite qu'eux (3.2.2) : la colonne garde la largeur de
-        la vidéo, qui a les mêmes marges que le titre (de la 3.2.0 à la 3.2.1, la colonne s'élargissait
-        pour « Fond », « Zoom » et les repères sur une ligne, et la vidéo flottait au milieu)."""
-        options = self._options.largeur_sur_une_ligne() if sur_une_ligne else self._options.minimumSize().width()
-        commandes = max(self._lecture.minimumSize().width(), options, self._reperes.minimumSize().width())
+    def largeur_min(self) -> int:
+        """Largeur du bloc sous laquelle ses commandes ne tiennent plus : la plus large de leurs
+        rangées qui ne passent pas à la ligne (la lecture ; « Fond » et « Zoom », toujours côte à côte ;
+        le plus large des repères, qui passent à la ligne si la vidéo est plus étroite qu'eux). Depuis
+        la 3.2.2, ces rangées tiennent sous une vidéo de 304 px : la colonne garde la largeur de la
+        vidéo, qui a les mêmes marges que le titre (de la 3.2.0 à la 3.2.1, en grande fenêtre, la
+        colonne s'élargissait pour les boutons de « Fond » et « Zoom » et les repères sur une ligne, et
+        la vidéo flottait au milieu)."""
+        commandes = max(self._lecture.minimumSize().width(), self._options.minimumSize().width(), self._reperes.minimumSize().width())
         return commandes + self._bords()
 
-    def _bornee(self, largeur_video: int, sur_une_ligne: bool = False) -> int:
+    def _bornee(self, largeur_video: int) -> int:
         """La largeur du bloc pour une vidéo de cette largeur : au moins celle des commandes (voir
         largeur_min), au plus STUDIO_APERCU_LARGEUR_MAX (une vidéo 16:9 laisse ainsi de la place aux
         autres colonnes)."""
         largeur = largeur_video + self._bords()
-        return max(self.largeur_min(sur_une_ligne), min(largeur, Dimensions.STUDIO_APERCU_LARGEUR_MAX))
+        return max(self.largeur_min(), min(largeur, Dimensions.STUDIO_APERCU_LARGEUR_MAX))
 
     def largeur_naturelle(self) -> int:
         """Fenêtre moyenne : la largeur de la colonne de l'aperçu, celle de la vidéo à 540 px de haut
@@ -174,14 +174,13 @@ class BlocApercu(QFrame):
 
     def largeur_pour_hauteur(self, hauteur: int) -> int:
         """Grande fenêtre : la largeur du bloc pour que la vidéo, entière, prenne la hauteur qui reste
-        quand le bloc a cette hauteur ; assez large, au moins, pour « Fond » et « Zoom » côte à côte
-        (V3.2). Les commandes passent à la ligne selon la largeur : le calcul est refait une fois avec
-        la largeur trouvée."""
+        quand le bloc a cette hauteur. Les repères passent à la ligne selon la largeur : le calcul est
+        refait une fois avec la largeur trouvée."""
         largeur_video, hauteur_video = self.toile.taille_video()
-        largeur = self.largeur_min(sur_une_ligne=True)
+        largeur = self.largeur_min()
         for _passage in range(2):
             reste = max(Dimensions.APERCU_HAUTEUR_MIN, hauteur - self._hauteur_sans_la_video(largeur))
-            largeur = self._bornee(round(reste * largeur_video / hauteur_video), sur_une_ligne=True)
+            largeur = self._bornee(round(reste * largeur_video / hauteur_video))
         return largeur
 
     def hauteur_pour_video(self, hauteur_video_voulue: int) -> int:
@@ -189,7 +188,7 @@ class BlocApercu(QFrame):
         la largeur qui va avec ; moins haute si la vidéo, plus large que haute, atteint d'abord la
         largeur maximale de la colonne (STUDIO_APERCU_LARGEUR_MAX)."""
         largeur_video, hauteur_video = self.toile.taille_video()
-        largeur = self._bornee(round(hauteur_video_voulue * largeur_video / hauteur_video), sur_une_ligne=True)
+        largeur = self._bornee(round(hauteur_video_voulue * largeur_video / hauteur_video))
         place = largeur - self._bords()
         hauteur = min(hauteur_video_voulue, round(place * hauteur_video / largeur_video))
         return self._hauteur_sans_la_video(largeur) + max(hauteur, Dimensions.APERCU_HAUTEUR_MIN)

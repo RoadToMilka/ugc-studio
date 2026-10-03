@@ -609,8 +609,9 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
       hauteur, la frise dessous sur toute la largeur, Source et Exporter au-dessus ; l'apparence
       défile seule (l'aperçu ne bouge pas). V3.2 : la vidéo fait 640 px de haut et le bloc de
       l'aperçu se voit en entier dans la page visible ; « Fond » et « Zoom » côte à côte, les trois
-      repères sur une ligne. (Jusqu'à la 3.1.3 : la page défilait au plus de la hauteur de la bande du
-      haut, et la vidéo n'avait que la place qui restait.)
+      repères sur une ligne. 3.2.2 : la vidéo a les mêmes marges que le titre, et « Fond » et « Zoom »
+      vont de son bord gauche à son bord droit. (Jusqu'à la 3.1.3 : la page défilait au plus de la
+      hauteur de la bande du haut, et la vidéo n'avait que la place qui restait.)
     - Coins arrondis de l'aperçu (V3.2) : le coin de la zone a la couleur du bloc.
     - Très grande fenêtre (2560 × 1400) : tout se voit sans faire défiler la page, et la vidéo dépasse
       540 px de haut.
@@ -673,10 +674,16 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
         etat["grande_apercu_entier_visible"] = apercu.height() <= visible
         etat["grande_fond_et_zoom_cote_a_cote"] = position(apercu.champ_fond).y() == position(apercu.champ_zoom).y()
         # 3.2.2 : la vidéo a les mêmes marges que le titre, à gauche comme à droite (la colonne a la
-        # largeur de la vidéo, « Fond » et « Zoom » étant des listes déroulantes).
+        # largeur de la vidéo, « Fond » et « Zoom » étant des listes déroulantes, qui vont du bord
+        # gauche de la vidéo à son bord droit).
         gauche = apercu.zone.mapTo(apercu, QPoint(0, 0)).x()
         droite = apercu.width() - (gauche + apercu.zone.width())
         etat["grande_video_aux_marges_du_titre"] = gauche == apercu.titre.mapTo(apercu, QPoint(0, 0)).x() and abs(droite - gauche) <= 1
+        fond, zoom = apercu.champ_fond, apercu.champ_zoom
+        bord_droit_du_zoom = zoom.mapTo(apercu, QPoint(0, 0)).x() + zoom.width()
+        etat["grande_fond_et_zoom_sous_la_video"] = (
+            fond.mapTo(apercu, QPoint(0, 0)).x() == gauche and abs(bord_droit_du_zoom - (gauche + apercu.zone.width())) <= 1
+        )
         cases = (apercu.repere_zone, apercu.repere_marge, apercu.repere_grille)
         etat["grande_reperes_sur_une_ligne"] = len({position(case).y() for case in cases}) == 1
         capturer(fenetre, "sous-titres-grande-fenetre")

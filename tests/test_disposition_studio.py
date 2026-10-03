@@ -211,9 +211,9 @@ def test_une_colonne_qui_ne_defile_pas_suit_son_contenu(page, qtbot):
 
 
 def test_commandes_de_l_apercu_sous_leur_nom(page, qtbot):
-    """« Fond » et « Zoom » au-dessus de leurs boutons, comme le nom d'un champ (8 px visibles) ;
-    « Repères » au-dessus de ses cases. En grande fenêtre, « Fond » et « Zoom » côte à côte, et les
-    trois repères sur une ligne (le bloc est assez large pour eux)."""
+    """« Fond » et « Zoom » au-dessus de leur liste, comme le nom d'un champ (8 px visibles) ;
+    « Repères » au-dessus de ses cases. En grande fenêtre, « Fond » et « Zoom » côte à côte, 16 px
+    entre eux, et les trois repères sur une ligne (la vidéo, de 360 px, est assez large pour eux)."""
     from ugc_studio.ui.composants.elements import ChampNomme
     from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
     from ugc_studio.ui.theme import Espacements
@@ -339,11 +339,11 @@ def _attendre_les_marges(qtbot, apercu, et_aussi=lambda: True) -> None:
 
 
 def test_video_aux_memes_marges_que_le_titre(page, qtbot):
-    """3.2.2 : « Fond » et « Zoom » en listes déroulantes, côte à côte sous la vidéo ; la colonne de
-    l'aperçu a la largeur de la vidéo, qui commence au bord gauche du titre et finit à la même
-    distance du bord droit du bloc (en grande fenêtre comme en fenêtre moyenne). De la 3.2.0 à la
-    3.2.1, la colonne s'élargissait pour les boutons de « Fond » et « Zoom », et la vidéo flottait au
-    milieu, avec plus d'espace sur les côtés qu'à gauche du titre."""
+    """3.2.2 : la colonne de l'aperçu a la largeur de la vidéo, qui commence au bord gauche du titre et
+    finit à la même distance du bord droit du bloc (en grande fenêtre comme en fenêtre moyenne).
+    « Fond » et « Zoom », en listes déroulantes, sont côte à côte sous la vidéo, de son bord gauche à
+    son bord droit. De la 3.2.0 à la 3.2.1, la colonne s'élargissait pour les boutons de « Fond » et
+    « Zoom », et la vidéo flottait au milieu, avec plus d'espace sur les côtés qu'à gauche du titre."""
     from ugc_studio.ui.composants.choix import ChoixEnListe
     from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
     from ugc_studio.ui.theme import Dimensions
@@ -351,12 +351,18 @@ def test_video_aux_memes_marges_que_le_titre(page, qtbot):
     atelier = page.atelier
     apercu = atelier.bloc_apercu
     assert isinstance(apercu.fond, ChoixEnListe) and isinstance(apercu.zoom, ChoixEnListe)
-    _attendre_les_marges(qtbot, apercu)  # fenêtre moyenne
-    assert _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y()
+
+    def fond_et_zoom_sous_la_video() -> bool:
+        zone, fond, zoom = (_position(e, apercu) for e in (apercu.zone, apercu.champ_fond, apercu.champ_zoom))
+        droite_de_la_video, droite_du_zoom = zone.x() + apercu.zone.width(), zoom.x() + apercu.champ_zoom.width()
+        return fond.y() == zoom.y() and fond.x() == zone.x() and abs(droite_du_zoom - droite_de_la_video) <= 1
+
+    _attendre_les_marges(qtbot, apercu)  # fenêtre moyenne : une vidéo de 304 px
+    assert fond_et_zoom_sous_la_video()
     page.resize(1800, 1300)
     qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
     _attendre_les_marges(qtbot, apercu, lambda: apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE)
-    assert _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y()
+    assert fond_et_zoom_sous_la_video()
 
 
 def test_un_long_chemin_introuvable_n_elargit_pas_l_apercu(page, qtbot, services):
