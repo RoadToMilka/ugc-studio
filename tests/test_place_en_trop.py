@@ -108,6 +108,31 @@ def test_un_element_qui_remplit_prend_la_place_qui_reste(app_configuree, qtbot):
     assert ecarts_de_place(cadre) == []
 
 
+def test_un_element_qui_remplit_s_arrete_a_sa_hauteur_maximale(app_configuree, qtbot):
+    """Un élément fait pour remplir mais limité en hauteur prend la place jusqu'à sa hauteur maximale ;
+    le reste va en bas, jamais au titre. L'autotest de la fenêtre « Autre couleur » l'a montré : son
+    sélecteur de couleur (celui de Qt, de taille fixe) ne pouvait pas grandir, et son titre prenait
+    les 300 px de la vérification."""
+    from PySide6.QtWidgets import QListWidget
+
+    from ugc_studio.ui.composants.elements import bloc
+    from ugc_studio.ui.composants.zone import ecarts_de_place
+
+    cadre, disposition = bloc("Autre couleur")
+    liste = QListWidget()
+    liste.setMaximumHeight(liste.sizeHint().height() + 40)
+    disposition.addWidget(liste)
+    qtbot.addWidget(cadre)
+    cadre.resize(320, _hauteur_naturelle(cadre, 320))
+    cadre.show()
+    qtbot.waitExposed(cadre)
+    titre = cadre.titre.geometry()
+    cadre.resize(320, cadre.height() + ETIREMENT)
+    qtbot.waitUntil(lambda: liste.height() == liste.maximumHeight(), timeout=3000)
+    assert cadre.titre.geometry() == titre
+    assert ecarts_de_place(cadre) == []
+
+
 # --- Le studio des sous-titres (le cas signalé après la 3.2.2) ----------------------------------
 
 
@@ -207,16 +232,21 @@ def test_chaque_page_garde_la_place_en_trop_en_bas(app_configuree, qtbot, servic
 
 
 def test_fenetres_et_cartes(app_configuree, qtbot, services):
-    """Une fenêtre (bloc et boutons du bas), les cartes des préréglages et celles des conseils ; une
-    fenêtre agrandie garde son contenu en haut du bloc, chaque élément à sa place."""
+    """Une fenêtre (bloc et boutons du bas), les cartes des préréglages et celles des conseils, la
+    fenêtre « Autre couleur » (son sélecteur de taille fixe) ; une fenêtre agrandie garde son contenu
+    en haut du bloc, chaque élément à sa place."""
+    from PySide6.QtGui import QColor
+
     from ugc_studio.conseils_des_pages import PAGES
     from ugc_studio.ui.composants.conseils import DialogueConseils
     from ugc_studio.ui.composants.zone import ecarts_dans
+    from ugc_studio.ui.dialogues.couleur import DialogueCouleur
     from ugc_studio.ui.dialogues.prereglages import DialoguePrereglages
     from ugc_studio.ui.dialogues.projet import DialogueNouveauProjet
 
     nouveau = DialogueNouveauProjet(services.projets)
-    for dialogue in (nouveau, DialoguePrereglages(services), DialogueConseils(PAGES["voix"])):
+    dialogues = (nouveau, DialoguePrereglages(services), DialogueConseils(PAGES["voix"]), DialogueCouleur(QColor("white")))
+    for dialogue in dialogues:
         qtbot.addWidget(dialogue)
         dialogue.show()
         qtbot.waitExposed(dialogue)

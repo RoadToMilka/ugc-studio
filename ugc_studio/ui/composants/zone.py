@@ -24,6 +24,8 @@ from PySide6.QtWidgets import QBoxLayout, QFrame, QLabel, QLayout, QLayoutItem, 
 
 # De combien la vérification étire une zone (en pixels) : assez pour voir où la place en trop va.
 ETIREMENT_VERIFIE = 300
+# Hauteur maximale d'un élément qui n'en a pas (QLAYOUTSIZE_MAX de Qt) : il peut grandir sans limite.
+SANS_LIMITE = (2**31 - 1) // 256 // 16
 
 
 def remplit(element: QLayoutItem, etirement: int = 0) -> bool:
@@ -48,22 +50,43 @@ def hauteur_du_contenu(disposition: QLayout, largeur: int) -> int:
     return hauteur if hauteur >= 0 else disposition.sizeHint().height()
 
 
+def hauteur_naturelle(element: QLayoutItem, largeur: int) -> int:
+    """Hauteur naturelle d'un élément à cette largeur : celle que Qt lui donne pour cette largeur (un
+    texte qui passe à la ligne), ou sa hauteur souhaitée, entre ses hauteurs minimale et maximale."""
+    hauteur = element.heightForWidth(largeur) if element.hasHeightForWidth() else element.sizeHint().height()
+    return max(element.minimumSize().height(), min(hauteur, element.maximumSize().height()))
+
+
 class DispositionDeZone(QVBoxLayout):
     """Disposition verticale d'une zone (voir en haut du fichier) : quand la zone est plus haute que
     son contenu, le contenu reste en haut, chaque élément à sa hauteur, et la place en trop va en bas.
-    Si un élément est fait pour remplir la zone (voir remplit), c'est lui qui la prend, comme avant."""
+    Si un élément est fait pour remplir la zone (voir remplit), c'est lui qui la prend, jusqu'à sa
+    hauteur maximale : un élément qui ne peut pas grandir (le sélecteur de couleur de Qt, de taille
+    fixe) ne la prend pas, et elle ne va pas non plus à un autre élément (le titre)."""
 
     def setGeometry(self, zone: QRect) -> None:  # noqa: N802 — nom imposé par Qt
-        if not self.a_un_element_qui_remplit():
-            hauteur = hauteur_du_contenu(self, zone.width())
-            if hauteur < zone.height():
-                # La disposition ne reçoit que la hauteur de son contenu, en haut de la zone : le reste,
-                # en dessous, reste vide.
-                zone = QRect(zone.x(), zone.y(), zone.width(), hauteur)
+        hauteur = hauteur_du_contenu(self, zone.width()) + self.croissance_possible(zone.width())
+        if hauteur < zone.height():
+            # La disposition ne reçoit que ce que son contenu peut prendre, en haut de la zone : le
+            # reste, en dessous, reste vide.
+            zone = QRect(zone.x(), zone.y(), zone.width(), hauteur)
         super().setGeometry(zone)
 
-    def a_un_element_qui_remplit(self) -> bool:
-        return any(remplit(self.itemAt(rang), self.stretch(rang)) for rang in range(self.count()))
+    def croissance_possible(self, largeur: int) -> int:
+        """De combien les éléments faits pour remplir la zone peuvent grandir au-delà de leur hauteur
+        naturelle, à cette largeur de zone (jusqu'à leur hauteur maximale) ; SANS_LIMITE si l'un d'eux
+        n'a pas de hauteur maximale (une liste, une colonne qui défile, un étirement)."""
+        marges = self.contentsMargins()
+        largeur -= marges.left() + marges.right()
+        croissance = 0
+        for rang in range(self.count()):
+            element = self.itemAt(rang)
+            if remplit(element, self.stretch(rang)):
+                maximum = element.maximumSize().height()
+                if maximum >= SANS_LIMITE:
+                    return SANS_LIMITE
+                croissance += max(0, maximum - hauteur_naturelle(element, largeur))
+        return croissance
 
 
 # --- Vérification (tests et autotest) -------------------------------------------------------------
@@ -125,13 +148,6 @@ def description_de_zone(zone: QWidget) -> str:
         texte = next((_texte(e) for e in zone.findChildren(QLabel) if e.isVisibleTo(zone) and _texte(e)), "")
     texte = texte.strip().replace("\n", " ")
     return f"« {texte[:40]} »" if texte else type(zone).__name__
-
-
-def hauteur_naturelle(element: QLayoutItem, largeur: int) -> int:
-    """Hauteur naturelle d'un élément à cette largeur : celle que Qt lui donne pour cette largeur (un
-    texte qui passe à la ligne), ou sa hauteur souhaitée, entre ses hauteurs minimale et maximale."""
-    hauteur = element.heightForWidth(largeur) if element.hasHeightForWidth() else element.sizeHint().height()
-    return max(element.minimumSize().height(), min(hauteur, element.maximumSize().height()))
 
 
 def ecarts_de_place(zone: QWidget) -> list[str]:
