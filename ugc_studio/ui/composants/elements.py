@@ -40,6 +40,7 @@ from ..theme import Couleurs, Dimensions, Durees, Espacements, Hauteurs, Opacite
 from .bouton import Bouton, dessiner_texte_centre_a_l_oeil
 from .bulle import PROPRIETE_MAISON, cacher_bulle, montrer_bulle, texte_en_lignes
 from .liste_deroulante import DelegueChoix, VueChoix, preparer_la_liste
+from .zone import DispositionDeZone
 
 
 # Entre un titre et ce qu'il précise (V3.2) : une puce, « Voix • Sérum Glowzy », « Voix • Conseils »
@@ -810,10 +811,12 @@ def bloc(titre: str | None = None, marges: int = Espacements.XL, aide: str | Non
     """Bloc (panneau arrondi sur fond « surface »). Renvoie le bloc et sa disposition verticale.
     `aide` : explication du bloc, dans une icône « i » devant le titre (V3.1 ; après lui jusqu'à la
     3.1.0) ; le titre est dans `cadre.titre`, l'icône dans `cadre.aide`. Avec un titre, la marge du
-    haut le place à `marges` px du bord, comme à gauche (voir marge_haute_titre)."""
+    haut le place à `marges` px du bord, comme à gauche (voir marge_haute_titre). V3.3 : quand le bloc
+    est plus haut que son contenu (à côté d'un bloc plus haut, dans une fenêtre agrandie), la place en
+    trop va en bas du bloc (DispositionDeZone, composants/zone.py)."""
     cadre = QFrame()
     cadre.setProperty("role", "bloc")
-    disposition = QVBoxLayout(cadre)
+    disposition = DispositionDeZone(cadre)
     disposition.setContentsMargins(marges, marge_haute_titre(marges) if titre else marges, marges, marges)
     disposition.setSpacing(Espacements.M)
     cadre.titre = cadre.aide = None

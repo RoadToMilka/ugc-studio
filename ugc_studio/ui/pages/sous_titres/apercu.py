@@ -34,6 +34,7 @@ from ...composants.apercu import FOND_GRIS, FOND_VIDEO, FONDS, ZOOM_AJUSTE, ZOOM
 from ...composants.choix import ChoixEnListe
 from ...composants.elements import bouton, case_a_cocher, champs_en_colonnes, glissiere, info, libelle, marge_haute_titre
 from ...composants.flux import DispositionFlux
+from ...composants.zone import DispositionDeZone
 from ...icones import icone
 from ...theme import Couleurs, Dimensions, Espacements
 
@@ -45,7 +46,7 @@ class BlocApercu(QFrame):
         super().__init__(parent)
         self.setProperty("role", "bloc")
         self._preferences = preferences
-        disposition = QVBoxLayout(self)
+        disposition = DispositionDeZone(self)  # la place en trop en bas du bloc (V3.3)
         disposition.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         self.titre = libelle("Aperçu", "titre-bloc")

@@ -40,6 +40,7 @@ from ...composants.elements import (
 )
 from ...composants.montant_label import MontantLabel
 from ...composants.onglets import Onglets
+from ...composants.zone import DispositionDeZone
 from ...theme import Dimensions, Espacements
 
 ONGLET_VIDEO, ONGLET_MOTS = range(2)
@@ -80,7 +81,7 @@ class BlocSource(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setProperty("role", "bloc")
-        disposition = QVBoxLayout(self)
+        disposition = DispositionDeZone(self)  # la place en trop en bas du bloc (V3.3)
         disposition.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.M)
         self.titre = libelle("Source", "titre-bloc")

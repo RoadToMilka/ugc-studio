@@ -37,6 +37,7 @@ from ...composants.elements import (
 from ...composants.etoiles import boutons_etoiles
 from ...composants.menu import Menu
 from ...composants.montant_label import MontantLabel
+from ...composants.zone import DispositionDeZone
 from ...icones import icone_menu
 from ...theme import Couleurs, Espacements, Hauteurs
 
@@ -93,7 +94,7 @@ class ListeAccroches(QWidget):
         disposition.setSpacing(Espacements.S)
         self.cadre = QFrame()
         self.cadre.setProperty("role", "bloc")
-        interieur = QVBoxLayout(self.cadre)
+        interieur = DispositionDeZone(self.cadre)  # la place en trop en bas du bloc (V3.3)
         interieur.setContentsMargins(Espacements.XL, marge_haute_titre(), Espacements.XL, Espacements.XL)
         interieur.setSpacing(Espacements.M)
         # V3.1 : ce qu'il faut faire reste écrit ; le reste de l'explication passe dans l'icône « i ».
@@ -159,7 +160,7 @@ class CarteScript(QFrame):
         self.setProperty("role", "bloc")
         self.script = script
         self._mots_par_seconde = mots_par_seconde
-        disposition = QVBoxLayout(self)
+        disposition = DispositionDeZone(self)  # la place en trop en bas de la carte (V3.3)
         # Le titre à 24 px du haut, comme à gauche (V3.2) ; le ⋯ de sa ligne est centré sur lui.
         haut = marge_haute_titre(hauteur_ligne=Hauteurs.PETIT_BOUTON)
         disposition.setContentsMargins(Espacements.XL, haut, Espacements.XL, Espacements.XL)

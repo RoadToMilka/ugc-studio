@@ -33,6 +33,7 @@ from .ui.composants.defilement import ZoneDefilante
 from .ui.composants.elements import BoutonInfo, Info
 from .ui.composants.menu import position_du_menu
 from .ui.composants.tableau import Tableau
+from .ui.composants.zone import ecarts_dans, zones
 from .ui.dialogues.assistant_style import DialogueAssistantStyle
 from .ui.dialogues.assistant_voix import DialogueAssistantVoix
 from .ui.dialogues.briefs import DialogueBibliothequeBriefs
@@ -101,6 +102,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "bulle_v32",
     "menu_v32",
     "fenetres_v32",
+    "place_en_trop",
 )
 ELEMENTS_SIGNALES_MAX = 6
 # V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
@@ -191,6 +193,16 @@ def _fenetre_comme_une_page(dialogue) -> dict:
     verifiees = ("fond_de_l_app", "bloc_a_16_px", "boutons_sous_le_bloc", "fondus_couleur_du_fond")
     resultat["ok"] = all(valeur for cle, valeur in resultat.items() if cle in verifiees)
     return resultat
+
+
+def _place_en_trop(racine: QWidget, releve: dict, nom: str) -> None:
+    """V3.3, lot 1 (§9.6) : chaque zone visible de `racine` (bloc, carte, colonne qui défile) garde la
+    place en trop en bas, jamais au-dessus de son titre ni entre deux éléments (voir composants/zone.py).
+    `releve` compte les zones vérifiées et garde les écarts, par page ou fenêtre."""
+    releve["zones_verifiees"] = releve.get("zones_verifiees", 0) + len(zones(racine))
+    ecarts = ecarts_dans(racine)
+    if ecarts:
+        releve.setdefault("ecarts", {})[nom] = ecarts
 
 
 def _laisser_afficher(secondes: float = PAUSE_AFFICHAGE_S) -> None:
@@ -615,9 +627,13 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
     - Coins arrondis de l'aperçu (V3.2) : le coin de la zone a la couleur du bloc.
     - Très grande fenêtre (2560 × 1400) : tout se voit sans faire défiler la page, et la vidéo dépasse
       540 px de haut.
+    - V3.3, lot 1 (§9.6) : dans chaque disposition, chaque zone garde la place en trop en bas. En
+      fenêtre moyenne, les groupes de l'onglet Texte fermés (le cas signalé après la 3.2.2), Apparence
+      est plus courte que l'Aperçu et s'étire à sa hauteur : son titre reste en haut, à la hauteur de
+      celui de l'Aperçu (jusqu'à la 3.2.2, un grand vide au-dessus et sous lui).
     Sur l'écran de la fabrication (1024 × 768), la fenêtre ne peut pas grandir autant : ces deux
     mesures-là sont notées « non mesurée » (les captures sans écran, elles, les font)."""
-    from .ui.pages.sous_titres.disposition import GRANDE
+    from .ui.pages.sous_titres.disposition import GRANDE, MOYENNE
 
     studio, apercu, toile = atelier.studio, atelier.bloc_apercu, atelier.toile
     page = atelier.defilement.verticalScrollBar()
@@ -650,6 +666,19 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
         )
     mesures: dict = {"depart": {"disposition": studio.mode, "zone": [apercu.zone.width(), apercu.zone.height()]}}
     debordements: list[str] = []
+    place = {"depart": ecarts_dans(atelier)}  # V3.3, lot 1 : la place en trop des zones, en bas
+    if studio.mode == MOYENNE:
+        ouvertes = [section for section in atelier.panneau.texte.sections.values() if section.est_ouverte()]
+        for section in ouvertes:
+            section.ouvrir(False)
+        _laisser_afficher()
+        etat["moyenne_titre_d_apparence_en_haut"] = position(atelier.cadre_apparence.titre).y() == position(apercu.titre).y()
+        mesures["moyenne_groupes_fermes"] = {"apparence": atelier.cadre_apparence.height(), "apercu": apercu.height()}
+        place["moyenne_groupes_fermes"] = ecarts_dans(atelier)
+        capturer(fenetre, "studio-moyenne-groupes-fermes")
+        for section in ouvertes:
+            section.ouvrir()
+        _laisser_afficher()
 
     if agrandir(GRANDE_FENETRE):
         colonnes = (apercu, atelier.cadre_apparence, atelier.cadre_sous_titres)
@@ -686,6 +715,7 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
         )
         cases = (apercu.repere_zone, apercu.repere_marge, apercu.repere_grille)
         etat["grande_reperes_sur_une_ligne"] = len({position(case).y() for case in cases}) == 1
+        place["grande"] = ecarts_dans(atelier)
         capturer(fenetre, "sous-titres-grande-fenetre")
         debordements += _debordements(fenetre, "page Sous-titres en grande fenêtre")
         # L'apparence défile seule : l'aperçu reste où il est.
@@ -713,6 +743,7 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
     if agrandir(TRES_GRANDE_FENETRE):
         etat["tres_grande_tout_visible"] = studio.mode == GRANDE and page.maximum() == 0
         etat["tres_grande_video_plus_haute"] = apercu.zone.height() > Dimensions.APERCU_HAUTEUR_MAX and a_la_taille_de_la_video()
+        place["tres_grande"] = ecarts_dans(atelier)
         capturer(fenetre, "sous-titres-tres-grande-fenetre")
         debordements += _debordements(fenetre, "page Sous-titres en très grande fenêtre")
         mesures["tres_grande"] = {"zone": [apercu.zone.width(), apercu.zone.height()], "defilement_page": page.maximum()}
@@ -726,6 +757,8 @@ def _disposition_du_studio(fenetre, atelier, capturer, rapport: dict) -> bool:
     etat["retour_a_la_taille_de_depart"] = studio.mode == mesures["depart"]["disposition"]
     etat["sans_debordement"] = not debordements
     mesures["debordements"] = debordements
+    etat["place_en_trop_en_bas"] = not any(place.values())
+    mesures["place_en_trop"] = {disposition: ecarts for disposition, ecarts in place.items() if ecarts}
     rapport["disposition_studio"] = {"etat": etat, "mesures": mesures}
     return all(etat.values())
 
@@ -2229,9 +2262,11 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             menu_projet.hide()
 
             fenetres_v32: dict = {}
+            place_en_trop: dict = {"zones_verifiees": 0}  # V3.3, lot 1 : fenêtres, puis pages
             dialogue = reglages.connexions.ajouter()
             capturer(dialogue, "dialogue-ajout-cle")
             fenetres_v32["dialogue-ajout-cle"] = _fenetre_comme_une_page(dialogue)
+            _place_en_trop(dialogue, place_en_trop, "dialogue-ajout-cle")
             dialogue.reject()
 
             # Fenêtres de l'étape 4 : bibliothèque de styles, style, assistant, prononciation.
@@ -2313,6 +2348,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)
                 fenetres_v32[nom] = _fenetre_comme_une_page(fenetre_dialogue)
+                _place_en_trop(fenetre_dialogue, place_en_trop, nom)
                 debordements += _debordements(fenetre_dialogue, f"fenêtre {nom}")
                 if nom in VERIFIER_DANS_LA_FENETRE:
                     lot2[nom] = VERIFIER_DANS_LA_FENETRE[nom](fenetre_dialogue)
@@ -2328,11 +2364,13 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 fenetre.afficher_module(identifiant)
                 _laisser_afficher()
                 debordements += _debordements(fenetre, f"page {identifiant}")
+                _place_en_trop(fenetre.page(identifiant), place_en_trop, f"page {identifiant}")
             fenetre.afficher_module("reglages")
             for index in range(reglages.onglets.count()):
                 reglages.onglets.setCurrentIndex(index)
                 _laisser_afficher()
                 debordements += _debordements(fenetre, f"réglages, onglet « {reglages.onglets.tabText(index)} »")
+                _place_en_trop(reglages, place_en_trop, f"réglages, onglet « {reglages.onglets.tabText(index)} »")
                 if reglages.onglets.widget(index) is reglages.couts:
                     capturer(fenetre, "reglages-couts-etroit")  # tableau à la plus petite largeur
             reglages.onglets.setCurrentIndex(0)
@@ -2349,6 +2387,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             fenetre.afficher_module("voix")
             rapport["debordements"] = debordements
             verifs["sans_debordement"] = not debordements
+            rapport["place_en_trop"] = place_en_trop
+            verifs["place_en_trop"] = place_en_trop["zones_verifiees"] > 0 and not place_en_trop.get("ecarts")
 
             galerie = GalerieComposants()
             galerie.show()

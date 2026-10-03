@@ -21,6 +21,7 @@ from ..theme import Dimensions, Espacements
 from .bouton import Bouton
 from .defilement import zone_defilante
 from .elements import BoutonInfo, bouton, libelle, ligne_avec_aide, marge_haute_titre, titre_avec
+from .zone import DispositionDeZone
 
 TEXTE_BOUTON = "Conseils"
 
@@ -85,7 +86,7 @@ class DialogueConseils(QDialog):
         for rubrique in page.rubriques:
             carte = QFrame()
             carte.setProperty("role", "bloc")
-            partie = QVBoxLayout(carte)
+            partie = DispositionDeZone(carte)  # la place en trop en bas de la carte (V3.3)
             # Le haut des majuscules du titre à 16 px du bord, comme à gauche (V3.2, voir marge_haute_titre).
             partie.setContentsMargins(Espacements.L, marge_haute_titre(Espacements.L), Espacements.L, Espacements.L)
             partie.setSpacing(Espacements.S)

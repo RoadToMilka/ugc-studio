@@ -341,3 +341,21 @@ def test_phrases_d_aide_ecrites_seulement_si_indispensables():
         if nombre > INFOS_VISIBLES_PERMISES.get(nom, 0)
     ]
     assert not ecarts, "Phrase d'aide écrite à l'écran : la mettre dans une icône « i » (aide=…) :\n" + "\n".join(ecarts)
+
+
+def test_chaque_bloc_garde_la_place_en_trop_en_bas():
+    """V3.3, lot 1 (§9.6) : un bloc (rôle « bloc », cartes comprises) range son contenu avec
+    DispositionDeZone (composants/zone.py) : quand il est plus haut que son contenu (à côté d'un bloc
+    plus haut, dans une fenêtre agrandie), la place en trop va en bas du bloc. Avec une disposition
+    verticale ordinaire, Qt la répartit lui-même : un titre plus haut, du vide au-dessus et entre les
+    éléments (le bloc Apparence de la 3.2.2, en fenêtre moyenne). Chaque fichier qui crée des blocs
+    crée donc au moins autant de DispositionDeZone (la vérification complète, sur chaque page et
+    chaque fenêtre, est faite par tests/test_place_en_trop.py et par l'autotest)."""
+    ecarts = []
+    for fichier in _fichiers():
+        texte = fichier.read_text(encoding="utf-8")
+        blocs = texte.count('"role", "bloc"')
+        dispositions = texte.count("DispositionDeZone(")
+        if blocs > dispositions:
+            ecarts.append(f"{fichier.relative_to(RACINE)} : {blocs} bloc(s) pour {dispositions} DispositionDeZone")
+    assert not ecarts, "Blocs sans DispositionDeZone (voir composants/zone.py) :\n" + "\n".join(ecarts)

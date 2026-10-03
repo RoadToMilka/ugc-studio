@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..theme import Couleurs, Dimensions, Espacements, qcolor
+from .zone import DispositionDeZone
 
 
 def couleur_du_fond(element: QWidget) -> str:
@@ -207,7 +208,9 @@ class ColonneDefilante(QScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         interieur = QWidget()
-        self._disposition = QVBoxLayout(interieur)
+        # V3.3 : plus haute que son contenu (la colonne défile, mais le contenu est court), la colonne
+        # garde son contenu en haut ; un contenu fait pour remplir (la liste des sous-titres) la remplit.
+        self._disposition = DispositionDeZone(interieur)
         self._disposition.setContentsMargins(0, 0, marge_droite, 0)
         self._disposition.setSpacing(0)
         self._disposition.addWidget(contenu)
