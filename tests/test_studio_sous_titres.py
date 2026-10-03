@@ -344,14 +344,14 @@ def test_video_introuvable_et_retrouvee(atelier, services, tmp_path, monkeypatch
     atelier.rafraichir()
     bloc = atelier.bloc_apercu
     assert bloc.ligne_introuvable.isVisibleTo(bloc) and "Vidéo introuvable" in bloc.message_video.text()
-    assert not bloc.fond.bouton("video").isEnabled()  # fond gris
+    assert not bloc.fond.est_actif("video")  # fond gris
     retrouvee = tmp_path / "rangee" / "pub.mp4"
     retrouvee.parent.mkdir()
     retrouvee.write_bytes(b"video")
     monkeypatch.setattr(atelier, "_demander_video", lambda _titre, _proposition: retrouvee)
     atelier.retrouver_la_video()
     assert transcription.source == str(retrouvee)
-    assert not bloc.ligne_introuvable.isVisibleTo(bloc) and bloc.fond.bouton("video").isEnabled()
+    assert not bloc.ligne_introuvable.isVisibleTo(bloc) and bloc.fond.est_actif("video")
     assert atelier.lecteur.video == str(retrouvee)
 
 
@@ -409,8 +409,8 @@ def test_fond_zoom_et_reperes_retenus(atelier, services):
     from ugc_studio.ui.composants.apercu import FOND_DAMIER, ZOOM_REEL
 
     bloc = atelier.bloc_apercu
-    bloc.fond.bouton(FOND_DAMIER).click()
-    bloc.zoom.bouton(ZOOM_REEL).click()
+    bloc.fond.choisir(FOND_DAMIER)
+    bloc.zoom.choisir(ZOOM_REEL)
     bloc.repere_grille.setChecked(True)
     bloc.repere_marge.setChecked(False)
     retenu = services.preferences.lire("apercu_sous_titres")

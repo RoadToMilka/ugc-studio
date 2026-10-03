@@ -48,7 +48,7 @@ from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import QFileDialog, QTableWidgetItem, QVBoxLayout
 
 from ....alignement import mots_du_script_accentues
-from ....chemins import dossier_documents
+from ....chemins import chemin_a_afficher, dossier_documents
 from ....exports.plan import SousTitresAExporter, source_du_projet
 from ....fournisseurs.stt import MODE_VERBATIM
 from ....import_srt import FILTRE, ErreurSrt, est_srt, transcription_depuis_srt
@@ -1047,9 +1047,11 @@ class AtelierSousTitres(Page):
         self.bloc_apercu.definir_lecture_possible(bool(chemin or audio))  # rien à lire : un fichier SRT seul
         self.bloc_apercu.ligne_introuvable.setVisible(bool(introuvable))
         if introuvable:
+            # Le chemin peut passer à la ligne après chaque « \ » ou « / » (3.2.2) : d'un seul tenant, il
+            # élargissait la colonne de l'aperçu, et la vidéo n'était plus aux marges du titre.
             self.bloc_apercu.message_video.setText(
-                f"Vidéo introuvable : {introuvable}. Elle a peut-être été déplacée ou supprimée "
-                "(elle n'est pas copiée dans le projet) : l'aperçu montre un fond gris."
+                f"Vidéo introuvable : {chemin_a_afficher(introuvable)}. Elle a peut-être été déplacée ou "
+                "supprimée (elle n'est pas copiée dans le projet) : l'aperçu montre un fond gris."
             )
         self._actualiser_toile()
 

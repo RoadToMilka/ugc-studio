@@ -386,7 +386,7 @@ def test_pipette_prend_une_couleur_dans_l_apercu(atelier, services, qtbot):
     from ugc_studio.ui.composants.apercu import FOND_GRIS
     from ugc_studio.ui.theme import CouleursApercu, qcolor
 
-    atelier.bloc_apercu.fond.bouton(FOND_GRIS).click()
+    atelier.bloc_apercu.fond.choisir(FOND_GRIS)
     texte = atelier.panneau.texte
     atelier.prendre_une_couleur(texte.couleur)
     toile = atelier.toile

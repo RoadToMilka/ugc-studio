@@ -211,12 +211,14 @@ def test_une_colonne_qui_ne_defile_pas_suit_son_contenu(page, qtbot):
 
 
 def test_commandes_de_l_apercu_sous_leur_nom(page, qtbot):
-    """« Fond » et « Zoom » au-dessus de leurs boutons, comme le nom d'un champ (8 px visibles) ;
-    « Repères » au-dessus de ses cases. En grande fenêtre, « Fond » et « Zoom » côte à côte, et les
-    trois repères sur une ligne (le bloc est assez large pour eux)."""
+    """« Fond » et « Zoom » au-dessus de leur liste, comme le nom d'un champ (8 px visibles) ;
+    « Repères » au-dessus de ses cases. En grande fenêtre, « Fond » et « Zoom » côte à côte, 16 px
+    entre eux, et, sous une vidéo de 640 px de haut ou plus (360 px de large ou plus), les trois
+    repères sur une ligne. Sous une vidéo plus étroite, ils passent à la ligne : la colonne garde la
+    largeur de la vidéo (3.2.2 ; voir test_video_aux_memes_marges_que_le_titre)."""
     from ugc_studio.ui.composants.elements import ChampNomme
     from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
-    from ugc_studio.ui.theme import Espacements
+    from ugc_studio.ui.theme import Dimensions, Espacements
 
     atelier = page.atelier
     apercu = atelier.bloc_apercu
@@ -227,12 +229,14 @@ def test_commandes_de_l_apercu_sous_leur_nom(page, qtbot):
     cases = (apercu.repere_zone, apercu.repere_marge, apercu.repere_grille)
     nom = apercu.nom_reperes
     assert nom.text() == "Repères" and all(_position(nom, apercu).y() + nom.height() <= _position(c, apercu).y() for c in cases)
-    page.resize(1800, 1050)
+    page.resize(1800, 1300)
     qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
+    qtbot.waitUntil(lambda: apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE, timeout=3000)
     qtbot.waitUntil(lambda: _position(apercu.champ_fond, apercu).y() == _position(apercu.champ_zoom, apercu).y(), timeout=3000)
     fond, zoom = apercu.champ_fond, apercu.champ_zoom
     assert _position(zoom, apercu).x() - (_position(fond, apercu).x() + fond.width()) == Espacements.L
-    assert len({_position(case, apercu).y() for case in cases}) == 1  # les repères sur une ligne
+    # Les repères sur une ligne (attendu : ils se replacent quand la disposition du bloc est refaite).
+    qtbot.waitUntil(lambda: len({_position(case, apercu).y() for case in cases}) == 1, timeout=3000)
 
 
 def test_coins_arrondis_de_l_apercu_a_l_ecran_seulement(page, qtbot):
@@ -298,3 +302,83 @@ def test_un_reglage_par_ligne_dans_les_effets(page, qtbot):
     couleur, epaisseur = texte.contour_couleur, texte.contour_epaisseur.champ
     qtbot.waitUntil(lambda: _position(epaisseur, texte).y() > _position(couleur, texte).y() + couleur.height(), timeout=3000)
     assert _position(epaisseur, texte).x() == _position(couleur, texte).x()  # alignés à gauche
+
+
+def _marges_de_l_apercu(apercu) -> tuple[int, int, int]:
+    """Dans le bloc de l'aperçu : le bord gauche du titre, puis l'espace à gauche et à droite de la
+    vidéo."""
+    zone = _position(apercu.zone, apercu)
+    return _position(apercu.titre, apercu).x(), zone.x(), apercu.width() - (zone.x() + apercu.zone.width())
+
+
+def _aux_marges_du_titre(apercu) -> bool:
+    titre, gauche, droite = _marges_de_l_apercu(apercu)
+    return gauche == titre and abs(droite - gauche) <= 1
+
+
+def _texte(element) -> str:
+    texte = getattr(element, "text", None)
+    return texte()[:60] if callable(texte) else ""
+
+
+def _attendre_les_marges(qtbot, apercu, et_aussi=lambda: True) -> None:
+    """Attend que la vidéo soit aux marges du titre (et `et_aussi`). Sinon, l'échec donne les mesures,
+    et les éléments du bloc les plus larges : celui qui élargit la colonne est en tête."""
+    from PySide6.QtWidgets import QWidget
+
+    try:
+        qtbot.waitUntil(lambda: _aux_marges_du_titre(apercu) and et_aussi(), timeout=3000)
+    except Exception as erreur:  # pytestqt.exceptions.TimeoutError
+        visibles = [enfant for enfant in apercu.findChildren(QWidget) if enfant.isVisibleTo(apercu)]
+        larges = sorted(
+            ((e.minimumSizeHint().width(), type(e).__name__, _texte(e)) for e in visibles),
+            key=lambda mesure: mesure[0],
+            reverse=True,
+        )[:4]
+        raise AssertionError(
+            f"(titre, gauche, droite) = {_marges_de_l_apercu(apercu)} ; bloc {apercu.width()} px "
+            f"(voulu {apercu.sizeHint().width()}, minimum {apercu.minimumSizeHint().width()}) ; vidéo "
+            f"{apercu.zone.width()} × {apercu.zone.height()} ; les plus larges : {larges}"
+        ) from erreur
+
+
+def test_video_aux_memes_marges_que_le_titre(page, qtbot):
+    """3.2.2 : la colonne de l'aperçu a la largeur de la vidéo, qui commence au bord gauche du titre et
+    finit à la même distance du bord droit du bloc (en grande fenêtre comme en fenêtre moyenne).
+    « Fond » et « Zoom », en listes déroulantes, sont côte à côte sous la vidéo, de son bord gauche à
+    son bord droit. De la 3.2.0 à la 3.2.1, la colonne s'élargissait pour les boutons de « Fond » et
+    « Zoom », et la vidéo flottait au milieu, avec plus d'espace sur les côtés qu'à gauche du titre."""
+    from ugc_studio.ui.composants.choix import ChoixEnListe
+    from ugc_studio.ui.pages.sous_titres.disposition import GRANDE
+    from ugc_studio.ui.theme import Dimensions
+
+    atelier = page.atelier
+    apercu = atelier.bloc_apercu
+    assert isinstance(apercu.fond, ChoixEnListe) and isinstance(apercu.zoom, ChoixEnListe)
+
+    def fond_et_zoom_sous_la_video() -> bool:
+        zone, fond, zoom = (_position(e, apercu) for e in (apercu.zone, apercu.champ_fond, apercu.champ_zoom))
+        droite_de_la_video, droite_du_zoom = zone.x() + apercu.zone.width(), zoom.x() + apercu.champ_zoom.width()
+        return fond.y() == zoom.y() and fond.x() == zone.x() and abs(droite_du_zoom - droite_de_la_video) <= 1
+
+    _attendre_les_marges(qtbot, apercu)  # fenêtre moyenne : une vidéo de 304 px
+    assert fond_et_zoom_sous_la_video()
+    page.resize(1800, 1300)
+    qtbot.waitUntil(lambda: atelier.studio.mode == GRANDE, timeout=3000)
+    _attendre_les_marges(qtbot, apercu, lambda: apercu.zone.height() >= Dimensions.APERCU_HAUTEUR_GRANDE)
+    assert fond_et_zoom_sous_la_video()
+
+
+def test_un_long_chemin_introuvable_n_elargit_pas_l_apercu(page, qtbot, services):
+    """3.2.2 : dans « Vidéo introuvable : … », le chemin passe à la ligne après chaque « \\ ». D'un
+    seul tenant (Qt ne coupe une ligne qu'aux espaces et aux tirets), un long chemin élargissait la
+    colonne de l'aperçu, et la vidéo n'était plus aux marges du titre."""
+    atelier = page.atelier
+    apercu = atelier.bloc_apercu
+    services.projets.projet.transcription.source = (
+        "C:\\Utilisateurs\\Coco\\Vidéos_de_la_marque_Glowzy\\Publicités_TikTok_et_Instagram\\Octobre_2026\\pub_v1.mp4"
+    )
+    atelier.rafraichir()
+    assert apercu.ligne_introuvable.isVisibleTo(apercu) and "Publicités_TikTok" in apercu.message_video.text()
+    _attendre_les_marges(qtbot, apercu)
+    assert (apercu.zone.width(), apercu.zone.height()) == (304, 540)

@@ -73,16 +73,6 @@ class DispositionFlux(QLayout):
         marges = self.contentsMargins()
         return taille + QSize(marges.left() + marges.right(), marges.top() + marges.bottom())
 
-    def largeur_sur_une_ligne(self) -> int:
-        """Largeur qu'il faut pour que tous les éléments visibles tiennent sur une seule rangée (ceux qui
-        prennent toute la largeur ont chacun la leur) : ex. « Fond » et « Zoom » sous l'aperçu (V3.2)."""
-        visibles = [element for element in self._elements if not element.isEmpty()]
-        rangee = [element.sizeHint().width() for element in visibles if not self._est_large(element)]
-        larges = [element.minimumSize().width() for element in visibles if self._est_large(element)]
-        largeur = sum(rangee) + self._espacement * max(0, len(rangee) - 1)
-        marges = self.contentsMargins()
-        return max([largeur, *larges]) + marges.left() + marges.right()
-
     def _est_large(self, element: QLayoutItem) -> bool:
         return element.widget() is not None and element.widget() in self._larges
 

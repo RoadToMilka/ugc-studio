@@ -114,3 +114,19 @@ def dossier_ressources() -> Path:
     à côté du code : ce chemin fonctionne donc dans les deux cas.
     """
     return Path(__file__).absolute().parent / "ressources"
+
+
+# « Espace de largeur nulle » : invisible, il indique seulement qu'une ligne peut se couper là.
+COUPURE_INVISIBLE = "​"
+
+
+def chemin_a_afficher(chemin: str | Path) -> str:
+    """Un chemin de fichier à afficher dans un texte qui passe à la ligne (3.2.2) : la ligne peut se
+    couper après chaque « \\ » ou « / », sans que rien ne se voie. Qt ne coupe une ligne qu'aux
+    espaces et aux tirets : d'un seul tenant, un long chemin élargissait sa colonne (une vidéo
+    introuvable décalait ainsi la vidéo de l'aperçu par rapport au titre du bloc). Pour un texte
+    qu'on peut sélectionner et copier, garder le chemin tel quel."""
+    texte = str(chemin)
+    for separateur in ("\\", "/"):
+        texte = texte.replace(separateur, separateur + COUPURE_INVISIBLE)
+    return texte
