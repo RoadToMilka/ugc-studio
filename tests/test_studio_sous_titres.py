@@ -220,7 +220,7 @@ def test_studio_avec_ses_onglets(atelier, services, tmp_path):
     _video(services, tmp_path)
     atelier.rafraichir()
     onglets = atelier.panneau.onglets
-    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Écran"]
+    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Écran"]  # « Position » : dans l'onglet Texte (V3.3)
     assert atelier.toile.sous_titre is atelier.sous_titres[0]  # le premier sous-titre est montré
     assert atelier.studio.mode == MOYENNE  # aperçu et apparence côte à côte, la liste dessous
 

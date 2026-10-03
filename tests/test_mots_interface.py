@@ -257,7 +257,7 @@ def atelier(app_configuree, qtbot, services, tmp_path):
 
 def test_studio_avec_l_onglet_mots(atelier, services):
     onglets = atelier.panneau.onglets
-    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Écran"]
+    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Écran"]  # « Position » : dans l'onglet Texte (V3.3)
     mots = atelier.panneau.mots
     mots.raccourci.setCurrentIndex(mots.raccourci.findData("surlignage"))
     mots.raccourci.activated.emit(mots.raccourci.currentIndex())

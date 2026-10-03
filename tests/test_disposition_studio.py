@@ -180,16 +180,28 @@ def test_fenetre_trop_basse_pas_de_trois_colonnes(page, qtbot):
     assert atelier.colonne_apparence.defile and not atelier.colonne_sous_titres.defile
 
 
-def test_decoupage_en_haut_des_sous_titres(page, services):
-    """Le Découpage quitte les onglets de l'apparence : en haut du bloc Sous-titres, replié au départ,
-    avec son ↺ ; « Masquer les hésitations » y est aussi, mais le ↺ ne le touche pas."""
+def test_decoupage_et_position_dans_l_onglet_texte(page, services):
+    """V3.3, lot 3 : le Découpage ouvre l'onglet Texte (en haut du bloc Sous-titres de la V3.1 à la
+    3.2.4), replié au départ, avec son ↺ ; le groupe Position (son propre onglet jusqu'à la 3.2.4) est
+    entre « Taille et casse » et « Remplissage » ; « Masquer les hésitations », hors du préréglage,
+    reste seul dans le bloc Sous-titres, sous la ligne de résumé, et le ↺ du Découpage ne le touche pas."""
+    from ugc_studio.ui.pages.sous_titres.reglages import ONGLET_TEXTE
+
     atelier = page.atelier
     panneau = atelier.panneau
     onglets = panneau.onglets
-    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Position", "Écran"]
-    decoupage = panneau.section_decoupage
-    assert atelier.cadre_sous_titres.isAncestorOf(decoupage) and not decoupage.est_ouverte()
-    assert decoupage.isAncestorOf(panneau.zone_masquer)
+    assert [onglets.tabText(i) for i in range(onglets.count())] == ["Texte", "Mots", "Animations", "Écran"]
+    texte = onglets.widget(ONGLET_TEXTE)
+    decoupage, position = panneau.section_decoupage, panneau.section_position
+    assert texte.isAncestorOf(decoupage) and texte.isAncestorOf(position) and not decoupage.est_ouverte()
+    groupes = [texte.layout().itemAt(rang).widget() for rang in range(texte.layout().count())]
+    sections = texte.sections
+    assert groupes.index(decoupage) < groupes.index(sections["Police"])
+    assert groupes.index(sections["Taille et casse"]) < groupes.index(position) < groupes.index(sections["Remplissage"])
+    bloc = atelier.cadre_sous_titres
+    assert bloc.isAncestorOf(panneau.zone_masquer) and not decoupage.isAncestorOf(panneau.zone_masquer)
+    assert _position(panneau.zone_masquer, bloc).y() > _position(atelier.resume, bloc).y()
+    assert _position(panneau.zone_masquer, bloc).y() < _position(atelier.titre_reorganiser, bloc).y()
     decoupage.ouvrir()
     panneau.caracteres.setValue(panneau.caracteres.value() + 3)
     assert services.projets.projet.sous_titres.caracteres_max == panneau.caracteres.value()
@@ -200,9 +212,15 @@ def test_decoupage_en_haut_des_sous_titres(page, services):
 
 
 def test_une_colonne_qui_ne_defile_pas_suit_son_contenu(page, qtbot):
-    """Fenêtre moyenne : ouvrir le Découpage agrandit le bloc Sous-titres (rien n'est coupé)."""
+    """Petite fenêtre : Apparence ne défile pas (V3.3 : elle défile en fenêtre moyenne) ; ouvrir le
+    Découpage agrandit son bloc (rien n'est coupé)."""
+    from ugc_studio.ui.pages.sous_titres.disposition import PETITE
+
     atelier = page.atelier
-    colonne = atelier.colonne_sous_titres
+    page.resize(700, 900)
+    qtbot.waitUntil(lambda: atelier.studio.mode == PETITE, timeout=3000)
+    colonne = atelier.colonne_apparence
+    assert not colonne.defile
     avant = colonne.height()
     atelier.panneau.section_decoupage.ouvrir()
     qtbot.waitUntil(lambda: colonne.height() > avant, timeout=3000)

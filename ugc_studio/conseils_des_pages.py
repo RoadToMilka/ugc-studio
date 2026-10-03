@@ -304,8 +304,8 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Découpage",
             (
-                "Le découpage est en haut de la liste des sous-titres (groupe « Découpage », replié au "
-                "départ) : tu vois tout de suite ce qu'il change.",
+                "Le découpage ouvre l'onglet Texte de l'apparence (groupe « Découpage », replié au départ) : "
+                "il fait partie du préréglage. La liste des sous-titres montre tout de suite ce qu'il change.",
                 "Caractères et mots par sous-titre sont deux maximums ; un mot n'est jamais coupé.",
                 "Un sous-titre se termine toujours à un changement de personne, après un silence de plus de "
                 "0,8 s et, si « Couper de préférence après la ponctuation » est cochée, après une fin de phrase.",
@@ -387,8 +387,8 @@ SOUS_TITRES = PageDeConseils(
         Rubrique(
             "Préréglages",
             (
-                "Un préréglage garde tout le style : onglets Texte, Mots, Animations et Position, et le "
-                "Découpage. Ni le format ni la zone de sécurité : ils dépendent de la vidéo et de la plateforme. "
+                "Un préréglage garde tout le style : onglets Texte (Découpage et Position compris), Mots et "
+                "Animations. Ni le format ni la zone de sécurité : ils dépendent de la vidéo et de la plateforme. "
                 "Ni « Masquer les hésitations », partagé avec le module Transcription.",
                 "Choisis-en un dans la liste « Préréglage » pour l'appliquer. Dès que tu changes un réglage, "
                 "la liste affiche « (modifié) » : ton projet garde sa propre copie du style.",
@@ -442,8 +442,8 @@ SOUS_TITRES = PageDeConseils(
             (
                 "« Haut » et « Bas » placent le sous-titre juste à l'intérieur de la zone de sécurité de la "
                 "plateforme : le même réglage convient à TikTok comme à Reels. Le réglage fin le décale (tu "
-                "peux aussi le glisser dans l'aperçu) ; il s'arrête avant la marge maximum. Le ↺ du groupe "
-                "Position remet la position du préréglage, réglage fin compris.",
+                "peux aussi le glisser dans l'aperçu) ; il s'arrête avant la marge maximum. Le groupe "
+                "Position est dans l'onglet Texte ; son ↺ remet la position du préréglage, réglage fin compris.",
                 "Un sous-titre de deux lignes grandit vers le bas (Haut), des deux côtés (Centre) ou vers le "
                 "haut (Bas).",
                 "L'alignement à gauche ou à droite part du bord de la zone de sécurité ; il peut changer le "

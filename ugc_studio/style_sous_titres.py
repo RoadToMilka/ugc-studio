@@ -208,7 +208,8 @@ class StyleTexte:
 
 @dataclass(frozen=True)
 class Position:
-    """Place des sous-titres à l'écran (onglet « Position »)."""
+    """Place des sous-titres à l'écran (groupe « Position » de l'onglet « Texte » ; son propre onglet
+    jusqu'à la 3.2.4)."""
 
     verticale: str = BAS
     decalage_pct: float = 0.0  # réglage fin, en % de la hauteur : positif vers le bas

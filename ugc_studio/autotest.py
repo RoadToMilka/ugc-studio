@@ -560,7 +560,7 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     l'autotest réorganise les sous-titres de démonstration)."""
     from .style_sous_titres import BAS, CENTRE, GAUCHE, HAUT
     from .ui.composants.apercu import FOND_DAMIER, FOND_VIDEO, ZOOM_AJUSTE, ZOOM_REEL
-    from .ui.pages.sous_titres.reglages import ONGLET_POSITION
+    from .ui.pages.sous_titres.reglages import ONGLET_TEXTE
 
     bloc, panneau, toile = atelier.bloc_apercu, atelier.panneau, atelier.toile
     depart = atelier.reglages_du_projet()
@@ -593,7 +593,13 @@ def _studio(atelier, capturer, rapport: dict) -> bool:
     for index in range(panneau.onglets.count()):
         panneau.onglets.setCurrentIndex(index)
         capturer(atelier.window(), f"studio-onglet-{index + 1}")
-    panneau.onglets.setCurrentIndex(ONGLET_POSITION)
+    # V3.3 : le groupe Position est dans l'onglet Texte (son propre onglet jusqu'à la 3.2.4). L'onglet
+    # se met en place avant qu'on fasse défiler l'apparence jusqu'au groupe (sinon, sa place n'est pas
+    # encore connue), et la capture le montre.
+    panneau.onglets.setCurrentIndex(ONGLET_TEXTE)
+    _laisser_afficher()
+    atelier.montrer(panneau.section_position)
+    _laisser_afficher()
     panneau.verticale.bouton(HAUT).click()
     panneau.alignement.bouton(GAUCHE).click()
     rect, video = toile.rect_du_sous_titre(), toile.rect_video()
@@ -1115,9 +1121,17 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
     rapport["prereglages_appliques"] = appliques
     etat["prereglages_appliques"] = len(appliques) == 7 and all(appliques)
     # Un réglage changé (V3.1) : « (modifié) », son nom en mauve, le ↺ de son groupe (et lui seul). Le
-    # découpage est en haut du bloc Sous-titres (lot 5), replié au départ.
+    # découpage ouvre l'onglet Texte, replié au départ (V3.3 ; en haut du bloc Sous-titres de la V3.1 à
+    # la 3.2.4) ; « Masquer les hésitations », hors du préréglage, reste seul dans le bloc Sous-titres.
     decoupage = panneau.section_decoupage
-    etat["decoupage_dans_sous_titres"] = atelier.cadre_sous_titres.isAncestorOf(decoupage) and not decoupage.est_ouverte()
+    panneau.onglets.setCurrentIndex(ONGLET_TEXTE)
+    groupes_du_texte = [panneau.texte.layout().itemAt(rang).widget() for rang in range(panneau.texte.layout().count())]
+    etat["decoupage_en_tete_de_l_onglet_texte"] = (
+        panneau.texte.isAncestorOf(decoupage)
+        and not decoupage.est_ouverte()
+        and groupes_du_texte.index(decoupage) < groupes_du_texte.index(panneau.texte.sections["Police"])
+    )
+    etat["masquer_dans_sous_titres"] = atelier.cadre_sous_titres.isAncestorOf(panneau.zone_masquer)
     decoupage.ouvrir()
     panneau.caracteres.setValue(panneau.caracteres.value() + 1)
     _laisser_afficher()
@@ -1127,7 +1141,9 @@ def _frise_et_prereglages(atelier, capturer, capturer_image, rapport: dict) -> b
     etat["retablir_du_groupe_seul"] = not decoupage.retablir.isHidden() and all(
         groupe.retablir.isHidden() for groupe in groupes if groupe is not decoupage
     )
-    capturer(atelier.cadre_sous_titres, "studio-decoupage-modifie")
+    atelier.montrer(decoupage)
+    _laisser_afficher()
+    capturer(atelier.cadre_apparence, "studio-decoupage-modifie")
     atelier.montrer(panneau.prereglage)  # la ligne « Préréglage (modifié) » sur la capture
     _laisser_afficher()
     capturer(atelier.window(), "studio-prereglage-modifie")

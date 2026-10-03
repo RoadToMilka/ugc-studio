@@ -194,7 +194,7 @@ class DialoguePrereglages(QDialog):
                 "Préréglages de sous-titres",
                 "prereglages",
                 aide=(
-                    "Un préréglage garde tout le style : onglets Texte, Mots, Animations et Position, et le Découpage. "
+                    "Un préréglage garde tout le style : onglets Texte (Découpage et Position compris), Mots et Animations. "
                     "Le projet en garde sa propre copie : modifier un préréglage ne change pas les projets déjà faits."
                 ),
             )
