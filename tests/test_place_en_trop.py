@@ -222,8 +222,38 @@ def test_fenetres_et_cartes(app_configuree, qtbot, services):
         qtbot.waitExposed(dialogue)
         ecarts = ecarts_dans(dialogue)
         assert not ecarts, f"{dialogue.windowTitle()} :\n" + "\n".join(ecarts)
-    premier = nouveau.cadre.layout().itemAt(0)
+    disposition = nouveau.cadre.layout()
+    premier = disposition.itemAt(0)
     avant, hauteur = premier.geometry(), nouveau.cadre.height()
+    etat_avant = _etat(nouveau.cadre)
     nouveau.resize(nouveau.width(), nouveau.height() + ETIREMENT)
     qtbot.waitUntil(lambda: nouveau.cadre.height() == hauteur + ETIREMENT, timeout=3000)
-    assert premier.geometry() == avant
+    assert premier.geometry() == avant, f"avant :\n{etat_avant}\naprès :\n{_etat(nouveau.cadre)}"
+
+
+def _etat(cadre) -> str:
+    """Mesures d'une zone et de ses éléments (pour comprendre un échec)."""
+    from PySide6.QtCore import Qt
+
+    from ugc_studio.ui.composants.zone import hauteur_du_contenu, remplit
+
+    disposition = cadre.layout()
+    largeur = cadre.contentsRect().width()
+    lignes = [
+        f"zone {cadre.size()} contenu {cadre.contentsRect()} disposition {type(disposition).__name__} "
+        f"géométrie {disposition.geometry()} remplit {getattr(disposition, 'a_un_element_qui_remplit', lambda: '?')()} "
+        f"naturelle {hauteur_du_contenu(disposition, largeur)} hfw {disposition.heightForWidth(largeur)} "
+        f"souhaitée {disposition.sizeHint()} minimum {disposition.minimumSize()}"
+    ]
+    for rang in range(disposition.count()):
+        element = disposition.itemAt(rang)
+        widget = element.widget()
+        nom = type(widget).__name__ if widget is not None else type(element).__name__
+        lignes.append(
+            f"  {rang} {nom} vide={element.isEmpty()} géométrie {element.geometry()} souhaitée {element.sizeHint()} "
+            f"min {element.minimumSize()} max {element.maximumSize()} "
+            f"vertical={bool(element.expandingDirections() & Qt.Orientation.Vertical)} étirement {disposition.stretch(rang)} "
+            f"remplit={remplit(element, disposition.stretch(rang))} hfw={element.hasHeightForWidth()}"
+            f"({element.heightForWidth(largeur - 48) if element.hasHeightForWidth() else '-'})"
+        )
+    return "\n".join(lignes)
