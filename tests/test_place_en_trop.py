@@ -208,7 +208,7 @@ def test_chaque_page_garde_la_place_en_trop_en_bas(app_configuree, qtbot, servic
 
 def test_fenetres_et_cartes(app_configuree, qtbot, services):
     """Une fenêtre (bloc et boutons du bas), les cartes des préréglages et celles des conseils ; une
-    fenêtre agrandie garde son contenu en haut du bloc."""
+    fenêtre agrandie garde son contenu en haut du bloc, chaque élément à sa place."""
     from ugc_studio.conseils_des_pages import PAGES
     from ugc_studio.ui.composants.conseils import DialogueConseils
     from ugc_studio.ui.composants.zone import ecarts_dans
@@ -222,38 +222,67 @@ def test_fenetres_et_cartes(app_configuree, qtbot, services):
         qtbot.waitExposed(dialogue)
         ecarts = ecarts_dans(dialogue)
         assert not ecarts, f"{dialogue.windowTitle()} :\n" + "\n".join(ecarts)
+    _sans_contenu_serre(nouveau)
     disposition = nouveau.cadre.layout()
-    premier = disposition.itemAt(0)
-    avant, hauteur = premier.geometry(), nouveau.cadre.height()
-    etat_avant = _etat(nouveau.cadre)
+    elements = [disposition.itemAt(rang) for rang in range(disposition.count())]
+    avant, hauteur = _geometries(elements), nouveau.cadre.height()
     nouveau.resize(nouveau.width(), nouveau.height() + ETIREMENT)
     qtbot.waitUntil(lambda: nouveau.cadre.height() == hauteur + ETIREMENT, timeout=3000)
-    assert premier.geometry() == avant, f"avant :\n{etat_avant}\naprès :\n{_etat(nouveau.cadre)}"
+    assert _geometries(elements) == avant
 
 
-def _etat(cadre) -> str:
-    """Mesures d'une zone et de ses éléments (pour comprendre un échec)."""
-    from PySide6.QtCore import Qt
+def _sans_contenu_serre(dialogue) -> None:
+    """Le bloc de la fenêtre a au moins la hauteur de son contenu à sa largeur : rien n'est serré."""
+    from ugc_studio.ui.composants.zone import hauteur_du_contenu
 
-    from ugc_studio.ui.composants.zone import hauteur_du_contenu, remplit
+    cadre = dialogue.cadre.contentsRect()
+    assert hauteur_du_contenu(dialogue.cadre.layout(), cadre.width()) <= cadre.height()
 
-    disposition = cadre.layout()
-    largeur = cadre.contentsRect().width()
-    lignes = [
-        f"zone {cadre.size()} contenu {cadre.contentsRect()} disposition {type(disposition).__name__} "
-        f"géométrie {disposition.geometry()} remplit {getattr(disposition, 'a_un_element_qui_remplit', lambda: '?')()} "
-        f"naturelle {hauteur_du_contenu(disposition, largeur)} hfw {disposition.heightForWidth(largeur)} "
-        f"souhaitée {disposition.sizeHint()} minimum {disposition.minimumSize()}"
-    ]
-    for rang in range(disposition.count()):
-        element = disposition.itemAt(rang)
-        widget = element.widget()
-        nom = type(widget).__name__ if widget is not None else type(element).__name__
-        lignes.append(
-            f"  {rang} {nom} vide={element.isEmpty()} géométrie {element.geometry()} souhaitée {element.sizeHint()} "
-            f"min {element.minimumSize()} max {element.maximumSize()} "
-            f"vertical={bool(element.expandingDirections() & Qt.Orientation.Vertical)} étirement {disposition.stretch(rang)} "
-            f"remplit={remplit(element, disposition.stretch(rang))} hfw={element.hasHeightForWidth()}"
-            f"({element.heightForWidth(largeur - 48) if element.hasHeightForWidth() else '-'})"
-        )
-    return "\n".join(lignes)
+
+# Un chemin qui passe sur plusieurs lignes dans une colonne étroite (il se coupe aux espaces).
+CHEMIN_LONG = "D:\\Mes pubs\\Clients 2026\\Marque de sérum bio\\Campagne de rentrée\\Vidéos des créatrices"
+
+
+def test_un_champ_qui_passe_a_la_ligne_a_la_hauteur_de_son_contenu(app_configuree, qtbot):
+    """Un champ dont le texte passe à la ligne (le chemin du dossier des projets) a la hauteur qu'il
+    lui faut à sa largeur. Jusqu'à la 3.2.2, sa hauteur restait bloquée à celle que Qt calcule pour
+    une autre largeur, plus grande : la dernière ligne était coupée, et dans la fenêtre « Nouveau
+    projet » agrandie, la place qui manquait au champ allait au titre."""
+    from PySide6.QtWidgets import QHBoxLayout
+
+    from ugc_studio.ui.composants.elements import ChampNomme, bloc, bouton, libelle
+    from ugc_studio.ui.composants.zone import ecarts_de_place
+
+    cadre, disposition = bloc("Nouveau projet")
+    ligne = QHBoxLayout()
+    chemin = libelle(CHEMIN_LONG, "secondaire", selectionnable=True)
+    ligne.addWidget(chemin, 1)
+    ligne.addWidget(bouton("Changer…", variante="contour"))
+    champ = ChampNomme("Emplacement", ligne, etire=True)
+    disposition.addWidget(champ)
+    elements, avant = _etirer(qtbot, cadre, largeur=280)
+    qtbot.waitUntil(lambda: _geometries(elements) == avant, timeout=3000)
+    # Le cas d'avant : à sa largeur, le champ a besoin de plus que la hauteur calculée par Qt.
+    assert champ.heightForWidth(champ.width()) > champ.sizeHint().height()
+    assert champ.height() == champ.heightForWidth(champ.width())
+    assert chemin.height() == chemin.heightForWidth(chemin.width())  # aucune ligne coupée
+    assert ecarts_de_place(cadre) == []
+
+
+def test_la_fenetre_nouveau_projet_grandit_avec_son_chemin(app_configuree, qtbot, services):
+    """Un autre dossier, au chemin plus long, prend des lignes de plus : la fenêtre grandit pour le
+    montrer en entier, le contenu toujours en haut du bloc."""
+    from ugc_studio.ui.composants.zone import ecarts_dans
+    from ugc_studio.ui.dialogues.projet import DialogueNouveauProjet
+
+    dialogue = DialogueNouveauProjet(services.projets)
+    qtbot.addWidget(dialogue)
+    dialogue.show()
+    qtbot.waitExposed(dialogue)
+    _sans_contenu_serre(dialogue)
+    hauteur = dialogue.height()
+    dialogue.chemin.setText("\\".join([CHEMIN_LONG] * 3))  # comme après « Changer… »
+    qtbot.waitUntil(lambda: dialogue.height() > hauteur, timeout=3000)
+    qtbot.wait(50)
+    _sans_contenu_serre(dialogue)
+    assert ecarts_dans(dialogue) == []

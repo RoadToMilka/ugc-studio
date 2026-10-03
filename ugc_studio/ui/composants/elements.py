@@ -149,7 +149,12 @@ class ChampNomme(QWidget):
     - `element` : le champ (ou une rangée : un champ et son unité, une liste et sa durée…) ;
     - `a_cote` : un petit bouton posé à droite du champ (ex. ↺) ;
     - `etire` : le champ prend toute la largeur (ex. une glissière) ; sinon, sa largeur naturelle.
-    Griser le ChampNomme grise aussi son nom ; le cacher cache les deux."""
+    Griser le ChampNomme grise aussi son nom ; le cacher cache les deux.
+
+    Hauteur : celle du nom et du champ, ni plus ni moins. V3.3 : un champ dont la hauteur dépend de sa
+    largeur (un texte qui passe à la ligne, ex. le chemin du dossier des projets) a la hauteur qu'il lui
+    faut à sa largeur ; jusqu'à la 3.2.2, sa hauteur était bloquée à celle calculée pour une autre
+    largeur, et une ligne de texte pouvait être coupée."""
 
     def __init__(
         self,
@@ -161,7 +166,7 @@ class ChampNomme(QWidget):
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
-        disposition = QVBoxLayout(self)
+        disposition = DispositionDeZone(self)  # plus haut que son contenu, il le garde en haut (V3.3)
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(Dimensions.ECART_NOM_CHAMP)
         self.nom = libelle(nom, "legende", retour_a_la_ligne=False) if nom else None
@@ -187,7 +192,11 @@ class ChampNomme(QWidget):
         self.element = element
         self.a_cote = a_cote
         politique = QSizePolicy.Policy.Expanding if etire else QSizePolicy.Policy.Preferred
-        self.setSizePolicy(politique, QSizePolicy.Policy.Fixed)
+        # « Fixed » en hauteur : Qt bloque la hauteur à la hauteur souhaitée, calculée pour une largeur
+        # quelconque. Un champ dont la hauteur dépend de la largeur prend donc « Preferred » : sa hauteur
+        # pour sa largeur (DispositionDeZone garde son contenu en haut s'il reçoit plus).
+        verticale = QSizePolicy.Policy.Preferred if disposition.hasHeightForWidth() else QSizePolicy.Policy.Fixed
+        self.setSizePolicy(politique, verticale)
 
 
 def champ_nomme(nom: str | None, element: QWidget | QLayout, etire: bool = False, aide: str | None = None) -> ChampNomme:
@@ -204,12 +213,16 @@ def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
 
     `champs` : des couples (nom, champ), ou des triplets (nom, champ, TOUTE_LA_RANGEE) pour un champ
     qui prend toute la rangée (ex. un texte de plusieurs lignes) ; None laisse une case vide.
-    Renvoie la grille ; chaque ChampNomme est dans `grille.champs` (par nom)."""
+    Renvoie la grille ; chaque ChampNomme est dans `grille.champs` (par nom).
+
+    Un champ plus bas que son voisin de rangée reste en haut de sa case, la place en trop dessous
+    (V3.3, §9.6) : Qt le centrait, avec du vide au-dessus de son nom."""
     grille = QGridLayout()
     grille.setContentsMargins(0, 0, 0, 0)
     grille.setHorizontalSpacing(Espacements.L)
     grille.setVerticalSpacing(Espacements.M)
     grille.champs = {}
+    en_haut = Qt.AlignmentFlag.AlignTop
     rang = colonne = 0
     for entree in champs:
         if entree is None:
@@ -221,10 +234,10 @@ def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
             if TOUTE_LA_RANGEE in options:
                 if colonne:
                     rang, colonne = rang + 1, 0
-                grille.addWidget(champ, rang, 0, 1, colonnes)
+                grille.addWidget(champ, rang, 0, 1, colonnes, en_haut)
                 rang += 1
                 continue
-            grille.addWidget(champ, rang, colonne)
+            grille.addWidget(champ, rang, colonne, en_haut)
             colonne += 1
         if colonne >= colonnes:
             rang, colonne = rang + 1, 0

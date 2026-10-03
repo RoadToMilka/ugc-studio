@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QDialog, QFileDialog, QHBoxLayout, QLineEdit
 
 from ...chemins import dossier_projets_defaut
@@ -64,6 +65,22 @@ class DialogueNouveauProjet(QDialog):
         boutons.addWidget(self.bouton_creer)
         fenetre.addLayout(boutons)  # sous le bloc, sur le fond de l'app (V3.2)
         self.nom.setFocus()
+        # Taille (V3.3) : la hauteur du contenu à la largeur de la fenêtre, le chemin du dossier pouvant
+        # passer à la ligne. Jusqu'à la 3.2.2, Qt calculait cette hauteur pour une autre largeur, et le
+        # contenu pouvait être serré. La fenêtre n'est pas non plus plus étroite que son contenu (un
+        # long chemin d'un seul tenant).
+        largeur = max(Dimensions.DIALOGUE_LARGEUR, self.minimumSizeHint().width())
+        self.resize(largeur, self.heightForWidth(largeur))
+
+    def event(self, evenement: QEvent) -> bool:
+        traite = super().event(evenement)
+        if evenement.type() == QEvent.Type.LayoutRequest:
+            # Le contenu vient de changer (un autre dossier, un message d'erreur) : s'il lui faut plus de
+            # hauteur à cette largeur, la fenêtre grandit pour tout montrer (V3.3).
+            hauteur = self.heightForWidth(self.width())
+            if hauteur > self.height():
+                self.resize(self.width(), hauteur)
+        return traite
 
     def _choisir_dossier(self) -> None:
         choix = QFileDialog.getExistingDirectory(self, "Emplacement des projets", str(self._emplacement))

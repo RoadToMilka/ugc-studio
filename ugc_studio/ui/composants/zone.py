@@ -127,13 +127,21 @@ def description_de_zone(zone: QWidget) -> str:
     return f"« {texte[:40]} »" if texte else type(zone).__name__
 
 
+def hauteur_naturelle(element: QLayoutItem, largeur: int) -> int:
+    """Hauteur naturelle d'un élément à cette largeur : celle que Qt lui donne pour cette largeur (un
+    texte qui passe à la ligne), ou sa hauteur souhaitée, entre ses hauteurs minimale et maximale."""
+    hauteur = element.heightForWidth(largeur) if element.hasHeightForWidth() else element.sizeHint().height()
+    return max(element.minimumSize().height(), min(hauteur, element.maximumSize().height()))
+
+
 def ecarts_de_place(zone: QWidget) -> list[str]:
     """Étire la disposition de la zone de ETIREMENT_VERIFIE px de plus que son contenu, et relève ce
-    qui bouge par rapport à la place que Qt donne à chaque élément à la hauteur du contenu : un élément
-    qui descend (du vide au-dessus de lui) ou qui devient plus haut (son texte se décale vers le
-    milieu). Seuls grandissent les éléments faits pour remplir (voir remplit) ; ceux qui les suivent
-    descendent d'autant, pas plus. Renvoie les écarts (aucun : la règle est respectée) ; la zone est
-    remise en place ensuite."""
+    qui ne respecte pas la règle :
+    - du vide au-dessus d'un élément : le premier n'est plus à sa place, en haut, ou un élément n'est
+      plus juste sous le précédent (avec l'écart que Qt met entre eux à la hauteur du contenu) ;
+    - un élément plus haut que son contenu (son texte descend vers le milieu), sauf un élément fait
+      pour remplir la zone (voir remplit), qui peut grandir : ceux qui le suivent descendent avec lui.
+    Renvoie les écarts (aucun : la règle est respectée) ; la zone est remise en place ensuite."""
     disposition = zone.layout()
     if not isinstance(disposition, QBoxLayout):
         return []
@@ -149,7 +157,7 @@ def ecarts_de_place(zone: QWidget) -> list[str]:
     def releve(hauteur: int, comme_qt: bool = False) -> list[QRect]:
         place = QRect(cadre.x(), cadre.y(), largeur, hauteur)
         if comme_qt:
-            # La disposition de Qt elle-même (sans DispositionDeZone) : la place naturelle de chacun.
+            # La disposition de Qt elle-même (sans DispositionDeZone) : les écarts entre les éléments.
             QBoxLayout.setGeometry(disposition, place)
         else:
             disposition.setGeometry(place)
@@ -162,15 +170,18 @@ def ecarts_de_place(zone: QWidget) -> list[str]:
         disposition.setGeometry(cadre)  # la zone reprend sa place
 
     ecarts = []
-    croissance = 0  # ce dont ont grandi, au-dessus, les éléments faits pour remplir
-    for (rang, element), a, b in zip(elements, avant, apres):
-        descente = b.top() - a.top() - croissance
-        if descente:
-            ecarts.append(f"{descente} px de vide au-dessus de {_nom(element)}")
-        if remplit(element, disposition.stretch(rang)):
-            croissance += b.height() - a.height()
-        elif b.height() != a.height():
-            ecarts.append(f"{_nom(element)} : {b.height() - a.height()} px plus haut (son texte descend)")
+    for index, ((rang, element), a, b) in enumerate(zip(elements, avant, apres)):
+        nom = _nom(element)
+        if index == 0:
+            attendu = a.top()
+        else:
+            attendu = apres[index - 1].bottom() + (a.top() - avant[index - 1].bottom())
+        if b.top() != attendu:
+            ecarts.append(f"{b.top() - attendu} px de vide au-dessus de {nom}")
+        if not remplit(element, disposition.stretch(rang)):
+            hauteur = hauteur_naturelle(element, b.width())
+            if b.height() > hauteur:
+                ecarts.append(f"{nom} : {b.height() - hauteur} px plus haut que son contenu (son texte descend)")
     return ecarts
 
 
