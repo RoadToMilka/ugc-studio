@@ -179,7 +179,22 @@ jobs:
       # .exe, lot 3), le plus rapide est donc le plus proche du temps propre à l'app ; puis les
       # médianes et le détail. Les écarts d'une fabrication à l'autre viennent de la machine prêtée :
       # seule la comparaison sur une même fabrication compte.
+      # Depuis le 04/10/2026 (minutes de GitHub comptées) : seulement quand une étape touche à ce qui
+      # fait le démarrage (la recette du .exe, les bibliothèques, le lancement de l'app, FFmpeg). Sinon,
+      # 3 minutes de machine de moins par fabrication, pour une mesure qui ne changerait pas.
+      - name: Faut-il mesurer le démarrage ?
+        id: demarrage
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $fichiers = gh api "repos/${{ github.repository }}/compare/main...${{ github.sha }}" --jq ".files[].filename"
+          $touche = @($fichiers | Where-Object { $_ -match '^(packaging/|lancer_ugc_studio\.py$|requirements\.txt$|ugc_studio/app\.py$|ugc_studio/exports/ffmpeg\.py$|outils/preparer_ffmpeg\.py$)' })
+          Write-Host "Fichiers qui touchent au démarrage : $($touche -join ', ')"
+          "mesurer=$(if ($touche.Count -gt 0) { 'oui' } else { 'non' })" >> $env:GITHUB_OUTPUT
+
       - name: Mesurer le démarrage (2.0.0, 2.2.0 et cette version)
+        if: steps.demarrage.outputs.mesurer == 'oui'
         timeout-minutes: 10
         continue-on-error: true
         env:
@@ -230,13 +245,15 @@ jobs:
           foreach ($nom in $exes.Keys) { $lignes += "  {0} : {1}" -f $nom, (($mesures[$nom] | ForEach-Object { "{0:N2}" -f $_ }) -join " ; ") }
           $lignes | Tee-Object -FilePath rapport/demarrage.txt
 
+      # Gardés 7 jours (30 jusqu'au 04/10/2026) : le stockage de GitHub est compté (500 Mo inclus par
+      # mois) ; le rapport reste aussi dans sa référence cachée, et chaque version publiée garde son .exe.
       - name: Joindre le rapport (tests, autotest, captures)
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: rapport
           path: rapport/
-          retention-days: 30
+          retention-days: 7
 
       # Copie du rapport dans une référence Git cachée (refs/rapports/<branche>), invisible dans
       # la liste des branches : Claude peut ainsi relire les captures d'écran depuis son espace
@@ -274,7 +291,7 @@ jobs:
         with:
           name: UGC-Studio-exe-${{ steps.empreinte.outputs.empreinte }}
           path: dist/UGC-Studio.exe
-          retention-days: 30
+          retention-days: 7
 
   # Sur main : la Release « v<version> » avec le .exe vérifié (celui de la branche de l'étape, ou
   # celui fabriqué juste avant si le code n'avait pas encore été fabriqué), si cette version n'a pas
