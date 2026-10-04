@@ -78,8 +78,9 @@ def test_chaque_bouton_ouvre_une_page_qui_existe_et_chaque_page_sert():
     assert set(PAGES) <= set(utilisees), f"Conseils jamais affichés : {set(PAGES) - set(utilisees)}"
 
 
-def test_cinq_modules_et_dix_neuf_fenetres():
-    modules = {"script", "voix", "transcription", "sous-titres", "reglages"}
+def test_les_modules_et_dix_neuf_fenetres():
+    # V4 : les outils (modules sans projet) ont leurs conseils, comme les autres modules.
+    modules = {"script", "voix", "transcription", "sous-titres", "reglages", "images"}
     assert modules <= set(PAGES)
     # Dont 4 au lot 2 de la V2 (variantes, comparaison, briefs, exemples), 1 au lot 7 (préréglages),
     # 2 dans la V3 (fenêtres d'export du calque, lot 1, et de la vidéo, lot 2) et 1 dans la V3.1

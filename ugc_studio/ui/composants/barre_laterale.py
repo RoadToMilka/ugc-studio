@@ -24,11 +24,12 @@ from ..icones import icone
 from ..polices import police
 from ..theme import Arrondis, Couleurs, Dimensions, Espacements, Hauteurs, Opacites, Typo, qcolor
 from .bouton import Bouton, dessiner_icone_et_texte
-from .elements import libelle
+from .elements import libelle, separateur
 from .menu import Menu
 
 TEXTE_SANS_PROJET = "Aucun projet ouvert"
 AIDE_PROJET = "Nouveau projet, ouvrir un projet, projets récents…"
+TITRE_OUTILS = "Outils"  # groupe des modules sans projet (V4)
 
 
 @dataclass(frozen=True)
@@ -136,11 +137,20 @@ class BarreLaterale(QFrame):
     """Barre de navigation. Émet `module_selectionne(identifiant)` quand on clique un module.
 
     En haut, dans une bande de la hauteur du bandeau (et avec la même ligne dessous) : le bouton du
-    projet ouvert, qui ouvre le menu Projet (nouveau, ouvrir, récents…), rempli par la fenêtre."""
+    projet ouvert, qui ouvre le menu Projet (nouveau, ouvrir, récents…), rempli par la fenêtre.
+
+    V4 : sous les modules d'une pub (Script, Voix…), un trait fin puis le groupe « Outils » (`outils`) :
+    des modules qui travaillent sur des fichiers et des dossiers, sans projet (Images…)."""
 
     module_selectionne = Signal(str)
 
-    def __init__(self, modules_haut: tuple[Module, ...], modules_bas: tuple[Module, ...], parent=None):
+    def __init__(
+        self,
+        modules_haut: tuple[Module, ...],
+        modules_bas: tuple[Module, ...],
+        outils: tuple[Module, ...] = (),
+        parent=None,
+    ):
         super().__init__(parent)
         self.setObjectName("barreLaterale")
         self.setFixedWidth(Dimensions.LARGEUR_BARRE_LATERALE)
@@ -171,6 +181,18 @@ class BarreLaterale(QFrame):
         self._boutons: dict[str, BoutonNavigation] = {}
         for module in modules_haut:
             navigation.addWidget(self._ajouter(module))
+        self.titre_outils = None
+        if outils:
+            # Un trait fin, 16 px sous le dernier module (avec l'espace de 4 px entre deux modules), puis
+            # le nom du groupe, aligné sur les icônes, comme la version en bas de la barre.
+            navigation.addSpacing(Espacements.M)
+            navigation.addWidget(separateur())
+            navigation.addSpacing(Espacements.S)
+            self.titre_outils = libelle(TITRE_OUTILS, "legende", retour_a_la_ligne=False)
+            self.titre_outils.setContentsMargins(Espacements.M, 0, 0, 0)
+            navigation.addWidget(self.titre_outils)
+            for module in outils:
+                navigation.addWidget(self._ajouter(module))
         navigation.addStretch(1)
         for module in modules_bas:
             navigation.addWidget(self._ajouter(module))

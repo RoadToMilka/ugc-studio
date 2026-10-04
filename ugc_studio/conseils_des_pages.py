@@ -1128,11 +1128,57 @@ CORRIGER_MOTS = PageDeConseils(
     ),
 )
 
+# --- Outils (V4) : des modules sans projet -----------------------------------------------------------
+
+IMAGES = PageDeConseils(
+    "Images",
+    (
+        Rubrique(
+            "Redimensionner un dossier",
+            (
+                "Choisis un dossier, ou glisse-le sur la page : l'app prend toutes ses images (JPG, PNG, WebP, "
+                "AVIF, TIFF, BMP), mais pas celles de ses sous-dossiers.",
+                "Indique la taille visée : la hauteur, la largeur ou le plus grand côté, en pixels. L'autre côté "
+                "suit : les proportions sont gardées.",
+                "Toutes les images passent à cette taille : les plus grandes sont réduites, les plus petites "
+                "agrandies. Une image déjà à la bonne taille est copiée telle quelle.",
+                "Les nouvelles images vont dans un sous-dossier nommé d'après la taille (ex. « 600 px de haut »), "
+                "avec le même nom que l'original : tes originaux ne changent jamais.",
+                "Si le dossier de sortie contient déjà une image du même nom (tu relances après avoir ajouté des "
+                "images, par exemple), l'app demande avant de la remplacer.",
+            ),
+        ),
+        Rubrique(
+            "Le filtre",
+            (
+                "Lanczos est le plus fidèle, en réduction comme en agrandissement : garde-le, sauf raison "
+                "particulière.",
+                "Agrandir n'invente pas de détails : une image agrandie plus de 2 fois paraîtra plus douce. Le "
+                "résumé la signale en orange avant de lancer.",
+                "Sur un bord très net qu'on agrandit (un produit détouré sur fond blanc, un texte), Lanczos peut "
+                "laisser un très léger liseré ; le bicubique en laisse moins.",
+            ),
+        ),
+        Rubrique(
+            "Qualité et couleurs",
+            (
+                "« Comme l'original » : un JPG garde la qualité de l'original (les mêmes réglages de "
+                "compression), ni plus lourd, ni plus abîmé. Choisis une autre qualité pour des fichiers plus "
+                "légers.",
+                "PNG, TIFF et BMP restent sans perte, et un WebP sans perte le reste ; la transparence est gardée.",
+                "Les photos de téléphone enregistrées couchées sont d'abord remises droites, et le profil de "
+                "couleurs de chaque image est gardé : les couleurs ne changent pas.",
+            ),
+        ),
+    ),
+)
+
 PAGES: dict[str, PageDeConseils] = {
     "script": SCRIPT,
     "voix": VOIX,
     "transcription": TRANSCRIPTION,
     "sous-titres": SOUS_TITRES,
+    "images": IMAGES,
     "reglages": REGLAGES,
     "creer-une-voix": CREER_UNE_VOIX,
     "style": STYLE,

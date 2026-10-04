@@ -207,12 +207,13 @@ def champ_nomme(nom: str | None, element: QWidget | QLayout, etire: bool = False
 TOUTE_LA_RANGEE = "toute la rangée"
 
 
-def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
+def champs_en_colonnes(champs, colonnes: int = 2, aides: dict[str, str] | None = None) -> QGridLayout:
     """Champs sous leur nom, en colonnes de même largeur, comme le brief du module Script (16 px
     entre deux colonnes, 12 px entre deux rangées) : pour des champs qui s'étirent (listes, textes).
 
     `champs` : des couples (nom, champ), ou des triplets (nom, champ, TOUTE_LA_RANGEE) pour un champ
     qui prend toute la rangée (ex. un texte de plusieurs lignes) ; None laisse une case vide.
+    `aides` : l'explication d'un champ (par son nom), dans une icône « i » devant son nom (V4).
     Renvoie la grille ; chaque ChampNomme est dans `grille.champs` (par nom).
 
     Un champ plus bas que son voisin de rangée reste en haut de sa case, la place en trop dessous
@@ -229,7 +230,7 @@ def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
             colonne += 1
         else:
             nom, element, *options = entree
-            champ = ChampNomme(nom, element, etire=True)
+            champ = ChampNomme(nom, element, etire=True, aide=(aides or {}).get(nom))
             grille.champs[nom] = champ
             if TOUTE_LA_RANGEE in options:
                 if colonne:
