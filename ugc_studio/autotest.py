@@ -104,6 +104,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "fenetres_v32",
     "place_en_trop",
     "images_v4",
+    "renommer_v4",
 )
 ELEMENTS_SIGNALES_MAX = 6
 # V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
@@ -2007,6 +2008,68 @@ def _images_v4(fenetre, capturer, rapport: dict) -> bool:
     return bool(fini) and tailles == attendues and all(rapport["images_v4"]["formats_pillow"].values())
 
 
+def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
+    """V4, lot 2 : le module Renommer dans le vrai .exe. Quatre images dans un dossier temporaire
+    (ordre de l'Explorateur : IMG_1, IMG_2, IMG_3, IMG_10) ; IMG_10 puis IMG_2 cliquées ; le masque de
+    l'utilisateur ; « Renommer » ; l'image en grand ; puis « Annuler le dernier renommage »
+    (confirmation acceptée d'office). Les vignettes (Pillow, puis Qt) doivent toutes s'afficher."""
+    import tempfile
+
+    from PIL import Image
+
+    from .ui.dialogues import messages
+    from .ui.pages.renommer.grille import ROLE_VIGNETTE
+
+    dossier = Path(tempfile.mkdtemp(prefix="ugc-studio-renommer-")) / "NeMu"
+    dossier.mkdir()
+    couleurs = {"IMG_1.jpg": (200, 60, 40), "IMG_2.png": (40, 160, 90), "IMG_3.jpg": (220, 180, 40), "IMG_10.webp": (60, 90, 200)}
+    for nom, couleur in couleurs.items():
+        Image.new("RGB", (900, 1200), couleur).save(dossier / nom)
+    page = fenetre.page("renommer")
+    fenetre.afficher_module("renommer")
+    page.ouvrir(dossier)
+    lu = _attendre(lambda: not page.occupe, 10)
+
+    def vignettes_faites() -> bool:
+        cases = [page.grille.case(chemin) for chemin in page.grille.chemins()]
+        return bool(cases) and all(case is not None and case.data(ROLE_VIGNETTE) is not None for case in cases)
+
+    vignettes = _attendre(vignettes_faites, 15)
+    page.masque.setEditText("NeMu_JPG_%num%%ext%")
+    page.cliquer(dossier / "IMG_10.webp")
+    page.cliquer(dossier / "IMG_2.png")
+    capturer(fenetre, "renommer-ordre")
+    plan = page._plan
+    apercu = [[ligne.numero, ligne.chemin.name, ligne.nouveau] for ligne in plan.lignes] if plan is not None else []
+    grande = page.voir_en_grand(dossier / "IMG_10.webp")
+    capturer(grande, "renommer-image-en-grand")
+    details = grande.details.text()
+    grande.close()
+    lance = lu and page.renommer()
+    fini = bool(lance) and _attendre(lambda: not page.occupe, 10)
+    apres = sorted(fichier.name for fichier in dossier.iterdir())
+    capturer(fenetre, "renommer-termine")
+    statut = page.statut.text()
+    vrai_confirmer = messages.confirmer
+    messages.confirmer = lambda *_arguments, **_options: True
+    try:
+        annule = page.annuler_le_dernier() and _attendre(lambda: not page.occupe, 10)
+    finally:
+        messages.confirmer = vrai_confirmer
+    remis = sorted(fichier.name for fichier in dossier.iterdir())
+    rapport["renommer_v4"] = {
+        "vignettes": vignettes,
+        "apercu": apercu,
+        "image_en_grand": details,
+        "apres": apres,
+        "statut": statut,
+        "annule": bool(annule),
+        "remis": remis,
+    }
+    attendus = ["NeMu_JPG_01.webp", "NeMu_JPG_02.png", "NeMu_JPG_03.jpg", "NeMu_JPG_04.jpg"]
+    return vignettes and fini and apres == attendus and bool(annule) and remis == sorted(couleurs) and details.startswith("900 × 1200 px")
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -2323,6 +2386,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
 
             # V4, lot 1 : le module Images (un vrai redimensionnement, dans le .exe).
             verifs["images_v4"] = _images_v4(fenetre, capturer, rapport)
+            # V4, lot 2 : le module Renommer (un vrai renommage, puis son annulation, dans le .exe).
+            verifs["renommer_v4"] = _renommer_v4(fenetre, capturer, rapport)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")

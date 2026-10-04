@@ -305,6 +305,17 @@ class Dimensions:
     VIGNETTE_LARGEUR = 240
     VIGNETTE_HAUTEUR = 108
     VIGNETTE_IMAGES_PAR_SECONDE = 20
+    # Module Renommer (V4, lot 2) : les images du dossier en vignettes, à cliquer dans l'ordre voulu.
+    # Chaque case : l'image, dans un carré de 112 px, et son nom dessous. La grille montre trois
+    # rangées et demie, puis défile : la demi-rangée montre qu'il y a d'autres images plus bas.
+    RENOMMER_IMAGE = 112
+    RENOMMER_NOM_HAUTEUR = 16  # une ligne de légende (12 px)
+    RENOMMER_CASE_LARGEUR = RENOMMER_IMAGE + 2 * Espacements.M
+    RENOMMER_CASE_HAUTEUR = RENOMMER_IMAGE + RENOMMER_NOM_HAUTEUR + 3 * Espacements.S
+    RENOMMER_GRILLE_HAUTEUR_MAX = 3 * RENOMMER_CASE_HAUTEUR + RENOMMER_CASE_HAUTEUR // 2
+    RENOMMER_CONTOUR_CHOISIE = 2  # contour mauve d'une image cliquée
+    # Une image en grand (double-clic) : au plus 80 % de l'écran, jamais plus grande que nature.
+    IMAGE_EN_GRAND_PART_ECRAN = 0.8
     DIALOGUE_PREREGLAGES_LARGEUR = 880 + MARGES_FENETRE  # trois cartes par rangée
     DIALOGUE_PREREGLAGES_HAUTEUR = DIALOGUE_HAUTEUR_MAX
     # Fenêtre d'export (V3) : réglages, résumé avant export et avancement dans une seule fenêtre, qui

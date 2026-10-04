@@ -105,6 +105,7 @@ def test_redimensionner_un_dossier(app_configuree, qtbot, services, tmp_path):
     assert tailles == {"grande.jpg": (800, 600), "petite.png": (1200, 600), "exacte.webp": (800, 600)}
     assert page.statut.text().startswith("3 images enregistrées en ") and page.statut.text().endswith(" dans « 600 px de haut ».")
     assert page.bouton_ouvrir.isVisible() and not page.zone_avancement.isVisible()
+    assert page.bouton_renommer.isVisible()  # « Trier et renommer » (V4, lot 2)
     # Relancer : les images du même nom sont signalées (elles seraient remplacées).
     assert page.alertes.text().endswith("3 images du même nom déjà dans « 600 px de haut » : elles seront remplacées.")
 

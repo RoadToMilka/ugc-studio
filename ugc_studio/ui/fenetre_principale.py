@@ -20,6 +20,7 @@ from .composants.entete import Entete
 from .pages.base import Page
 from .pages.images import PageImages
 from .pages.reglages import PageReglages
+from .pages.renommer import PageRenommer
 from .pages.script import PageScript
 from .pages.sous_titres import PageSousTitres
 from .pages.transcription import PageTranscription
@@ -37,7 +38,7 @@ MODULES_HAUT = (
 )
 MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
 # V4 : les outils, des modules sans projet, dans leur groupe sous les modules d'une pub.
-MODULES_OUTILS = (Module("images", "Images", "image"),)
+MODULES_OUTILS = (Module("images", "Images", "image"), Module("renommer", "Renommer", "list-ordered"))
 
 
 def _creer_pages(services: Services) -> dict[str, QWidget]:
@@ -47,6 +48,7 @@ def _creer_pages(services: Services) -> dict[str, QWidget]:
         "transcription": PageTranscription(services),
         "sous-titres": PageSousTitres(services),
         "images": PageImages(services),
+        "renommer": PageRenommer(services),
         "reglages": PageReglages(services),
     }
 
@@ -109,6 +111,9 @@ class FenetrePrincipale(QMainWindow):
         self.page("script").atelier.envoi_demande.connect(self.envoyer_dans_voix)
         # Accroches d'une série « Accroches seulement » (V2, lot 2) : en variantes A/B de voix.
         self.page("script").atelier.variantes_voix_demandees.connect(self.envoyer_accroches_en_variantes)
+        # « Trier et renommer » (V4, lot 2) : à la fin du module Images, le module Renommer sur les
+        # images faites.
+        self.page("images").renommer_demande.connect(self.trier_et_renommer)
 
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
@@ -178,6 +183,11 @@ class FenetrePrincipale(QMainWindow):
             precedente.quitter()  # ex. la lecture de la page quittée s'arrête
         self.pages.setCurrentIndex(self._index_pages[identifiant])
         self.barre_laterale.selectionner(identifiant)
+
+    def trier_et_renommer(self, dossier) -> None:
+        """« Trier et renommer » (module Images) : le module Renommer s'ouvre sur ce dossier."""
+        self.afficher_module("renommer")
+        self.page("renommer").ouvrir(dossier)
 
     def corriger_les_mots(self, temps: float = -1.0) -> None:
         """« Corriger les mots » : le module Transcription s'ouvre ; depuis la frise des sous-titres,
@@ -251,6 +261,7 @@ class FenetrePrincipale(QMainWindow):
         voix.atelier.lecteur.arreter()
         voix.atelier.enregistrer_maintenant()
         self.page("images").arreter()  # images pas encore commencées : elles ne le seront plus
+        self.page("renommer").arreter()  # vignettes pas encore faites : elles ne le seront plus
         self._preferences.ecrire("geometrie_fenetre", bytes(self.saveGeometry().toBase64()).decode("ascii"))
         self._preferences.ecrire("module", self.module_actuel())
         try:

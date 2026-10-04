@@ -21,7 +21,7 @@ def test_modules_de_la_barre_laterale(app_configuree, qtbot, tmp_path):
     libelles = [b.text() for b in fenetre.barre_laterale.boutons()]
     # V2 : le module Script en tête, c'est la première étape d'une pub. V4 : le groupe « Outils »
     # (modules sans projet) sous les modules d'une pub, Réglages toujours en bas.
-    assert libelles == ["Script", "Voix", "Transcription", "Sous-titres", "Images", "Réglages"]
+    assert libelles == ["Script", "Voix", "Transcription", "Sous-titres", "Images", "Renommer", "Réglages"]
     assert all(not b.icon().isNull() for b in fenetre.barre_laterale.boutons())
     assert fenetre.module_actuel() == "script"
 
