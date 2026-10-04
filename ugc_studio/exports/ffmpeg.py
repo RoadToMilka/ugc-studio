@@ -842,13 +842,16 @@ class Processus:
     fenêtre ne répondrait plus pendant l'export ; et si personne ne lisait ses messages, FFmpeg
     finirait par s'arrêter, bloqué sur un tuyau plein."""
 
-    def __init__(self, arguments: list[str], avec_images: bool):
+    def __init__(self, arguments: list[str], avec_images: bool, environnement: dict[str, str] | None = None):
+        """`environnement` : variables ajoutées à celles de l'app (V4, lot 3 : les dossiers des modèles
+        de Topaz)."""
         journal.info("FFmpeg : %s", " ".join(arguments))
         self._processus = subprocess.Popen(
             arguments,
             stdin=subprocess.PIPE if avec_images else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env={**os.environ, **environnement} if environnement else None,
             **_options_de_lancement(),
         )
         self.nouvelles = Nouvelles()

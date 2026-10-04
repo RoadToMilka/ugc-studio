@@ -24,6 +24,7 @@ from .pages.renommer import PageRenommer
 from .pages.script import PageScript
 from .pages.sous_titres import PageSousTitres
 from .pages.transcription import PageTranscription
+from .pages.upscale import PageUpscale
 from .pages.voix import PageVoix
 from .theme import Dimensions
 
@@ -38,7 +39,11 @@ MODULES_HAUT = (
 )
 MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
 # V4 : les outils, des modules sans projet, dans leur groupe sous les modules d'une pub.
-MODULES_OUTILS = (Module("images", "Images", "image"), Module("renommer", "Renommer", "list-ordered"))
+MODULES_OUTILS = (
+    Module("upscale", "Upscale vidéo", "image-upscale"),
+    Module("images", "Images", "image"),
+    Module("renommer", "Renommer", "list-ordered"),
+)
 
 
 def _creer_pages(services: Services) -> dict[str, QWidget]:
@@ -47,6 +52,7 @@ def _creer_pages(services: Services) -> dict[str, QWidget]:
         "voix": PageVoix(services),
         "transcription": PageTranscription(services),
         "sous-titres": PageSousTitres(services),
+        "upscale": PageUpscale(services),
         "images": PageImages(services),
         "renommer": PageRenommer(services),
         "reglages": PageReglages(services),
@@ -260,6 +266,7 @@ class FenetrePrincipale(QMainWindow):
         voix = self.page("voix")
         voix.atelier.lecteur.arreter()
         voix.atelier.enregistrer_maintenant()
+        self.page("upscale").arreter()  # Topaz s'arrête : la vidéo en cours est abandonnée
         self.page("images").arreter()  # images pas encore commencées : elles ne le seront plus
         self.page("renommer").arreter()  # vignettes pas encore faites : elles ne le seront plus
         self._preferences.ecrire("geometrie_fenetre", bytes(self.saveGeometry().toBase64()).decode("ascii"))

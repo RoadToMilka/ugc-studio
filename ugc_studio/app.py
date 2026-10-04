@@ -100,6 +100,14 @@ def configurer_application(app) -> dict:
 
 def main(arguments: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if arguments is None else arguments
+    from .topaz.faux import OPTION as FAUX_TOPAZ
+
+    if arguments[:1] == [FAUX_TOPAZ]:
+        # Autotest du module Upscale (V4, lot 3) : le .exe joue le rôle du FFmpeg de Topaz, sans fenêtre
+        # (topaz/faux.py). Jamais utilisé par l'utilisateur.
+        from .topaz.faux import principal
+
+        return principal(arguments[1:])
     options = analyser_arguments(arguments)
     dossier_autotest = None
     if options.autotest:

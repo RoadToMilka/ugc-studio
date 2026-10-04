@@ -105,6 +105,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "place_en_trop",
     "images_v4",
     "renommer_v4",
+    "upscale_v4",
 )
 ELEMENTS_SIGNALES_MAX = 6
 # V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
@@ -2082,6 +2083,73 @@ def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
     )
 
 
+# V4, lot 3 : la commande « FFmpeg Command » de l'utilisateur (Topaz Video AI 7.1.1), chemins changés.
+COMMANDE_TOPAZ = (
+    'ffmpeg "-hide_banner" "-t" "0.15833306944488423" "-ss" "0" "-i" "C:/Videos/RawBox01.mp4" '
+    '"-sws_flags" "spline+accurate_rnd+full_chroma_int" "-filter_complex" '
+    '"tvai_up=model=prob-4:scale=0:w=1080:h=1920:preblur=0:noise=0:details=0:halo=0:blur=0:compression=0:'
+    'estimate=8:blend=0.3:device=-2:vram=1:instances=1,scale=w=1080:h=1920:flags=lanczos:threads=0" '
+    '"-c:v" "h264_nvenc" "-profile:v" "high" "-pix_fmt" "yuv420p" "-g" "30" "-rc" "cbr" "-b:v" "24M" '
+    '"-preset" "p6" "-map" "0:a?" "-map_metadata:s:a:0" "0:s:a:0" "-c:a" "copy" "-bsf:a:0" "aac_adtstoasc" '
+    '"-map_metadata" "0" "-map_metadata:s:v" "0:s:v" "-fps_mode:v" "passthrough" "-movflags" '
+    '"frag_keyframe+empty_moov+delay_moov+use_metadata_tags+write_colr" "-bf" "0" "-metadata" '
+    '"videoai=Enhanced using prob-4; mode: auto; and recover original detail at 30. Changed resolution to 1080x1920" '
+    '"C:/Videos/RawBox01_805515910.mp4"'
+)
+
+
+def _upscale_v4(fenetre, capturer, rapport: dict) -> bool:
+    """V4, lot 3 : le module Upscale vidéo dans le vrai .exe, avec le .exe lui-même dans le rôle du
+    FFmpeg de Topaz (« --faux-topaz », topaz/faux.py : il lit la commande, donne son avancement et écrit
+    le fichier). Le vrai modèle ne peut être essayé que chez l'utilisateur : ni Topaz, ni sa licence,
+    ni sa carte graphique ici. Une vidéo de 606 × 1080 (celle de l'exemple de l'utilisateur) doit
+    passer à 1080 × 1924."""
+    import tempfile
+
+    from .exports.ffmpeg import executer, preparer_ffmpeg
+    from .topaz.commande import comprendre
+    from .topaz.faux import OPTION
+    from .topaz.installation import CONNEXION, Topaz
+
+    dossier = Path(tempfile.mkdtemp(prefix="ugc-studio-upscale-"))
+    rushs, modeles = dossier / "Rushs", dossier / "models"
+    rushs.mkdir()
+    modeles.mkdir()
+    (modeles / CONNEXION).write_bytes(b"")
+    (modeles / "prob-4.json").write_text("{}", encoding="utf-8")
+    source = rushs / "RawBox01.mp4"
+    ffmpeg = preparer_ffmpeg()
+    executer(
+        [str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=606x1080:rate=30",
+         "-t", "0.5", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)],
+        60,
+    )
+    page = fenetre.page("upscale")
+    fenetre.afficher_module("upscale")
+    capturer(fenetre, "upscale-sans-topaz")
+    page.definir_topaz(Topaz(Path(sys.executable).parent, (sys.executable, OPTION), "7.1.1 (autotest)", modeles, modeles))
+    page.ajouter_le_prereglage(comprendre(COMMANDE_TOPAZ))
+    page.ajouter([source])
+    lu = _attendre(lambda: not page.occupe, 30)
+    capturer(fenetre, "upscale-pret")
+    lignes = page.tableau.rowCount()
+    finale = page.tableau.item(0, 2).text() if lignes else ""
+    lance = lu and page.lancer()
+    fini = bool(lance) and _attendre(lambda: not page.occupe, 90)
+    capturer(fenetre, "upscale-termine")
+    sortie = rushs / "RawBox01 (upscale).mp4"
+    rapport["upscale_v4"] = {
+        "finale": finale,
+        "resume_prereglage": page.resume_prereglage.text(),
+        "etat_topaz": page.etat_topaz.text(),
+        "etat": page.tableau.item(0, 4).text() if lignes else "",
+        "statut": page.statut.text(),
+        "sortie": sortie.is_file(),
+        "provisoires": [f.name for f in rushs.glob("*.en-cours.*")],
+    }
+    return fini and finale == "1080 × 1924" and sortie.is_file() and not rapport["upscale_v4"]["provisoires"]
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -2400,6 +2468,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["images_v4"] = _images_v4(fenetre, capturer, rapport)
             # V4, lot 2 : le module Renommer (un vrai renommage, puis son annulation, dans le .exe).
             verifs["renommer_v4"] = _renommer_v4(fenetre, capturer, rapport)
+            # V4, lot 3 : le module Upscale vidéo (le .exe joue le rôle de Topaz).
+            verifs["upscale_v4"] = _upscale_v4(fenetre, capturer, rapport)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")

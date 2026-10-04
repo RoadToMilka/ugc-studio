@@ -53,7 +53,7 @@ def test_groupe_outils_dans_la_barre_laterale(app_configuree, qtbot, services):
     boutons = {b.text(): b for b in barre.boutons()}
     haut = lambda element: element.mapTo(barre, QPoint(0, 0)).y()  # noqa: E731
     # Le nom du groupe sous le dernier module d'une pub, au-dessus de son premier outil.
-    assert haut(boutons["Sous-titres"]) < haut(barre.titre_outils) < haut(boutons["Images"]) < haut(boutons["Réglages"])
+    assert haut(boutons["Sous-titres"]) < haut(barre.titre_outils) < haut(boutons["Upscale vidéo"]) < haut(boutons["Images"]) < haut(boutons["Réglages"])
     fenetre.afficher_module("images")
     entete = fenetre.entete.entete_affichee()
     assert entete is fenetre.page("images").entete and entete.titre.text() == "Images"  # sans nom de projet
