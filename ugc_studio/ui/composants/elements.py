@@ -217,7 +217,11 @@ def champs_en_colonnes(champs, colonnes: int = 2, aides: dict[str, str] | None =
     Renvoie la grille ; chaque ChampNomme est dans `grille.champs` (par nom).
 
     Un champ plus bas que son voisin de rangée reste en haut de sa case, la place en trop dessous
-    (V3.3, §9.6) : Qt le centrait, avec du vide au-dessus de son nom."""
+    (V3.3, §9.6) : Qt le centrait, avec du vide au-dessus de son nom.
+
+    Un champ de largeur fixe (un nombre, `champ_entier()`) garde sa largeur, à gauche sous son nom
+    (V4, module Images) : étiré comme les autres, il ne pouvait pas s'élargir, et Qt le centrait
+    dans sa colonne, loin de son nom."""
     grille = QGridLayout()
     grille.setContentsMargins(0, 0, 0, 0)
     grille.setHorizontalSpacing(Espacements.L)
@@ -230,7 +234,8 @@ def champs_en_colonnes(champs, colonnes: int = 2, aides: dict[str, str] | None =
             colonne += 1
         else:
             nom, element, *options = entree
-            champ = ChampNomme(nom, element, etire=True, aide=(aides or {}).get(nom))
+            largeur_fixe = isinstance(element, QWidget) and element.minimumWidth() == element.maximumWidth()
+            champ = ChampNomme(nom, element, etire=not largeur_fixe, aide=(aides or {}).get(nom))
             grille.champs[nom] = champ
             if TOUTE_LA_RANGEE in options:
                 if colonne:
