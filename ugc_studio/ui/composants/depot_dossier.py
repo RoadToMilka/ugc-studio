@@ -7,7 +7,6 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout
 
 from ..theme import Espacements
@@ -24,8 +23,11 @@ class ZoneDepotDossier(QFrame):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.S)
-        disposition.addWidget(libelle(texte, "intitule"), 0, Qt.AlignmentFlag.AlignHCenter)
-        disposition.addWidget(libelle(legende, "legende"), 0, Qt.AlignmentFlag.AlignHCenter)
+        # Centrés dans toute la largeur, sans alignement dans la disposition : un texte qui passe à la
+        # ligne, posé avec un alignement, recevait de Qt la hauteur d'une seule ligne et sa fin était
+        # coupée (« Glisse un dossier » au lieu de « Glisse un dossier d'images ici », voir libelle()).
+        disposition.addWidget(libelle(texte, "intitule", centre=True))
+        disposition.addWidget(libelle(legende, "legende", centre=True))
         ligne = QHBoxLayout()
         ligne.addStretch(1)
         self.bouton_choisir = bouton("Choisir un dossier…", nom_icone="folder-open", action=choisir_dossier)
