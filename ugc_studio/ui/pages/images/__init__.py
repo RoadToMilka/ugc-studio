@@ -163,8 +163,9 @@ class ZoneDepotDossier(QFrame):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.S)
-        disposition.addWidget(libelle("Glisse un dossier d'images ici", "intitule"), 0, Qt.AlignmentFlag.AlignHCenter)
-        disposition.addWidget(libelle(FORMATS_ACCEPTES, "legende"), 0, Qt.AlignmentFlag.AlignHCenter)
+        # Centrés dans toute la largeur (sans alignement dans la disposition : texte coupé, voir libelle()).
+        disposition.addWidget(libelle("Glisse un dossier d'images ici", "intitule", centre=True))
+        disposition.addWidget(libelle(FORMATS_ACCEPTES, "legende", centre=True))
         ligne = QHBoxLayout()
         ligne.addStretch(1)
         self.bouton_choisir = bouton("Choisir un dossier…", nom_icone="folder-open", action=choisir_dossier)

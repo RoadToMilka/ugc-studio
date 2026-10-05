@@ -2,11 +2,13 @@
 
 from PIL import Image
 from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QLabel
 
 from ugc_studio.images.redimensionnement import BILINEAIRE, HAUTEUR, LARGEUR
 from ugc_studio.ui.dialogues import messages
 from ugc_studio.ui.pages.images import (
     AUTRE_DOSSIER,
+    FORMATS_ACCEPTES,
     PREF_COTE,
     PREF_FILTRE,
     PREF_PIXELS,
@@ -55,6 +57,23 @@ def test_groupe_outils_dans_la_barre_laterale(app_configuree, qtbot, services):
     fenetre.afficher_module("images")
     entete = fenetre.entete.entete_affichee()
     assert entete is fenetre.page("images").entete and entete.titre.text() == "Images"  # sans nom de projet
+
+
+def test_textes_de_la_zone_de_depot_entiers(app_configuree, qtbot, services):
+    """Les textes de la zone de dépôt, centrés, sont écrits en entier, même quand ils passent à la
+    ligne : posés avec un alignement, Qt les coupait (« Glisse un dossier » au lieu de « Glisse un
+    dossier d'images ici », vu sur les captures du lot 1)."""
+    page = _page(qtbot, services)
+    qtbot.waitExposed(page)
+    etiquettes = [e for e in page.zone_depot.findChildren(QLabel) if e.wordWrap()]
+    assert {e.text() for e in etiquettes} == {"Glisse un dossier d'images ici", FORMATS_ACCEPTES}
+    for largeur in (Dimensions.FENETRE_LARGEUR, 300):  # 300 px (ou le minimum de la page) : à la ligne
+        page.resize(largeur, Dimensions.FENETRE_HAUTEUR)
+        qtbot.wait(50)
+        utile = page.zone_depot.layout().contentsRect().width()
+        for etiquette in etiquettes:
+            assert etiquette.width() == utile  # toute la largeur, le texte centré dedans
+            assert etiquette.height() >= etiquette.heightForWidth(etiquette.width())
 
 
 def test_redimensionner_un_dossier(app_configuree, qtbot, services, tmp_path):

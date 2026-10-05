@@ -130,12 +130,17 @@ class ZoneDepot(QFrame):
         disposition = QVBoxLayout(self)
         disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
         disposition.setSpacing(Espacements.S)
-        disposition.addWidget(libelle("Glisse une vidéo ou un audio ici", "intitule"), 0, Qt.AlignmentFlag.AlignHCenter)
-        disposition.addWidget(
-            info("Vidéo (MP4, MOV, MKV…) ou audio (WAV, MP3, M4A…) : la piste son est extraite automatiquement.", "legende"),
-            0,
-            Qt.AlignmentFlag.AlignHCenter,
+        # Textes qui passent à la ligne : jamais posés avec un alignement dans la disposition (Qt leur
+        # donnait une largeur réduite mais la hauteur d'une ligne, et la fin était coupée, voir libelle()).
+        # Le titre est centré dans toute la largeur ; l'info, entre deux ressorts, à sa largeur.
+        disposition.addWidget(libelle("Glisse une vidéo ou un audio ici", "intitule", centre=True))
+        ligne_info = QHBoxLayout()
+        ligne_info.addStretch(1)
+        ligne_info.addWidget(
+            info("Vidéo (MP4, MOV, MKV…) ou audio (WAV, MP3, M4A…) : la piste son est extraite automatiquement.", "legende")
         )
+        ligne_info.addStretch(1)
+        disposition.addLayout(ligne_info)
         ligne = QHBoxLayout()
         ligne.addStretch(1)
         self.bouton_choisir = bouton("Choisir un fichier…", nom_icone="folder-open", action=choisir_fichier)
