@@ -343,6 +343,40 @@ def test_phrases_d_aide_ecrites_seulement_si_indispensables():
     assert not ecarts, "Phrase d'aide écrite à l'écran : la mettre dans une icône « i » (aide=…) :\n" + "\n".join(ecarts)
 
 
+# Alignements horizontaux d'un élément dans sa disposition (addWidget(élément, étirement, alignement)).
+ALIGNEMENTS_HORIZONTAUX = ("AlignHCenter", "AlignCenter", "AlignLeft", "AlignRight", "AlignJustify", "AlignHorizontal")
+
+
+def _passe_a_la_ligne(appel: ast.Call) -> bool:
+    """libelle(…) passe à la ligne, sauf avec retour_a_la_ligne=False ; info(…) toujours."""
+    if _nom_appel(appel) not in ("libelle", "info", "Info"):
+        return False
+    return not any(
+        argument.arg == "retour_a_la_ligne" and isinstance(argument.value, ast.Constant) and argument.value.value is False
+        for argument in appel.keywords
+    )
+
+
+def test_texte_qui_passe_a_la_ligne_jamais_aligne_dans_sa_disposition():
+    """V4 (module Images) : un texte qui passe à la ligne (libelle(), info()), posé avec un alignement
+    horizontal (addWidget(texte, 0, AlignHCenter)), reçoit de Qt une largeur plus petite que la sienne
+    mais la hauteur d'une seule ligne : la fin du texte est coupée (« Glisse un dossier » au lieu de
+    « Glisse un dossier d'images ici »). Un texte centré s'écrit libelle(…, centre=True), posé sans
+    alignement ; une info centrée se pose entre deux ressorts (addStretch)."""
+    ecarts = []
+    for fichier in _fichiers():
+        for noeud in ast.walk(ast.parse(fichier.read_text(encoding="utf-8"))):
+            if not (isinstance(noeud, ast.Call) and _nom_appel(noeud) == "addWidget" and noeud.args):
+                continue
+            element = noeud.args[0]
+            if not (isinstance(element, ast.Call) and _passe_a_la_ligne(element)):
+                continue
+            reste = [ast.unparse(a) for a in noeud.args[1:]] + [ast.unparse(k.value) for k in noeud.keywords]
+            if any(alignement in morceau for morceau in reste for alignement in ALIGNEMENTS_HORIZONTAUX):
+                ecarts.append(f"{fichier.relative_to(RACINE)}:{noeud.lineno}")
+    assert not ecarts, "Texte qui passe à la ligne posé avec un alignement (fin coupée) :\n" + "\n".join(ecarts)
+
+
 def test_chaque_bloc_garde_la_place_en_trop_en_bas():
     """V3.3, lot 1 (§9.6) : un bloc (rôle « bloc », cartes comprises) range son contenu avec
     DispositionDeZone (composants/zone.py) : quand il est plus haut que son contenu (à côté d'un bloc

@@ -18,6 +18,7 @@ from .composants.barre_laterale import BarreLaterale, Module
 from .composants.elements import titre_avec
 from .composants.entete import Entete
 from .pages.base import Page
+from .pages.images import PageImages
 from .pages.reglages import PageReglages
 from .pages.script import PageScript
 from .pages.sous_titres import PageSousTitres
@@ -35,6 +36,8 @@ MODULES_HAUT = (
     Module("sous-titres", "Sous-titres", "captions"),
 )
 MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
+# V4 : les outils, des modules sans projet, dans leur groupe sous les modules d'une pub.
+MODULES_OUTILS = (Module("images", "Images", "image"),)
 
 
 def _creer_pages(services: Services) -> dict[str, QWidget]:
@@ -43,6 +46,7 @@ def _creer_pages(services: Services) -> dict[str, QWidget]:
         "voix": PageVoix(services),
         "transcription": PageTranscription(services),
         "sous-titres": PageSousTitres(services),
+        "images": PageImages(services),
         "reglages": PageReglages(services),
     }
 
@@ -65,7 +69,7 @@ class FenetrePrincipale(QMainWindow):
         disposition.setContentsMargins(0, 0, 0, 0)
         disposition.setSpacing(0)
 
-        self.barre_laterale = BarreLaterale(MODULES_HAUT, MODULES_BAS)
+        self.barre_laterale = BarreLaterale(MODULES_HAUT, MODULES_BAS, MODULES_OUTILS)
         disposition.addWidget(self.barre_laterale)
 
         colonne = QVBoxLayout()
@@ -246,6 +250,7 @@ class FenetrePrincipale(QMainWindow):
         voix = self.page("voix")
         voix.atelier.lecteur.arreter()
         voix.atelier.enregistrer_maintenant()
+        self.page("images").arreter()  # images pas encore commencées : elles ne le seront plus
         self._preferences.ecrire("geometrie_fenetre", bytes(self.saveGeometry().toBase64()).decode("ascii"))
         self._preferences.ecrire("module", self.module_actuel())
         try:

@@ -92,6 +92,19 @@ def test_champs_en_colonnes(app_configuree, qtbot):
     assert colonnes.champs["Catégorie"].nom.mapTo(colonnes.champs["Catégorie"].parentWidget(), QPoint(0, 0)).y() == 0
 
 
+def test_nombre_a_gauche_sous_son_nom(app_configuree, qtbot):
+    """Module Images (V4) : un champ de largeur fixe (un nombre) garde sa largeur, à gauche sous son
+    nom ; étiré comme les autres, il ne pouvait pas s'élargir et Qt le centrait dans sa colonne."""
+    cote, pixels = liste_deroulante(), champ_entier(1, 20000, " px")
+    colonnes = champs_en_colonnes((("Côté", cote), ("Taille", pixels)))
+    _fenetre = _montrer(qtbot, colonnes, 516)
+    taille = colonnes.champs["Taille"]
+    assert cote.width() == (516 - Espacements.L) // 2
+    assert taille.width() == (516 - Espacements.L) // 2
+    assert pixels.width() == Dimensions.CHAMP_NOMBRE_LARGEUR
+    assert pixels.mapTo(taille, QPoint(0, 0)).x() == taille.nom.mapTo(taille, QPoint(0, 0)).x() == 0
+
+
 def test_case_a_cocher_a_la_taille_du_texte(app_configuree, qtbot):
     """14 px, bordure comprise : la hauteur du texte courant (20 px jusqu'à la 3.0.0)."""
     assert Dimensions.CASE_A_COCHER == Typo.COURANT == 14

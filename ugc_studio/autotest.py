@@ -103,6 +103,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "menu_v32",
     "fenetres_v32",
     "place_en_trop",
+    "images_v4",
 )
 ELEMENTS_SIGNALES_MAX = 6
 # V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
@@ -1960,6 +1961,52 @@ def _zone_source(fenetre, atelier, capturer, rapport: dict) -> bool:
     return all(etat.values())
 
 
+def _images_v4(fenetre, capturer, rapport: dict) -> bool:
+    """V4, lot 1 : le module Images dans le vrai .exe (Pillow y est-il complet ?). Trois images de
+    démonstration, dans un dossier temporaire : une photo couchée (orientation EXIF), un PNG transparent
+    à agrandir plus de 2 fois, un WebP déjà à la bonne taille ; toutes passent à 600 px de haut."""
+    import tempfile
+
+    from PIL import Image, features
+
+    from .images.redimensionnement import ORIENTATION
+
+    dossier = Path(tempfile.mkdtemp(prefix="ugc-studio-images-")) / "Produits"
+    dossier.mkdir()
+    exif = Image.Exif()
+    exif[ORIENTATION] = 6  # enregistrée couchée : 1600 × 1200, vue 1200 × 1600
+    Image.new("RGB", (1600, 1200), (200, 60, 40)).save(dossier / "photo-1.jpg", quality=85, exif=exif.tobytes())
+    Image.new("RGBA", (300, 150), (0, 0, 255, 128)).save(dossier / "logo.png")
+    Image.new("RGB", (900, 600), (10, 200, 10)).save(dossier / "visuel.webp")
+    page = fenetre.page("images")
+    fenetre.afficher_module("images")
+    page.ouvrir(dossier)
+    lu = _attendre(lambda: not page.occupe, 10)
+    page.pixels.setValue(600)
+    capturer(fenetre, "images-resume")
+    lance = lu and page.redimensionner()
+    fini = lance and _attendre(lambda: not page.occupe, 30)
+    capturer(fenetre, "images-termine")
+    sortie = dossier / "600 px de haut"
+    tailles = {}
+    for nom in ("photo-1.jpg", "logo.png", "visuel.webp"):
+        try:
+            with Image.open(sortie / nom) as image:
+                tailles[nom] = list(image.size)
+        except OSError as erreur:
+            tailles[nom] = str(erreur)
+    rapport["images_v4"] = {
+        "compte": page.compte.text(),
+        "resume": page.resume.text(),
+        "alertes": page.alertes.text(),
+        "statut": page.statut.text(),
+        "tailles": tailles,
+        "formats_pillow": {nom: features.check(nom) for nom in ("jpg", "webp", "avif", "zlib", "littlecms2")},
+    }
+    attendues = {"photo-1.jpg": [450, 600], "logo.png": [1200, 600], "visuel.webp": [900, 600]}
+    return bool(fini) and tailles == attendues and all(rapport["images_v4"]["formats_pillow"].values())
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -2273,6 +2320,9 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                 capturer_par_dessus("menu-couper", menu_couper)
                 menu_couper.hide()
                 barre.setValue(0)
+
+            # V4, lot 1 : le module Images (un vrai redimensionnement, dans le .exe).
+            verifs["images_v4"] = _images_v4(fenetre, capturer, rapport)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")

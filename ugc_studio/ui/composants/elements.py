@@ -58,18 +58,26 @@ def libelle(
     role: str | None = None,
     selectionnable: bool = False,
     retour_a_la_ligne: bool = True,
+    centre: bool = False,
 ) -> QLabel:
     """Texte. Rôles : « titre-page », « titre-bloc », « secondaire », « legende », « discret »,
     « succes », « avertissement », « erreur ».
 
     `retour_a_la_ligne=False` pour les textes courts placés sur une ligne avec d'autres éléments
-    (titres de bloc à côté d'une pastille…) : ils gardent alors leur largeur naturelle."""
+    (titres de bloc à côté d'une pastille…) : ils gardent alors leur largeur naturelle.
+
+    `centre` : texte centré dans toute la largeur (ex. une zone de dépôt). À poser sans alignement
+    dans sa disposition (V4) : un texte qui passe à la ligne, posé avec un alignement (AlignHCenter…),
+    reçoit de Qt une largeur plus petite que la sienne mais la hauteur d'une seule ligne, et la fin
+    du texte est coupée (« Glisse un dossier » au lieu de « Glisse un dossier d'images ici »)."""
     etiquette = QLabel(texte)
     # Texte brut : sans cela, Qt prendrait « <laugh> » pour une balise HTML et l'effacerait.
     etiquette.setTextFormat(Qt.TextFormat.PlainText)
     if role:
         etiquette.setProperty("role", role)
     etiquette.setWordWrap(retour_a_la_ligne)
+    if centre:
+        etiquette.setAlignment(Qt.AlignmentFlag.AlignHCenter)
     if selectionnable:
         etiquette.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
     return etiquette
@@ -207,16 +215,21 @@ def champ_nomme(nom: str | None, element: QWidget | QLayout, etire: bool = False
 TOUTE_LA_RANGEE = "toute la rangée"
 
 
-def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
+def champs_en_colonnes(champs, colonnes: int = 2, aides: dict[str, str] | None = None) -> QGridLayout:
     """Champs sous leur nom, en colonnes de même largeur, comme le brief du module Script (16 px
     entre deux colonnes, 12 px entre deux rangées) : pour des champs qui s'étirent (listes, textes).
 
     `champs` : des couples (nom, champ), ou des triplets (nom, champ, TOUTE_LA_RANGEE) pour un champ
     qui prend toute la rangée (ex. un texte de plusieurs lignes) ; None laisse une case vide.
+    `aides` : l'explication d'un champ (par son nom), dans une icône « i » devant son nom (V4).
     Renvoie la grille ; chaque ChampNomme est dans `grille.champs` (par nom).
 
     Un champ plus bas que son voisin de rangée reste en haut de sa case, la place en trop dessous
-    (V3.3, §9.6) : Qt le centrait, avec du vide au-dessus de son nom."""
+    (V3.3, §9.6) : Qt le centrait, avec du vide au-dessus de son nom.
+
+    Un champ de largeur fixe (un nombre, `champ_entier()`) garde sa largeur, à gauche sous son nom
+    (V4, module Images) : étiré comme les autres, il ne pouvait pas s'élargir, et Qt le centrait
+    dans sa colonne, loin de son nom."""
     grille = QGridLayout()
     grille.setContentsMargins(0, 0, 0, 0)
     grille.setHorizontalSpacing(Espacements.L)
@@ -229,7 +242,8 @@ def champs_en_colonnes(champs, colonnes: int = 2) -> QGridLayout:
             colonne += 1
         else:
             nom, element, *options = entree
-            champ = ChampNomme(nom, element, etire=True)
+            largeur_fixe = isinstance(element, QWidget) and element.minimumWidth() == element.maximumWidth()
+            champ = ChampNomme(nom, element, etire=not largeur_fixe, aide=(aides or {}).get(nom))
             grille.champs[nom] = champ
             if TOUTE_LA_RANGEE in options:
                 if colonne:

@@ -19,8 +19,9 @@ def _fenetre(qtbot, _chemin=None):
 def test_modules_de_la_barre_laterale(app_configuree, qtbot, tmp_path):
     fenetre = _fenetre(qtbot, tmp_path / "preferences.json")
     libelles = [b.text() for b in fenetre.barre_laterale.boutons()]
-    # V2 : le module Script en tête, c'est la première étape d'une pub.
-    assert libelles == ["Script", "Voix", "Transcription", "Sous-titres", "Réglages"]
+    # V2 : le module Script en tête, c'est la première étape d'une pub. V4 : le groupe « Outils »
+    # (modules sans projet) sous les modules d'une pub, Réglages toujours en bas.
+    assert libelles == ["Script", "Voix", "Transcription", "Sous-titres", "Images", "Réglages"]
     assert all(not b.icon().isNull() for b in fenetre.barre_laterale.boutons())
     assert fenetre.module_actuel() == "script"
 
