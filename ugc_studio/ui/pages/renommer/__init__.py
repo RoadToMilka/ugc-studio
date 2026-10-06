@@ -150,6 +150,10 @@ class PageRenommer(Page):
         self._affichage: list[Path] = []  # les images dans l'ordre de l'affichage
         self._choisies: list[Path] = []  # les images cliquées, dans l'ordre des clics
         self._vignettes: dict[Path, QPixmap | None] = {}
+        # La date de modification de chaque image quand sa vignette a été demandée (V4, 4.0.2) : une
+        # image remplacée depuis (même nom, autre contenu, par exemple un nouveau redimensionnement)
+        # reçoit une nouvelle vignette quand le dossier est relu ; elle gardait l'ancienne.
+        self._dates_des_vignettes: dict[Path, float] = {}
         self._plan: PlanDeRenommage | None = None
         self._occupe = False
         self._bouton_occupe = BoutonOccupe()
@@ -306,7 +310,7 @@ class PageRenommer(Page):
         if self._occupe:
             return
         if dossier != self._dossier:
-            self._vignettes = {}
+            self._vignettes, self._dates_des_vignettes = {}, {}
             garder_l_ordre = False
         self._dossier = dossier
         self._preferences.ecrire(PREF_DOSSIER, str(dossier))
@@ -336,9 +340,13 @@ class PageRenommer(Page):
         self._occuper(False)
         nombre = len(contenu.images)
         self.compte.setText(quantite(nombre, "image") if nombre else f"Aucune image dans ce dossier ({FORMATS_ACCEPTES})")
+        dates = {image.chemin: image.modifiee for image in contenu.images}
+        for chemin in [c for c in self._vignettes if c in dates and self._dates_des_vignettes.get(c) != dates[c]]:
+            del self._vignettes[chemin]  # image remplacée depuis sa vignette : à refaire
         self._afficher_les_images()
         manquantes = [image.chemin for image in contenu.images if image.chemin not in self._vignettes]
         if manquantes:
+            self._dates_des_vignettes.update({chemin: dates[chemin] for chemin in manquantes})
             self._lancer_les_vignettes(manquantes)
 
     def _lecture_echouee(self, numero: int, erreur: Exception) -> None:
@@ -617,9 +625,12 @@ class PageRenommer(Page):
         if dossier != self._dossier:
             return
         anciennes = {ancien: self._vignettes.pop(dossier / ancien) for ancien, _n in changements if dossier / ancien in self._vignettes}
+        dates = {ancien: self._dates_des_vignettes.pop(dossier / ancien) for ancien, _n in changements if dossier / ancien in self._dates_des_vignettes}
         for ancien, nouveau in changements:
             if anciennes.get(ancien) is not None:  # une case vide (vignette impossible) sera refaite
                 self._vignettes[dossier / nouveau] = anciennes[ancien]
+            if ancien in dates:  # renommer ne change pas la date de modification d'un fichier
+                self._dates_des_vignettes[dossier / nouveau] = dates[ancien]
 
     # --- Annuler -----------------------------------------------------------------------------
 
