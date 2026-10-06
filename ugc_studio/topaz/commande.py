@@ -9,6 +9,9 @@ change que ce qui est propre à chaque vidéo :
 - la taille finale (voir taille_finale) : dans le filtre de Topaz (`tvai_up`, `w` et `h`) et dans le
   dernier ajustement (`scale`) ;
 - le début de la commande qui ne traite qu'un extrait (`-ss`, `-t` : un aperçu) est retiré ;
+- le fichier est un MP4 (ou MOV) classique, comme le fichier final de l'interface de Topaz : les
+  options qui le découpent en morceaux (« MP4 fragmenté », `-movflags frag_keyframe+empty_moov…`) sont
+  retirées, le sommaire du fichier est placé au début (voir mp4_classique ; 4.0.3) ;
 - l'app ajoute ce dont elle a besoin pour suivre le travail (`-progress`) et ne rien demander au
   clavier (`-nostdin`).
 
@@ -32,6 +35,43 @@ OPTIONS_D_EXTRAIT = {"-ss", "-t", "-to", "-sseof"}
 OPTIONS_DE_L_APP = {"-y", "-n", "-nostdin", "-stdin", "-progress", "-stats", "-nostats"}
 OPTIONS_DU_GRAPHE = ("-filter_complex", "-vf", "-filter:v")
 OPTIONS_SANS_VALEUR = {"-hide_banner", "-y", "-n", "-nostdin", "-stdin", "-stats", "-nostats", "-shortest", "-an", "-vn", "-sn", "-dn"}
+
+# MP4 « fragmenté » (4.0.3) : la commande de Topaz découpe le fichier en morceaux, chacun avec son petit
+# sommaire, après un sommaire de départ vide (`-movflags frag_keyframe+empty_moov+delay_moov…`) : le
+# fichier reste lisible pendant l'export ou s'il est interrompu. L'interface de Topaz le finalise
+# ensuite en MP4 classique ; rejouée telle quelle, la commande laissait un fichier fragmenté : pas de
+# durée dans l'Explorateur de Windows, moins bien lu par certains logiciels (constaté par
+# l'utilisateur le 06/10/2026). L'app écrit dans un fichier provisoire, effacé si le travail
+# s'arrête : ces options ne lui servent pas. Elles ne changent ni l'image, ni le son, ni l'encodage.
+DRAPEAUX_DE_FRAGMENTATION = {
+    "frag_keyframe", "empty_moov", "delay_moov", "frag_custom", "frag_every_frame", "frag_discont",
+    "separate_moof", "default_base_moof", "omit_tfhd_offset", "global_sidx", "skip_sidx", "skip_trailer",
+    "dash", "cmaf", "isml",
+}
+OPTIONS_DE_FRAGMENTATION = {"-frag_duration", "-frag_size", "-min_frag_duration", "-frag_interleave"}  # avec valeur
+SOMMAIRE_AU_DEBUT = "faststart"  # le sommaire (« moov ») au début : le fichier s'ouvre et s'importe plus vite
+
+
+def mp4_classique(options: list[str]) -> list[str]:
+    """Les options de sortie sans la fragmentation (voir DRAPEAUX_DE_FRAGMENTATION), et, quand la
+    commande règle le conteneur (`-movflags`), avec le sommaire au début. Les autres drapeaux de Topaz
+    (`use_metadata_tags`, `write_colr`…) sont gardés."""
+    resultat: list[str] = []
+    rang = 0
+    while rang < len(options):
+        morceau = options[rang]
+        if morceau in OPTIONS_DE_FRAGMENTATION and rang + 1 < len(options):
+            rang += 2
+            continue
+        if morceau == "-movflags" and rang + 1 < len(options):
+            drapeaux = re.findall(r"([+-]?)([A-Za-z0-9_]+)", options[rang + 1])
+            gardes = [f"{'-' if signe == '-' else '+'}{nom}" for signe, nom in drapeaux if nom not in DRAPEAUX_DE_FRAGMENTATION and nom != SOMMAIRE_AU_DEBUT]
+            resultat += ["-movflags", "".join([f"+{SOMMAIRE_AU_DEBUT}", *gardes])]
+            rang += 2
+            continue
+        resultat.append(morceau)
+        rang += 1
+    return resultat
 
 # Noms des modèles de Topaz Video AI (les plus courants) : « prob-4 » est Proteus (version 4).
 MODELES = {
@@ -302,7 +342,7 @@ class Prereglage:
             *self.avant_entree,
             "-i",
             entree,
-            *apres,
+            *mp4_classique(apres),
             sortie,
         ]
 
