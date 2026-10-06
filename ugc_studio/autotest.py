@@ -372,6 +372,10 @@ def _textes_coupes(racine: QWidget, nom: str) -> list[str]:
             continue
         if etiquette.textFormat() != Qt.TextFormat.PlainText and "<" in texte:
             continue  # texte mis en forme (balises) : sa largeur ne se mesure pas ligne à ligne
+        if etiquette.buddy() is not None:
+            # « &Teinte : » (fenêtre « Autre couleur » de Qt) : le « & » souligne la lettre du raccourci
+            # clavier, il ne s'écrit pas (« && » écrit un « & »).
+            texte = texte.replace("&&", "\x00").replace("&", "").replace("\x00", "&")
         mesures = etiquette.fontMetrics()
         largeur = max(mesures.horizontalAdvance(ligne) for ligne in texte.split("\n"))
         place = etiquette.contentsRect().width() - 2 * max(etiquette.margin(), 0)
