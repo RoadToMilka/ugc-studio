@@ -15,6 +15,7 @@ from ugc_studio.topaz.commande import (
     Prereglage,
     comprendre,
     decouper,
+    mp4_classique,
     pair_le_plus_proche,
     taille_finale,
 )
@@ -89,6 +90,23 @@ def test_rejouer_la_commande_sur_une_autre_video():
         assert arguments[arguments.index(option) + 1] == valeur
     note = arguments[arguments.index("-metadata") + 1]
     assert note.endswith("Changed resolution to 1080x1924")
+    # 4.0.3 : un MP4 classique, comme le fichier final de l'interface de Topaz (la commande écrivait un
+    # MP4 fragmenté, sans durée dans l'Explorateur de Windows) ; les autres drapeaux de Topaz restent.
+    assert arguments[arguments.index("-movflags") + 1] == "+faststart+use_metadata_tags+write_colr"
+
+
+def test_mp4_classique():
+    """4.0.3 : seules les options de fragmentation sont retirées ; le sommaire passe au début quand la
+    commande règle le conteneur (-movflags), sans être répété."""
+    assert mp4_classique(["-c:v", "libx264", "-movflags", "+faststart"]) == ["-c:v", "libx264", "-movflags", "+faststart"]
+    assert mp4_classique(["-movflags", "empty_moov+frag_keyframe", "-frag_duration", "1000000", "-c:a", "copy"]) == [
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "copy",
+    ]
+    assert mp4_classique(["-movflags", "frag_keyframe-use_metadata_tags+write_colr"]) == ["-movflags", "+faststart-use_metadata_tags+write_colr"]
+    assert mp4_classique(["-c:v", "prores_ks", "-profile:v", "3"]) == ["-c:v", "prores_ks", "-profile:v", "3"]  # sans -movflags : rien
 
 
 def test_preset_x2_sans_taille():
@@ -256,6 +274,26 @@ def test_video_couchee_lue_debout(tmp_path):
     video = lire_la_video(source, FFMPEG)
     assert (video.largeur, video.hauteur) == (108, 192) and not video.son
     assert planifier([video], 1080, ".mp4")[0].finale == (1080, 1920)
+
+
+@pytest.mark.skipif(FFMPEG is None, reason="FFmpeg absent de cet ordinateur")
+def test_options_du_conteneur_donnent_un_mp4_classique(tmp_path):
+    """4.0.3 : les options du conteneur de la commande de l'utilisateur, telles que l'app les rejoue,
+    donnent à FFmpeg un MP4 classique : aucun morceau (« moof »), le sommaire (« moov ») au début et
+    sa durée lisible. Avec les options d'origine, le fichier était fragmenté."""
+    prereglage = comprendre(COMMANDE)
+    arguments = prereglage.arguments("entree.mp4", "sortie.mp4", 1080, 1924)
+    conteneur = ["-movflags", arguments[arguments.index("-movflags") + 1]]
+    commun = [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=96x160:rate=30", "-t", "2"]
+    commun += ["-c:v", "libx264", "-g", "30", "-pix_fmt", "yuv420p"]
+    rejoue, origine = tmp_path / "rejoue.mp4", tmp_path / "origine.mp4"
+    subprocess.run([*commun, *conteneur, str(rejoue)], check=True)
+    subprocess.run([*commun, "-movflags", "frag_keyframe+empty_moov+delay_moov+use_metadata_tags+write_colr", str(origine)], check=True)
+    octets = rejoue.read_bytes()
+    assert b"moof" not in octets and octets.index(b"moov") < octets.index(b"mdat")
+    assert b"moof" in origine.read_bytes()  # la commande d'origine : un MP4 fragmenté
+    video = lire_la_video(rejoue, FFMPEG)
+    assert abs(video.duree_s - 2) < 0.1
 
 
 @pytest.mark.skipif(FFMPEG is None, reason="FFmpeg absent de cet ordinateur")
