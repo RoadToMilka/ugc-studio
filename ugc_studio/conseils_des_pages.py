@@ -1130,6 +1130,61 @@ CORRIGER_MOTS = PageDeConseils(
 
 # --- Outils (V4) : des modules sans projet -----------------------------------------------------------
 
+UPSCALE = PageDeConseils(
+    "Upscale vidéo",
+    (
+        Rubrique(
+            "Ton Topaz, tes réglages",
+            (
+                "Le module lance le moteur de Topaz Video AI installé sur ton ordinateur : même modèle, même carte "
+                "graphique, donc le même résultat et le même temps que dans Topaz. Ta licence à vie de Topaz Video "
+                "AI permet de le lancer ainsi.",
+                "Connecte-toi une fois dans l'app Topaz : le moteur se sert de cette connexion. Pendant que le module "
+                "travaille, évite d'exporter dans Topaz : ta carte graphique ne fait bien qu'un travail à la fois.",
+                "Si Topaz n'est pas trouvé (installé ailleurs, modèles téléchargés dans un autre dossier), choisis ses "
+                "dossiers avec « Dossiers de Topaz… ».",
+            ),
+        ),
+        Rubrique(
+            "Le préréglage",
+            (
+                "Dans Topaz, exporte une vidéo avec tes réglages habituels. Dans la file d'export, ouvre le menu ⋯ "
+                "de la vidéo, choisis « FFmpeg Command » et copie la commande.",
+                "Dans le module, « Nouveau… », colle la commande et donne un nom : l'app montre ce qu'elle a compris "
+                "(modèle, réglages, encodage, son). Tout est repris tel quel, sauf la vidéo, le fichier écrit et la "
+                "taille.",
+                "Si la commande ne traitait qu'un extrait (un aperçu), le module traite quand même toute la vidéo.",
+                "Tu changes de réglages dans Topaz ? Crée un nouveau préréglage avec la nouvelle commande : tu peux en "
+                "garder plusieurs.",
+            ),
+        ),
+        Rubrique(
+            "La taille",
+            (
+                "La résolution visée porte sur le petit côté, comme « 1080p » : 1080 de large pour une vidéo "
+                "verticale, 1080 de haut pour une vidéo horizontale.",
+                "L'autre côté garde exactement le ratio de chaque vidéo, sans jamais l'étirer, arrondi au nombre "
+                "pair le plus proche (obligatoire pour une vidéo H.264) : une vidéo en 9:16 donne 1080 × 1920, une "
+                "vidéo de 606 × 1080 donne 1080 × 1924.",
+                "Une vidéo enregistrée couchée par un téléphone (avec une consigne « à tourner ») est mesurée debout, "
+                "comme tu la vois.",
+            ),
+        ),
+        Rubrique(
+            "Lancer et vérifier",
+            (
+                "Les vidéos passent l'une après l'autre ; le tableau montre où en est chacune. « Arrêter » abandonne "
+                "la vidéo en cours (son fichier inachevé est effacé) ; celles déjà faites restent.",
+                "Chaque vidéo est enregistrée à côté de l'originale, « Sérum (upscale).mp4 », ou dans le dossier "
+                "choisi. Rien n'est écrasé : si le nom est pris, « Sérum (upscale) (2).mp4 ».",
+                "Une vidéo en erreur n'arrête pas les autres : le message de Topaz est au survol de son état.",
+                "Pour vérifier une première fois : traite une vidéo courte ici, exporte la même dans Topaz avec le même "
+                "réglage, puis « Comparer à un export de Topaz… ». Au-dessus de 99 %, aucune différence visible.",
+            ),
+        ),
+    ),
+)
+
 IMAGES = PageDeConseils(
     "Images",
     (
@@ -1229,6 +1284,7 @@ PAGES: dict[str, PageDeConseils] = {
     "voix": VOIX,
     "transcription": TRANSCRIPTION,
     "sous-titres": SOUS_TITRES,
+    "upscale": UPSCALE,
     "images": IMAGES,
     "renommer": RENOMMER,
     "reglages": REGLAGES,

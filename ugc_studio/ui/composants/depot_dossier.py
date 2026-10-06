@@ -15,9 +15,16 @@ from .elements import bouton, libelle
 
 class ZoneDepotDossier(QFrame):
     """Cadre en pointillés (rôle « depot ») : `texte` (« Glisse un dossier d'images ici »), `legende`
-    (les formats acceptés) et le bouton « Choisir un dossier… »."""
+    (les formats acceptés) et le bouton « Choisir un dossier… » (ou `texte_du_bouton`)."""
 
-    def __init__(self, texte: str, legende: str, choisir_dossier: Callable[[], None], parent=None):
+    def __init__(
+        self,
+        texte: str,
+        legende: str,
+        choisir_dossier: Callable[[], None],
+        texte_du_bouton: str = "Choisir un dossier…",
+        parent=None,
+    ):
         super().__init__(parent)
         self.setProperty("role", "depot")
         disposition = QVBoxLayout(self)
@@ -30,7 +37,7 @@ class ZoneDepotDossier(QFrame):
         disposition.addWidget(libelle(legende, "legende", centre=True))
         ligne = QHBoxLayout()
         ligne.addStretch(1)
-        self.bouton_choisir = bouton("Choisir un dossier…", nom_icone="folder-open", action=choisir_dossier)
+        self.bouton_choisir = bouton(texte_du_bouton, nom_icone="folder-open", action=choisir_dossier)
         ligne.addWidget(self.bouton_choisir)
         ligne.addStretch(1)
         disposition.addLayout(ligne)
@@ -39,6 +46,24 @@ class ZoneDepotDossier(QFrame):
         self.setProperty("survol", actif)
         self.style().unpolish(self)
         self.style().polish(self)
+
+
+def fichiers_deposes(donnees, extensions: Iterable[str]) -> list[Path]:
+    """Les fichiers glissés sur une page qui ont l'une de ces extensions, et ceux des dossiers glissés
+    (pas ceux de leurs sous-dossiers), dans l'ordre de l'Explorateur pour chaque dossier."""
+    from ...dossiers import fichiers_du_dossier
+
+    acceptees = {extension.lower() for extension in extensions}
+    trouves: list[Path] = []
+    for url in donnees.urls():
+        if not url.isLocalFile():
+            continue
+        chemin = Path(url.toLocalFile())
+        if chemin.is_dir():
+            trouves += fichiers_du_dossier(chemin, acceptees)
+        elif chemin.suffix.lower() in acceptees:
+            trouves.append(chemin)
+    return trouves
 
 
 def dossier_depose(donnees, extensions: Iterable[str]) -> Path | None:
