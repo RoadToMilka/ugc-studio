@@ -2206,23 +2206,35 @@ def _upscale_v4(fenetre, capturer, rapport: dict) -> bool:
     page.ajouter_le_prereglage(comprendre(COMMANDE_TOPAZ))
     page.ajouter([source])
     lu = _attendre(lambda: not page.occupe, 30)
+    # 4.1.0 : le nom par un masque, comme dans Renommer, avec la balise %res% de l'Upscale.
+    page.champs_nom.masque.setEditText("NeMu_VID_%num%_%res%%ext%")
     capturer(fenetre, "upscale-pret")
     lignes = page.tableau.rowCount()
     finale = page.tableau.item(0, 2).text() if lignes else ""
+    en_attente = page.tableau.item(0, 4).text() if lignes else ""
+    resume_nom = page.resume_nom.text()
     lance = lu and page.lancer()
     fini = bool(lance) and _attendre(lambda: not page.occupe, 90)
     capturer(fenetre, "upscale-termine")
-    sortie = rushs / "RawBox01 (upscale).mp4"
+    sortie = rushs / "NeMu_VID_01_1080p.mp4"
     rapport["upscale_v4"] = {
         "finale": finale,
         "resume_prereglage": page.resume_prereglage.text(),
         "etat_topaz": page.etat_topaz.text(),
+        "en_attente": en_attente,
+        "resume_nom": resume_nom,
         "etat": page.tableau.item(0, 4).text() if lignes else "",
         "statut": page.statut.text(),
         "sortie": sortie.is_file(),
         "provisoires": [f.name for f in rushs.glob("*.en-cours.*")],
     }
-    return fini and finale == "1080 × 1924" and sortie.is_file() and not rapport["upscale_v4"]["provisoires"]
+    return (
+        fini
+        and finale == "1080 × 1924"
+        and en_attente == "en attente : NeMu_VID_01_1080p.mp4"
+        and sortie.is_file()
+        and not rapport["upscale_v4"]["provisoires"]
+    )
 
 
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:

@@ -76,6 +76,22 @@ def test_analyse_du_masque():
     assert analyser_le_masque("%folder0%_%num%").inconnues == ("%folder0%",)
 
 
+def test_balises_en_plus_et_extension_finale():
+    """4.1.0 (Upscale vidéo) : des balises propres à un module, une extension donnée, et un masque qui
+    doit finir par %ext%."""
+    chemin = Path("C:/Pubs/Glowzy/Sérum.mov")
+    valeurs = {"res": "1080p", "preset": "Proteus"}
+    assert appliquer_le_masque("%name%_%RES%_%preset%%ext%", chemin, "01", ".mp4", valeurs) == "Sérum_1080p_Proteus.mp4"
+    assert appliquer_le_masque("%name%_%res%%ext%", chemin, "01") == "Sérum_%res%.mov"  # Renommer : inconnue, telle quelle
+    masque = "%name%_%res%_%date%%ext%"
+    analyse = analyser_le_masque(masque, ("res", "preset"))
+    assert analyse.inconnues == ("%date%",) and analyse.finit_par_extension
+    assert analyse.extension_finale == len("%name%_%res%_%date%")
+    assert analyser_le_masque("%name%_%res%%ext%").inconnues == ("%res%",)  # Renommer ne la connaît pas
+    assert not analyser_le_masque("%ext%_%num%").finit_par_extension
+    assert not analyser_le_masque("%num%%%ext%").finit_par_extension  # « %% », puis le texte « ext% »
+
+
 def test_masques_recents():
     assert masques_recents(["b", "a", "c"], "a") == ["a", "b", "c"]
     assert len(masques_recents([f"m{i}" for i in range(30)], "nouveau")) == renommage.MASQUES_RECENTS_MAX

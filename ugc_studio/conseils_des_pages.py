@@ -1175,8 +1175,11 @@ UPSCALE = PageDeConseils(
             (
                 "Les vidéos passent l'une après l'autre ; le tableau montre où en est chacune. « Arrêter » abandonne "
                 "la vidéo en cours (son fichier inachevé est effacé) ; celles déjà faites restent.",
-                "Chaque vidéo est enregistrée à côté de l'originale, « Sérum (upscale).mp4 », ou dans le dossier "
-                "choisi. Rien n'est écrasé : si le nom est pris, « Sérum (upscale) (2).mp4 ».",
+                "Chaque vidéo est enregistrée à côté de l'originale, ou dans le dossier choisi. Son nom suit le "
+                "masque, comme dans Renommer : %name% (le nom d'origine), %num% (le numéro, dans l'ordre de la "
+                "liste), %res% (1080p), %preset% (le préréglage), %ext% à la fin. Au départ : « Sérum (upscale).mp4 ».",
+                "Avant de lancer, chaque vidéo de la liste montre son futur nom. Rien n'est écrasé : si un nom est "
+                "pris, « Sérum (upscale) (2).mp4 ».",
                 "Une vidéo en erreur n'arrête pas les autres : le message de Topaz est au survol de son état.",
                 "Pour vérifier une première fois : traite une vidéo courte ici, exporte la même dans Topaz avec le même "
                 "réglage, puis « Comparer à un export de Topaz… ». Au-dessus de 99 %, aucune différence visible.",
