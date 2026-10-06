@@ -199,3 +199,31 @@ def test_trier_et_renommer_depuis_images(app_configuree, qtbot, services, tmp_pa
     page = fenetre.page("renommer")
     qtbot.waitUntil(lambda: not page.occupe, timeout=10_000)
     assert page.compte.text() == "4 images"
+
+
+def test_image_remplacee_recoit_une_nouvelle_vignette(app_configuree, qtbot, services, tmp_path):
+    """4.0.2 : une image remplacée (même nom, autre contenu, par exemple un nouveau redimensionnement)
+    reçoit une nouvelle vignette quand le dossier est relu. Elle gardait l'ancienne : les vignettes
+    déjà faites pour un dossier restent quand on le rouvre, et elles n'étaient reconnues qu'au nom."""
+    dossier = _dossier(tmp_path)
+    page = _page(qtbot, services)
+    _ouvrir(qtbot, page, dossier)
+
+    def couleur(nom: str) -> tuple[int, int, int] | None:
+        vignette = page.grille.case(dossier / nom).data(ROLE_VIGNETTE)
+        if vignette is None:
+            return None
+        image = vignette.toImage()
+        return image.pixelColor(image.width() // 2, image.height() // 2).getRgb()[:3]
+
+    qtbot.waitUntil(lambda: all(couleur(nom) is not None for nom in NOMS), timeout=10_000)
+    avant, autre = couleur("IMG_1.jpg"), couleur("IMG_2.png")
+    remplacee = dossier / "IMG_1.jpg"
+    Image.new("RGB", (90, 120), (230, 230, 20)).save(remplacee)  # jaune : l'ancienne était bleue
+    date = remplacee.stat().st_mtime + 10
+    os.utime(remplacee, (date, date))  # une autre date, même si le système l'arrondit
+    _ouvrir(qtbot, page, dossier)
+    qtbot.waitUntil(lambda: couleur("IMG_1.jpg") not in (None, avant), timeout=10_000)
+    rouge, vert, bleu = couleur("IMG_1.jpg")
+    assert rouge > 200 and vert > 200 and bleu < 80
+    assert couleur("IMG_2.png") == autre  # les autres gardent leur vignette
