@@ -5,17 +5,19 @@
 #   2. lance les tests automatiques ;
 #   3. fabrique UGC-Studio.exe ;
 #   4. démarre le .exe pour vérifier qu'il fonctionne (autotest avec captures d'écran et vrais
-#      exports vidéo), et mesure son temps de démarrage à côté de ceux de la version 2.0.0 et de la
-#      précédente ;
+#      exports vidéo), puis le relance en affichage agrandi (125 % et 150 %) pour relever les textes
+#      coupés, et mesure son temps de démarrage à côté de ceux de la version 2.0.0 et de la
+#      précédente (seulement si l'étape touche au démarrage) ;
 #   5. joint le .exe et le rapport au « run » (onglet Actions du dépôt) ;
 #   6. sur la branche main uniquement : publie une Release « v<version> » avec le .exe,
 #      si cette version n'a pas encore été publiée.
 #
 # Sur main, après la fusion d'une étape, le code est en général exactement celui de sa branche,
 # déjà fabriqué et vérifié : la Release reprend alors ce .exe au lieu de tout refaire (voir le
-# travail « deja_fabrique » et outils/empreinte_du_code.py). Le dépôt est privé : GitHub compte
-# les minutes de ses machines, avec un quota par mois, et chaque étape fabriquait le .exe deux fois
-# (quota d'octobre épuisé le 04/10/2026).
+# travail « deja_fabrique » et outils/empreinte_du_code.py). La Release publie ainsi exactement le
+# .exe dont les captures ont été relues, environ 13 minutes plus tôt. (Raison de départ : le dépôt
+# était privé, et GitHub comptait les minutes de ses machines ; quota d'octobre épuisé le
+# 04/10/2026. Dépôt public depuis le 06/10/2026.)
 
 name: Fabrication de l'app
 
@@ -168,6 +170,29 @@ jobs:
           $p = Start-Process -FilePath "dist/UGC-Studio.exe" -ArgumentList @("--autotest", "`"$dossier`"", "--captures-taille-fixe") -Wait -PassThru
           if ($p.ExitCode -ne 0) { Write-Warning "Captures incomplètes (code $($p.ExitCode))" }
 
+      # Affichage agrandi (V4 ; demande de l'utilisateur du 06/10/2026) : beaucoup d'écrans d'ordinateur
+      # portable sont réglés à 125 % ou 150 % dans Windows. Le même autotest, sans écran, avec Qt
+      # agrandi d'autant (QT_SCALE_FACTOR) : les textes s'y mesurent un peu autrement. Un texte coupé
+      # ou un bouton qui déborde fait échouer la fabrication ; les autres vérifications (certaines
+      # mesurent la disposition au pixel près, pour l'écran à 100 %) sont signalées en avertissement
+      # (outils/affichage_agrandi.py). Seules les captures des modules sont gardées dans le rapport.
+      - name: Affichage agrandi (125 % et 150 %)
+        timeout-minutes: 15
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $echelles = [ordered]@{ "125" = "1.25"; "150" = "1.5" }
+          foreach ($pourcent in $echelles.Keys) {
+            $dossier = Join-Path $PWD "rapport/captures-$pourcent"
+            $env:QT_SCALE_FACTOR = $echelles[$pourcent]
+            $p = Start-Process -FilePath "dist/UGC-Studio.exe" -ArgumentList @("--autotest", "`"$dossier`"", "--captures-taille-fixe") -Wait -PassThru
+            Remove-Item Env:QT_SCALE_FACTOR
+            Write-Host "Affichage à $pourcent % : autotest terminé (code $($p.ExitCode))"
+            Get-ChildItem $dossier -Filter "*.png" -ErrorAction SilentlyContinue | Where-Object { $_.Name -notlike "module-*" } | Remove-Item
+          }
+          python outils/affichage_agrandi.py rapport/captures-125 rapport/captures-150
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       # Temps de démarrage (V3) : FFmpeg est dans le .exe, mais dans une ressource que le démarrage ne
       # recopie pas (il l'est au premier export). Le .exe de la version 2.0.0 (sans FFmpeg), celui de la
       # version précédente (2.2.0) et celui-ci sont lancés à tour de rôle (2.0.0, 2.2.0, celui-ci, puis
@@ -179,9 +204,10 @@ jobs:
       # .exe, lot 3), le plus rapide est donc le plus proche du temps propre à l'app ; puis les
       # médianes et le détail. Les écarts d'une fabrication à l'autre viennent de la machine prêtée :
       # seule la comparaison sur une même fabrication compte.
-      # Depuis le 04/10/2026 (minutes de GitHub comptées) : seulement quand une étape touche à ce qui
-      # fait le démarrage (la recette du .exe, les bibliothèques, le lancement de l'app, FFmpeg). Sinon,
-      # 3 minutes de machine de moins par fabrication, pour une mesure qui ne changerait pas.
+      # Depuis le 04/10/2026 (quand le dépôt était privé et les minutes de GitHub comptées) : seulement
+      # quand une étape touche à ce qui fait le démarrage (la recette du .exe, les bibliothèques, le
+      # lancement de l'app, FFmpeg). Sinon, 3 minutes de moins par fabrication, pour une mesure qui ne
+      # changerait pas.
       - name: Faut-il mesurer le démarrage ?
         id: demarrage
         continue-on-error: true

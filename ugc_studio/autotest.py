@@ -17,7 +17,7 @@ from pathlib import Path
 import PySide6
 from PySide6.QtCore import QPoint, QPointF, QRect, Qt, QTimer, qVersion
 from PySide6.QtGui import QColor, QFontDatabase, QFontInfo, QIcon, QImage, QImageReader, QPainter
-from PySide6.QtWidgets import QApplication, QDialog, QLabel, QScrollArea, QWidget
+from PySide6.QtWidgets import QAbstractButton, QApplication, QDialog, QLabel, QScrollArea, QWidget
 
 from . import __version__
 from .chemins import fichier_journal
@@ -30,7 +30,7 @@ from .ui.composants.bulle import bulle as la_bulle
 from .ui.composants.bulle import bulle_visible, cacher_bulle
 from .ui.composants.conseils import DialogueConseils
 from .ui.composants.defilement import ZoneDefilante
-from .ui.composants.elements import BoutonInfo, Info
+from .ui.composants.elements import BoutonInfo, EtiquetteAbregee, Info, ListeDeroulante
 from .ui.composants.menu import position_du_menu
 from .ui.composants.tableau import Tableau
 from .ui.composants.zone import ecarts_dans, zones
@@ -111,6 +111,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "upscale_v4",
 )
 ELEMENTS_SIGNALES_MAX = 6
+TOLERANCE_TEXTE_PX = 1  # arrondis de Qt : un texte n'est « coupé » qu'au-delà d'un pixel
 # V3.1, lot 5 : la page Sous-titres en grande fenêtre (écran de 1080 px, fenêtre agrandie : la barre
 # des tâches et le titre de Windows en moins), puis sur un grand écran (1440 px).
 GRANDE_FENETRE = (1920, 1010)
@@ -343,6 +344,57 @@ def _debordements(racine: QWidget, nom: str) -> list[str]:
             f"{nom} : contenu plus large que la partie visible de {exces} px : "
             + ", ".join(_description(e) for e in coupables[:ELEMENTS_SIGNALES_MAX])
         )
+    return problemes + _textes_coupes(racine, nom)
+
+
+def _textes_coupes(racine: QWidget, nom: str) -> list[str]:
+    """Textes coupés (V4 ; demande de l'utilisateur du 06/10/2026 : repérer automatiquement les
+    textes coupés et les boutons qui débordent) : un texte écrit en partie seulement, sans « … » ni
+    infobulle pour le lire en entier.
+
+    - Texte qui passe à la ligne mais n'a de place que pour une partie de ses lignes : la zone de
+      dépôt du module Images montrait « Glisse un dossier » au lieu de « Glisse un dossier d'images
+      ici » (lot 1 de la V4).
+    - Texte sur une seule ligne plus large que sa place. Les textes abrégés exprès par « … »
+      (EtiquetteAbregee) ne comptent pas : leur texte complet est dans l'infobulle.
+    - Liste déroulante abrégée alors qu'elle a la largeur qu'elle demande (« Nom (comme
+      l'Explorate… » sous Windows, lot 2 de la V4).
+    - Bouton ou case à cocher plus étroit que son texte (et son icône)."""
+    problemes = []
+    for etiquette in racine.findChildren(QLabel):
+        texte = etiquette.text()
+        if not texte or not etiquette.isVisible() or isinstance(etiquette, EtiquetteAbregee) or not etiquette.pixmap().isNull():
+            continue
+        if etiquette.wordWrap():
+            besoin = etiquette.heightForWidth(etiquette.width())
+            if besoin > etiquette.height() + TOLERANCE_TEXTE_PX:
+                problemes.append(f"{nom} : texte coupé (il lui faut {besoin} px de haut, il en a {etiquette.height()}) : « {texte[:50]} »")
+            continue
+        if etiquette.textFormat() != Qt.TextFormat.PlainText and "<" in texte:
+            continue  # texte mis en forme (balises) : sa largeur ne se mesure pas ligne à ligne
+        if etiquette.buddy() is not None:
+            # « &Teinte : » (fenêtre « Autre couleur » de Qt) : le « & » souligne la lettre du raccourci
+            # clavier, il ne s'écrit pas (« && » écrit un « & »).
+            texte = texte.replace("&&", "\x00").replace("&", "").replace("\x00", "&")
+        mesures = etiquette.fontMetrics()
+        largeur = max(mesures.horizontalAdvance(ligne) for ligne in texte.split("\n"))
+        place = etiquette.contentsRect().width() - 2 * max(etiquette.margin(), 0)
+        if largeur > place + TOLERANCE_TEXTE_PX:
+            problemes.append(f"{nom} : texte coupé ({largeur} px de texte pour {place} px) : « {texte[:50]} »")
+    for liste in racine.findChildren(ListeDeroulante):
+        if (
+            liste.isVisible()
+            and not liste.isEditable()
+            and liste.width() >= liste.sizeHint().width()
+            and liste.texte_affiche() != liste.currentText()
+        ):
+            problemes.append(f"{nom} : liste abrégée alors que la place ne manque pas : « {liste.currentText()[:50]} »")
+    for bouton in racine.findChildren(QAbstractButton):
+        if not bouton.isVisible() or not bouton.text():
+            continue
+        minimum = bouton.minimumSizeHint().width()
+        if bouton.width() + TOLERANCE_TEXTE_PX < minimum:
+            problemes.append(f"{nom} : {type(bouton).__name__} « {bouton.text()[:40]} » de {bouton.width()} px, il lui en faut {minimum}")
     return problemes
 
 
