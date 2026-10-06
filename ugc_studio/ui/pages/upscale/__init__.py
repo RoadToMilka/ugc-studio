@@ -134,7 +134,9 @@ class PageUpscale(Page):
         self._prereglage: Prereglage | None = None  # le préréglage choisi (relu à chaque changement de liste)
         self._videos: list[Video] = []
         self._etats: dict[Path, tuple[str, str]] = {}  # source : (état, rôle de couleur : "", "succes", "erreur"…)
-        self._faites: set[Path] = set()  # agrandies pendant cette session : pas relancées
+        # Agrandies pendant cette session (pas relancées), avec la taille de la vidéo faite : elle reste
+        # dans la colonne « Taille finale », même si la résolution visée change ensuite.
+        self._faites: dict[Path, tuple[int, int]] = {}
         self._travaux: list[Travail] = []
         self._en_cours: list[Travail] = []
         self._arret: threading.Event | None = None
@@ -486,13 +488,13 @@ class PageUpscale(Page):
             return
         video = self._videos.pop(rang)
         self._etats.pop(video.source, None)
-        self._faites.discard(video.source)
+        self._faites.pop(video.source, None)
         self._actualiser()
 
     def vider_la_liste(self) -> None:
         if self._occupe:
             return
-        self._videos, self._etats, self._faites = [], {}, set()
+        self._videos, self._etats, self._faites = [], {}, {}
         self._actualiser()
 
     def dragEnterEvent(self, evenement) -> None:  # noqa: N802 : nom imposé par Qt
@@ -534,7 +536,9 @@ class PageUpscale(Page):
         self._mettre_a_jour_les_boutons()
 
     def _remplir_le_tableau(self) -> None:
-        finales = {travail.video.source: travail.finale for travail in self._travaux}
+        # La taille d'une vidéo faite, puis celle visée pour les autres (une vidéo faite n'est plus
+        # dans les travaux : sa taille finale disparaissait du tableau).
+        finales = {**self._faites, **{travail.video.source: travail.finale for travail in self._travaux}}
         self.tableau.setRowCount(len(self._videos))
         for rang, video in enumerate(self._videos):
             etat, role = self._etats.get(video.source, (EN_ATTENTE, ""))
@@ -646,7 +650,7 @@ class PageUpscale(Page):
         for resultat in resultats:
             source = resultat.travail.video.source
             if resultat.reussi:
-                self._faites.add(source)
+                self._faites[source] = resultat.travail.finale
                 self._etats[source] = (f"faite en {duree_lisible(resultat.duree_s)} : {resultat.travail.destination.name}", "succes")
             elif resultat.arrete:
                 self._etats[source] = ("arrêtée", "avertissement")

@@ -55,7 +55,10 @@ from .ui.dialogues.voix import DialogueBibliothequeVoix
 from .ui.composants.choix_voix import choisir
 from .ui.erreurs import erreurs_autotest
 from .voice_design import assembler_description
+from .topaz.installation import DOSSIER_PAR_DEFAUT, MODELES_PAR_DEFAUT
 from .ui.galerie import GalerieComposants
+from .ui.pages.upscale.dossiers_topaz import DialogueDossiersTopaz
+from .ui.pages.upscale.prereglage import DialoguePrereglage
 from .ui.icones import icones_feuille_de_style
 from .ui.polices import police
 from .ui.theme import Couleurs, Dimensions, Espacements, Hauteurs, Typo, qcolor
@@ -2586,6 +2589,17 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
                     ),
                 ),
                 ("dialogue-autre-couleur", DialogueCouleur(qcolor(Couleurs.AVERTISSEMENT), fenetre)),
+                # V4, lot 3 : les fenêtres du module Upscale vidéo, comme les autres (captures,
+                # fenêtre comme une page, place en trop, débordements).
+                ("dialogue-prereglage-topaz", DialoguePrereglage(fenetre, ["Proteus"])),
+                (
+                    "dialogue-dossiers-topaz",
+                    DialogueDossiersTopaz(
+                        {"installation": None, "modeles": None, "telecharges": None},
+                        {"installation": DOSSIER_PAR_DEFAUT, "modeles": MODELES_PAR_DEFAUT, "telecharges": None},
+                        fenetre,
+                    ),
+                ),
             ):
                 fenetre_dialogue.show()
                 capturer(fenetre_dialogue, nom)

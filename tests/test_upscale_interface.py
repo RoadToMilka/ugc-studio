@@ -123,6 +123,10 @@ def test_file_de_videos_avec_le_faux_topaz(app_configuree, qtbot, services, tmp_
     assert page.statut.text().startswith("2 vidéos agrandies en ") and page.bouton_ouvrir.isVisible()
     # Les vidéos faites ne sont pas relancées.
     assert not page.bouton_lancer.isEnabled()
+    # La taille de la vidéo faite reste affichée (elle disparaissait), même si la résolution visée change.
+    assert page.tableau.item(0, 2).text() == "1080 × 1924"
+    page.resolution.setCurrentIndex(page.resolution.findData(1440))
+    assert page.tableau.item(0, 2).text() == "1080 × 1924" and not page.bouton_lancer.isEnabled()
     page.vider_la_liste()
     assert page.zone_depot.isVisible()
 
