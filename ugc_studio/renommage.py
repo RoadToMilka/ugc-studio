@@ -14,6 +14,9 @@ Ce fichier ne contient que le calcul et le renommage, sans interface :
   « Annuler le dernier renommage ».
 
 Seul le nom des fichiers change, jamais leur contenu.
+
+Le masque sert aussi au nom des vidéos de l'Upscale vidéo (4.1.0, topaz/upscale.py), avec deux balises
+en plus (`%res%`, `%preset%`) et l'extension du format du préréglage.
 """
 
 from __future__ import annotations
@@ -67,24 +70,35 @@ class AnalyseDuMasque:
     avec_extension: bool
     inconnues: tuple[str, ...]  # « %date% » : gardées telles quelles
     niveaux: tuple[int, ...]  # N des balises %folderN%
+    extension_finale: int = -1  # où commence le %ext% qui finit le masque (-1 : il ne finit pas par %ext%)
+
+    @property
+    def finit_par_extension(self) -> bool:
+        return self.extension_finale >= 0
 
 
-def analyser_le_masque(masque: str) -> AnalyseDuMasque:
+def analyser_le_masque(masque: str, balises_en_plus: Iterable[str] = ()) -> AnalyseDuMasque:
+    """Les balises du masque. `balises_en_plus` : celles qu'un module ajoute aux balises d'Ant Renamer
+    (l'Upscale vidéo, 4.1.0 : `res` et `preset`), connues elles aussi."""
+    en_plus = {balise.lower() for balise in balises_en_plus}
     avec_numero = avec_extension = False
     inconnues: list[str] = []
     niveaux: list[int] = []
+    extension_finale = -1
     for jeton in _JETON.finditer(masque):
         balise = (jeton.group(1) or "").lower() if jeton.group(3) is None else None
         if balise is None:
-            if jeton.group(0) not in inconnues:
+            if jeton.group(3).lower() not in en_plus and jeton.group(0) not in inconnues:
                 inconnues.append(jeton.group(0))
         elif balise == "num":
             avec_numero = True
         elif balise == "ext":
             avec_extension = True
+            if jeton.end() == len(masque):
+                extension_finale = jeton.start()
         elif balise.startswith("folder"):
             niveaux.append(int(jeton.group(2)))
-    return AnalyseDuMasque(avec_numero, avec_extension, tuple(inconnues), tuple(niveaux))
+    return AnalyseDuMasque(avec_numero, avec_extension, tuple(inconnues), tuple(niveaux), extension_finale)
 
 
 def nom_du_dossier(chemin: Path, niveau: int) -> str:
@@ -93,12 +107,23 @@ def nom_du_dossier(chemin: Path, niveau: int) -> str:
     return parents[niveau - 1].name if niveau - 1 < len(parents) else ""
 
 
-def appliquer_le_masque(masque: str, chemin: Path, numero: str) -> str:
-    """Le nouveau nom de l'image `chemin`, avec ce numéro (déjà écrit avec ses zéros)."""
+def appliquer_le_masque(
+    masque: str,
+    chemin: Path,
+    numero: str,
+    extension: str | None = None,
+    valeurs: dict[str, str] | None = None,
+) -> str:
+    """Le nouveau nom du fichier `chemin`, avec ce numéro (déjà écrit avec ses zéros).
+
+    `extension` : ce que donne `%ext%` quand ce n'est pas celle du fichier (l'Upscale vidéo : celle
+    du format du préréglage) ; `valeurs` : ce que donnent les balises propres à un module
+    (`{"res": "1080p", "preset": "Proteus"}`)."""
+    en_plus = {cle.lower(): valeur for cle, valeur in (valeurs or {}).items()}
 
     def remplacer(jeton: re.Match) -> str:
         if jeton.group(3) is not None:
-            return jeton.group(0)  # balise inconnue : gardée telle quelle
+            return en_plus.get(jeton.group(3).lower(), jeton.group(0))  # balise inconnue : gardée telle quelle
         balise = jeton.group(1).lower()
         if balise == "":
             return "%"
@@ -107,7 +132,7 @@ def appliquer_le_masque(masque: str, chemin: Path, numero: str) -> str:
         if balise == "name":
             return chemin.stem
         if balise == "ext":
-            return chemin.suffix
+            return chemin.suffix if extension is None else extension
         return nom_du_dossier(chemin, int(jeton.group(2)))
 
     return _JETON.sub(remplacer, masque)

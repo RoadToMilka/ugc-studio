@@ -9,7 +9,8 @@ Le parcours, de haut en bas :
 3. Taille : la résolution visée sur le petit côté (1080p, 1440p…) ; l'autre côté suit le ratio de
    chaque vidéo, sans jamais l'étirer.
 4. Vidéos : glisser-déposer ou « Ajouter des vidéos… » ; chaque vidéo, sa taille actuelle et finale.
-5. Enregistrement : à côté de chaque vidéo (« Sérum (upscale).mp4 »), ou dans un autre dossier.
+5. Enregistrement : à côté de chaque vidéo, ou dans un autre dossier ; le nom par un masque, comme
+   dans le module Renommer (4.1.0 ; au départ « Sérum (upscale).mp4 »).
 6. « Lancer » : une vidéo après l'autre, avancement, « Arrêter » ; puis « Ouvrir le dossier », et
    « Comparer à un export de Topaz… » pour vérifier que le résultat est le même.
 """
@@ -25,18 +26,23 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QTableWidgetItem, QVBoxL
 from ....chemins import chemin_a_afficher, dossier_documents, dossier_donnees
 from ....exports.ffmpeg import preparer_ffmpeg
 from ....services import Services
-from ....topaz.commande import PETIT_COTE_1080P, PETIT_COTE_1440P, PETIT_COTE_MAX, PETIT_COTE_MIN, Prereglage
+from ....topaz.commande import PETIT_COTE_1080P, PETIT_COTE_1440P, PETIT_COTE_MAX, PETIT_COTE_MIN, Prereglage, taille_finale
 from ....topaz.comparaison import ComparaisonImpossible, comparer
 from ....topaz.installation import DOSSIER_PAR_DEFAUT, Topaz, trouver_topaz
 from ....topaz.prereglages import FICHIER as FICHIER_PREREGLAGES
 from ....topaz.prereglages import PrereglagesTopaz
 from ....topaz.upscale import (
+    EXEMPLE,
     EXTENSIONS_VIDEOS,
+    MASQUE_PAR_DEFAUT,
     Avancement,
+    NomDesVideos,
+    PlanDeLaFile,
     Resultat,
     Travail,
     Video,
     duree_lisible,
+    exemple_de_nom,
     lire_la_video,
     planifier,
     upscaler,
@@ -54,6 +60,7 @@ from ...composants.elements import (
     libelle,
     liste_deroulante,
 )
+from ...composants.masque import ChampsDuMasque
 from ...composants.tableau import Colonne, Tableau
 from ...dialogues import messages
 from ...ouvrir import ouvrir_dossier
@@ -73,6 +80,9 @@ PREF_SORTIE = "upscale_sortie"
 PREF_SORTIE_AUTRE = "upscale_sortie_autre"
 PREF_DOSSIERS_TOPAZ = "upscale_dossiers_topaz"  # {"installation": …, "modeles": …, "telecharges": …}
 PREF_DERNIER_DOSSIER = "upscale_dernier_dossier"
+# Le masque du nom (4.1.0) : écrit par ses champs (composants/masque.py), sous ce préfixe : « upscale_masque »,
+# « upscale_masques_recents », « upscale_depart »… (à part de ceux de Renommer).
+PREFIXE_NOM = "upscale"
 
 AUTRE = 0
 RESOLUTIONS = {
@@ -104,8 +114,28 @@ AIDE_VIDEOS = (
     "vidéo après l'autre : c'est la carte graphique qui travaille. Tes vidéos d'origine ne sont jamais modifiées."
 )
 AIDE_SORTIE = (
-    "Par défaut, à côté de chaque vidéo : « Sérum (upscale).mp4 ». Aucun fichier n'est écrasé : si ce nom est "
-    "pris, « Sérum (upscale) (2).mp4 »."
+    "Par défaut, à côté de chaque vidéo. Le nom suit le masque, comme dans Renommer : au départ « Sérum "
+    "(upscale).mp4 ». Aucun fichier n'est écrasé : si un nom est pris, « Sérum (upscale) (2).mp4 »."
+)
+AIDE_MASQUE = (
+    "Le nom de chaque vidéo faite, avec des balises remplacées pour chacune, comme dans Renommer :\n"
+    "%num% : le numéro, dans l'ordre de la liste\n"
+    "%name% : le nom de la vidéo d'origine\n"
+    "%ext% : l'extension du format du préréglage (.mp4), à la fin du masque\n"
+    "%folder1% : le nom du dossier de la vidéo (%folder2% : celui du dessus…)\n"
+    "%res% : la résolution visée (1080p)\n"
+    "%preset% : le nom du préréglage\n"
+    "%% : le caractère %\n"
+    "Exemple : NeMu_VID_%num%%ext% donne NeMu_VID_01.mp4, NeMu_VID_02.mp4…"
+)
+# Balises à ajouter au masque d'un clic : celles de Renommer, dans le même ordre, puis celles de l'Upscale.
+BALISES = (
+    ("%num%", "Le numéro, dans l'ordre de la liste"),
+    ("%name%", "Le nom de la vidéo d'origine"),
+    ("%ext%", "L'extension du format du préréglage (.mp4)"),
+    ("%folder1%", "Le nom du dossier de la vidéo"),
+    ("%res%", "La résolution visée (1080p)"),
+    ("%preset%", "Le nom du préréglage"),
 )
 AIDE_COMPARER = (
     "Choisis une vidéo faite ici, puis la même exportée par Topaz avec le même réglage : l'app mesure leur "
@@ -137,6 +167,7 @@ class PageUpscale(Page):
         # Agrandies pendant cette session (pas relancées), avec la taille de la vidéo faite : elle reste
         # dans la colonne « Taille finale », même si la résolution visée change ensuite.
         self._faites: dict[Path, tuple[int, int]] = {}
+        self._plan = PlanDeLaFile()  # les travaux, leur nom, et ce qui empêcherait de lancer
         self._travaux: list[Travail] = []
         self._en_cours: list[Travail] = []
         self._arret: threading.Event | None = None
@@ -239,6 +270,14 @@ class PageUpscale(Page):
         self.bouton_autre = bouton("Changer…", variante="contour", nom_icone="folder-open", action=self.choisir_autre_dossier)
         ligne.addWidget(self.bouton_autre, 0, Qt.AlignmentFlag.AlignTop)
         d.addWidget(self.ligne_autre)
+        # Le nom des vidéos (4.1.0) : les champs du masque de Renommer (même composant), puis ce qu'il
+        # donne et ce qui mérite un coup d'œil.
+        self.champs_nom = ChampsDuMasque(self._preferences, PREFIXE_NOM, MASQUE_PAR_DEFAUT, BALISES, aide_masque=AIDE_MASQUE)
+        d.addWidget(self.champs_nom)
+        self.resume_nom = libelle("", "secondaire")
+        d.addWidget(self.resume_nom)
+        self.alertes_nom = libelle("", "avertissement")
+        d.addWidget(self.alertes_nom)
         self.contenu.addWidget(self.cadre_sortie)
 
         # --- Lancer ---
@@ -277,6 +316,7 @@ class PageUpscale(Page):
         self.resolution.currentIndexChanged.connect(lambda _index: self._taille_changee())
         self.petit_cote.valueChanged.connect(lambda _valeur: self._taille_changee())
         self.sortie.currentIndexChanged.connect(lambda _index: self._sortie_changee())
+        self.champs_nom.change.connect(self._actualiser)
         self._remplir_les_prereglages(self._preferences.lire(PREF_PREREGLAGE))
         self.chercher_topaz()
         self._actualiser()
@@ -516,16 +556,24 @@ class PageUpscale(Page):
 
     # --- Résumé ------------------------------------------------------------------------------
 
+    def nom_des_videos(self) -> NomDesVideos:
+        """Le masque saisi, sa numérotation et le nom du préréglage (pour %preset%)."""
+        prereglage = self.prereglage_choisi()
+        return NomDesVideos(self.champs_nom.texte(), self.champs_nom.numerotation(), prereglage.nom if prereglage else "")
+
     def _actualiser(self) -> None:
-        """Les travaux selon les réglages (les vidéos déjà agrandies mises à part), puis le tableau."""
+        """Les travaux selon les réglages (les vidéos déjà agrandies mises à part), leur nom, puis le
+        tableau."""
         self.champ_petit_cote.setVisible(self.resolution.currentData() == AUTRE)
         autre = self.sortie.currentData() == AUTRE_DOSSIER
         self.ligne_autre.setVisible(autre)
         self.chemin_autre.setText(chemin_a_afficher(self._autre_dossier) if self._autre_dossier else "Aucun dossier choisi")
         prereglage = self.prereglage_choisi()
         extension = prereglage.extension if prereglage else ".mp4"
-        a_faire = [video for video in self._videos if video.source not in self._faites]
-        self._travaux = planifier(a_faire, self.petit_cote_vise(), extension, self.dossier_de_sortie())
+        nom = self.nom_des_videos()
+        self._plan = planifier(self._videos, self.petit_cote_vise(), extension, self.dossier_de_sortie(), nom, set(self._faites))
+        self._travaux = self._plan.travaux
+        self._actualiser_le_nom(nom, extension)
         avec_videos = bool(self._videos)
         self.zone_depot.setVisible(not avec_videos and not self._occupe)
         self.ligne_videos.setVisible(avec_videos or self._occupe)
@@ -535,13 +583,38 @@ class PageUpscale(Page):
         self._remplir_le_tableau()
         self._mettre_a_jour_les_boutons()
 
+    def _actualiser_le_nom(self, nom: NomDesVideos, extension: str) -> None:
+        """Sous le masque, comme dans Renommer : ce qu'il donne (« 3 vidéos : de « … » à « … ». », ou un
+        exemple sans vidéo à faire), en rouge ce qui empêche de lancer, en orange ce qui mérite un coup
+        d'œil."""
+        plan = self._plan
+        if plan.erreur or plan.travaux:
+            texte, erreur = plan.resume(), bool(plan.erreur or plan.problemes)
+        else:
+            exemple, probleme = exemple_de_nom(nom, extension, self.petit_cote_vise())
+            texte, erreur = (f"« {exemple} » : {probleme}" if probleme else f"Exemple : « {EXEMPLE.name} » donne « {exemple} »."), bool(probleme)
+        self.resume_nom.setText(texte)
+        self.resume_nom.setProperty("role", "erreur" if erreur else "secondaire")
+        self.alertes_nom.setText("\n".join(plan.alertes))
+        self.alertes_nom.setVisible(bool(plan.alertes))
+        for etiquette in (self.resume_nom, self.alertes_nom):
+            etiquette.style().unpolish(etiquette)
+            etiquette.style().polish(etiquette)
+
     def _remplir_le_tableau(self) -> None:
-        # La taille d'une vidéo faite, puis celle visée pour les autres (une vidéo faite n'est plus
-        # dans les travaux : sa taille finale disparaissait du tableau).
-        finales = {**self._faites, **{travail.video.source: travail.finale for travail in self._travaux}}
+        # La taille d'une vidéo faite, puis celle visée pour les autres (une vidéo faite garde la taille de
+        # la vidéo écrite, même si la résolution visée change ensuite).
+        petit_cote = self.petit_cote_vise()
+        visees = {v.source: taille_finale(v.largeur, v.hauteur, petit_cote) for v in self._videos if not v.erreur and v.largeur and v.hauteur}
+        finales = {**visees, **self._faites}
+        # 4.1.0 : chaque vidéo en attente montre son futur nom (ou pourquoi Windows le refuserait).
+        travaux = {travail.video.source: travail for travail in self._travaux}
         self.tableau.setRowCount(len(self._videos))
         for rang, video in enumerate(self._videos):
             etat, role = self._etats.get(video.source, (EN_ATTENTE, ""))
+            travail = travaux.get(video.source)
+            if etat == EN_ATTENTE and travail is not None:
+                etat, role = (f"nom impossible : {travail.probleme}", "erreur") if travail.probleme else (f"{EN_ATTENTE} : {travail.destination.name}", "")
             finale = finales.get(video.source)
             cases = (
                 video.source.name,
@@ -566,7 +639,7 @@ class PageUpscale(Page):
         self.tableau.setFixedHeight(min(Dimensions.TABLEAU_HAUTEUR_MIN, hauteur))
 
     def _mettre_a_jour_les_boutons(self) -> None:
-        pret = self._topaz is not None and self.prereglage_choisi() is not None and bool(self._travaux)
+        pret = self._topaz is not None and self.prereglage_choisi() is not None and self._plan.possible
         actif = self._bouton_occupe.est
         self.bouton_lancer.setEnabled((pret and not self._occupe) or actif(self.bouton_lancer))
         self.bouton_retirer.setEnabled(not self._occupe and self.tableau.currentRow() >= 0)
@@ -576,6 +649,8 @@ class PageUpscale(Page):
             self.bouton_lancer.setToolTip("Topaz Video AI introuvable : « Dossiers de Topaz… »")
         elif self.prereglage_choisi() is None:
             self.bouton_lancer.setToolTip("Crée d'abord un préréglage (« Nouveau… »)")
+        elif self._plan.erreur or self._plan.problemes:
+            self.bouton_lancer.setToolTip("Corrige le nom des vidéos (en rouge, dans « Enregistrement »)")
         else:
             self.bouton_lancer.setToolTip("")
 
@@ -584,7 +659,7 @@ class PageUpscale(Page):
     def lancer(self) -> bool:
         """Lance la file (en arrière-plan). Renvoie True si elle commence."""
         prereglage, topaz, travaux = self.prereglage_choisi(), self._topaz, list(self._travaux)
-        if self._occupe or prereglage is None or topaz is None or not travaux:
+        if self._occupe or prereglage is None or topaz is None or not self._plan.possible:
             return False
         problemes = topaz.problemes(prereglage.modele)
         if problemes and not messages.confirmer(
@@ -597,6 +672,7 @@ class PageUpscale(Page):
         ):
             return False
         self._en_cours = travaux
+        self.champs_nom.retenir(self.champs_nom.texte())  # en tête des masques récents, comme dans Renommer
         for travail in travaux:
             self._etats[travail.video.source] = (EN_ATTENTE, "")
         self._arret = threading.Event()

@@ -107,8 +107,8 @@ def test_file_de_videos_avec_le_faux_topaz(app_configuree, qtbot, services, tmp_
     qtbot.waitUntil(lambda: not page.occupe, timeout=20_000)
     lignes = [[page.tableau.item(rang, colonne).text() for colonne in (0, 1, 2, 4)] for rang in range(page.tableau.rowCount())]
     assert lignes == [
-        ["RawBox01.mp4", "606 × 1080", "1080 × 1924", "en attente"],
-        ["Paysage.mp4", "320 × 180", "1920 × 1080", "en attente"],
+        ["RawBox01.mp4", "606 × 1080", "1080 × 1924", "en attente : RawBox01 (upscale).mp4"],  # son futur nom (4.1.0)
+        ["Paysage.mp4", "320 × 180", "1920 × 1080", "en attente : Paysage (upscale).mp4"],
     ]
     page.resolution.setCurrentIndex(page.resolution.findData(AUTRE))
     assert page.champ_petit_cote.isVisible()
@@ -152,6 +152,67 @@ def test_autre_dossier_et_erreur_de_topaz(app_configuree, qtbot, services, tmp_p
     assert page.lancer()  # une vidéo en erreur peut être relancée
     qtbot.waitUntil(lambda: not page.occupe, timeout=30_000)
     assert (sortie / "Sérum (upscale).mp4").is_file()
+
+
+@avec_ffmpeg
+def test_nom_des_videos_par_masque(app_configuree, qtbot, services, tmp_path):
+    """4.1.0 : le nom des vidéos faites par un masque, avec les champs de Renommer (le même
+    composant) et deux balises en plus, %res% et %preset%."""
+    rushs = tmp_path / "Glowzy"
+    premiere = _video(rushs, "RawBox01.mp4")
+    seconde = _video(rushs, "RawBox02.mp4", "320x180")
+    page = _page(qtbot, services)
+    # Sans vidéo : un exemple ; au départ, le nom d'avant.
+    assert page.champs_nom.texte() == "%name% (upscale)%ext%"
+    assert page.resume_nom.text() == "Exemple : « Sérum.mp4 » donne « Sérum (upscale).mp4 »."
+    assert [b.text() for b in page.champs_nom.boutons_balises] == ["%num%", "%name%", "%ext%", "%folder1%", "%res%", "%preset%"]
+    page.definir_topaz(_faux_topaz(tmp_path))
+    page.ajouter_le_prereglage(comprendre(COMMANDE))  # nommé d'après son modèle : « Proteus »
+    page.ajouter([premiere, seconde])
+    qtbot.waitUntil(lambda: not page.occupe, timeout=20_000)
+    # Sans %ext% à la fin : en rouge, « Lancer » grisé.
+    page.champs_nom.masque.setEditText("NeMu_VID_%num%_%res%")
+    assert page.resume_nom.text() == "Le masque doit finir par %ext% : l'app y met l'extension du format du préréglage (.mp4)."
+    assert page.resume_nom.property("role") == "erreur" and not page.bouton_lancer.isEnabled()
+    page.champs_nom.inserer_balise("%ext%")  # à l'endroit du curseur : la fin
+    assert page.champs_nom.texte() == "NeMu_VID_%num%_%res%%ext%" and page.bouton_lancer.isEnabled()
+    assert page.resume_nom.text() == "2 vidéos : de « NeMu_VID_01_1080p.mp4 » à « NeMu_VID_02_1080p.mp4 »."
+    etats = [page.tableau.item(rang, 4).text() for rang in range(2)]
+    assert etats == ["en attente : NeMu_VID_01_1080p.mp4", "en attente : NeMu_VID_02_1080p.mp4"]
+    page.champs_nom.depart.setValue(7)
+    page.champs_nom.chiffres.setValue(3)
+    page.champs_nom.masque.setEditText("%folder1%_%num%_%preset%%ext%")
+    assert page.tableau.item(1, 4).text() == "en attente : Glowzy_008_Proteus.mp4"
+    # Un nom que Windows refuse : en rouge, dans le tableau aussi.
+    page.champs_nom.masque.setEditText("NeMu?%num%%ext%")
+    assert page.resume_nom.text() == "2 vidéos ont un nom impossible (en rouge) : rien n'est lancé tant que c'est le cas."
+    assert page.tableau.item(0, 4).text() == "nom impossible : Caractère interdit par Windows : ?"
+    assert not page.bouton_lancer.isEnabled()
+    # Ni numéro ni nom d'origine : le même nom pour les deux, « (2) » ajouté, signalé en orange.
+    page.champs_nom.masque.setEditText("NeMu%ext%")
+    assert page.bouton_lancer.isEnabled() and page.alertes_nom.isVisible()
+    assert page.alertes_nom.text().startswith("1 vidéo aurait le même nom qu'une autre de la liste")
+    assert page.tableau.item(1, 4).text() == "en attente : NeMu (2).mp4"
+    page.champs_nom.masque.setEditText("NeMu_VID_%num%%ext%")
+    page.champs_nom.depart.setValue(1)
+    page.champs_nom.chiffres.setValue(2)
+    assert page.lancer()
+    qtbot.waitUntil(lambda: not page.occupe, timeout=30_000)
+    assert (rushs / "NeMu_VID_01.mp4").is_file() and (rushs / "NeMu_VID_02.mp4").is_file()
+    assert page.tableau.item(0, 4).text().endswith(": NeMu_VID_01.mp4")
+    # Le masque retenu en tête des masques récents, à part de ceux de Renommer.
+    assert services.preferences.lire("upscale_masques_recents")[0] == "NeMu_VID_%num%%ext%"
+    assert services.preferences.lire("renommer_masque") is None
+    # Une vidéo ajoutée ensuite prend le numéro suivant.
+    page.ajouter([_video(rushs, "RawBox03.mp4")])
+    qtbot.waitUntil(lambda: not page.occupe, timeout=20_000)
+    assert page.tableau.item(2, 4).text() == "en attente : NeMu_VID_03.mp4"
+    # Un nom déjà pris dans le dossier : « (2) », signalé en orange.
+    page.champs_nom.depart.setValue(0)  # 00, 01, 02 : la 3e prendrait « NeMu_VID_02.mp4 », déjà là
+    assert page.tableau.item(2, 4).text() == "en attente : NeMu_VID_02 (2).mp4"
+    assert "« NeMu_VID_02.mp4 » existe déjà" in page.alertes_nom.text()
+    autre = _page(qtbot, services)  # réglages retenus
+    assert autre.champs_nom.texte() == "NeMu_VID_%num%%ext%" and autre.champs_nom.depart.value() == 0
 
 
 @avec_ffmpeg

@@ -20,13 +20,17 @@ from ugc_studio.topaz.commande import (
     taille_finale,
 )
 from ugc_studio.topaz.installation import CONNEXION, VARIABLE_DONNEES, VARIABLE_MODELES, Topaz, trouver_topaz
+from ugc_studio.renommage import Numerotation
 from ugc_studio.topaz.upscale import (
+    NomDesVideos,
     Video,
     chemin_provisoire,
     duree_lisible,
+    exemple_de_nom,
     lire_la_video,
     nom_de_sortie,
     planifier,
+    resolution_lisible,
     upscaler,
 )
 
@@ -209,22 +213,80 @@ def _videos(tmp_path, noms=("Sérum.mp4", "Crème.mov")) -> list[Video]:
 
 
 def test_noms_de_sortie(tmp_path):
-    source = tmp_path / "Sérum.mp4"
-    assert nom_de_sortie(source, tmp_path, ".mp4") == tmp_path / "Sérum (upscale).mp4"
+    assert nom_de_sortie("Sérum (upscale)", tmp_path, ".mp4") == tmp_path / "Sérum (upscale).mp4"
     (tmp_path / "Sérum (upscale).mp4").write_bytes(b"")
-    assert nom_de_sortie(source, tmp_path, ".mp4") == tmp_path / "Sérum (upscale) (2).mp4"  # rien n'est écrasé
+    assert nom_de_sortie("Sérum (upscale)", tmp_path, ".mp4") == tmp_path / "Sérum (upscale) (2).mp4"  # rien n'est écrasé
     assert chemin_provisoire(tmp_path / "Sérum (upscale).mp4") == tmp_path / "Sérum (upscale).en-cours.mp4"
-    deux = planifier([Video(tmp_path / "a" / "x.mp4", 606, 1080, 1.0), Video(tmp_path / "b" / "x.mp4", 1920, 1080, 1.0)], 1080, ".mp4", tmp_path)
+    # Le masque de départ donne le nom d'avant la 4.1.0 : « x (upscale).mp4 ».
+    deux = planifier([Video(tmp_path / "a" / "x.mp4", 606, 1080, 1.0), Video(tmp_path / "b" / "x.mp4", 1920, 1080, 1.0)], 1080, ".mp4", tmp_path).travaux
     assert [t.destination.name for t in deux] == ["x (upscale).mp4", "x (upscale) (2).mp4"]
     assert [t.finale for t in deux] == [(1080, 1924), (1920, 1080)]
-    assert planifier([Video(tmp_path / "abimee.mp4", erreur="illisible")], 1080, ".mp4") == []
+    assert planifier([Video(tmp_path / "abimee.mp4", erreur="illisible")], 1080, ".mp4").travaux == []
     assert (duree_lisible(42.4), duree_lisible(192), duree_lisible(3900)) == ("42 s", "3 min 12 s", "1 h 05 min")
+
+
+def test_nom_des_videos_par_masque(tmp_path):
+    """4.1.0 : le masque de Renommer, avec %res% et %preset% ; %num% facultatif, %ext% à la fin."""
+    dossier = tmp_path / "Glowzy"
+    dossier.mkdir()
+    videos = [
+        Video(dossier / "A.mp4", 606, 1080, 1.0),
+        Video(dossier / "B.mov", erreur="illisible"),  # pas de numéro : elle ne sera pas faite
+        Video(dossier / "C.mp4", 1920, 1080, 1.0),
+        Video(dossier / "D.mp4", 720, 1280, 1.0),
+    ]
+    nom = NomDesVideos("NeMu_VID_%num%_%res%%ext%")
+    plan = planifier(videos, 1080, ".mp4", nom=nom)
+    assert [t.destination.name for t in plan.travaux] == ["NeMu_VID_01_1080p.mp4", "NeMu_VID_02_1080p.mp4", "NeMu_VID_03_1080p.mp4"]
+    assert plan.possible and plan.alertes == []
+    assert plan.resume() == "3 vidéos : de « NeMu_VID_01_1080p.mp4 » à « NeMu_VID_03_1080p.mp4 »."
+    # Une vidéo déjà faite garde sa place : les autres gardent leur numéro.
+    plan = planifier(videos, 1440, ".mp4", nom=nom, faites={dossier / "A.mp4"})
+    assert [t.destination.name for t in plan.travaux] == ["NeMu_VID_02_1440p.mp4", "NeMu_VID_03_1440p.mp4"]
+    # Les autres balises, sans tenir compte des majuscules, et la numérotation de Renommer.
+    nom = NomDesVideos("%Folder1%_%NUM%_%preset%_%name%%Ext%", Numerotation(7, 3, 5), "Proteus")
+    noms = [t.destination.name for t in planifier(videos, 2160, ".mov", nom=nom).travaux]
+    assert noms == ["Glowzy_007_Proteus_A.mov", "Glowzy_012_Proteus_C.mov", "Glowzy_017_Proteus_D.mov"]
+    assert resolution_lisible(2160) == "2160p"
+    # Le masque doit finir par %ext% (« %% » suivi de « ext% » n'est pas la balise).
+    for masque in ("NeMu_%num%", "NeMu_%ext%_%num%", "NeMu%%ext%", ""):
+        plan = planifier(videos, 1080, ".mp4", nom=NomDesVideos(masque))
+        assert plan.erreur and not plan.travaux and not plan.possible, masque
+    erreur = planifier(videos, 1080, ".mp4", nom=NomDesVideos("x")).erreur
+    assert erreur == "Le masque doit finir par %ext% : l'app y met l'extension du format du préréglage (.mp4)."
+    # Ce que Windows refuse : en rouge, rien n'est lancé.
+    plan = planifier(videos, 1080, ".mp4", nom=NomDesVideos("CON%ext%"))
+    assert not plan.possible and plan.travaux[0].probleme == "« CON » est un nom réservé par Windows."
+    assert plan.resume() == "3 vidéos ont un nom impossible (en rouge) : rien n'est lancé tant que c'est le cas."
+    # Sans vidéo : un exemple.
+    assert exemple_de_nom(NomDesVideos(), ".mp4", 1080) == ("Sérum (upscale).mp4", "")
+    assert exemple_de_nom(NomDesVideos("%folder1%_%res%%ext%"), ".mp4", 1440) == ("Glowzy_1440p.mp4", "")
+    assert exemple_de_nom(NomDesVideos("a|b%ext%"), ".mp4", 1080)[1] == "Caractère interdit par Windows : |"
+
+
+def test_noms_deja_pris_et_balises_inconnues(tmp_path):
+    dossier = tmp_path / "Rushs"
+    dossier.mkdir()
+    videos = [Video(dossier / f"{lettre}.mp4", 606, 1080, 1.0) for lettre in "ABC"]
+    plan = planifier(videos, 1080, ".mp4", nom=NomDesVideos("NeMu%ext%"))  # ni %num% ni %name% : permis
+    assert [t.destination.name for t in plan.travaux] == ["NeMu.mp4", "NeMu (2).mp4", "NeMu (3).mp4"]
+    assert plan.possible and plan.alertes == [
+        "2 vidéos auraient le même nom qu'une autre de la liste : « (2) », « (3) »… ajoutés. Mets %num% ou %name% dans le "
+        "masque pour les distinguer."
+    ]
+    (dossier / "NeMu_02.mp4").write_bytes(b"")  # un lot précédent
+    plan = planifier(videos, 1080, ".mp4", nom=NomDesVideos("NeMu_%num%%ext%"))
+    assert [t.destination.name for t in plan.travaux] == ["NeMu_01.mp4", "NeMu_02 (2).mp4", "NeMu_03.mp4"]
+    assert plan.alertes == ["« NeMu_02.mp4 » existe déjà : la vidéo sera enregistrée en « NeMu_02 (2).mp4 » (rien n'est écrasé)."]
+    plan = planifier(videos[:1], 1080, ".mp4", nom=NomDesVideos("%date%_%folder99%_%num%%ext%"))
+    assert plan.alertes == ["%date% n'est pas une balise : écrit tel quel dans les noms.", "%folder99% : pas de dossier à ce niveau, remplacé par rien."]
+    assert plan.travaux[0].destination.name == "%date%__01.mp4"
 
 
 def test_file_de_videos_avec_le_faux_topaz(tmp_path, monkeypatch):
     commande = tmp_path / "commande.txt"
     monkeypatch.setenv("UGC_FAUX_TOPAZ_COMMANDE", str(commande))
-    travaux = planifier(_videos(tmp_path), 1080, ".mp4")
+    travaux = planifier(_videos(tmp_path), 1080, ".mp4").travaux
     avancement = []
     resultats = upscaler(travaux, comprendre(COMMANDE), _faux(tmp_path), avancement.append, threading.Event())
     assert [r.reussi for r in resultats] == [True, True]
@@ -239,7 +301,7 @@ def test_file_de_videos_avec_le_faux_topaz(tmp_path, monkeypatch):
 
 def test_topaz_en_echec(tmp_path, monkeypatch):
     monkeypatch.setenv("UGC_FAUX_TOPAZ_ECHEC", "1")
-    travaux = planifier(_videos(tmp_path, ("Sérum.mp4",)), 1080, ".mp4")
+    travaux = planifier(_videos(tmp_path, ("Sérum.mp4",)), 1080, ".mp4").travaux
     resultats = upscaler(travaux, comprendre(COMMANDE), _faux(tmp_path), lambda _a: None, threading.Event())
     assert not resultats[0].reussi and "Model prob-4 could not be loaded" in resultats[0].erreur
     assert not list((tmp_path / "Rushs").glob("*(upscale)*"))  # rien de laissé
@@ -247,7 +309,7 @@ def test_topaz_en_echec(tmp_path, monkeypatch):
 
 def test_arreter_la_file(tmp_path, monkeypatch):
     monkeypatch.setenv("UGC_FAUX_TOPAZ_PAUSE", "0.5")
-    travaux = planifier(_videos(tmp_path), 1080, ".mp4")
+    travaux = planifier(_videos(tmp_path), 1080, ".mp4").travaux
     arret = threading.Event()
     resultats = upscaler(travaux, comprendre(COMMANDE), _faux(tmp_path), lambda _a: arret.set(), arret)
     assert len(resultats) == 1 and resultats[0].arrete  # la 2e vidéo n'est pas commencée
@@ -273,7 +335,7 @@ def test_video_couchee_lue_debout(tmp_path):
     subprocess.run([*commun, "-display_rotation", "90", "-i", str(droite), "-c", "copy", str(source)], check=True)
     video = lire_la_video(source, FFMPEG)
     assert (video.largeur, video.hauteur) == (108, 192) and not video.son
-    assert planifier([video], 1080, ".mp4")[0].finale == (1080, 1920)
+    assert planifier([video], 1080, ".mp4").travaux[0].finale == (1080, 1920)
 
 
 @pytest.mark.skipif(FFMPEG is None, reason="FFmpeg absent de cet ordinateur")

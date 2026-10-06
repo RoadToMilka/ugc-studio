@@ -24,21 +24,15 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QComboBox, QFileDialog, QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
 
 from ....chemins import chemin_a_afficher, dossier_documents, dossier_donnees
 from ....dossiers import EXTENSIONS_IMAGES
 from ....images.vignettes import faire_les_vignettes
 from ....renommage import (
-    CHIFFRES_MAX,
-    CHIFFRES_MIN,
-    DEPART_MAX,
-    DEPART_MIN,
     FICHIER_JOURNAL,
     MASQUE_PAR_DEFAUT,
     NOM,
-    PAS_MAX,
-    PAS_MIN,
     TRIS,
     ContenuDuDossier,
     JournalDesRenommages,
@@ -49,7 +43,6 @@ from ....renommage import (
     annuler,
     lire_le_dossier,
     maintenant,
-    masques_recents,
     ordre_final,
     planifier,
     quantite,
@@ -65,10 +58,10 @@ from ...composants.elements import (
     afficher_message,
     bloc,
     bouton,
-    champ_entier,
     libelle,
     liste_deroulante,
 )
+from ...composants.masque import ChampsDuMasque
 from ...composants.tableau import Colonne, Tableau
 from ...dialogues import messages
 from ...theme import Couleurs, Dimensions, Espacements, Hauteurs, qcolor
@@ -79,13 +72,15 @@ from .image_en_grand import FenetreImageEnGrand
 TITRE = "Renommer"
 SOUS_TITRE = "Choisis l'ordre des images en les cliquant, puis renomme-les toutes d'un coup."
 
-# Préférences (§10) : ce module ne dépend pas d'un projet.
+# Préférences (§10) : ce module ne dépend pas d'un projet. Celles du masque sont écrites par ses champs
+# (composants/masque.py), sous ce préfixe.
+PREFIXE = "renommer"
 PREF_DOSSIER = "renommer_dossier"
-PREF_MASQUE = "renommer_masque"
-PREF_MASQUES_RECENTS = "renommer_masques_recents"
-PREF_DEPART = "renommer_depart"
-PREF_CHIFFRES = "renommer_chiffres"
-PREF_PAS = "renommer_pas"
+PREF_MASQUE = f"{PREFIXE}_masque"
+PREF_MASQUES_RECENTS = f"{PREFIXE}_masques_recents"
+PREF_DEPART = f"{PREFIXE}_depart"
+PREF_CHIFFRES = f"{PREFIXE}_chiffres"
+PREF_PAS = f"{PREFIXE}_pas"
 PREF_TRI = "renommer_tri"
 
 FORMATS_ACCEPTES = "JPG, PNG, WebP, AVIF, TIFF ou BMP"
@@ -112,7 +107,6 @@ AIDE_NOM = (
     "%% : le caractère %\n"
     "Exemple : NeMu_JPG_%num%%ext% donne NeMu_JPG_01.jpg, NeMu_JPG_02.jpg…"
 )
-AIDE_CHIFFRES = "2 : 01, 02… Au-delà de 99, le numéro s'allonge tout seul (100)."
 AIDE_APERCU = (
     "Chaque image dans l'ordre final, avec son nouveau nom. En rouge, un nom que Windows refuserait : rien "
     "n'est renommé tant qu'il en reste. En orange, ce qui mérite un coup d'œil."
@@ -218,42 +212,14 @@ class PageRenommer(Page):
         self.contenu.addWidget(self.cadre_ordre)
 
         # --- Nom ---
+        # Les champs du masque sont un composant commun avec l'Upscale vidéo (4.1.0) : la même
+        # présentation et le même comportement dans toute l'app (demande de l'utilisateur).
         self.cadre_nom, d = bloc("Nom", aide=AIDE_NOM)
-        champs = QHBoxLayout()
-        champs.setContentsMargins(0, 0, 0, 0)
-        champs.setSpacing(Espacements.L)
-        self.masque = liste_deroulante()
-        self.masque.setEditable(True)
-        self.masque.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.masque.setFixedHeight(Hauteurs.CONTROLE)
-        self._remplir_les_masques(self._preferences.lire(PREF_MASQUE) or MASQUE_PAR_DEFAUT)
-        champs.addWidget(ChampNomme("Masque", self.masque, etire=True), 1)
-        self.depart = champ_entier(DEPART_MIN, DEPART_MAX)
-        self.chiffres = champ_entier(CHIFFRES_MIN, CHIFFRES_MAX)
-        self.pas = champ_entier(PAS_MIN, PAS_MAX)
-        numerotation = Numerotation()
-        for champ, cle, defaut in (
-            (self.depart, PREF_DEPART, numerotation.depart),
-            (self.chiffres, PREF_CHIFFRES, numerotation.chiffres),
-            (self.pas, PREF_PAS, numerotation.pas),
-        ):
-            valeur = self._preferences.lire(cle, defaut)
-            champ.setValue(valeur if isinstance(valeur, int) else defaut)
-        champs.addWidget(ChampNomme("Démarrer à", self.depart))
-        champs.addWidget(ChampNomme("Nombre de chiffres", self.chiffres, aide=AIDE_CHIFFRES))
-        champs.addWidget(ChampNomme("Incrémenter de", self.pas))
-        d.addLayout(champs)
-        balises = QHBoxLayout()
-        balises.setContentsMargins(0, 0, 0, 0)
-        balises.setSpacing(Espacements.S)
-        self.boutons_balises = []
-        for balise, explication in BALISES:
-            ajout = bouton(balise, variante="contour", action=lambda b=balise: self.inserer_balise(b))
-            ajout.setToolTip(f"Ajouter {balise} au masque : {explication.lower()}.")
-            balises.addWidget(ajout)
-            self.boutons_balises.append(ajout)
-        balises.addStretch(1)
-        d.addLayout(balises)
+        self.champs_nom = ChampsDuMasque(self._preferences, PREFIXE, MASQUE_PAR_DEFAUT, BALISES)
+        d.addWidget(self.champs_nom)
+        self.masque, self.depart = self.champs_nom.masque, self.champs_nom.depart
+        self.chiffres, self.pas = self.champs_nom.chiffres, self.champs_nom.pas
+        self.boutons_balises = self.champs_nom.boutons_balises
         self.contenu.addWidget(self.cadre_nom)
 
         # --- Aperçu ---
@@ -282,9 +248,7 @@ class PageRenommer(Page):
         self.contenu.addLayout(action)
 
         self.tri.currentIndexChanged.connect(lambda _index: self._tri_change())
-        self.masque.editTextChanged.connect(lambda _texte: self._masque_change())
-        for champ, cle in ((self.depart, PREF_DEPART), (self.chiffres, PREF_CHIFFRES), (self.pas, PREF_PAS)):
-            champ.valueChanged.connect(lambda valeur, c=cle: self._numerotation_changee(c, valeur))
+        self.champs_nom.change.connect(self._actualiser)
         self._actualiser()
 
     @staticmethod
@@ -500,34 +464,14 @@ class PageRenommer(Page):
     # --- Nom ---------------------------------------------------------------------------------
 
     def masque_saisi(self) -> str:
-        return self.masque.currentText()
+        return self.champs_nom.texte()
 
     def numerotation(self) -> Numerotation:
-        return Numerotation(self.depart.value(), self.chiffres.value(), self.pas.value())
-
-    def _remplir_les_masques(self, masque: str) -> None:
-        """Les masques récents dans la liste du champ (comme Ant Renamer), `masque` dans le champ."""
-        recents = self._preferences.lire(PREF_MASQUES_RECENTS, [])
-        recents = [m for m in recents if isinstance(m, str) and m] if isinstance(recents, list) else []
-        self.masque.blockSignals(True)
-        self.masque.clear()
-        self.masque.addItems(recents or [MASQUE_PAR_DEFAUT])
-        self.masque.setEditText(masque)
-        self.masque.blockSignals(False)
+        return self.champs_nom.numerotation()
 
     def inserer_balise(self, balise: str) -> None:
         """Ajoute la balise au masque, à l'endroit du curseur (à la fin si on n'a pas cliqué dedans)."""
-        champ = self.masque.lineEdit()
-        champ.insert(balise)
-        champ.setFocus()
-
-    def _masque_change(self) -> None:
-        self._preferences.ecrire(PREF_MASQUE, self.masque_saisi())
-        self._actualiser()
-
-    def _numerotation_changee(self, cle: str, valeur: int) -> None:
-        self._preferences.ecrire(cle, valeur)
-        self._actualiser()
+        self.champs_nom.inserer_balise(balise)
 
     # --- Aperçu ------------------------------------------------------------------------------
 
@@ -643,9 +587,7 @@ class PageRenommer(Page):
         journal = self.journal()
         journal.ajouter(Renommage(dossier, maintenant(), tuple(changements)))
         self._dernier = journal.dernier()
-        recents = self._preferences.lire(PREF_MASQUES_RECENTS, [])
-        self._preferences.ecrire(PREF_MASQUES_RECENTS, masques_recents(recents if isinstance(recents, list) else [], masque))
-        self._remplir_les_masques(masque)
+        self.champs_nom.retenir(masque)
         self._occuper(False)
         self._renommer_les_vignettes(dossier, changements)
         self._afficher(f"{quantite(nombre, 'image')} renommée{'s' if nombre > 1 else ''}.", "succes")
