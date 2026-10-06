@@ -276,10 +276,13 @@ jobs:
           git config core.autocrlf false
           git add -A
           git commit -q -m "Rapport de fabrication $env:GITHUB_SHA"
-          for ($essai = 1; $essai -le 3; $essai++) {
+          # GitHub répond parfois « Internal Server Error » pendant un moment (les 3 essais à 5 s
+          # d'écart ont tous échoué au lot 2 de la V4, le 06/10/2026) : 5 essais, de plus en plus
+          # espacés (15, 30, 45 puis 60 s).
+          for ($essai = 1; $essai -le 5; $essai++) {
             $sortie = git push -f "https://x-access-token:$env:JETON@github.com/$env:DEPOT.git" "HEAD:refs/rapports/$env:BRANCHE" 2>&1
             if ($LASTEXITCODE -eq 0) { Write-Host "Rapport déposé."; exit 0 }
-            Start-Sleep -Seconds 5
+            if ($essai -lt 5) { Start-Sleep -Seconds (15 * $essai) }
           }
           Write-Output "::warning title=Rapport non déposé::$($sortie -join ' | ')"
           exit 1
