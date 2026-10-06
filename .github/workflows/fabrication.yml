@@ -152,6 +152,37 @@ jobs:
           $taille = (Get-Item dist/UGC-Studio.exe).Length / 1MB
           "Taille du .exe : {0:N1} Mo" -f $taille | Tee-Object -FilePath rapport/taille-exe.txt
 
+      # V4.1 (4.2.0) : video-compare, que l'utilisateur télécharge lui-même sur sa page officielle. Son zip
+      # (version 20261004) est mis dans les Téléchargements de la machine, comme chez l'utilisateur : l'autotest
+      # du .exe doit l'y trouver, l'installer et ouvrir sa fenêtre pour de vrai. Le zip est comparé à
+      # l'empreinte que GitHub publie pour ce fichier, et gardé en cache d'une fabrication à l'autre.
+      - name: Garder le zip de video-compare (cache)
+        uses: actions/cache@v6
+        with:
+          path: outils/cache-video-compare
+          key: video-compare-20261004-win10-x86_64
+
+      - name: Mettre video-compare dans les Téléchargements (comme l'utilisateur)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $nom = "video-compare-20261004-win10-x86_64.zip"
+          $cache = "outils/cache-video-compare"
+          New-Item -ItemType Directory -Force -Path $cache | Out-Null
+          $zip = Join-Path $cache $nom
+          if (-not (Test-Path $zip)) {
+            Invoke-WebRequest -Uri "https://github.com/pixop/video-compare/releases/download/20261004/$nom" -OutFile $zip
+          }
+          $empreinte = "sha256:" + (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          $version = Invoke-RestMethod -Uri "https://api.github.com/repos/pixop/video-compare/releases/tags/20261004" -Headers @{ Authorization = "Bearer $env:GH_TOKEN" }
+          $publiee = ($version.assets | Where-Object { $_.name -eq $nom }).digest
+          Write-Host "Empreinte du zip : $empreinte ; publiée par GitHub : $publiee"
+          if ($publiee -and $publiee -ne $empreinte) { Write-Error "Le zip de video-compare n'a pas l'empreinte publiée par GitHub"; exit 1 }
+          $telechargements = (New-Object -ComObject Shell.Application).NameSpace("shell:Downloads").Self.Path
+          New-Item -ItemType Directory -Force -Path $telechargements | Out-Null
+          Copy-Item $zip $telechargements
+          Write-Host "video-compare copié dans $telechargements"
+
       - name: Démarrer le .exe (autotest sur l'écran Windows)
         timeout-minutes: 8
         run: |
