@@ -2,11 +2,12 @@
 
 Lancé par la fabrication automatique, jamais par l'utilisateur.
 
-Pourquoi : le dépôt est privé, et GitHub compte les minutes de ses machines (avec un quota par mois).
-Chaque étape fabriquait le .exe deux fois : sur sa branche, pour le vérifier, puis sur main après la
-fusion, pour publier la Release. Le .exe vérifié sur la branche porte maintenant cette empreinte dans
-son nom ; après la fusion, main calcule la sienne et, si elle est la même, publie ce .exe au lieu de
-tout refaire.
+Pourquoi : chaque étape fabriquait le .exe deux fois, avec le même code : sur sa branche, pour le
+vérifier, puis sur main après la fusion, pour publier la Release. Le .exe vérifié sur la branche porte
+maintenant cette empreinte dans son nom ; après la fusion, main calcule la sienne et, si elle est la
+même, publie ce .exe au lieu de tout refaire : exactement celui dont les captures ont été relues, et
+environ 13 minutes plus tôt. (Raison de départ : le dépôt était privé, et GitHub comptait les minutes
+de ses machines ; il est public depuis le 06/10/2026.)
 
 La documentation (le dossier `docs/` et les fichiers `.md`) ne compte pas : modifier seulement elle ne
 relance pas la fabrication (`paths-ignore` dans .github/workflows/fabrication.yml), elle ne change donc
