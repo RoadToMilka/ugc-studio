@@ -3,7 +3,7 @@ taille, réduites ou agrandies, sans Photoshop. Le calcul est dans images/redime
 
 Le parcours, de haut en bas :
 1. Dossier : glisser-déposer ou « Choisir un dossier… ». L'app lit la taille de chaque image (sans les
-   décoder : rapide, même pour beaucoup d'images).
+   décoder : rapide, même pour beaucoup d'images). « Fermer le dossier » le fait oublier à l'app (4.0.4).
 2. Taille : le côté (hauteur, largeur ou plus grand côté), la taille en pixels, le filtre et la qualité.
 3. Enregistrement : un sous-dossier nommé d'après la taille (« 600 px de haut »), ou un autre dossier.
 4. Résumé : combien d'images réduites, agrandies, déjà à la bonne taille ; en orange, ce qui mérite
@@ -91,6 +91,7 @@ AIDE_DOSSIER = (
     "Les images du dossier lui-même (JPG, PNG, WebP, AVIF, TIFF, BMP), pas celles de ses sous-dossiers. "
     "Tes originaux ne sont jamais modifiés."
 )
+AIDE_FERMER = "L'app oublie ce dossier : la zone redevient vide. Tes images ne bougent pas, tes réglages restent."
 AIDE_TAILLE = (
     "Toutes les images passent à cette taille : les plus grandes sont réduites, les plus petites agrandies. "
     "L'autre côté suit : les proportions sont gardées."
@@ -193,6 +194,9 @@ class PageImages(Page):
         ligne.addLayout(textes, 1)
         self.bouton_changer = bouton("Changer de dossier…", variante="contour", nom_icone="folder-open", action=self.choisir_dossier)
         ligne.addWidget(self.bouton_changer, 0, Qt.AlignmentFlag.AlignTop)
+        self.bouton_fermer = bouton("Fermer le dossier", variante="contour", nom_icone="x", action=self.fermer_le_dossier)
+        self.bouton_fermer.setToolTip(AIDE_FERMER)
+        ligne.addWidget(self.bouton_fermer, 0, Qt.AlignmentFlag.AlignTop)
         self.ligne_dossier.hide()
         d.addWidget(self.ligne_dossier)
         self.contenu.addWidget(self.cadre_dossier)
@@ -329,6 +333,24 @@ class PageImages(Page):
             lambda resultat, n=numero: self._images_lues(n, resultat),
             lambda erreur, n=numero: self._lecture_echouee(n, erreur),
         )
+
+    def fermer_le_dossier(self) -> None:
+        """« Fermer le dossier » (4.0.4) : l'app oublie le dossier, la zone redevient « Glisse un dossier
+        d'images ici ». Les fichiers ne bougent pas ; les réglages (taille, filtre, qualité,
+        enregistrement) restent. Rien à perdre ici : pas de question."""
+        if self._occupe or self._dossier is None:
+            return
+        self._lecture += 1  # une lecture encore en route serait ignorée
+        self._dossier = None
+        self._images, self._illisibles, self._plan = [], [], None
+        self._derniere_sortie = None
+        self._cacher_les_boutons_de_fin()
+        self.chemin.setText("")
+        self.compte.setText("")
+        self.ligne_dossier.hide()
+        self.zone_depot.show()
+        self._afficher("", "secondaire")
+        self._actualiser()
 
     def _images_lues(self, numero: int, resultat) -> None:
         if numero != self._lecture:
@@ -582,6 +604,7 @@ class PageImages(Page):
         self.cadre_taille.setEnabled(not occupe)
         self.cadre_sortie.setEnabled(not occupe)
         self.bouton_changer.setEnabled(not occupe or actif(self.bouton_changer))
+        self.bouton_fermer.setEnabled(not occupe)
         self.zone_depot.setEnabled(not occupe or actif(self.zone_depot.bouton_choisir))
         self._mettre_a_jour_les_boutons()
 

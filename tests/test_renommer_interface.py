@@ -201,6 +201,57 @@ def test_trier_et_renommer_depuis_images(app_configuree, qtbot, services, tmp_pa
     assert page.compte.text() == "4 images"
 
 
+def test_fermer_le_dossier(app_configuree, qtbot, services, tmp_path, monkeypatch):
+    """4.0.4 : « Fermer le dossier » fait oublier le dossier à l'app (la zone redevient vide). Les
+    fichiers ne bougent pas ; les réglages et « Annuler le dernier renommage » restent. Avec un ordre
+    cliqué, l'app demande d'abord (cet ordre serait perdu)."""
+    dossier = _dossier(tmp_path)
+    page = _page(qtbot, services)
+    assert not page.fermer_le_dossier()  # pas de dossier : rien à fermer
+    _ouvrir(qtbot, page, dossier)
+    page.masque.setEditText("NeMu_JPG_%num%%ext%")
+    page.cliquer(dossier / "IMG_10.webp")
+    assert page.renommer()
+    qtbot.waitUntil(lambda: not page.occupe, timeout=10_000)
+    renommees = ["NeMu_JPG_01.webp", "NeMu_JPG_02.jpg", "NeMu_JPG_03.png", "NeMu_JPG_04.jpg"]
+    assert page.bouton_fermer.isVisible() and page.bouton_fermer.isEnabled()
+    # Un ordre cliqué : la question ; refusée, tout reste.
+    page.cliquer(dossier / "NeMu_JPG_03.png")
+    questions = []
+    monkeypatch.setattr(messages, "confirmer", lambda *args, **kwargs: questions.append(args[2:4]) or False)
+    assert not page.fermer_le_dossier()
+    assert questions == [("Fermer « NeMu » ?", "L'ordre que tu as cliqué (1 image) sera perdu. Tes images ne changent pas.")]
+    assert page._choisies == [dossier / "NeMu_JPG_03.png"] and page.ligne_dossier.isVisible()
+    # Acceptée : le dossier est oublié.
+    monkeypatch.setattr(messages, "confirmer", lambda *args, **kwargs: True)
+    assert page.fermer_le_dossier()
+    assert page.zone_depot.isVisible() and not page.ligne_dossier.isVisible()
+    assert not page.cadre_ordre.isVisible() and not page.cadre_apercu.isVisible()
+    assert page._choisies == [] and page.grille.chemins() == [] and not page.bouton_renommer.isEnabled()
+    assert page.statut.text() == ""
+    # Les fichiers ne bougent pas ; les réglages et « Annuler le dernier renommage » restent.
+    assert sorted(f.name for f in dossier.iterdir() if f.is_file() and f.suffix != ".txt") == renommees
+    assert page.masque_saisi() == "NeMu_JPG_%num%%ext%"
+    assert page.bouton_annuler.isEnabled() and "4 images dans « NeMu »" in page.bouton_annuler.toolTip()
+    # Sans ordre cliqué : pas de question.
+    _ouvrir(qtbot, page, dossier)
+    assert page.grille.chemins() == [dossier / nom for nom in renommees]
+    questions.clear()
+    monkeypatch.setattr(messages, "confirmer", lambda *args, **kwargs: questions.append(args[2]) or False)
+    assert page.fermer_le_dossier() and questions == []
+
+
+def test_fermer_le_dossier_grise_pendant_un_travail(app_configuree, qtbot, services, tmp_path):
+    dossier = _dossier(tmp_path)
+    page = _page(qtbot, services)
+    _ouvrir(qtbot, page, dossier)
+    page._occuper(True, page.bouton_renommer)  # comme pendant un renommage
+    assert not page.bouton_fermer.isEnabled()
+    assert not page.fermer_le_dossier() and page.ligne_dossier.isVisible()
+    page._occuper(False)
+    assert page.bouton_fermer.isEnabled()
+
+
 def test_image_remplacee_recoit_une_nouvelle_vignette(app_configuree, qtbot, services, tmp_path):
     """4.0.2 : une image remplacée (même nom, autre contenu, par exemple un nouveau redimensionnement)
     reçoit une nouvelle vignette quand le dossier est relu. Elle gardait l'ancienne : les vignettes
