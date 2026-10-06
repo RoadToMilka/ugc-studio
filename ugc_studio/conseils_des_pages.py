@@ -1282,6 +1282,50 @@ RENOMMER = PageDeConseils(
     ),
 )
 
+COMPARER = PageDeConseils(
+    "Comparer",
+    (
+        Rubrique(
+            "video-compare",
+            (
+                "Ce module ouvre video-compare, un logiciel gratuit et libre (de Pixop) qui compare deux vidéos ou "
+                "deux images, image par image, avec un curseur et un zoom au pixel. Il s'ouvre dans sa propre "
+                "fenêtre.",
+                "Télécharge « video-compare-…-win10-x86_64.zip » sur sa page (bouton « Sa page »). Laisse-le dans tes "
+                "Téléchargements : l'app l'y trouve. Sinon, « Choisir video-compare… » : le zip, ou video-compare.exe "
+                "si tu l'as décompressé toi-même.",
+                "« Installer » décompresse le zip dans le dossier des programmes de l'app ; ton zip ne bouge pas, et "
+                "c'est fait une fois pour toutes.",
+            ),
+        ),
+        Rubrique(
+            "Comparer",
+            (
+                "Glisse deux vidéos ou deux images sur la page. Celle de gauche sert de référence : par exemple "
+                "l'export de Topaz, ou la vidéo d'origine.",
+                "Si elles n'ont pas la même taille, video-compare les met à la même taille pour les comparer.",
+                "Curseur : une seule image, coupée par un trait que la souris déplace. Côte à côte : pratique pour "
+                "deux vidéos verticales sur un écran large.",
+                "Si la vidéo de droite ne démarre pas au même moment, règle le décalage (en millisecondes), ou "
+                "corrige-le dans la fenêtre avec les touches + et -.",
+            ),
+        ),
+        Rubrique(
+            "Dans la fenêtre de video-compare",
+            (
+                "Espace : lecture et pause ; A et D : image par image. La molette zoome sur le pixel visé, le clic "
+                "droit maintenu déplace la vue, R revient à 100 %.",
+                "0 : le mode différence (ce qui change entre les deux apparaît, le reste est noir) ; S échange "
+                "gauche et droite.",
+                "M : les mesures de ressemblance de l'image affichée, qui s'écrivent dans l'app (SSIM au-dessus "
+                "de 0,99 : aucune différence visible). F : trois captures, dans le dossier du fichier de gauche.",
+                "Échap ferme la fenêtre ; H y montre toutes les touches (en anglais). Il n'y a pas de son : "
+                "video-compare compare les images.",
+            ),
+        ),
+    ),
+)
+
 PAGES: dict[str, PageDeConseils] = {
     "script": SCRIPT,
     "voix": VOIX,
@@ -1290,6 +1334,7 @@ PAGES: dict[str, PageDeConseils] = {
     "upscale": UPSCALE,
     "images": IMAGES,
     "renommer": RENOMMER,
+    "comparer": COMPARER,
     "reglages": REGLAGES,
     "creer-une-voix": CREER_UNE_VOIX,
     "style": STYLE,

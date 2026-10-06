@@ -20,6 +20,7 @@ from .composants.entete import Entete
 from .pages.base import Page
 from .pages.images import PageImages
 from .pages.reglages import PageReglages
+from .pages.comparer import PageComparer
 from .pages.renommer import PageRenommer
 from .pages.script import PageScript
 from .pages.sous_titres import PageSousTitres
@@ -43,6 +44,7 @@ MODULES_OUTILS = (
     Module("upscale", "Upscale vidéo", "image-upscale"),
     Module("images", "Images", "image"),
     Module("renommer", "Renommer", "list-ordered"),
+    Module("comparer", "Comparer", "square-split-horizontal"),  # V4.1 (4.2.0) : video-compare
 )
 
 
@@ -55,6 +57,7 @@ def _creer_pages(services: Services) -> dict[str, QWidget]:
         "upscale": PageUpscale(services),
         "images": PageImages(services),
         "renommer": PageRenommer(services),
+        "comparer": PageComparer(services),
         "reglages": PageReglages(services),
     }
 
@@ -269,6 +272,7 @@ class FenetrePrincipale(QMainWindow):
         self.page("upscale").arreter()  # Topaz s'arrête : la vidéo en cours est abandonnée
         self.page("images").arreter()  # images pas encore commencées : elles ne le seront plus
         self.page("renommer").arreter()  # vignettes pas encore faites : elles ne le seront plus
+        self.page("comparer").arreter()  # la fenêtre de video-compare se ferme aussi
         self._preferences.ecrire("geometrie_fenetre", bytes(self.saveGeometry().toBase64()).decode("ascii"))
         self._preferences.ecrire("module", self.module_actuel())
         try:

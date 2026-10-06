@@ -71,32 +71,44 @@ def dossier_programmes() -> Path:
     return _creer(Path.home() / ".cache" / NOM_APP)
 
 
+def _dossier_connu(identifiant_windows: str) -> Path | None:
+    """Un dossier connu de Windows (Documents, Téléchargements…), même s'il a été déplacé (ex. vers
+    OneDrive ou un autre disque), d'après son identifiant (FOLDERID_…). None ailleurs que sous Windows."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        import uuid
+        from ctypes import wintypes
+
+        identifiant = uuid.UUID(identifiant_windows)
+
+        class GUID(ctypes.Structure):
+            _fields_ = [("donnees", ctypes.c_byte * 16)]
+
+        guid = GUID()
+        ctypes.memmove(guid.donnees, identifiant.bytes_le, 16)
+        chemin = ctypes.c_wchar_p()
+        fonction = ctypes.windll.shell32.SHGetKnownFolderPath
+        fonction.argtypes = [ctypes.POINTER(GUID), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)]
+        if fonction(ctypes.byref(guid), 0, None, ctypes.byref(chemin)) == 0 and chemin.value:
+            resultat = Path(chemin.value)
+            ctypes.windll.ole32.CoTaskMemFree(chemin)
+            return resultat
+    except (AttributeError, OSError, ValueError):
+        pass
+    return None
+
+
 def dossier_documents() -> Path:
     """Dossier « Documents » de l'utilisateur, même s'il a été déplacé (ex. vers OneDrive)."""
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            import uuid
-            from ctypes import wintypes
+    return _dossier_connu("{FDD39AD0-238F-46AF-ADB4-6C85480369C7}") or Path.home() / "Documents"  # FOLDERID_Documents
 
-            # Identifiant Windows du dossier Documents (FOLDERID_Documents).
-            identifiant = uuid.UUID("{FDD39AD0-238F-46AF-ADB4-6C85480369C7}")
 
-            class GUID(ctypes.Structure):
-                _fields_ = [("donnees", ctypes.c_byte * 16)]
-
-            guid = GUID()
-            ctypes.memmove(guid.donnees, identifiant.bytes_le, 16)
-            chemin = ctypes.c_wchar_p()
-            fonction = ctypes.windll.shell32.SHGetKnownFolderPath
-            fonction.argtypes = [ctypes.POINTER(GUID), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)]
-            if fonction(ctypes.byref(guid), 0, None, ctypes.byref(chemin)) == 0 and chemin.value:
-                resultat = Path(chemin.value)
-                ctypes.windll.ole32.CoTaskMemFree(chemin)
-                return resultat
-        except (AttributeError, OSError, ValueError):
-            pass
-    return Path.home() / "Documents"
+def dossier_telechargements() -> Path:
+    """Dossier « Téléchargements » de l'utilisateur, même s'il a été déplacé (4.2.0 : le module
+    Comparer y cherche video-compare)."""
+    return _dossier_connu("{374DE290-123F-4565-9164-39C4925E467B}") or Path.home() / "Downloads"  # FOLDERID_Downloads
 
 
 def dossier_projets_defaut() -> Path:

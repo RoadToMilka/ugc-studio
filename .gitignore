@@ -15,3 +15,6 @@ rapport/
 ugc_studio/ressources/ffmpeg/ffmpeg.exe
 ugc_studio/ressources/ffmpeg/ffmpeg
 outils/cache/
+
+# video-compare (V4.1) : son zip, mis en cache par la fabrication pour l'autotest, jamais envoyé sur GitHub
+outils/cache-video-compare/

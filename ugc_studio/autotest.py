@@ -109,6 +109,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "images_v4",
     "renommer_v4",
     "upscale_v4",
+    "comparer_v41",
 )
 ELEMENTS_SIGNALES_MAX = 6
 TOLERANCE_TEXTE_PX = 1  # arrondis de Qt : un texte n'est « coupé » qu'au-delà d'un pixel
@@ -2209,6 +2210,9 @@ def _upscale_v4(fenetre, capturer, rapport: dict) -> bool:
     # 4.1.0 : le nom par un masque, comme dans Renommer, avec la balise %res% de l'Upscale.
     page.champs_nom.masque.setEditText("NeMu_VID_%num%_%res%%ext%")
     capturer(fenetre, "upscale-pret")
+    page.defilement.ensureWidgetVisible(page.cadre_sortie)  # la zone Enregistrement, pour la relire
+    capturer(fenetre, "upscale-nom")
+    page.defilement.verticalScrollBar().setValue(0)
     lignes = page.tableau.rowCount()
     finale = page.tableau.item(0, 2).text() if lignes else ""
     en_attente = page.tableau.item(0, 4).text() if lignes else ""
@@ -2235,6 +2239,65 @@ def _upscale_v4(fenetre, capturer, rapport: dict) -> bool:
         and sortie.is_file()
         and not rapport["upscale_v4"]["provisoires"]
     )
+
+
+def _comparer_v41(fenetre, capturer, capturer_image, rapport: dict) -> bool:
+    """V4.1 (4.2.0) : le module Comparer dans le vrai .exe, avec le vrai video-compare. La fabrication a
+    mis son zip officiel (version 20261004) dans les Téléchargements, comme l'utilisateur : l'app doit l'y
+    trouver, l'installer (dans le dossier des programmes de l'autotest, hors du rapport) et vérifier qu'il
+    démarre. Sur l'écran réel, sa fenêtre s'ouvre avec deux vidéos de démonstration (une petite, et la même
+    agrandie, comme après un upscale) ; tout l'écran est photographié, puis l'app la ferme."""
+    import tempfile
+
+    from .exports.ffmpeg import executer, preparer_ffmpeg
+
+    page = fenetre.page("comparer")
+    fenetre.afficher_module("comparer")
+    _attendre(lambda: not page.occupe, 60)
+    trouve = page.etat_programme.text()
+    capturer(fenetre, "comparer-trouve")
+    if page.bouton_installer.isVisible():
+        page.installer()
+    _attendre(lambda: not page.occupe, 300)  # décompression, puis « video-compare -V »
+    video_compare = page.video_compare()
+    dossier = Path(tempfile.mkdtemp(prefix="ugc-studio-comparer-")) / "Rendus"
+    dossier.mkdir()
+    ffmpeg = preparer_ffmpeg()
+    source, agrandie = dossier / "Source.mp4", dossier / "Agrandie.mp4"
+    commun = [str(ffmpeg), "-hide_banner", "-loglevel", "error", "-y"]
+    executer([*commun, "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(source)], 60)
+    executer([*commun, "-i", str(source), "-vf", "scale=720:1280:flags=lanczos", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(agrandie)], 60)
+    page.definir_les_fichiers([source, agrandie])
+    _attendre(lambda: all("lecture" not in page.infos[cote].text() for cote in ("gauche", "droite")), 30)
+    capturer(fenetre, "comparer-pret")
+    ecran_reel = QApplication.platformName() != "offscreen"
+    ouverte = fermee = None
+    commande, lignes = [], []
+    if ecran_reel and video_compare is not None:
+        lance = page.comparer()
+        comparaison = page._comparaison
+        _attendre(lambda: False, 6)  # le temps que sa fenêtre s'ouvre et montre la première image
+        ouverte = bool(lance) and page.comparaison_ouverte()
+        ecran = QApplication.primaryScreen()
+        capturer_image(ecran.grabWindow(0) if ecran is not None else None, "comparer-video-compare")
+        if comparaison is not None:
+            commande, lignes = comparaison.commande, comparaison.dernieres_lignes
+        page.fermer_la_comparaison()
+        fermee = _attendre(lambda: not page.comparaison_ouverte(), 15)
+    rapport["comparer_v41"] = {
+        "trouve": trouve,
+        "etat": page.etat_programme.text(),
+        "detail": page.detail_programme.text(),
+        "version": video_compare.version if video_compare else "",
+        "infos": [page.infos[cote].text() for cote in ("gauche", "droite")],
+        "ecran_reel": ecran_reel,
+        "ouverte": ouverte,
+        "fermee": fermee,
+        "commande": commande,
+        "lignes": lignes,
+        "statut": page.statut.text(),
+    }
+    return video_compare is not None and (not ecran_reel or (bool(ouverte) and bool(fermee)))
 
 
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
@@ -2557,6 +2620,8 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["renommer_v4"] = _renommer_v4(fenetre, capturer, rapport)
             # V4, lot 3 : le module Upscale vidéo (le .exe joue le rôle de Topaz).
             verifs["upscale_v4"] = _upscale_v4(fenetre, capturer, rapport)
+            # V4.1 (4.2.0) : le module Comparer, avec le vrai video-compare (sa fenêtre, sur l'écran réel).
+            verifs["comparer_v41"] = _comparer_v41(fenetre, capturer, capturer_image, rapport)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")
