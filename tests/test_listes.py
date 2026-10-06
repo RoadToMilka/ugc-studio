@@ -4,6 +4,7 @@ from PySide6.QtCore import QEvent, QPoint, QRect, Qt
 from PySide6.QtGui import QColor, QHelpEvent, QImage, QPainter
 from PySide6.QtWidgets import (
     QApplication,
+    QHBoxLayout,
     QStyle,
     QStyleOptionComboBox,
     QStyleOptionViewItem,
@@ -108,6 +109,27 @@ def test_texte_trop_long_abrege_dans_le_champ(app_configuree, qtbot):
     cacher_bulle()
     liste.setCurrentIndex(1)
     assert liste.texte_affiche() == "Choix 0"  # texte court : rien n'est abrégé
+
+
+def test_le_plus_long_choix_ecrit_en_entier(app_configuree, qtbot):
+    """V4 : à sa largeur souhaitée, la liste écrit son plus long choix en entier. Qt mesurait les
+    choix à l'encre de leurs lettres, plus étroite que leur place une fois écrites : sous Windows,
+    « Nom (comme l'Explorateur) » était abrégé dans le module Renommer, avec de la place à côté."""
+    fenetre = QWidget()
+    ligne = QHBoxLayout(fenetre)
+    liste = liste_deroulante()
+    for texte in ("Nom (comme l'Explorateur)", "Date de prise de vue", "WWWWWWWWWWWWWWWWWWWWWWWWWWWW"):
+        liste.addItem(texte)
+    ligne.addWidget(liste)
+    ligne.addStretch(1)  # la liste à sa largeur souhaitée, la place en trop à côté
+    qtbot.addWidget(fenetre)
+    fenetre.resize(1200, 100)
+    fenetre.show()
+    qtbot.waitExposed(fenetre)
+    assert liste.width() == liste.sizeHint().width()
+    for index in range(liste.count()):
+        liste.setCurrentIndex(index)
+        assert liste.texte_affiche() == liste.itemText(index)
 
 
 def test_separations_en_fine_ligne(app_configuree, qtbot):

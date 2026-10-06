@@ -2035,6 +2035,9 @@ def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
         return bool(cases) and all(case is not None and case.data(ROLE_VIGNETTE) is not None for case in cases)
 
     vignettes = _attendre(vignettes_faites, 15)
+    # « Nom (comme l'Explorateur) » écrit en entier : sous Windows, il était abrégé (« Nom (comme
+    # l'Explorate… ») alors que la place ne manquait pas (largeur de la liste, V4).
+    tri_affiche = page.tri.texte_affiche()
     page.masque.setEditText("NeMu_JPG_%num%%ext%")
     page.cliquer(dossier / "IMG_10.webp")
     page.cliquer(dossier / "IMG_2.png")
@@ -2059,6 +2062,7 @@ def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
     remis = sorted(fichier.name for fichier in dossier.iterdir())
     rapport["renommer_v4"] = {
         "vignettes": vignettes,
+        "tri_affiche": tri_affiche,
         "apercu": apercu,
         "image_en_grand": details,
         "apres": apres,
@@ -2067,7 +2071,15 @@ def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
         "remis": remis,
     }
     attendus = ["NeMu_JPG_01.webp", "NeMu_JPG_02.png", "NeMu_JPG_03.jpg", "NeMu_JPG_04.jpg"]
-    return vignettes and fini and apres == attendus and bool(annule) and remis == sorted(couleurs) and details.startswith("900 × 1200 px")
+    return (
+        vignettes
+        and tri_affiche == page.tri.currentText()
+        and fini
+        and apres == attendus
+        and bool(annule)
+        and remis == sorted(couleurs)
+        and details.startswith("900 × 1200 px")
+    )
 
 
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
