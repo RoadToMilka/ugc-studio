@@ -19,8 +19,8 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFileDialog, QFrame, QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
 
 from ....chemins import chemin_a_afficher, dossier_documents
 from ....dossiers import EXTENSIONS_IMAGES
@@ -52,6 +52,7 @@ from ....services import Services
 from ... import taches
 from ...composants.barre_avancement import BarreAvancement
 from ...composants.bouton import BoutonOccupe
+from ...composants.depot_dossier import ZoneDepotDossier, dossier_depose
 from ...composants.elements import (
     afficher_message,
     bloc,
@@ -154,32 +155,10 @@ def alertes_du_plan(plan: Plan) -> list[str]:
     return alertes
 
 
-class ZoneDepotDossier(QFrame):
-    """Cadre en pointillés : « Glisse un dossier d'images ici » (le dépôt marche sur toute la page)."""
-
-    def __init__(self, choisir_dossier, parent=None):
-        super().__init__(parent)
-        self.setProperty("role", "depot")
-        disposition = QVBoxLayout(self)
-        disposition.setContentsMargins(Espacements.XL, Espacements.XL, Espacements.XL, Espacements.XL)
-        disposition.setSpacing(Espacements.S)
-        # Centrés dans toute la largeur (sans alignement dans la disposition : texte coupé, voir libelle()).
-        disposition.addWidget(libelle("Glisse un dossier d'images ici", "intitule", centre=True))
-        disposition.addWidget(libelle(FORMATS_ACCEPTES, "legende", centre=True))
-        ligne = QHBoxLayout()
-        ligne.addStretch(1)
-        self.bouton_choisir = bouton("Choisir un dossier…", nom_icone="folder-open", action=choisir_dossier)
-        ligne.addWidget(self.bouton_choisir)
-        ligne.addStretch(1)
-        disposition.addLayout(ligne)
-
-    def survol(self, actif: bool) -> None:
-        self.setProperty("survol", actif)
-        self.style().unpolish(self)
-        self.style().polish(self)
-
-
 class PageImages(Page):
+    # V4, lot 2 : « Trier et renommer » (dossier des images faites) : la fenêtre ouvre le module Renommer.
+    renommer_demande = Signal(object)
+
     def __init__(self, services: Services):
         super().__init__(TITRE, SOUS_TITRE, conseils="images")
         self._preferences = services.preferences
@@ -198,7 +177,7 @@ class PageImages(Page):
 
         # --- Dossier ---
         self.cadre_dossier, d = bloc("Dossier", aide=AIDE_DOSSIER)
-        self.zone_depot = ZoneDepotDossier(self.choisir_dossier)
+        self.zone_depot = ZoneDepotDossier("Glisse un dossier d'images ici", FORMATS_ACCEPTES, self.choisir_dossier)
         d.addWidget(self.zone_depot)
         self.ligne_dossier = QWidget()
         ligne = QHBoxLayout(self.ligne_dossier)
@@ -284,6 +263,10 @@ class PageImages(Page):
         self.bouton_ouvrir = bouton("Ouvrir le dossier", variante="contour", nom_icone="folder-open", action=self.ouvrir_le_dossier)
         self.bouton_ouvrir.hide()
         boutons.addWidget(self.bouton_ouvrir)
+        self.bouton_renommer = bouton("Trier et renommer", variante="contour", nom_icone="list-ordered", action=self.trier_et_renommer)
+        self.bouton_renommer.setToolTip("Ouvre le module Renommer sur les images faites : choisis leur ordre, puis renomme-les.")
+        self.bouton_renommer.hide()
+        boutons.addWidget(self.bouton_renommer)
         boutons.addStretch(1)
         action.addLayout(boutons)
         self.zone_avancement = QWidget()
@@ -335,7 +318,7 @@ class PageImages(Page):
         self._images, self._illisibles, self._plan = [], [], None
         self._lecture += 1
         numero = self._lecture
-        self.bouton_ouvrir.hide()
+        self._cacher_les_boutons_de_fin()
         self.chemin.setText(chemin_a_afficher(dossier))
         self.compte.setText("Lecture des images…")
         self.zone_depot.hide()
@@ -374,21 +357,9 @@ class PageImages(Page):
                 formats.append(nom)
         return f"{quantite(len(self._images), 'image')} ({', '.join(formats)})"
 
-    def _dossier_depose(self, donnees) -> Path | None:
-        """Le dossier glissé sur la page (ou celui d'une image glissée)."""
-        for url in donnees.urls():
-            if not url.isLocalFile():
-                continue
-            chemin = Path(url.toLocalFile())
-            if chemin.is_dir():
-                return chemin
-            if chemin.suffix.lower() in EXTENSIONS_IMAGES:
-                return chemin.parent
-        return None
-
     def dragEnterEvent(self, evenement) -> None:  # noqa: N802 : nom imposé par Qt
         donnees = evenement.mimeData()
-        if not self._occupe and donnees.hasUrls() and self._dossier_depose(donnees) is not None:
+        if not self._occupe and donnees.hasUrls() and dossier_depose(donnees, EXTENSIONS_IMAGES) is not None:
             evenement.acceptProposedAction()
             self.zone_depot.survol(True)
 
@@ -398,7 +369,7 @@ class PageImages(Page):
 
     def dropEvent(self, evenement) -> None:  # noqa: N802
         self.zone_depot.survol(False)
-        dossier = self._dossier_depose(evenement.mimeData())
+        dossier = dossier_depose(evenement.mimeData(), EXTENSIONS_IMAGES)
         if dossier is not None:
             evenement.acceptProposedAction()
             self.ouvrir(dossier)
@@ -416,7 +387,7 @@ class PageImages(Page):
     def _reglage_change(self) -> None:
         self._preferences.ecrire(PREF_COTE, self.cote.currentData())
         self._preferences.ecrire(PREF_PIXELS, self.pixels.value())
-        self.bouton_ouvrir.hide()
+        self._cacher_les_boutons_de_fin()
         self._actualiser()
 
     def _sortie_changee(self) -> None:
@@ -426,7 +397,7 @@ class PageImages(Page):
                 self._choisir(self.sortie, SOUS_DOSSIER)
                 return
         self._preferences.ecrire(PREF_SORTIE, self.sortie.currentData())
-        self.bouton_ouvrir.hide()
+        self._cacher_les_boutons_de_fin()
         self._actualiser()
 
     def choisir_autre_dossier(self) -> None:
@@ -538,7 +509,7 @@ class PageImages(Page):
         arret = self._arret
         filtre, qualite = self.filtre.currentData(), self.qualite.currentData()
         self._afficher("", "secondaire")
-        self.bouton_ouvrir.hide()
+        self._cacher_les_boutons_de_fin()
         self.barre.definir(0)
         self.avancee.setText(f"0 sur {quantite(len(plan.images), 'image')}")
         self.zone_avancement.show()
@@ -575,12 +546,22 @@ class PageImages(Page):
         self._derniere_sortie = bilan.dossier_sortie
         self._actualiser()  # les images faites sont maintenant dans le dossier de sortie
         self.bouton_ouvrir.setVisible(bilan.faites > 0)
+        self.bouton_renommer.setVisible(bilan.faites > 0)
         self._afficher(bilan.message(), "avertissement" if bilan.erreurs or bilan.arrete else "succes")
 
     def _echec(self, erreur: Exception) -> None:
         self._fin()
         self._actualiser()
         self._afficher(f"Impossible d'enregistrer les images : {erreur}", "erreur")
+
+    def _cacher_les_boutons_de_fin(self) -> None:
+        self.bouton_ouvrir.hide()
+        self.bouton_renommer.hide()
+
+    def trier_et_renommer(self) -> None:
+        dossier = self._derniere_sortie
+        if dossier is not None and dossier.is_dir():
+            self.renommer_demande.emit(dossier)
 
     def ouvrir_le_dossier(self) -> None:
         dossier = self._derniere_sortie or self.dossier_de_sortie()

@@ -1146,6 +1146,8 @@ IMAGES = PageDeConseils(
                 "avec le même nom que l'original : tes originaux ne changent jamais.",
                 "Si le dossier de sortie contient déjà une image du même nom (tu relances après avoir ajouté des "
                 "images, par exemple), l'app demande avant de la remplacer.",
+                "À la fin, « Trier et renommer » ouvre le module Renommer sur les nouvelles images : choisis leur "
+                "ordre, puis renomme-les.",
             ),
         ),
         Rubrique(
@@ -1173,12 +1175,62 @@ IMAGES = PageDeConseils(
     ),
 )
 
+RENOMMER = PageDeConseils(
+    "Renommer",
+    (
+        Rubrique(
+            "Choisir l'ordre",
+            (
+                "Choisis un dossier, glisse-le sur la page, ou clique « Trier et renommer » à la fin du module "
+                "Images : ses images s'affichent en vignettes (pas celles de ses sous-dossiers).",
+                "Clique les images dans l'ordre voulu : la première cliquée prend le premier numéro, en mauve, "
+                "la suivante le deuxième… Un nouveau clic retire son numéro à une image, et les suivantes "
+                "remontent d'un cran. « Tout effacer » pour recommencer.",
+                "Les images non cliquées suivent, dans l'ordre de l'affichage (numéros gris) : celui de "
+                "l'Explorateur de Windows, ou par date. Clique seulement celles qui comptent, souvent les "
+                "premières.",
+                "Double-clic : l'image en grand, avec sa taille et son poids, pour départager deux images proches.",
+            ),
+        ),
+        Rubrique(
+            "Le masque",
+            (
+                "Le masque est le nouveau nom, avec des balises remplacées pour chaque image, comme dans l'action "
+                "« Énumération » d'Ant Renamer : tes masques habituels marchent tels quels.",
+                "%num% : le numéro (obligatoire, sinon toutes les images auraient le même nom). %name% : le nom "
+                "actuel, sans l'extension. %ext% : l'extension, avec son point (.jpg). %folder1% : le nom du "
+                "dossier, %folder2% celui du dessus. %% : le caractère %.",
+                "Exemple : NeMu_JPG_%num%%ext%, en démarrant à 1 avec 2 chiffres, donne NeMu_JPG_01.jpg, "
+                "NeMu_JPG_02.jpg… Au-delà de 99, le numéro s'allonge tout seul (100).",
+                "Garde %ext% à la fin : sans lui, les images perdent leur extension, et Windows ne sait plus avec "
+                "quelle app les ouvrir. L'aperçu le signale en orange.",
+                "Tes derniers masques sont dans la liste du champ : clique la flèche pour en reprendre un.",
+            ),
+        ),
+        Rubrique(
+            "Sécurité",
+            (
+                "Rien n'est renommé avant « Renommer », et seul le nom des fichiers change, jamais les images.",
+                "L'aperçu montre chaque image dans l'ordre final, avec son nouveau nom. En rouge, un nom que "
+                "Windows refuserait (caractère interdit, nom réservé comme CON, deux images au même nom) : "
+                "rien n'est renommé tant qu'il en reste.",
+                "Une image ouverte dans une autre app ne peut pas être renommée : rien ne change, et l'app dit "
+                "laquelle. Ferme-la, puis réessaie.",
+                "« Annuler le dernier renommage » remet les anciens noms. L'app garde la liste des 20 derniers "
+                "renommages (dans son dossier de données, pas dans ton dossier d'images) : tu peux remonter de "
+                "l'un à l'autre.",
+            ),
+        ),
+    ),
+)
+
 PAGES: dict[str, PageDeConseils] = {
     "script": SCRIPT,
     "voix": VOIX,
     "transcription": TRANSCRIPTION,
     "sous-titres": SOUS_TITRES,
     "images": IMAGES,
+    "renommer": RENOMMER,
     "reglages": REGLAGES,
     "creer-une-voix": CREER_UNE_VOIX,
     "style": STYLE,

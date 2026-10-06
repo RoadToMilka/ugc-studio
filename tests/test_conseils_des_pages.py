@@ -80,7 +80,7 @@ def test_chaque_bouton_ouvre_une_page_qui_existe_et_chaque_page_sert():
 
 def test_les_modules_et_dix_neuf_fenetres():
     # V4 : les outils (modules sans projet) ont leurs conseils, comme les autres modules.
-    modules = {"script", "voix", "transcription", "sous-titres", "reglages", "images"}
+    modules = {"script", "voix", "transcription", "sous-titres", "reglages", "images", "renommer"}
     assert modules <= set(PAGES)
     # Dont 4 au lot 2 de la V2 (variantes, comparaison, briefs, exemples), 1 au lot 7 (préréglages),
     # 2 dans la V3 (fenêtres d'export du calque, lot 1, et de la vidéo, lot 2) et 1 dans la V3.1

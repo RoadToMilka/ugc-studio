@@ -634,6 +634,28 @@ class ListeDeroulante(_SansMolette, QComboBox):
         option = self._option()
         return self.fontMetrics().elidedText(option.currentText, Qt.TextElideMode.ElideRight, self._place_du_texte(option))
 
+    def sizeHint(self) -> QSize:  # noqa: N802 — nom imposé par Qt
+        """Assez large pour écrire le plus long choix en entier (V4). Qt mesure les choix à l'encre
+        de leurs lettres (boundingRect), un peu plus étroite que la place qu'elles prennent une fois
+        écrites (horizontalAdvance, qui sert à les abréger) : sous Windows, le plus long choix était
+        abrégé alors que la place ne manquait pas (« Nom (comme l'Explorate… », module Renommer).
+        La place du texte est mesurée comme au dessin (marges et flèche de la feuille de style)."""
+        taille = super().sizeHint()
+        if self.isEditable() or self.count() == 0:
+            return taille  # liste modifiable : le texte est dans un champ de saisie
+        mesures = self.fontMetrics()
+        icone = self.iconSize().width() + Espacements.XS
+        besoin = max(
+            mesures.horizontalAdvance(self.itemText(index)) + (0 if self.itemIcon(index).isNull() else icone)
+            for index in range(self.count())
+        )
+        option = self._option()
+        option.rect = QRect(QPoint(0, 0), taille)
+        place = self.style().subControlRect(
+            QStyle.ComplexControl.CC_ComboBox, option, QStyle.SubControl.SC_ComboBoxEditField, self
+        ).width()
+        return QSize(taille.width() + max(0, besoin - place), taille.height())
+
     def paintEvent(self, evenement) -> None:  # noqa: N802 — nom imposé par Qt
         if self.isEditable():  # le texte est alors dans un champ de saisie, qui se dessine seul
             super().paintEvent(evenement)

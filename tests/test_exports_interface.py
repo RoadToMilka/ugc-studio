@@ -327,8 +327,8 @@ def projet_video(services, tmp_path):
     return projet
 
 
-def _point_blanc(contenu: SousTitresAExporter, temps: float) -> tuple[int, int] | None:
-    """Un point au milieu d'un mot blanc (3 × 3 points blancs opaques autour), dans l'image des
+def _points_blancs(contenu: SousTitresAExporter, temps: float) -> list[tuple[int, int]]:
+    """Les points au milieu des mots blancs (3 × 3 points blancs opaques autour), dans l'image des
     sous-titres à ce moment, dessinée en 8 bits à la taille de la vidéo de test."""
     from PySide6.QtGui import QImage
 
@@ -337,16 +337,25 @@ def _point_blanc(contenu: SousTitresAExporter, temps: float) -> tuple[int, int] 
     calque = CalqueDeLaVideo(contenu.reglages, LARGEUR, HAUTEUR, contenu.sous_titres, contenu.mots, False)
     image = calque.image(calque.cle(temps), temps).convertToFormat(QImage.Format.Format_RGBA8888)
     octets, par_ligne = bytes(image.constBits()), image.bytesPerLine()
+    blancs = [False] * (LARGEUR * HAUTEUR)
+    for y in range(HAUTEUR):
+        for x in range(LARGEUR):
+            rouge, vert, bleu, alpha = octets[y * par_ligne + x * 4 : y * par_ligne + x * 4 + 4]
+            blancs[y * LARGEUR + x] = alpha == 255 and min(rouge, vert, bleu) >= 250
+    return [
+        (x, y)
+        for y in range(1, HAUTEUR - 1)
+        for x in range(1, LARGEUR - 1)
+        if all(blancs[(y + dy) * LARGEUR + x + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1))
+    ]
 
-    def blanc(x: int, y: int) -> bool:
-        rouge, vert, bleu, alpha = octets[y * par_ligne + x * 4 : y * par_ligne + x * 4 + 4]
-        return alpha == 255 and min(rouge, vert, bleu) >= 250
 
-    for y in range(1, HAUTEUR - 1):
-        for x in range(1, LARGEUR - 1):
-            if all(blanc(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
-                return x, y
-    return None
+def _blanc_median(luminances: list[int], points: list[tuple[int, int]]) -> int:
+    """La luminance médiane de ces points dans une image de la vidéo. Un seul point rendait les tests
+    fragiles (V4) : le premier trouvé est au bord d'une lettre, et la compression (4:2:0, H.264 ou
+    H.265) y fait varier la luminance d'une fabrication à l'autre (730 au lieu de 721 ± 8 une fois)."""
+    valeurs = sorted(luminances[y * LARGEUR + x] for x, y in points)
+    return valeurs[len(valeurs) // 2]
 
 
 def _luminances(video: Path, numero: int, bits: int) -> list[int]:
@@ -414,16 +423,17 @@ def test_export_de_la_video_puis_relue(app_configuree, qtbot, services, projet_v
     assert sortie.images.codec == "h264" and sortie.images.nombre == source.images.nombre == 60
     assert [m * sortie.images.base_de_temps for m in sortie.images.moments] == [m * source.images.base_de_temps for m in source.images.moments]
     assert sortie.son.codec == "aac" and (sortie.couleurs.matrice, sortie.couleurs.transfert) == ("bt709", "bt709")
-    # Pendant « sérum » (0,42 à 0,80 s) : un point d'un mot blanc est blanc (235 sur 255, le blanc d'une
-    # vidéo) dans l'image exportée ; le reste de l'image est celui de la vidéo. Le point est au milieu
-    # de l'image (480 lignes) : pendant le lot 3, zscale découpé en bandes rangeait sa transparence
-    # ailleurs (défaut de FFmpeg, voir vers_le_format), et le mot manquait.
+    # Pendant « sérum » (0,42 à 0,80 s) : les points des mots blancs sont blancs (235 sur 255, le blanc
+    # d'une vidéo ; leur médiane, voir _blanc_median) dans l'image exportée ; le reste de l'image est
+    # celui de la vidéo. Les mots sont au milieu de l'image (480 lignes) : pendant le lot 3, zscale
+    # découpé en bandes rangeait sa transparence ailleurs (défaut de FFmpeg, voir vers_le_format), et
+    # le mot manquait.
     numero = 18  # 0,60 s
-    point = _point_blanc(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
-    assert point is not None
+    points = _points_blancs(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
+    assert points
     avant, apres = _luminances(Path(projet_video.transcription.source), numero, 8), _luminances(plan.sortie, numero, 8)
-    blanc = apres[point[1] * LARGEUR + point[0]]
-    assert abs(blanc - 235) <= 6, (point, blanc, avant[point[1] * LARGEUR + point[0]])
+    blanc = _blanc_median(apres, points)
+    assert abs(blanc - 235) <= 6, (len(points), blanc, _blanc_median(avant, points))
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
     assert ecarts[len(ecarts) // 2] < 6  # le reste de l'image intact
     assert services.preferences.lire("export_video_conteneur") == "mp4" and services.preferences.lire("export_video_debit") == "identique"
@@ -592,11 +602,11 @@ def test_export_hdr_depuis_la_fenetre(app_configuree, qtbot, services, projet_hd
     assert (couleurs.format_pixels, couleurs.matrice, couleurs.primaires, couleurs.transfert) == ("yuv420p10le", "bt2020nc", "bt2020", "arib-std-b67")
     assert sortie.son.codec == "aac"
     numero = 18  # 0,60 s, pendant « sérum »
-    point = _point_blanc(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
-    assert point is not None
+    points = _points_blancs(dialogue._contenu, float(source.images.moments[numero] * source.images.base_de_temps))
+    assert points
     avant = _luminances(Path(projet_hdr.transcription.source), numero, 10)
     apres = _luminances(plan.sortie, numero, 10)
-    blanc = apres[point[1] * LARGEUR + point[0]]
-    assert abs(blanc - 721) <= 8, (point, blanc, avant[point[1] * LARGEUR + point[0]])  # blanc de référence (HLG : 75 %)
+    blanc = _blanc_median(apres, points)
+    assert abs(blanc - 721) <= 8, (len(points), blanc, _blanc_median(avant, points))  # blanc de référence (HLG : 75 %)
     ecarts = sorted(abs(a - b) for a, b in zip(avant, apres, strict=True))
     assert ecarts[len(ecarts) // 2] < 24  # le reste de l'image intact (sur 1 023)
