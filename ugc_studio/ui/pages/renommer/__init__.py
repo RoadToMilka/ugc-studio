@@ -4,7 +4,7 @@ d'Ant Renamer. Le calcul et le renommage sont dans renommage.py.
 
 Le parcours, de haut en bas :
 1. Dossier : glisser-déposer ou « Choisir un dossier… » (ou « Trier et renommer » à la fin du module
-   Images).
+   Images). « Fermer le dossier » le fait oublier à l'app (4.0.4).
 2. Ordre : les images en vignettes. Un clic leur donne le numéro suivant (en mauve), un nouveau clic
    le leur retire ; les autres suivent dans l'ordre de l'affichage (numéros gris). Double-clic :
    l'image en grand.
@@ -94,6 +94,10 @@ AIDE_DOSSIER = (
     "Les images du dossier lui-même (JPG, PNG, WebP, AVIF, TIFF, BMP), pas celles de ses sous-dossiers. "
     "Seul leur nom change, jamais leur contenu."
 )
+AIDE_FERMER = (
+    "L'app oublie ce dossier : la zone redevient vide. Tes images ne bougent pas ; tes réglages et "
+    "« Annuler le dernier renommage » restent."
+)
 AIDE_ORDRE = (
     "Clique les images dans l'ordre voulu : la première cliquée prend le premier numéro (en mauve), la "
     "suivante le deuxième… Un nouveau clic lui retire son numéro, et les suivantes remontent. Les autres "
@@ -182,6 +186,9 @@ class PageRenommer(Page):
         ligne.addLayout(textes, 1)
         self.bouton_changer = bouton("Changer de dossier…", variante="contour", nom_icone="folder-open", action=self.choisir_dossier)
         ligne.addWidget(self.bouton_changer, 0, Qt.AlignmentFlag.AlignTop)
+        self.bouton_fermer = bouton("Fermer le dossier", variante="contour", nom_icone="x", action=self.fermer_le_dossier)
+        self.bouton_fermer.setToolTip(AIDE_FERMER)
+        ligne.addWidget(self.bouton_fermer, 0, Qt.AlignmentFlag.AlignTop)
         self.ligne_dossier.hide()
         d.addWidget(self.ligne_dossier)
         self.contenu.addWidget(self.cadre_dossier)
@@ -330,6 +337,39 @@ class PageRenommer(Page):
             lambda contenu, n=numero: self._dossier_lu(n, contenu),
             lambda erreur, n=numero: self._lecture_echouee(n, erreur),
         )
+
+    def fermer_le_dossier(self) -> bool:
+        """« Fermer le dossier » (4.0.4) : l'app oublie le dossier, la zone redevient « Glisse un dossier
+        d'images ici ». Les fichiers ne bougent pas ; les réglages et « Annuler le dernier renommage »
+        restent (l'historique est dans les données de l'app). Si des images ont été cliquées, l'app
+        demande d'abord : cet ordre serait perdu. Renvoie True si le dossier est fermé."""
+        if self._occupe or self._dossier is None:
+            return False
+        if self._choisies:
+            nombre = len(self._choisies)
+            if not messages.confirmer(
+                self,
+                "Fermer le dossier",
+                f"Fermer « {self._dossier.name} » ?",
+                f"L'ordre que tu as cliqué ({quantite(nombre, 'image')}) sera perdu. Tes images ne changent pas.",
+                action="Fermer le dossier",
+                icone_action="x",
+            ):
+                return False
+        self._arreter_les_vignettes()
+        self._lecture += 1  # une lecture encore en route serait ignorée
+        self._dossier = None
+        self._contenu, self._affichage, self._choisies, self._plan = None, [], [], None
+        self._vignettes, self._dates_des_vignettes = {}, {}
+        self._avant_le_clic = None
+        self.grille.remplir([], {})
+        self.chemin.setText("")
+        self.compte.setText("")
+        self.ligne_dossier.hide()
+        self.zone_depot.show()
+        self._afficher("", "secondaire")
+        self._actualiser()
+        return True
 
     def _dossier_lu(self, numero: int, contenu: ContenuDuDossier) -> None:
         if numero != self._lecture:
@@ -701,6 +741,7 @@ class PageRenommer(Page):
         self.grille.setEnabled(not occupe)
         self.bouton_effacer.setEnabled(bool(self._choisies) and not occupe)
         self.bouton_changer.setEnabled(not occupe or actif(self.bouton_changer))
+        self.bouton_fermer.setEnabled(not occupe)
         self.zone_depot.setEnabled(not occupe or actif(self.zone_depot.bouton_choisir))
         self._mettre_a_jour_les_boutons()
 

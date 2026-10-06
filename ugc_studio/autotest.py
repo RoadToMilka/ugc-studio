@@ -2060,8 +2060,12 @@ def _images_v4(fenetre, capturer, rapport: dict) -> bool:
         "tailles": tailles,
         "formats_pillow": {nom: features.check(nom) for nom in ("jpg", "webp", "avif", "zlib", "littlecms2")},
     }
+    # 4.0.4 : « Fermer le dossier » : la zone redevient vide ; les fichiers ne bougent pas.
+    page.fermer_le_dossier()
+    ferme = page.zone_depot.isVisible() and not page.ligne_dossier.isVisible() and len(list(sortie.iterdir())) == 3
+    rapport["images_v4"]["dossier_ferme"] = ferme
     attendues = {"photo-1.jpg": [450, 600], "logo.png": [1200, 600], "visuel.webp": [900, 600]}
-    return bool(fini) and tailles == attendues and all(rapport["images_v4"]["formats_pillow"].values())
+    return bool(fini) and tailles == attendues and all(rapport["images_v4"]["formats_pillow"].values()) and ferme
 
 
 def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
@@ -2116,6 +2120,20 @@ def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
     finally:
         messages.confirmer = vrai_confirmer
     remis = sorted(fichier.name for fichier in dossier.iterdir())
+    # 4.0.4 : « Fermer le dossier », avec un ordre cliqué (la question est acceptée d'office) : la zone
+    # redevient vide, les fichiers ne bougent pas, « Annuler le dernier renommage » reste possible.
+    page.cliquer(dossier / "IMG_3.jpg")
+    messages.confirmer = lambda *_arguments, **_options: True
+    try:
+        ferme = page.fermer_le_dossier()
+    finally:
+        messages.confirmer = vrai_confirmer
+    ferme = (
+        bool(ferme)
+        and page.zone_depot.isVisible()
+        and not page.ligne_dossier.isVisible()
+        and sorted(fichier.name for fichier in dossier.iterdir()) == sorted(couleurs)
+    )
     rapport["renommer_v4"] = {
         "vignettes": vignettes,
         "tri_affiche": tri_affiche,
@@ -2125,6 +2143,7 @@ def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
         "statut": statut,
         "annule": bool(annule),
         "remis": remis,
+        "dossier_ferme": ferme,
     }
     attendus = ["NeMu_JPG_01.webp", "NeMu_JPG_02.png", "NeMu_JPG_03.jpg", "NeMu_JPG_04.jpg"]
     return (
@@ -2135,6 +2154,7 @@ def _renommer_v4(fenetre, capturer, rapport: dict) -> bool:
         and bool(annule)
         and remis == sorted(couleurs)
         and details.startswith("900 × 1200 px")
+        and ferme
     )
 
 

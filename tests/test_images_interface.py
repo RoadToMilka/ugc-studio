@@ -166,6 +166,46 @@ def test_reglages_retenus(app_configuree, qtbot, services):
     assert autre.sortie.itemText(0) == "Sous-dossier « 1080 px de large »"
 
 
+def test_fermer_le_dossier(app_configuree, qtbot, services, tmp_path, monkeypatch):
+    """4.0.4 : « Fermer le dossier » fait oublier le dossier à l'app : la zone redevient vide, sans
+    question (rien à perdre). Les fichiers ne bougent pas, les réglages restent."""
+    source = _dossier(tmp_path)
+    page = _page(qtbot, services)
+    assert not page.ligne_dossier.isVisible()  # pas de dossier : pas de bouton
+    _ouvrir(qtbot, page, source)
+    page.pixels.setValue(600)
+    assert page.redimensionner()
+    qtbot.waitUntil(lambda: not page.occupe, timeout=20_000)
+    assert page.bouton_fermer.isVisible() and page.bouton_fermer.isEnabled()
+    questions = []
+    monkeypatch.setattr(messages, "confirmer", lambda *args, **kwargs: questions.append(args[2]) or False)
+    page.fermer_le_dossier()
+    assert questions == []  # pas de question
+    assert page.zone_depot.isVisible() and not page.ligne_dossier.isVisible()
+    assert not page.cadre_resume.isVisible() and not page.bouton_redimensionner.isEnabled()
+    assert not page.bouton_ouvrir.isVisible() and not page.bouton_renommer.isVisible()
+    assert page.statut.text() == "" and page.dossier_de_sortie() is None
+    # Les fichiers ne bougent pas ; les réglages restent.
+    assert sorted(f.name for f in source.iterdir()) == ["600 px de haut", "exacte.webp", "grande.jpg", "notes.txt", "petite.png"]
+    assert len(list((source / "600 px de haut").iterdir())) == 3
+    assert page.pixels.value() == 600
+    # Le même dossier se rouvre normalement.
+    _ouvrir(qtbot, page, source)
+    assert page.compte.text() == "3 images (WebP, JPG, PNG)" and page.bouton_redimensionner.isEnabled()
+
+
+def test_fermer_le_dossier_grise_pendant_un_travail(app_configuree, qtbot, services, tmp_path):
+    source = _dossier(tmp_path)
+    page = _page(qtbot, services)
+    _ouvrir(qtbot, page, source)
+    page._occuper(True, page.bouton_redimensionner)  # comme pendant un redimensionnement
+    assert not page.bouton_fermer.isEnabled()
+    page.fermer_le_dossier()
+    assert page.ligne_dossier.isVisible()  # rien n'est fermé pendant un travail
+    page._occuper(False)
+    assert page.bouton_fermer.isEnabled()
+
+
 def test_dossier_sans_image(app_configuree, qtbot, services, tmp_path):
     vide = tmp_path / "Vide"
     vide.mkdir()
