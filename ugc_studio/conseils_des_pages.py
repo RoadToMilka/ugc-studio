@@ -1188,6 +1188,71 @@ UPSCALE = PageDeConseils(
     ),
 )
 
+DOUBLONS = PageDeConseils(
+    "Doublons",
+    (
+        Rubrique(
+            "Trouver les doublons",
+            (
+                "Ajoute un ou plusieurs dossiers (ou glisse-les sur la page), puis clique « Analyser ». L'app prend "
+                "leurs photos (JPG, PNG, WebP, AVIF, TIFF, BMP, mélangés sans problème) ; « Inclure les "
+                "sous-dossiers » prend aussi celles de leurs sous-dossiers.",
+                "Avec plusieurs dossiers, « Comparer » : les photos d'un même dossier entre elles, chaque photo avec "
+                "celles des autres dossiers, ou les deux.",
+                "Le tableau montre une ligne par paire, les plus proches en haut, avec les deux photos en tout petit "
+                "au début de la ligne. Une photo présente en plusieurs exemplaires identiques ne fait pas apparaître "
+                "ses ressemblances plusieurs fois.",
+                "Avec l'IA, le seuil choisit les paires montrées : le tableau le suit tout de suite, sans refaire "
+                "l'analyse. 85 % est le plus bas pour ne trouver que de vrais doublons (réglé sur des photos de "
+                "clients) : en dessous, ce sont surtout des photos qui se ressemblent sans être des doublons. Sans IA, "
+                "pas de seuil : toutes les copies trouvées sont montrées, puisqu'elles sont toutes prouvées.",
+            ),
+        ),
+        Rubrique(
+            "La méthode et la note",
+            (
+                "« Copies seulement (sans IA) » : les fichiers identiques et les copies d'une même photo (autre "
+                "taille, autre compression ou autre format, autres couleurs, retournée en miroir, bords unis "
+                "ajoutés). Elles sont prouvées en superposant les contours des deux photos : pas d'erreur possible "
+                "entre deux photos différentes.",
+                "« Copies et photos proches (avec IA) » : aussi les photos que l'IA juge proches, comme la même "
+                "photo rognée ou zoomée, ou des prises presque identiques. Le modèle d'IA (DINOv2, de Meta) tourne "
+                "sur ton ordinateur : rien ne part sur internet.",
+                "La note suit une seule échelle : 100 % pour des identiques, de 95 à 99 % pour la même photo "
+                "modifiée (plus elle a été modifiée, plus on descend), 94 % au plus pour des photos proches, "
+                "estimé par l'IA. Seule une preuve fait entrer dans les zones du haut.",
+                "L'IA voit les ressemblances, pas qui a pris la photo : deux photos différentes du même produit (la "
+                "même montre chez deux clients) peuvent ressortir avec une note élevée. Le seuil de départ (85 %) est "
+                "réglé pour les laisser dessous sur des photos de clients.",
+                "Les photos rognées ou recadrées seront prouvées dans une prochaine version ; en attendant, avec "
+                "l'IA, elles ressortent comme photos proches.",
+            ),
+        ),
+        Rubrique(
+            "Comparer une paire",
+            (
+                "Clique une ligne : la paire s'affiche en grand à côté du tableau (dessous dans une fenêtre "
+                "étroite), avec la taille, le format, le poids et la date de chaque photo. En mauve, ce qui la "
+                "distingue de l'autre : la plus grande, la plus lourde.",
+                "Flèches ↑ et ↓ : la paire précédente ou suivante, sans quitter le clavier.",
+                "« Agrandir » ou double-clic : les deux photos en grand, côte à côte, ou l'une puis l'autre à la "
+                "même place (barre Espace) : c'est la meilleure façon de voir une petite différence.",
+                "Menu ⋯ : afficher l'une des photos dans l'Explorateur, ou ouvrir les deux dans le module Comparer.",
+            ),
+        ),
+        Rubrique(
+            "Sécurité",
+            (
+                "L'analyse ne fait que lire tes photos : elle ne les modifie, ne les déplace et ne les supprime "
+                "jamais.",
+                "Ce que l'analyse a lu reste en mémoire le temps de la séance : après avoir ajouté un dossier, "
+                "« Analyser » ne relit que les nouvelles photos. Rien n'est gardé sur le disque.",
+            ),
+        ),
+    ),
+)
+
+
 IMAGES = PageDeConseils(
     "Images",
     (
@@ -1332,6 +1397,7 @@ PAGES: dict[str, PageDeConseils] = {
     "transcription": TRANSCRIPTION,
     "sous-titres": SOUS_TITRES,
     "upscale": UPSCALE,
+    "doublons": DOUBLONS,
     "images": IMAGES,
     "renommer": RENOMMER,
     "comparer": COMPARER,

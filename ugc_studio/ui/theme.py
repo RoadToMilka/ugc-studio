@@ -316,6 +316,17 @@ class Dimensions:
     RENOMMER_CONTOUR_CHOISIE = 2  # contour mauve d'une image cliquée
     # Une image en grand (double-clic) : au plus 80 % de l'écran, jamais plus grande que nature.
     IMAGE_EN_GRAND_PART_ECRAN = 0.8
+    # Module Doublons (V4.3) : deux petites vignettes au début de chaque ligne du tableau des paires,
+    # de la hauteur de la ligne (moins 4 px en haut et en bas), séparées de 4 px.
+    DOUBLONS_VIGNETTE = Hauteurs.LIGNE_TABLEAU - 2 * Espacements.XS
+    DOUBLONS_COLONNE_VIGNETTES = 2 * DOUBLONS_VIGNETTE + 3 * Espacements.XS + 2 * Espacements.S
+    # La paire choisie, à côté du tableau quand la page est assez large (sinon dessous) : ses deux
+    # images, côte à côte, à la même hauteur.
+    DOUBLONS_COTE_A_COTE_MIN = 1040  # largeur du contenu de la page
+    DOUBLONS_IMAGE_HAUTEUR = 260
+    DOUBLONS_IMAGE_LARGEUR_MIN = 160
+    DOUBLONS_TABLEAU_HAUTEUR = 360  # le tableau des paires, à côté de la comparaison : il défile au-delà
+    DOUBLONS_SEUIL_LARGEUR = 220  # la barre du seuil (50 à 100 %)
     DIALOGUE_PREREGLAGES_LARGEUR = 880 + MARGES_FENETRE  # trois cartes par rangée
     DIALOGUE_PREREGLAGES_HAUTEUR = DIALOGUE_HAUTEUR_MAX
     # Fenêtre d'export (V3) : réglages, résumé avant export et avancement dans une seule fenêtre, qui

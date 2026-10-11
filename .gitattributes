@@ -1,0 +1,5 @@
+# Fichiers gardés octet pour octet, sans conversion des fins de ligne : sur la machine Windows de la
+# fabrication, Git écrit sinon chaque fichier texte avec les fins de ligne de Windows (CRLF).
+# Doublons (V4.3) : le texte de la licence du modèle d'IA, tel que publié par Meta, joint à l'app à
+# l'identique (son empreinte SHA-256 est vérifiée par tests/test_doublons_modeles.py).
+ugc_studio/ressources/modeles/LICENCE-*.txt -text

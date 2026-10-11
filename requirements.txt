@@ -10,3 +10,11 @@ keyring==25.7.0
 lameenc==1.8.4
 # Images (V4) : lire, redimensionner et enregistrer les images (JPG, PNG, WebP, AVIF, TIFF, BMP).
 Pillow==12.3.0
+# Doublons (V4.3) : le modèle d'IA qui décrit chaque photo tourne avec ONNX Runtime (Microsoft, licence
+# MIT), sur le processeur ; numpy (licence BSD) fait les calculs (proximité de toutes les paires).
+# ONNX Runtime 1.30.0 plutôt que la 1.31.0, publiée deux jours avant le choix (11/10/2026) : un mois de
+# recul ; numpy 2.5.3 de même. Les besoins d'ONNX Runtime (protobuf, flatbuffers) sont figés eux aussi.
+numpy==2.5.3
+onnxruntime==1.30.0
+protobuf==7.36.2
+flatbuffers==25.12.19

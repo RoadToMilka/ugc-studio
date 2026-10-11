@@ -18,6 +18,7 @@ from .composants.barre_laterale import BarreLaterale, Module
 from .composants.elements import titre_avec
 from .composants.entete import Entete
 from .pages.base import Page
+from .pages.doublons import PageDoublons
 from .pages.images import PageImages
 from .pages.reglages import PageReglages
 from .pages.comparer import PageComparer
@@ -42,6 +43,9 @@ MODULES_BAS = (Module("reglages", "Réglages", "settings"),)
 # V4 : les outils, des modules sans projet, dans leur groupe sous les modules d'une pub.
 MODULES_OUTILS = (
     Module("upscale", "Upscale vidéo", "image-upscale"),
+    # V4.3 (4.3.0) : juste avant Images, dans l'ordre où l'on traite une base de photos (d'abord les
+    # doublons, puis la taille, puis les noms ; accord de l'utilisateur du 11/10/2026).
+    Module("doublons", "Doublons", "images"),
     Module("images", "Images", "image"),
     Module("renommer", "Renommer", "list-ordered"),
     Module("comparer", "Comparer", "square-split-horizontal"),  # V4.1 (4.2.0) : video-compare
@@ -55,6 +59,7 @@ def _creer_pages(services: Services) -> dict[str, QWidget]:
         "transcription": PageTranscription(services),
         "sous-titres": PageSousTitres(services),
         "upscale": PageUpscale(services),
+        "doublons": PageDoublons(services),
         "images": PageImages(services),
         "renommer": PageRenommer(services),
         "comparer": PageComparer(services),
@@ -123,6 +128,8 @@ class FenetrePrincipale(QMainWindow):
         # « Trier et renommer » (V4, lot 2) : à la fin du module Images, le module Renommer sur les
         # images faites.
         self.page("images").renommer_demande.connect(self.trier_et_renommer)
+        # « Ouvrir les deux dans Comparer » (V4.3) : la paire choisie dans Doublons, dans le module Comparer.
+        self.page("doublons").comparer_demande.connect(self.comparer_les_fichiers)
 
         self.barre_laterale.module_selectionne.connect(self.afficher_module)
         self._restaurer_etat()
@@ -198,6 +205,12 @@ class FenetrePrincipale(QMainWindow):
         self.afficher_module("renommer")
         self.page("renommer").ouvrir(dossier)
 
+    def comparer_les_fichiers(self, chemins) -> None:
+        """« Ouvrir les deux dans Comparer » (module Doublons) : le module Comparer s'ouvre avec ces deux
+        fichiers."""
+        self.afficher_module("comparer")
+        self.page("comparer").definir_les_fichiers(list(chemins))
+
     def corriger_les_mots(self, temps: float = -1.0) -> None:
         """« Corriger les mots » : le module Transcription s'ouvre ; depuis la frise des sous-titres,
         le mot qui commence à `temps` y est choisi (-1 : aucun)."""
@@ -270,6 +283,7 @@ class FenetrePrincipale(QMainWindow):
         voix.atelier.lecteur.arreter()
         voix.atelier.enregistrer_maintenant()
         self.page("upscale").arreter()  # Topaz s'arrête : la vidéo en cours est abandonnée
+        self.page("doublons").arreter()  # l'analyse s'arrête à la photo en cours
         self.page("images").arreter()  # images pas encore commencées : elles ne le seront plus
         self.page("renommer").arreter()  # vignettes pas encore faites : elles ne le seront plus
         self.page("comparer").arreter()  # la fenêtre de video-compare se ferme aussi
