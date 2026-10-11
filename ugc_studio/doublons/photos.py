@@ -47,6 +47,17 @@ class Photo:
         return os.path.normcase(str(self.chemin)), self.octets, self.modifiee
 
 
+def a_change(photo: Photo) -> bool:
+    """Vrai si la photo a changé depuis l'analyse (V4.5) : déplacée, supprimée ou modifiée ailleurs (une
+    autre taille ou une autre date). Une photo changée n'est jamais mise à la corbeille : elle n'est plus
+    celle que la comparaison a montrée."""
+    try:
+        infos = photo.chemin.stat()
+    except OSError:
+        return True
+    return (infos.st_size, infos.st_mtime) != (photo.octets, photo.modifiee)
+
+
 def _dossiers_visibles(dossier: Path) -> list[Path]:
     """Les sous-dossiers d'un dossier (pas les dossiers cachés de Windows), dans l'ordre de l'Explorateur.
     Les raccourcis vers d'autres dossiers (liens) ne sont pas suivis : pas de boucle sans fin."""

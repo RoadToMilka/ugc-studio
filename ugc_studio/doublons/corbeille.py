@@ -58,6 +58,10 @@ class ImpossibleDeRessortir(Exception):
     """La photo ne peut pas être remise à sa place (la raison, en français)."""
 
 
+class DejaRevenue(ImpossibleDeRessortir):
+    """La photo est déjà revenue à sa place (remise depuis la corbeille de Windows, par exemple)."""
+
+
 @dataclass(frozen=True)
 class Jetee:
     """Une photo mise à la corbeille (ou supprimée définitivement) : son chemin, et ce que Windows en a fait.
@@ -120,7 +124,7 @@ def ressortir(jetee: Jetee) -> None:
         raise ImpossibleDeRessortir("Windows n'a pas dit où il l'a rangée")
     if not dedans.exists():
         if origine.exists():
-            raise ImpossibleDeRessortir("elle est déjà revenue à sa place")
+            raise DejaRevenue("elle est déjà revenue à sa place")
         raise ImpossibleDeRessortir("elle n'est plus dans la corbeille (vidée entre-temps ?)")
     if origine.exists():
         raise ImpossibleDeRessortir(f"un fichier « {origine.name} » est déjà à sa place (il n'est pas remplacé)")

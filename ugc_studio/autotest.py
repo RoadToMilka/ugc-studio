@@ -112,6 +112,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "comparer_v41",
     "doublons_v43",
     "doublons_v44",
+    "doublons_v45",
 )
 ELEMENTS_SIGNALES_MAX = 6
 TOLERANCE_TEXTE_PX = 1  # arrondis de Qt : un texte n'est « coupé » qu'au-delà d'un pixel
@@ -2466,6 +2467,111 @@ def _doublons(fenetre, capturer, rapport: dict) -> tuple[bool, bool]:
     return v43, v44
 
 
+def _doublons_v45(fenetre, capturer, rapport: dict) -> bool:
+    """V4.5 (4.5.0), juste après _doublons, sur les mêmes photos de démonstration : décider, dans le vrai
+    .exe, avec la **vraie corbeille de Windows** de la machine de la fabrication.
+    - La suggestion de la paire identique (produit-copie.jpg porte un nom de copie : garder l'autre).
+    - « Supprimer » sous produit-copie.jpg : elle part dans la corbeille ($Recycle.Bin, où Windows dit
+      l'avoir rangée), ses paires disparaissent ; capture « doublons-mise-a-la-corbeille ».
+    - « Annuler » : elle revient à sa place, intacte, avec sa date ; la corbeille ne la garde plus.
+    - La touche I dans le tableau : la paire choisie est ignorée ; « Annuler » la remet."""
+    import os
+
+    from PySide6.QtGui import QKeyEvent
+
+    from .doublons import corbeille
+    from .doublons.choix import COPIES_IA, IDENTIQUES, SANS_IA
+
+    page = fenetre.page("doublons")
+    fenetre.afficher_module("doublons")
+    resultat = page.resultat
+    if resultat is None:
+        rapport["doublons_v45"] = {"erreur": "pas d'analyse"}
+        return False
+    page.methode.definir(SANS_IA)
+    page._methode_changee(SANS_IA)
+
+    def noms() -> list:
+        return [[resultat.photos[p.a].chemin.name, resultat.photos[p.b].chemin.name] for p in page.paires()]
+
+    avant = noms()
+    rang = next((rang for rang, paire in enumerate(page.paires()) if paire.genre == IDENTIQUES), None)
+    infos: dict = {"paires_avant": avant, "fausse_corbeille": os.environ.get(corbeille.VARIABLE_FAUSSE_CORBEILLE)}
+    rapport["doublons_v45"] = infos
+    if rang is None:
+        return False
+    page.choisir(rang)
+    infos["suggestion"] = page.suggestion.text()
+    paire = page.paire_choisie()
+    gauche = resultat.photos[paire.a].chemin
+    contenu, date = gauche.read_bytes(), gauche.stat().st_mtime
+    infos["photo"] = gauche.name
+    infos["supprimer_commence"] = page.supprimer(0)
+    _attendre(lambda: not page.decision_en_cours, 30)
+    decision = page.derniere_decision
+    jetee = decision.jetee if decision is not None else None
+    dans = jetee.dans_la_corbeille if jetee is not None else None
+    infos.update(
+        {
+            "disparue": not gauche.exists(),
+            "dans_la_corbeille": str(dans) if dans else None,
+            "dans_le_dossier_de_la_corbeille": bool(dans) and dans.parent.parent.name.lower() == "$recycle.bin",
+            "dans_la_corbeille_intacte": bool(dans) and dans.exists() and dans.read_bytes() == contenu,
+            "fiche_de_la_corbeille": corbeille.lire_l_origine(corbeille.fiche_de_la_corbeille(dans)) if dans else None,
+            "texte_apres_suppression": page.texte_decision.text(),
+            "annuler_visible": page.bouton_annuler.isVisible(),
+            "paires_apres_suppression": noms(),
+        }
+    )
+    page.defilement.ensureWidgetVisible(page.zone_decision)  # la ligne de la décision, et « Annuler »
+    capturer(fenetre, "doublons-mise-a-la-corbeille")
+    infos["annuler_commence"] = page.annuler()
+    _attendre(lambda: not page.decision_en_cours, 30)
+    infos.update(
+        {
+            "revenue": gauche.exists() and gauche.read_bytes() == contenu and gauche.stat().st_mtime == date,
+            "plus_dans_la_corbeille": bool(dans) and not dans.exists() and not corbeille.fiche_de_la_corbeille(dans).exists(),
+            "texte_apres_annulation": page.texte_decision.text(),
+            "paires_apres_annulation": noms(),
+        }
+    )
+    # La touche I dans le tableau : ignorer la paire choisie, puis « Annuler ».
+    page.choisir(rang)
+    page.tableau.setFocus()
+    for genre in (QKeyEvent.Type.KeyPress, QKeyEvent.Type.KeyRelease):
+        QApplication.sendEvent(page.tableau, QKeyEvent(genre, Qt.Key.Key_I, Qt.KeyboardModifier.NoModifier, "i"))
+    infos["paires_apres_la_touche_i"] = noms()
+    infos["texte_apres_la_touche_i"] = page.texte_decision.text()
+    page.defilement.ensureWidgetVisible(page.zone_decision)
+    capturer(fenetre, "doublons-paire-ignoree")
+    page.annuler()
+    page.defilement.verticalScrollBar().setValue(0)
+    infos["paires_apres_la_seconde_annulation"] = noms()
+    page.methode.definir(COPIES_IA)  # la méthode de départ
+    page._methode_changee(COPIES_IA)
+    paire_texte = f"« {gauche.name} »"
+    return (
+        infos["supprimer_commence"]
+        and infos["suggestion"] == "Suggestion : garder celle de droite (l'autre a un nom de copie)."
+        and infos["fausse_corbeille"] is None
+        and infos["disparue"]
+        and infos["dans_le_dossier_de_la_corbeille"]
+        and infos["dans_la_corbeille_intacte"]
+        and infos["fiche_de_la_corbeille"] == str(gauche)
+        and infos["texte_apres_suppression"] == f"{paire_texte} mise à la corbeille."
+        and infos["annuler_visible"]
+        and not any(gauche.name in paire for paire in infos["paires_apres_suppression"])
+        and infos["annuler_commence"]
+        and infos["revenue"]
+        and infos["plus_dans_la_corbeille"]
+        and infos["texte_apres_annulation"] == f"{paire_texte} est revenue à sa place."
+        and infos["paires_apres_annulation"] == avant
+        and len(infos["paires_apres_la_touche_i"]) == len(avant) - 1
+        and infos["texte_apres_la_touche_i"].startswith("Paire ignorée : ")
+        and infos["paires_apres_la_seconde_annulation"] == avant
+    )
+
+
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
     def executer() -> None:
         rapport: dict = {
@@ -2790,6 +2896,9 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             verifs["comparer_v41"] = _comparer_v41(fenetre, capturer, capturer_image, rapport)
             # V4.3 (4.3.0) : le module Doublons, avec le vrai modèle d'IA et ses bibliothèques (dans le .exe).
             verifs["doublons_v43"], verifs["doublons_v44"] = _doublons(fenetre, capturer, rapport)
+            # V4.5 (4.5.0) : décider, avec la vraie corbeille de Windows (une photo mise à la corbeille,
+            # puis remise à sa place ; une paire ignorée avec la touche I, puis remise).
+            verifs["doublons_v45"] = _doublons_v45(fenetre, capturer, rapport)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")

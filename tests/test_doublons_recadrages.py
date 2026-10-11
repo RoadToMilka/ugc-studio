@@ -72,6 +72,22 @@ def test_paires_a_examiner_les_plus_proches_d_un_autre_groupe():
     assert (0, 2) not in paires_a_examiner(empreintes.astype(np.float32), groupes, connues={(0, 2)})
 
 
+def test_chaque_copie_entiere_garde_ses_voisins():
+    """V4.5 : 0 et 1 sont la même photo à deux tailles (une famille) ; 2 en est une partie. Les deux
+    versions sont examinées face à 2 (si l'une est mise à la corbeille, l'autre garde son recadrage), mais
+    pas entre elles (déjà prouvées), et elles ne prennent pas la place d'un voisin."""
+    hasard = np.random.default_rng(6)
+    base = hasard.normal(size=(12, 768))
+    empreintes = base / np.linalg.norm(base, axis=1, keepdims=True)
+    empreintes[1] = empreintes[0] * 0.99 + empreintes[1] * 0.05
+    empreintes[2] = empreintes[0] * 0.8 + empreintes[2] * 0.5
+    empreintes /= np.linalg.norm(empreintes, axis=1, keepdims=True)
+    groupes = list(range(12))
+    familles = [0, 0] + list(range(2, 12))
+    paires = paires_a_examiner(empreintes.astype(np.float32), groupes, connues={(0, 1)}, familles=familles)
+    assert (0, 2) in paires and (1, 2) in paires and (0, 1) not in paires
+
+
 # --- Superposition, sans le modèle --------------------------------------------------------------------
 
 

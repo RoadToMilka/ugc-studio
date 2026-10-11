@@ -16,7 +16,7 @@ import time
 from collections import deque
 from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +28,7 @@ from .copies import Preuve, Signature, paires_candidates, prouver, rogner_bords_
 from .paires import IDENTIQUES, MEME_PHOTO, Paire, Selection, ToutesLesPaires, paires_permises
 from .photos import Photo, PhotoLue, lire_la_photo
 from .recadrages import Detail, PreuveRecadrage
+from .suggestion import Suggestion, suggerer
 
 LECTEURS = 3  # photos lues en même temps (Pillow décode en parallèle)
 EN_AVANCE = 6  # photos lues d'avance, au plus (mémoire)
@@ -90,7 +91,11 @@ class Memoire:
 @dataclass
 class Resultat:
     """Le résultat d'une analyse. `photos` : celles qui ont pu être lues ; `illisibles` : les autres, avec
-    la raison. Les paires se demandent à paires(mode, seuil)."""
+    la raison. Les paires se demandent à paires(mode, seuil).
+
+    V4.5 : les décisions de la séance, pour cette analyse seulement (rien n'est retenu d'une analyse à
+    l'autre) : `retirees`, les photos mises à la corbeille (leurs paires disparaissent) ; `ignorees`, les
+    paires ignorées."""
 
     photos: list[Photo]
     infos: list[Infos]
@@ -102,11 +107,37 @@ class Resultat:
     empreintes: np.ndarray | None  # n × 768 (avec IA), sinon None
     duree_s: float
     recadrages: dict[tuple[int, int], PreuveRecadrage] = field(default_factory=dict)  # V4.4 (avec IA)
+    retirees: set[int] = field(default_factory=set)  # V4.5
+    ignorees: set[tuple[int, int]] = field(default_factory=set)  # V4.5
     _par_mode: dict[tuple[str, str], ToutesLesPaires] = field(default_factory=dict, repr=False)
+    _etendus: dict[tuple[int, int], PreuveRecadrage] | None = field(default=None, repr=False)
 
     @property
     def dossiers(self) -> list[int]:
         return [photo.dossier for photo in self.photos]
+
+    # --- Décisions de la séance (V4.5) -------------------------------------------------------------
+
+    def retirer(self, numero: int) -> None:
+        """La photo a été mise à la corbeille : ses paires disparaissent. Si elle représentait d'autres
+        copies (la première d'un groupe), une de ses copies prend sa place dans les paires montrées."""
+        self.retirees.add(numero)
+        self._par_mode.clear()
+
+    def remettre(self, numero: int) -> None:
+        """« Annuler » : la photo est revenue, ses paires aussi."""
+        self.retirees.discard(numero)
+        self._par_mode.clear()
+
+    def ignorer(self, a: int, b: int) -> None:
+        """La paire est masquée pour cette analyse ; aussi les autres paires des mêmes groupes de copies
+        (ce sont les mêmes photos : elles ne la remplacent pas)."""
+        self.ignorees.add((min(a, b), max(a, b)))
+        self._par_mode.clear()
+
+    def ne_plus_ignorer(self, a: int, b: int) -> None:
+        self.ignorees.discard((min(a, b), max(a, b)))
+        self._par_mode.clear()
 
     def paires(self, mode: str, seuil: int, methode: str = AVEC_IA) -> Selection:
         """Les paires de ce mode au-dessus de ce seuil, les plus proches d'abord, selon la méthode :
@@ -146,6 +177,23 @@ class Resultat:
             details.append("autre format")
         return tuple(details) or ("autre taille",)
 
+    def suggestion(self, paire: Paire) -> Suggestion | None:
+        """Celle des deux photos à garder (V4.5, suggestion.py), ou None (deux photos seulement
+        ressemblantes : une question de goût)."""
+        a, b = paire.a, paire.b
+        info_a, info_b = self.infos[a], self.infos[b]
+        preuve = self.preuves.get((a, b))
+        return suggerer(
+            paire.genre,
+            pixels=(info_a.largeur * info_a.hauteur, info_b.largeur * info_b.hauteur),
+            formats=(info_a.format, info_b.format),
+            octets=(self.photos[a].octets, self.photos[b].octets),
+            noms=(self.photos[a].chemin.name, self.photos[b].chemin.name),
+            recadrage=paire.recadrage,
+            bords_sur=preuve.bords_sur if preuve is not None else -1,
+            autres_couleurs="autres couleurs" in paire.details,
+        )
+
     def cosinus(self, a: int, b: int) -> float | None:
         """La proximité vue par l'IA (de -1 à 1), quand l'IA a servi."""
         if self.empreintes is None:
@@ -155,77 +203,127 @@ class Resultat:
     def groupes(self, memes_photos: bool = False) -> list[int]:
         """Pour chaque photo, le numéro de son groupe (la première photo du groupe) : ses copies
         identiques ; avec `memes_photos`, aussi ses copies prouvées (même photo, modifiée). Les photos
-        d'un groupe ont à peu près les mêmes ressemblances avec toutes les autres."""
+        d'un groupe ont à peu près les mêmes ressemblances avec toutes les autres. Les photos mises à la
+        corbeille ne relient plus rien (chacune seule dans son groupe)."""
+        liens = self.identiques | self.memes_pixels
+        if memes_photos:
+            liens = liens | set(self.preuves) | set(self.recadrages)
+        return self._groupes(liens)
+
+    def _groupes(self, liens: set[tuple[int, int]], sans: set[int] | None = None) -> list[int]:
+        """Les groupes formés par ces liens (deux photos liées sont dans le même groupe), sans les photos
+        de `sans` (les photos mises à la corbeille, au départ). Le numéro d'un groupe : sa première photo."""
+        sans = self.retirees if sans is None else sans
         groupe = list(range(len(self.photos)))
-        liees = self.identiques | self.memes_pixels | ((set(self.preuves) | set(self.recadrages)) if memes_photos else set())
-        for a, b in sorted(liees):
-            racine_a, racine_b = groupe[a], groupe[b]
-            while groupe[racine_a] != racine_a:
-                racine_a = groupe[racine_a]
-            while groupe[racine_b] != racine_b:
-                racine_b = groupe[racine_b]
+
+        def racine(numero: int) -> int:
+            while groupe[numero] != numero:
+                groupe[numero] = groupe[groupe[numero]]
+                numero = groupe[numero]
+            return numero
+
+        for a, b in sorted(liens):
+            if a in sans or b in sans:
+                continue
+            racine_a, racine_b = racine(a), racine(b)
             if racine_a != racine_b:
                 groupe[max(racine_a, racine_b)] = min(racine_a, racine_b)
-        for numero in range(len(groupe)):
-            racine = groupe[numero]
-            while groupe[racine] != racine:
-                racine = groupe[racine]
-            groupe[numero] = racine
-        return groupe
+        return [racine(numero) for numero in range(len(groupe))]
+
+    def recadrages_etendus(self) -> dict[tuple[int, int], PreuveRecadrage]:
+        """Les copies recadrées prouvées, et les mêmes pour les copies identiques (mêmes pixels) de leurs
+        photos : la preuve est la même. L'analyse ne cherche les recadrages que pour une photo par groupe
+        de copies identiques ; si celle-là est mise à la corbeille, sa copie garde ses recadrages."""
+        if self._etendus is None:
+            identiques = self._groupes(self.identiques | self.memes_pixels, sans=set())
+            membres: dict[int, list[int]] = {}
+            for numero, groupe in enumerate(identiques):
+                membres.setdefault(groupe, []).append(numero)
+            etendus = dict(self.recadrages)
+            for (a, b), preuve in self.recadrages.items():
+                for x in membres[identiques[a]]:
+                    for y in membres[identiques[b]]:
+                        if x < y:
+                            etendus.setdefault((x, y), preuve)
+                        elif y < x:  # dans l'autre ordre : l'extrait change de côté
+                            etendus.setdefault((y, x), replace(preuve, extrait=1 - preuve.extrait))
+            self._etendus = etendus
+        return self._etendus
+
+    def _une_par_couple(self, paires: list[Paire], groupe: list[int]) -> list[Paire]:
+        """Une seule paire par couple de groupes : la plus proche (à égalité, les premières photos). Un
+        couple dont une paire est ignorée n'en montre aucune : ce sont les mêmes photos."""
+        def couple(a: int, b: int) -> tuple[int, int]:
+            return min(groupe[a], groupe[b]), max(groupe[a], groupe[b])
+
+        vus = {couple(a, b) for a, b in self.ignorees}
+        gardees = []
+        for paire in sorted(paires, key=lambda p: p.cle_de_tri):
+            if couple(paire.a, paire.b) not in vus:
+                vus.add(couple(paire.a, paire.b))
+                gardees.append(paire)
+        return gardees
 
     def _toutes(self, mode: str, methode: str) -> ToutesLesPaires:
-        """Toutes les paires du mode et de la méthode. Les copies identiques entre elles sont toutes
-        montrées ; les copies prouvées (entières, puis recadrées), une seule par couple de groupes de
-        copies identiques ; les paires de l'IA, une seule par couple de groupes de copies (identiques ou
-        prouvées). Sans cela, une photo présente en plusieurs exemplaires ferait apparaître chacune de
-        ses ressemblances plusieurs fois."""
+        """Toutes les paires du mode et de la méthode, sans les photos mises à la corbeille ni les paires
+        ignorées. Les copies identiques entre elles sont toutes montrées ; les copies entières, une seule
+        par couple de groupes de copies identiques ; les copies recadrées, une seule par couple de
+        familles (une photo, ses copies identiques et ses copies entières) ; les paires de l'IA, une seule
+        par couple de groupes de copies (identiques ou prouvées). Sans cela, une photo présente en
+        plusieurs exemplaires ferait apparaître chacune de ses ressemblances plusieurs fois. Les groupes
+        sont faits sans les photos mises à la corbeille : une copie qui reste prend leur place."""
         permises = paires_permises(self.dossiers, mode) if self.photos else np.zeros((0, 0), dtype=bool)
-        groupe = self.groupes()
+        if self.retirees:
+            retirees = sorted(self.retirees)
+            permises[retirees, :] = False
+            permises[:, retirees] = False
+        identiques = self.identiques | self.memes_pixels
         prouvees: list[Paire] = []
         connues: set[tuple[int, int]] = set()
         for a, b in sorted(self.identiques):
-            if permises[a, b]:
+            if permises[a, b] and (a, b) not in self.ignorees:
                 prouvees.append(Paire(a, b, 100, IDENTIQUES, ("même fichier",), self.cosinus(a, b)))
             connues.add((a, b))
         for a, b in sorted(self.memes_pixels - connues):
-            if permises[a, b]:
+            if permises[a, b] and (a, b) not in self.ignorees:
                 prouvees.append(Paire(a, b, 100, IDENTIQUES, ("mêmes pixels",), self.cosinus(a, b)))
             connues.add((a, b))
-        couples_vus: set[tuple[int, int]] = set()
-        meme_photo = [
+        entieres = [
             Paire(a, b, preuve.proximite(), MEME_PHOTO, self.details(a, b, preuve), self.cosinus(a, b))
             for (a, b), preuve in self.preuves.items()
             if (a, b) not in connues and permises[a, b]
         ]
-        if methode in (COPIES_IA, AVEC_IA):
-            meme_photo += [
-                Paire(a, b, preuve.proximite(), MEME_PHOTO, self.details_du_recadrage(a, b, preuve), self.cosinus(a, b), preuve)
-                for (a, b), preuve in self.recadrages.items()
-                if (a, b) not in connues and (a, b) not in self.preuves and permises[a, b]
-            ]
-        for paire in sorted(meme_photo, key=lambda p: p.cle_de_tri):
-            couple = (min(groupe[paire.a], groupe[paire.b]), max(groupe[paire.a], groupe[paire.b]))
-            if couple not in couples_vus:
-                couples_vus.add(couple)
-                prouvees.append(paire)
+        prouvees += self._une_par_couple(entieres, self._groupes(identiques))
         connues |= set(self.preuves)
+        etendus = self.recadrages_etendus() if methode in (COPIES_IA, AVEC_IA) else {}
+        recadrees = [
+            Paire(a, b, preuve.proximite(), MEME_PHOTO, self.details_du_recadrage(a, b, preuve), self.cosinus(a, b), preuve)
+            for (a, b), preuve in etendus.items()
+            if (a, b) not in connues and permises[a, b]
+        ]
+        prouvees += self._une_par_couple(recadrees, self._groupes(identiques | set(self.preuves)))
         if methode != AVEC_IA or self.empreintes is None or len(self.photos) < 2:
             return ToutesLesPaires(prouvees)
-        connues |= set(self.recadrages)
+        connues |= set(etendus)
         restantes = np.triu(permises, 1)
         for a, b in connues:
             restantes[a, b] = False
         lignes, colonnes = np.nonzero(restantes)
         valeurs = np.einsum("ij,ij->i", self.empreintes[lignes], self.empreintes[colonnes]) if len(lignes) else np.zeros(0, dtype=np.float32)
         # Une seule paire par couple de groupes de copies : la plus proche (à égalité, les premières
-        # photos), et aucune à l'intérieur d'un groupe (ses photos sont déjà montrées comme copies).
-        groupe = self.groupes(memes_photos=True)
+        # photos), et aucune à l'intérieur d'un groupe (ses photos sont déjà montrées comme copies), ni
+        # pour un couple dont une paire est ignorée.
+        groupe = self._groupes(identiques | set(self.preuves) | set(etendus))
         groupes = np.asarray(groupe)
         g_a, g_b = groupes[lignes], groupes[colonnes]
-        couples = np.minimum(g_a, g_b) * len(groupe) + np.maximum(g_a, g_b)
+        n = len(groupe)
+        couples = np.minimum(g_a, g_b) * n + np.maximum(g_a, g_b)
+        ignores = {min(groupe[a], groupe[b]) * n + max(groupe[a], groupe[b]) for a, b in self.ignorees}
         ordre = np.lexsort((colonnes, lignes, -valeurs))
         _, premieres = np.unique(couples[ordre], return_index=True)
-        gardees = np.array([k for k in sorted(ordre[premieres].tolist()) if g_a[k] != g_b[k]], dtype=np.int64)
+        gardees = np.array(
+            [k for k in sorted(ordre[premieres].tolist()) if g_a[k] != g_b[k] and int(couples[k]) not in ignores], dtype=np.int64
+        )
         if len(gardees) == 0:
             return ToutesLesPaires(prouvees)
         return ToutesLesPaires(prouvees, lignes[gardees], colonnes[gardees], valeurs[gardees])
@@ -369,9 +467,12 @@ def _recadrages(resultat: Resultat, details: list[Detail | None], dire, arret: t
     """Les copies recadrées, zoomées ou tournées (V4.4) : les paires que l'IA voit assez proches
     (recadrages.paires_a_examiner), prouvées sans IA (recadrages.prouver)."""
     connues = resultat.identiques | resultat.memes_pixels | set(resultat.preuves)
+    # Une photo par groupe de copies identiques (leurs preuves sont les mêmes : Resultat.recadrages_etendus),
+    # mais chaque copie entière (autre taille, autres couleurs…) : si l'une est mise à la corbeille
+    # (V4.5), l'autre garde ses copies recadrées.
     a_examiner = [
         (a, b)
-        for a, b in recadrages.paires_a_examiner(resultat.empreintes, resultat.groupes(memes_photos=True), connues)
+        for a, b in recadrages.paires_a_examiner(resultat.empreintes, resultat.groupes(), connues, familles=resultat.groupes(memes_photos=True))
         if details[a] is not None and details[b] is not None
     ]
     trouves: dict[tuple[int, int], PreuveRecadrage] = {}

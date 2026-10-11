@@ -1,10 +1,11 @@
 """Module Doublons (V4.3, lot 1) : la page, avec un faux modèle d'IA dont les empreintes sont connues."""
 
+import os
 import shutil
 
 import numpy as np
 import pytest
-from PySide6.QtCore import QMimeData, QUrl
+from PySide6.QtCore import QMimeData, Qt, QUrl
 from PySide6.QtWidgets import QLabel
 
 from photos_factices import miroir, photo_factice, plus_petite
@@ -334,3 +335,131 @@ def test_la_comparaison_a_cote_du_tableau_en_grande_fenetre(app_configuree, qtbo
     assert page.cadre_comparaison.x() == page.cadre_paires.x()
     assert page.resultats.width() <= page.defilement.viewport().width()  # rien ne dépasse à droite
     assert page.mode.valeur() == LES_DEUX  # le mode de départ (sans effet avec un seul dossier)
+
+
+# --- V4.5 : décider (Supprimer, Ignorer, Annuler, suggestion) -----------------------------------------
+
+
+def _analyser_le_premier_lot(qtbot, page, dossiers):
+    page.ajouter([dossiers[0]])
+    page.methode.definir(SANS_IA)
+    page._methode_changee(SANS_IA)
+    _analyser(qtbot, page)
+
+
+def test_supprimer_puis_annuler(app_configuree, qtbot, services, dossiers, fausse_corbeille):
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+    premier = dossiers[0]
+    assert [(a, b) for a, b, *_ in _lignes(page)] == [("a copie.jpg", "a.jpg"), ("a copie.jpg", "a petite.jpg")]
+    # La suggestion : deux copies identiques, dont l'une porte un nom de copie.
+    assert page.suggestion.isVisible() and page.suggestion.text() == "Suggestion : garder celle de droite (l'autre a un nom de copie)."
+    assert not page.zone_decision.isVisible()
+    assert all(b.isEnabled() for b in page.deux_photos.boutons_supprimer) and page.bouton_ignorer.isEnabled()
+    page.deux_photos.boutons_supprimer[0].click()  # « Supprimer » sous a copie.jpg
+    qtbot.waitUntil(lambda: not page.decision_en_cours, timeout=10_000)
+    assert not (premier / "a copie.jpg").exists()
+    assert sorted(chemin.name[:2] for chemin in fausse_corbeille.iterdir()) == ["$I", "$R"]
+    assert page.texte_decision.text() == "« a copie.jpg » mise à la corbeille."
+    assert page.zone_decision.isVisible() and page.bouton_annuler.isVisible() and page.bouton_annuler.isEnabled()
+    # Ses paires disparaissent ; a.jpg, sa copie identique, prend sa place face à a petite.jpg.
+    assert [(a, b) for a, b, *_ in _lignes(page)] == [("a petite.jpg", "a.jpg")]
+    assert page.rang_choisi() == 0 and page.deux_photos.premiere.nom.text() == "a petite.jpg"
+    assert page.resume.text() == "4 images dans 1 dossier · 1 paire de copies : 1 même photo."
+    assert any(e.text().startswith("4 images · ") for e in page.liste_dossiers.findChildren(QLabel))
+    assert page.tableau.hasFocus()  # ↑, ↓ et I continuent de marcher
+    assert page.suggestion.text() == "Suggestion : garder celle de droite (plus grande)."
+    page.bouton_annuler.click()
+    qtbot.waitUntil(lambda: not page.decision_en_cours, timeout=10_000)
+    assert (premier / "a copie.jpg").exists() and list(fausse_corbeille.iterdir()) == []
+    assert page.texte_decision.text() == "« a copie.jpg » est revenue à sa place."
+    assert not page.bouton_annuler.isVisible() and page.derniere_decision is None
+    assert [(a, b) for a, b, *_ in _lignes(page)] == [("a copie.jpg", "a.jpg"), ("a copie.jpg", "a petite.jpg")]
+    assert page.rang_choisi() == 0  # la paire d'où la photo était partie
+
+
+def test_ignorer_avec_la_touche_i_puis_annuler(app_configuree, qtbot, services, dossiers):
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+    page.choisir(1)
+    page.tableau.setFocus()
+    qtbot.keyClick(page.tableau, Qt.Key.Key_I)
+    assert [(a, b) for a, b, *_ in _lignes(page)] == [("a copie.jpg", "a.jpg")]
+    assert page.rang_choisi() == 0  # la dernière paire est partie : la précédente
+    assert page.texte_decision.text() == "Paire ignorée : « a copie.jpg » et « a petite.jpg »."
+    assert page.resume.text().endswith("1 paire de copies : 1 identique.")
+    # Ctrl+I n'ignore rien.
+    qtbot.keyClick(page.tableau, Qt.Key.Key_I, Qt.KeyboardModifier.ControlModifier)
+    assert len(page.paires()) == 1
+    page.annuler()
+    assert [(a, b) for a, b, *_ in _lignes(page)] == [("a copie.jpg", "a.jpg"), ("a copie.jpg", "a petite.jpg")]
+    assert page.rang_choisi() == 1 and page.texte_decision.text() == "La paire est revenue dans le tableau."
+    assert not page.annuler()  # plus rien à annuler
+    # Une nouvelle analyse oublie les paires ignorées (rien n'est retenu) et la dernière décision.
+    page.ignorer()
+    _analyser(qtbot, page)
+    assert len(page.paires()) == 2 and page.derniere_decision is None and not page.zone_decision.isVisible()
+
+
+def test_une_photo_changee_depuis_l_analyse_n_est_pas_touchee(app_configuree, qtbot, services, dossiers):
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+    photo = dossiers[0] / "a.jpg"
+    os.utime(photo, (photo.stat().st_mtime + 120, photo.stat().st_mtime + 120))
+    assert not page.supprimer(1)
+    assert photo.exists()
+    assert page.texte_decision.text().startswith("« a.jpg » a changé depuis l'analyse")
+    assert not page.bouton_annuler.isVisible()
+
+
+def test_un_disque_sans_corbeille_la_question_d_abord(app_configuree, qtbot, services, dossiers, monkeypatch):
+    from ugc_studio.doublons import corbeille
+    from ugc_studio.ui.dialogues import messages
+
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+
+    def sans_corbeille(_chemin):
+        raise corbeille.PasDeCorbeille()
+
+    monkeypatch.setattr(corbeille, "mettre_a_la_corbeille", sans_corbeille)
+    questions = []
+    reponse = {"oui": False}
+
+    def confirmer(_parent, titre, question, precision="", action="OK", icone_action=None, annuler="Annuler"):
+        questions.append((titre, question, action, annuler))
+        return reponse["oui"]
+
+    monkeypatch.setattr(messages, "confirmer", confirmer)
+    photo = dossiers[0] / "a copie.jpg"
+    assert page.supprimer(0)
+    qtbot.waitUntil(lambda: not page.decision_en_cours and bool(questions), timeout=10_000)
+    assert questions[0][0] == "Supprimer définitivement ?" and "ne peut pas mettre « a copie.jpg » dans la corbeille" in questions[0][1]
+    assert questions[0][2:] == ("Supprimer définitivement", "Garder la photo")
+    assert photo.exists() and page.texte_decision.text() == "« a copie.jpg » est gardée."
+    reponse["oui"] = True
+    assert page.supprimer(0)
+    qtbot.waitUntil(lambda: not page.decision_en_cours and not photo.exists(), timeout=10_000)
+    qtbot.waitUntil(lambda: page.texte_decision.text() == "« a copie.jpg » supprimée définitivement.", timeout=10_000)
+    assert not page.bouton_annuler.isVisible() and page.derniere_decision is None
+
+
+def test_decider_dans_la_fenetre_en_grand(app_configuree, qtbot, services, dossiers):
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+    fenetre = page.agrandir(0)
+    assert fenetre is not None and fenetre.titre.text() == "Paire 1 sur 2"
+    assert all(b.isEnabled() for b in fenetre.boutons_supprimer) and not fenetre.zone_decision.isVisible()
+    qtbot.keyClick(fenetre, Qt.Key.Key_I)  # « Ignorer » : la fenêtre reste ouverte, sur la paire suivante
+    assert page._fenetre_en_grand is fenetre and fenetre.isVisible()
+    assert fenetre.titre.text() == "Paire 1 sur 1" and fenetre.description.text().startswith("99 % · Même photo")
+    assert fenetre.zone_decision.isVisible() and fenetre.texte_decision.text() == "Paire ignorée : « a copie.jpg » et « a.jpg »."
+    fenetre.bouton_annuler.click()
+    assert fenetre.titre.text() == "Paire 1 sur 2" and fenetre.description.text().startswith("100 % · Identiques")
+    # « Supprimer » sous la photo de droite (a.jpg).
+    fenetre.boutons_supprimer[1].click()
+    qtbot.waitUntil(lambda: not page.decision_en_cours, timeout=10_000)
+    assert not (dossiers[0] / "a.jpg").exists() and fenetre.isVisible()
+    assert fenetre.texte_decision.text() == "« a.jpg » mise à la corbeille." and fenetre.bouton_annuler.isVisible()
+    assert fenetre.titre.text() == "Paire 1 sur 1"
+    fenetre.close()

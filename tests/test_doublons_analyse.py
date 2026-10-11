@@ -204,3 +204,99 @@ def test_copies_seulement_apres_une_analyse_avec_ia(tmp_path):
     assert [genre for *_noms_, genre, _note, _details in avec] == [MEME_PHOTO, RESSEMBLANTES]
     assert [genre for *_noms_, genre, _note, _details in sans] == [MEME_PHOTO]
     assert toutes == sans  # le faux modèle ne donne pas de carreaux : pas de recadrage à prouver
+
+
+# --- V4.5 : les décisions de la séance (photo mise à la corbeille, paire ignorée) -------------------------
+
+
+def test_une_photo_retiree_ses_copies_prennent_le_relais(lot):
+    resultat = analyser(lister_les_photos([lot]), False, Memoire())
+    noms = [photo.chemin.name for photo in resultat.photos]
+    assert noms == ["a copie.jpg", "a miroir.png", "a petite.jpg", "a.jpg", "b.jpg"]
+
+    def paires():
+        return {(x, y): genre for x, y, genre, *_ in _noms(resultat, resultat.paires(LES_DEUX, 50))}
+
+    depart = paires()
+    assert depart == {
+        ("a copie.jpg", "a.jpg"): IDENTIQUES,
+        ("a copie.jpg", "a miroir.png"): MEME_PHOTO,
+        ("a copie.jpg", "a petite.jpg"): MEME_PHOTO,
+        ("a miroir.png", "a petite.jpg"): MEME_PHOTO,
+    }
+    # « a copie.jpg » mise à la corbeille : ses paires disparaissent, et sa copie identique (a.jpg) prend
+    # sa place face aux autres versions (sinon, elles ne seraient plus montrées avec personne).
+    resultat.retirer(0)
+    assert paires() == {
+        ("a miroir.png", "a.jpg"): MEME_PHOTO,
+        ("a petite.jpg", "a.jpg"): MEME_PHOTO,
+        ("a miroir.png", "a petite.jpg"): MEME_PHOTO,
+    }
+    resultat.remettre(0)
+    assert paires() == depart
+
+
+def test_une_paire_ignoree_n_est_pas_remplacee_par_une_copie(lot):
+    resultat = analyser(lister_les_photos([lot]), False, Memoire())
+
+    def paires():
+        return {(x, y) for x, y, *_ in _noms(resultat, resultat.paires(LES_DEUX, 50))}
+
+    depart = paires()
+    resultat.ignorer(1, 0)  # a copie.jpg et a miroir.png (dans n'importe quel ordre)
+    # a.jpg (la copie identique de a copie.jpg) face à a miroir.png : les mêmes photos, toujours ignorées.
+    assert paires() == depart - {("a copie.jpg", "a miroir.png")}
+    resultat.ne_plus_ignorer(0, 1)
+    assert paires() == depart
+    resultat.ignorer(0, 3)  # deux copies identiques : seulement cette paire
+    assert paires() == depart - {("a copie.jpg", "a.jpg")}
+
+
+def test_les_ressemblances_ignorees_et_retirees(tmp_path):
+    for graine, taille in ((10, (400, 600)), (11, (402, 600))):
+        photo_factice(graine, taille).save(tmp_path / f"photo {graine}.jpg", quality=90)
+    proche_a, proche_b = _vecteurs_de_cosinus(0.93)
+    modele = FauxModele({(400, 600): proche_a, (402, 600): proche_b})
+    resultat = analyser(lister_les_photos([tmp_path]), True, Memoire(), descripteur_ia=lambda: modele)
+    assert resultat.paires(LES_DEUX, 85).total == 1
+    resultat.ignorer(0, 1)
+    assert resultat.paires(LES_DEUX, 85).total == 0
+    resultat.ne_plus_ignorer(0, 1)
+    resultat.retirer(1)
+    assert resultat.paires(LES_DEUX, 85).total == 0
+    resultat.remettre(1)
+    assert resultat.paires(LES_DEUX, 85).total == 1
+
+
+def _resultat_a_la_main(noms, identiques=(), recadrages=None):
+    from pathlib import Path
+
+    from ugc_studio.doublons.analyse import Infos, Resultat
+    from ugc_studio.doublons.photos import Photo
+
+    photos = [Photo(Path(nom), 0, 1000 + rang, 0.0) for rang, nom in enumerate(noms)]
+    infos = [Infos(f"empreinte {rang}", 600, 800, "JPEG") for rang in range(len(noms))]
+    return Resultat(photos, infos, [], True, set(identiques), set(), {}, None, 0.0, dict(recadrages or {}))
+
+
+def test_un_recadrage_suit_la_copie_identique_de_sa_photo():
+    """L'analyse ne cherche les recadrages que pour une photo par groupe de copies identiques : si celle-là
+    est mise à la corbeille, sa copie (les mêmes pixels) garde le recadrage, avec la même preuve."""
+    from ugc_studio.doublons.recadrages import PreuveRecadrage
+
+    preuve = PreuveRecadrage(extrait=1, gardee=0.5, angle=0.0, miroir=False, agrandie=False, contours=0.99, carreaux=1.0, ecart_de_couleurs=1.0, correspondances=90)
+    # 0 : la photo ; 1 : la même recadrée ; 2 : une copie identique de 0.
+    resultat = _resultat_a_la_main(["a.jpg", "a recadree.jpg", "a copie.jpg"], identiques={(0, 2)}, recadrages={(0, 1): preuve})
+    etendus = resultat.recadrages_etendus()
+    assert etendus[(0, 1)] is preuve
+    assert etendus[(1, 2)].extrait == 0  # dans l'autre ordre : la recadrée est maintenant la première
+    selection = resultat.paires(LES_DEUX, 95, COPIES_IA)
+    assert [(p.a, p.b, p.genre) for p in selection.paires] == [(0, 2, IDENTIQUES), (0, 1, MEME_PHOTO)]  # un seul recadrage montré
+    resultat.retirer(0)
+    selection = resultat.paires(LES_DEUX, 95, COPIES_IA)
+    assert [(p.a, p.b, p.genre) for p in selection.paires] == [(1, 2, MEME_PHOTO)]
+    assert selection.paires[0].recadrage.extrait == 0
+    resultat.ignorer(1, 2)
+    assert resultat.paires(LES_DEUX, 95, COPIES_IA).total == 0
+    resultat.remettre(0)
+    assert resultat.paires(LES_DEUX, 95, COPIES_IA).total == 1  # (0, 2) seulement : le recadrage reste ignoré

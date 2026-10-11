@@ -82,7 +82,7 @@ def test_ressortir_seulement_sans_risque(tmp_path):
     ressortir(jetee)
     assert photo.exists()
     # Déjà revenue (remise à sa place depuis la corbeille de Windows) ; ou la corbeille a été vidée.
-    with pytest.raises(ImpossibleDeRessortir, match="déjà revenue"):
+    with pytest.raises(corbeille.DejaRevenue, match="déjà revenue"):
         ressortir(jetee)
     photo.unlink()
     with pytest.raises(ImpossibleDeRessortir, match="plus dans la corbeille"):

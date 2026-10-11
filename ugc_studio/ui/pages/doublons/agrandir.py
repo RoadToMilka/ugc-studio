@@ -3,7 +3,11 @@
 Deux façons de regarder, au choix : les deux photos côte à côte, ou l'une puis l'autre à la même place
 (la barre Espace passe de l'une à l'autre) : c'est la meilleure façon de voir une petite différence.
 ↑ et ↓ passent à la paire précédente ou suivante, sans fermer la fenêtre. La fenêtre tient sur l'écran
-(au plus 80 % de sa largeur et de sa hauteur) ; les photos n'y sont jamais agrandies."""
+(au plus 80 % de sa largeur et de sa hauteur) ; les photos n'y sont jamais agrandies.
+
+V4.5 : on y décide aussi, sans la fermer : « Supprimer » sous chaque photo (en « l'une puis l'autre », celle
+qui est montrée), « Ignorer » (ou la touche I), « Annuler ». La page fait le travail (la corbeille, le
+tableau) ; la fenêtre suit, sur la paire qui prend la place de celle qui est partie."""
 
 from __future__ import annotations
 
@@ -17,7 +21,7 @@ from ...composants.choix import ChoixEnBoutons
 from ...composants.elements import bouton, libelle, libelle_abrege
 from ...composants.fenetre import fenetre_en_bloc
 from ...theme import Dimensions, Espacements
-from .comparaison import FichePhoto, ImageAjustee, image_pour_l_ecran, texte_des_details
+from .comparaison import FichePhoto, ImageAjustee, bouton_supprimer, image_pour_l_ecran, texte_des_details
 
 COTE_A_COTE, L_UNE_PUIS_L_AUTRE = "cote_a_cote", "alterner"
 FACONS = {COTE_A_COTE: "Côte à côte", L_UNE_PUIS_L_AUTRE: "L'une puis l'autre"}
@@ -29,6 +33,9 @@ Paire = tuple[FichePhoto, FichePhoto, str]
 
 class FenetrePaireEnGrand(QDialog):
     rang_change = Signal(int)  # la paire montrée a changé (↑ ↓) : la page choisit la même ligne
+    supprimer_demande = Signal(int)  # V4.5 : « Supprimer » sous la photo 0 (à gauche) ou 1 (à droite)
+    ignorer_demande = Signal()
+    annuler_demande = Signal()
 
     def __init__(self, parent, obtenir: Callable[[int], Paire | None], rang: int, nombre: int, facon: str = COTE_A_COTE):
         super().__init__(parent)
@@ -61,15 +68,27 @@ class FenetrePaireEnGrand(QDialog):
         deux = QHBoxLayout(cote_a_cote)
         deux.setContentsMargins(0, 0, 0, 0)
         deux.setSpacing(Espacements.L)
-        self.premiere, self.legende_premiere = self._colonne(deux)
-        self.seconde, self.legende_seconde = self._colonne(deux)
+        self.premiere, self.legende_premiere, supprimer_premiere = self._colonne(deux, lambda: self.supprimer_demande.emit(0))
+        self.seconde, self.legende_seconde, supprimer_seconde = self._colonne(deux, lambda: self.supprimer_demande.emit(1))
         self.pages.addWidget(cote_a_cote)
         une = QWidget()
         seule = QHBoxLayout(une)
         seule.setContentsMargins(0, 0, 0, 0)
-        self.unique, self.legende_unique = self._colonne(seule)
+        self.unique, self.legende_unique, supprimer_unique = self._colonne(seule, lambda: self.supprimer_demande.emit(self._montree))
         self.pages.addWidget(une)
+        self.boutons_supprimer = [supprimer_premiere, supprimer_seconde, supprimer_unique]
         disposition.addWidget(self.pages, 1)
+        # V4.5 : la dernière décision, et « Annuler » (comme sous la comparaison de la page).
+        self.zone_decision = QWidget()
+        decision = QHBoxLayout(self.zone_decision)
+        decision.setContentsMargins(0, 0, 0, 0)
+        decision.setSpacing(Espacements.M)
+        self.texte_decision = libelle("", "secondaire")
+        decision.addWidget(self.texte_decision, 1)
+        self.bouton_annuler = bouton("Annuler", variante="contour", nom_icone="undo-2", action=self.annuler_demande.emit)
+        decision.addWidget(self.bouton_annuler, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.zone_decision.hide()
+        disposition.addWidget(self.zone_decision)
 
         boutons = QHBoxLayout()
         boutons.setSpacing(Espacements.S)
@@ -77,6 +96,9 @@ class FenetrePaireEnGrand(QDialog):
         boutons.addWidget(self.bouton_precedente)
         self.bouton_suivante = bouton("Suivante", nom_icone="chevron-down", action=lambda: self.aller(self._rang + 1))
         boutons.addWidget(self.bouton_suivante)
+        self.bouton_ignorer = bouton("Ignorer", nom_icone="eye-off", action=self.ignorer_demande.emit)
+        self.bouton_ignorer.setToolTip("Masquer cette paire pour cette analyse (touche I)")
+        boutons.addWidget(self.bouton_ignorer)
         boutons.addStretch(1)
         self.bouton_fermer = bouton("Fermer", variante="principal", action=self.accept)
         boutons.addWidget(self.bouton_fermer)
@@ -91,15 +113,18 @@ class FenetrePaireEnGrand(QDialog):
         self.resize(*self._place())
 
     @staticmethod
-    def _colonne(disposition):
+    def _colonne(disposition, supprimer):
         colonne = QVBoxLayout()
         colonne.setSpacing(Espacements.XS)
         image = ImageAjustee(None)  # toute la place de la fenêtre
         colonne.addWidget(image, 1)
         legende = libelle_abrege("", "legende")
         colonne.addWidget(legende)
+        colonne.addSpacing(Espacements.XS)
+        bouton_de_la_photo = bouton_supprimer(supprimer)
+        colonne.addWidget(bouton_de_la_photo, 0, Qt.AlignmentFlag.AlignLeft)
         disposition.addLayout(colonne, 1)
-        return image, legende
+        return image, legende, bouton_de_la_photo
 
     def _place(self) -> tuple[int, int]:
         """Largeur et hauteur de l'écran que la fenêtre peut prendre (80 %)."""
@@ -110,6 +135,33 @@ class FenetrePaireEnGrand(QDialog):
     @property
     def rang(self) -> int:
         return self._rang
+
+    @property
+    def montree(self) -> int:
+        """En « l'une puis l'autre » : la photo montrée (0 la première, 1 la seconde)."""
+        return self._montree
+
+    def actualiser(self, nombre: int, rang: int) -> None:
+        """Les paires ont changé (V4.5 : une photo mise à la corbeille, une paire ignorée, « Annuler ») :
+        la fenêtre montre la paire de ce rang, parmi `nombre`."""
+        self._nombre = nombre
+        self.aller(max(0, min(rang, nombre - 1)))
+
+    def permettre_les_decisions(self, libre: bool, annulable: bool) -> None:
+        """Les boutons qui décident, comme ceux de la page (grisés pendant qu'une photo part ou revient)."""
+        for supprimer in self.boutons_supprimer:
+            supprimer.setEnabled(libre)
+        self.bouton_ignorer.setEnabled(libre)
+        self.bouton_annuler.setEnabled(annulable)
+
+    def montrer_la_decision(self, texte: str, role: str, annuler: bool) -> None:
+        self.texte_decision.setText(texte)
+        if self.texte_decision.property("role") != role:
+            self.texte_decision.setProperty("role", role)
+            self.texte_decision.style().unpolish(self.texte_decision)
+            self.texte_decision.style().polish(self.texte_decision)
+        self.bouton_annuler.setVisible(annuler)
+        self.zone_decision.setVisible(bool(texte))
 
     def aller(self, rang: int) -> None:
         """Montre la paire de ce rang (0 : la première), si elle existe."""
@@ -165,6 +217,10 @@ class FenetrePaireEnGrand(QDialog):
         touche = evenement.key()
         if touche == Qt.Key.Key_Space:
             self.basculer()
+        elif touche == Qt.Key.Key_I and not evenement.modifiers() & (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier
+        ):
+            self.ignorer_demande.emit()
         elif touche == Qt.Key.Key_Up:
             self.aller(self._rang - 1)
         elif touche == Qt.Key.Key_Down:

@@ -1,6 +1,7 @@
 """La paire choisie dans le tableau du module Doublons (V4.3), toujours visible : les deux photos côte à
 côte, à la même hauteur, et sous chacune son nom, sa taille, son format, son poids, sa date et son
-dossier ; ce qui la distingue de l'autre (la plus grande, la plus lourde) en mauve.
+dossier ; ce qui la distingue de l'autre (la plus grande, la plus lourde) en mauve ; depuis la V4.5,
+« Supprimer » (la photo part dans la corbeille de Windows).
 
 Les photos sont lues en arrière-plan, en petit (un JPG est décodé directement à la bonne taille) : passer
 d'une paire à l'autre avec ↑ et ↓ reste immédiat."""
@@ -12,20 +13,21 @@ from datetime import datetime
 from pathlib import Path
 
 from PIL import Image, ImageOps
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 from shiboken6 import isValid
 
 from ....chemins import chemin_a_afficher
 from ... import taches
-from ...composants.elements import libelle, libelle_abrege
+from ...composants.elements import bouton, libelle, libelle_abrege
 from ...theme import Dimensions, Espacements
 from ..renommer.grille import qimage_depuis_pillow
 from ..renommer.image_en_grand import poids_lisible
 
 NOMS_DES_FORMATS = {"JPEG": "JPG", "PNG": "PNG", "WEBP": "WebP", "AVIF": "AVIF", "TIFF": "TIFF", "BMP": "BMP", "MPO": "JPG"}
 TEXTE_ILLISIBLE = "Aperçu impossible"
+AIDE_SUPPRIMER = "Mettre cette photo dans la corbeille de Windows (« Annuler », juste après, la remet à sa place)"
 
 
 @dataclass(frozen=True)
@@ -180,18 +182,34 @@ class PanneauPhoto(QWidget):
         self.distinction.hide()
 
 
+def bouton_supprimer(action) -> QWidget:
+    """« Supprimer », sous une photo (V4.5) : elle part dans la corbeille de Windows."""
+    resultat = bouton("Supprimer", variante="contour", nom_icone="trash", action=action)
+    resultat.setToolTip(AIDE_SUPPRIMER)
+    return resultat
+
+
 class DeuxPhotos(QWidget):
-    """Les deux photos de la paire, côte à côte, à la même hauteur."""
+    """Les deux photos de la paire, côte à côte, à la même hauteur ; sous chacune, « Supprimer » (V4.5),
+    sur la même ligne pour les deux (une grille : les textes d'une photo peuvent être plus hauts)."""
+
+    supprimer_demande = Signal(int)  # 0 : la photo de gauche (la première de la paire), 1 : celle de droite
 
     def __init__(self):
         super().__init__()
-        disposition = QHBoxLayout(self)
+        disposition = QGridLayout(self)
         disposition.setContentsMargins(0, 0, 0, 0)
-        disposition.setSpacing(Espacements.L)
+        disposition.setHorizontalSpacing(Espacements.L)
+        disposition.setVerticalSpacing(Espacements.M)
         self.premiere = PanneauPhoto()
         self.seconde = PanneauPhoto()
-        disposition.addWidget(self.premiere, 1)
-        disposition.addWidget(self.seconde, 1)
+        self.boutons_supprimer = []
+        for colonne, panneau in enumerate((self.premiere, self.seconde)):
+            disposition.addWidget(panneau, 0, colonne)
+            supprimer = bouton_supprimer(lambda laquelle=colonne: self.supprimer_demande.emit(laquelle))
+            disposition.addWidget(supprimer, 1, colonne, Qt.AlignmentFlag.AlignLeft)
+            disposition.setColumnStretch(colonne, 1)
+            self.boutons_supprimer.append(supprimer)
 
     def montrer(self, premiere: FichePhoto, seconde: FichePhoto) -> None:
         self.premiere.montrer(premiere, seconde)
