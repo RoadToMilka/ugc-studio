@@ -419,7 +419,7 @@ def test_un_disque_sans_corbeille_la_question_d_abord(app_configuree, qtbot, ser
     page = _page(qtbot, services)
     _analyser_le_premier_lot(qtbot, page, dossiers)
 
-    def sans_corbeille(_chemin):
+    def sans_corbeille(_chemin, _fenetre=None):
         raise corbeille.PasDeCorbeille()
 
     monkeypatch.setattr(corbeille, "mettre_a_la_corbeille", sans_corbeille)
@@ -510,9 +510,9 @@ def test_rien_ne_change_pendant_qu_une_photo_part(app_configuree, qtbot, service
     feu = threading.Event()
     vraie = corbeille.mettre_a_la_corbeille
 
-    def lente(chemin):
+    def lente(chemin, fenetre=None):
         feu.wait(10)
-        return vraie(chemin)
+        return vraie(chemin, fenetre)
 
     monkeypatch.setattr(corbeille, "mettre_a_la_corbeille", lente)
     assert page.supprimer(0) and page.decision_en_cours
@@ -522,3 +522,21 @@ def test_rien_ne_change_pendant_qu_une_photo_part(app_configuree, qtbot, service
     qtbot.waitUntil(lambda: not page.decision_en_cours, timeout=10_000)
     assert page.texte_decision.text() == "« a copie.jpg » mise à la corbeille." and page.bouton_annuler.isVisible()
     assert page.ajouter([dossiers[1]]) == 1  # ensuite, tout est permis
+
+
+def test_non_a_la_question_de_windows_garde_la_photo(app_configuree, qtbot, services, dossiers, monkeypatch):
+    """Si Windows demande lui-même « supprimer définitivement ? » (une photo plus grande que la corbeille)
+    et qu'on répond « Non », la photo est gardée, et la page le dit."""
+    from ugc_studio.doublons import corbeille
+
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+
+    def non(_chemin, _fenetre=None):
+        raise corbeille.Gardee()
+
+    monkeypatch.setattr(corbeille, "mettre_a_la_corbeille", non)
+    assert page.supprimer(0)
+    qtbot.waitUntil(lambda: not page.decision_en_cours, timeout=10_000)
+    assert page.texte_decision.text() == "« a copie.jpg » est gardée." and not page.bouton_annuler.isVisible()
+    assert (dossiers[0] / "a copie.jpg").exists() and len(page.paires()) == 2

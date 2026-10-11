@@ -6,6 +6,7 @@ import struct
 import sys
 import threading
 import time
+import warnings
 from pathlib import Path
 
 import pytest
@@ -124,6 +125,7 @@ def test_les_fiches_de_la_corbeille_de_windows(tmp_path):
 
 def test_les_raisons_en_francais():
     assert raison(corbeille._signe(0x8007_0020)) == "elle est ouverte dans un autre programme"
+    assert raison(corbeille._signe(0x8027_0027)) == "elle est ouverte dans un autre programme"  # relevé par la fabrication
     assert raison(0x8007_0005) == "Windows en refuse l'accès (photo protégée ?)"
     assert raison(corbeille._signe(0x8000_FFFF)) == "erreur de Windows 0x8000FFFF"
     assert corbeille.E_ABORT == -2147467260  # 0x80004004, tel que ctypes le rend à Windows
@@ -178,9 +180,17 @@ def test_jamais_supprimee_pour_de_bon_sans_question(tmp_path, monkeypatch):
     en_reseau = Path(rf"\\localhost\{lecteur[0]}$" + reste)
     if not en_reseau.exists():
         pytest.skip("le partage administratif du disque n'est pas joignable sur cette machine")
+    assert not corbeille.corbeille_possible(en_reseau)  # un dossier réseau : vu avant d'appeler Windows
     with pytest.raises(PasDeCorbeille):
         mettre_a_la_corbeille(en_reseau)
     assert photo.exists() and photo.read_bytes() == b"\xff\xd8 une photo \xff\xd9"
+    # Sans cette vérification, le suivi arrête Windows juste avant la suppression (ou Windows demande
+    # lui-même, et la réponse « Non » la garde) : jamais supprimée pour de bon sans question.
+    with _repondre_non_a_windows() as questions:
+        with pytest.raises((PasDeCorbeille, corbeille.Gardee, ErreurDeCorbeille)) as arret:
+            corbeille._jeter_avec_windows(en_reseau)
+    assert photo.exists()
+    warnings.warn(f"Dossier réseau, sans la vérification de l'app : {type(arret.value).__name__}, questions de Windows : {questions}", stacklevel=1)
 
 
 @sous_windows
@@ -207,6 +217,64 @@ def test_une_photo_tenue_par_un_autre_programme(tmp_path, monkeypatch):
             mettre_a_la_corbeille(photo)
     assert photo.exists()
     assert str(erreur.value) == "elle est ouverte dans un autre programme"
+
+
+def _repondre_non_a_windows():
+    """Pendant le bloc, répond « Non » à toute question que Windows poserait dans une fenêtre de ce
+    programme (« Voulez-vous supprimer définitivement ce fichier ? ») ; la liste des questions vues (leur
+    titre) est rendue, pour le rapport."""
+    import contextlib
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32")
+    rappel_t = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumWindows.argtypes = [rappel_t, wintypes.LPARAM]
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+    WM_COMMAND, IDNO = 0x0111, 7
+    questions: list[str] = []
+    fin = threading.Event()
+
+    def guetter() -> None:
+        repondues: set[int] = set()
+        while not fin.is_set():
+            trouvees = []
+
+            def rappel(hwnd, _parametre):
+                processus = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(processus))
+                if processus.value == os.getpid() and user32.IsWindowVisible(hwnd):
+                    classe = ctypes.create_unicode_buffer(64)
+                    user32.GetClassNameW(hwnd, classe, 64)
+                    if classe.value == "#32770":
+                        trouvees.append(hwnd)
+                return True
+
+            user32.EnumWindows(rappel_t(rappel), 0)
+            for hwnd in trouvees:
+                if hwnd not in repondues:
+                    titre = ctypes.create_unicode_buffer(256)
+                    user32.GetWindowTextW(hwnd, titre, 256)
+                    questions.append(titre.value)
+                    repondues.add(hwnd)
+                user32.PostMessageW(hwnd, WM_COMMAND, IDNO, 0)
+            fin.wait(0.1)
+
+    @contextlib.contextmanager
+    def bloc():
+        fil = threading.Thread(target=guetter, daemon=True)
+        fil.start()
+        try:
+            yield questions
+        finally:
+            fin.set()
+            fil.join(5)
+
+    return bloc()
 
 
 def _reglage_de_la_corbeille(chemin: Path, nom: str, valeur: int):
@@ -246,23 +314,35 @@ def _reglage_de_la_corbeille(chemin: Path, nom: str, valeur: int):
 @pytest.mark.parametrize(("nom", "valeur", "octets"), [("NukeOnDelete", 1, 4096), ("MaxCapacity", 1, 3 * 1024 * 1024)])
 def test_jamais_supprimee_pour_de_bon_quand_la_corbeille_la_refuse(tmp_path, monkeypatch, nom, valeur, octets):
     """La corbeille réglée pour tout supprimer (NukeOnDelete), ou une photo plus grande que la corbeille
-    (MaxCapacity, en Mo) : Windows la supprimerait pour de bon. Ce qui ne doit jamais arriver : la photo
-    partie sans être dans la corbeille. Soit l'app arrête tout (PasDeCorbeille), soit (si Windows ne relit
-    pas tout de suite ce réglage) la photo est bien dans la corbeille."""
+    (MaxCapacity, en Mo) : Windows la supprimerait pour de bon. L'app le voit avant de l'appeler (ses
+    réglages) : PasDeCorbeille, rien n'est supprimé. Puis, sans cette vérification : le suivi arrête
+    Windows, ou Windows demande lui-même (FOF_WANTNUKEWARNING), et la réponse « Non » garde la photo ;
+    sans FOF_WANTNUKEWARNING, la fabrication a vu Windows supprimer pour de bon une photo trop grande.
+    Ce qui ne doit jamais arriver : la photo partie sans être dans la corbeille."""
     monkeypatch.delenv(corbeille.VARIABLE_FAUSSE_CORBEILLE)
     reglage = _reglage_de_la_corbeille(tmp_path, nom, valeur)
     if reglage is None:
         pytest.skip("ce disque n'a pas d'identifiant de volume")
     photo = _photo(tmp_path / nom, octets=os.urandom(octets))
     with reglage:
-        try:
-            jetee = mettre_a_la_corbeille(photo)
-        except PasDeCorbeille:
-            assert photo.exists()  # rien n'a été supprimé : la question d'abord
-            return
-    assert jetee.recyclee and jetee.dans_la_corbeille is not None and jetee.dans_la_corbeille.exists()
-    ressortir(jetee)
-    pytest.skip(f"{nom} : Windows a encore pris la photo dans la corbeille (réglage pas relu) ; rien de perdu")
+        assert not corbeille.corbeille_possible(photo)
+        with pytest.raises(PasDeCorbeille):
+            mettre_a_la_corbeille(photo)
+        assert photo.exists()
+        with _repondre_non_a_windows() as questions:
+            try:
+                jetee = corbeille._jeter_avec_windows(photo)
+            except (PasDeCorbeille, corbeille.Gardee, ErreurDeCorbeille) as arret:
+                issue = f"{type(arret).__name__} {arret}"
+                jetee = None
+    if jetee is None:
+        assert photo.exists()  # rien n'a été supprimé
+    else:
+        # Windows a pris la photo dans la corbeille (son réglage pas encore relu) : rien de perdu.
+        issue = "dans la corbeille"
+        assert jetee.recyclee and jetee.dans_la_corbeille is not None and jetee.dans_la_corbeille.exists(), jetee
+        ressortir(jetee)
+    warnings.warn(f"{nom}, sans la vérification de l'app : {issue}, questions de Windows : {questions}", stacklevel=1)
 
 
 def test_la_meme_place_ecrite_autrement(tmp_path):
@@ -301,3 +381,30 @@ def test_annuler_avec_le_nom_court_d_un_dossier(tmp_path, monkeypatch):
     assert corbeille.chercher_dans_la_corbeille(courte, depuis) == jetee.dans_la_corbeille
     ressortir(jetee)
     assert photo.exists()
+
+
+class _SuiviFactice:
+    def __init__(self, supprimee=False, recyclee=False, dans_la_corbeille=None, code_de_suppression=None, vers_la_corbeille=True):
+        self.refusee = False
+        self.supprimee, self.recyclee, self.dans_la_corbeille = supprimee, recyclee, dans_la_corbeille
+        self.code_de_suppression, self.vers_la_corbeille = code_de_suppression, vers_la_corbeille
+
+
+def test_ce_qui_s_est_passe_d_apres_le_disque(tmp_path):
+    """Ce que l'opération de Windows a fait se lit d'abord sur le disque : la photo est-elle encore là ?"""
+    photo = _photo(tmp_path)
+    passe = corbeille._ce_qui_s_est_passe
+    # Encore là : « Non » à la question de Windows (trois façons de le dire), ou une erreur.
+    for code in (0x8027_0000, 0x8007_04C7, 0x0027_0005):
+        with pytest.raises(corbeille.Gardee):
+            passe(photo, _SuiviFactice(code_de_suppression=corbeille._signe(code)), 0, 0)
+    with pytest.raises(ErreurDeCorbeille, match="ouverte dans un autre programme"):
+        passe(photo, _SuiviFactice(code_de_suppression=corbeille._signe(0x8027_0027)), 0, 0)
+    with pytest.raises(ErreurDeCorbeille, match="ne l'a pas déplacée"):
+        passe(photo, _SuiviFactice(), 0, 0)
+    # Partie : dans la corbeille (où Windows l'a dit), supprimée sur « Oui » à sa question, ou annoncée.
+    dedans = tmp_path / "$RABCDEF.jpg"
+    photo.rename(dedans)
+    assert passe(photo, _SuiviFactice(supprimee=True, recyclee=True, dans_la_corbeille=str(dedans)), 0, 0) == Jetee(photo, True, dedans)
+    assert passe(photo, _SuiviFactice(supprimee=True, recyclee=False), 0, 0) == Jetee(photo, False)
+    assert passe(photo, _SuiviFactice(), 0, 0) == Jetee(photo, True, None)

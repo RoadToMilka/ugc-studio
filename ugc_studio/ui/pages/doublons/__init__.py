@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QSize, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QGuiApplication, QPixmap
 from PySide6.QtWidgets import QBoxLayout, QFileDialog, QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
 from shiboken6 import isValid
 
@@ -1063,9 +1063,13 @@ class PageDoublons(Page):
             return False
         rang = self.rang_choisi()
         resultat = self._resultat
+        # La fenêtre de l'app (ou « Agrandir ») : si Windows devait demander « supprimer définitivement ? »
+        # (une photo plus grande que la corbeille), sa question s'afficherait au-dessus d'elle.
+        proprietaire = (self._fenetre_en_grand or self).window()
+        fenetre = int(proprietaire.winId()) if QGuiApplication.platformName() == "windows" else None
         self._decider(True)
         taches.lancer(
-            lambda: corbeille.mettre_a_la_corbeille(photo.chemin),
+            lambda: corbeille.mettre_a_la_corbeille(photo.chemin, fenetre),
             lambda jetee: self._mise_a_la_corbeille(resultat, numero, (paire.a, paire.b), rang, jetee),
             lambda erreur: self._mise_a_la_corbeille_impossible(resultat, numero, (paire.a, paire.b), rang, erreur),
         )
@@ -1113,6 +1117,9 @@ class PageDoublons(Page):
                 lambda jetee: self._mise_a_la_corbeille(resultat, numero, paire, rang, jetee),
                 lambda autre: self._mise_a_la_corbeille_impossible(resultat, numero, paire, rang, autre),
             )
+            return
+        if isinstance(erreur, corbeille.Gardee):  # « Non » à la question de Windows
+            self._dire_la_decision(f"« {photo.chemin.name} » est gardée.", "secondaire")
             return
         raison = str(erreur) if isinstance(erreur, corbeille.ErreurDeCorbeille) else (getattr(erreur, "strerror", None) or str(erreur))
         self._dire_la_decision(f"Impossible de supprimer « {photo.chemin.name} » : {raison}.", "erreur")

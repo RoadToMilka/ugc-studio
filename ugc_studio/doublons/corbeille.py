@@ -4,12 +4,17 @@ la corbeille, et l'en ressortir (« Annuler »).
 **Mettre à la corbeille** : avec la fonction de Windows faite pour ça, IFileOperation (celle que
 Microsoft conseille depuis Windows Vista), appelée directement (ctypes), sans bibliothèque en plus.
 
-**Jamais de suppression définitive sans question** : juste avant de supprimer, Windows dit à l'app si
-la photo ira dans la corbeille (PreDeleteItem, appelé sur le « suivi » que l'app lui donne). Si non (une
-clé USB ou un dossier réseau n'ont pas de corbeille ; ou elle est réglée pour tout supprimer), l'app
-arrête tout : rien n'est supprimé, et la page pose la question (PasDeCorbeille). C'est la vérification
-que fait aussi Electron (le moteur de Visual Studio Code, de Slack…) pour mettre un fichier à la
-corbeille.
+**Jamais de suppression définitive sans question**, en trois temps :
+1. avant d'appeler Windows, l'app regarde le disque et les réglages de sa corbeille : un dossier réseau,
+   une clé USB (pas de corbeille), une corbeille réglée pour tout supprimer, ou une photo plus grande que
+   la corbeille : rien n'est fait, la page pose la question (PasDeCorbeille) ;
+2. juste avant de supprimer, Windows dit à l'app si la photo ira dans la corbeille (PreDeleteItem, appelé
+   sur le « suivi » que l'app lui donne) ; si non, l'app arrête tout : rien n'est supprimé, et la page pose
+   la question. C'est la vérification que fait aussi Electron (le moteur de Visual Studio Code, de
+   Slack…) ;
+3. si Windows découvre plus tard qu'il ne peut pas la mettre dans la corbeille (une photo trop grande,
+   relevé par la fabrication : il passait alors outre, sans question), c'est lui qui demande
+   (FOF_WANTNUKEWARNING) ; « Non » garde la photo (Gardee).
 
 **Ressortir** : Windows dit aussi où il a mis la photo (PostDeleteItem) : un fichier « $R… » dans le
 dossier $Recycle.Bin du même disque ; à côté, un petit fichier « $I… » note d'où elle vient. L'app
@@ -67,6 +72,11 @@ class DejaRevenue(ImpossibleDeRessortir):
     """La photo est déjà revenue à sa place (remise depuis la corbeille de Windows, par exemple)."""
 
 
+class Gardee(Exception):
+    """Windows a demandé s'il fallait supprimer la photo définitivement, et la réponse a été « Non » : la
+    photo n'a pas bougé."""
+
+
 @dataclass(frozen=True)
 class Jetee:
     """Une photo mise à la corbeille (ou supprimée définitivement) : son chemin, et ce que Windows en a fait.
@@ -82,14 +92,18 @@ class Jetee:
 # --- Mettre à la corbeille, supprimer --------------------------------------------------------------------
 
 
-def mettre_a_la_corbeille(chemin: Path) -> Jetee:
-    """Met la photo dans la corbeille. Lance PasDeCorbeille (rien n'est supprimé) si Windows ne peut pas
-    l'y mettre, ErreurDeCorbeille si elle n'a pas pu être déplacée."""
+def mettre_a_la_corbeille(chemin: Path, fenetre: int | None = None) -> Jetee:
+    """Met la photo dans la corbeille. Lance PasDeCorbeille (rien n'est supprimé) si elle ne peut pas y
+    aller, Gardee si Windows a demandé s'il fallait la supprimer définitivement et que la réponse a été
+    « Non », ErreurDeCorbeille si elle n'a pas pu être déplacée. `fenetre` : la fenêtre de l'app (son
+    identifiant Windows), au-dessus de laquelle Windows poserait sa question."""
     chemin = Path(os.path.abspath(chemin))
     fausse = _fausse_corbeille()
     if fausse is not None:
         return Jetee(chemin, True, _jeter_dans_la_fausse(chemin, fausse))
-    return _jeter_avec_windows(chemin)
+    if not corbeille_possible(chemin):
+        raise PasDeCorbeille()
+    return _jeter_avec_windows(chemin, fenetre)
 
 
 def supprimer_definitivement(chemin: Path) -> Jetee:
@@ -98,6 +112,56 @@ def supprimer_definitivement(chemin: Path) -> Jetee:
     chemin = Path(os.path.abspath(chemin))
     chemin.unlink()
     return Jetee(chemin, False)
+
+
+# Types de disques (GetDriveTypeW) : une clé USB (amovible), un dossier réseau, un disque en mémoire n'ont
+# pas de corbeille : Windows y supprime pour de bon.
+DISQUE_AMOVIBLE, DISQUE_RESEAU, DISQUE_EN_MEMOIRE = 2, 4, 6
+CLE_DES_REGLAGES = r"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume"
+CLE_DES_REGLES = r"Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"  # imposées par un administrateur
+
+
+def corbeille_possible(chemin: Path) -> bool:
+    """Faux si Windows supprimerait la photo pour de bon : un disque sans corbeille (dossier réseau, clé
+    USB, disque en mémoire), une corbeille réglée pour tout supprimer (« Ne pas déplacer les fichiers vers
+    la Corbeille »), ou une photo plus grande que la corbeille. Vrai sinon, ou si on ne sait pas : Windows
+    le dira lui-même (le suivi, puis sa propre question). Windows seulement."""
+    if sys.platform != "win32":
+        return True
+    import ctypes
+    import winreg
+
+    racine = os.path.splitdrive(str(chemin))[0] + "\\"
+    noyau = ctypes.WinDLL("kernel32")
+    noyau.GetDriveTypeW.argtypes = [ctypes.c_wchar_p]
+    noyau.GetDriveTypeW.restype = ctypes.c_uint
+    if noyau.GetDriveTypeW(racine) in (DISQUE_AMOVIBLE, DISQUE_RESEAU, DISQUE_EN_MEMOIRE):
+        return False
+
+    def lire(cle: str, nom: str, base=winreg.HKEY_CURRENT_USER) -> int | None:
+        try:
+            with winreg.OpenKey(base, cle) as ouverte:
+                valeur, _genre = winreg.QueryValueEx(ouverte, nom)
+                return int(valeur)
+        except (OSError, ValueError, TypeError):
+            return None
+
+    if any(lire(CLE_DES_REGLES, "NoRecycleFiles", base) == 1 for base in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE)):
+        return False
+    noyau.GetVolumeNameForVolumeMountPointW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint]
+    noyau.GetVolumeNameForVolumeMountPointW.restype = ctypes.c_int
+    tampon = ctypes.create_unicode_buffer(64)
+    if not noyau.GetVolumeNameForVolumeMountPointW(racine, tampon, len(tampon)) or "{" not in tampon.value:
+        return True
+    volume = tampon.value[tampon.value.index("{") : tampon.value.index("}") + 1]
+    if lire(rf"{CLE_DES_REGLAGES}\{volume}", "NukeOnDelete") == 1:
+        return False
+    maximum_mo = lire(rf"{CLE_DES_REGLAGES}\{volume}", "MaxCapacity")
+    try:
+        taille = chemin.stat().st_size
+    except OSError:
+        return True
+    return maximum_mo is None or taille <= maximum_mo * 1024 * 1024
 
 
 def emplacement_de_la_corbeille() -> str:
@@ -276,19 +340,26 @@ RELEASE = 2
 IFILE_OPERATION_ADVISE = 3
 IFILE_OPERATION_UNADVISE = 4
 IFILE_OPERATION_SET_OPERATION_FLAGS = 5
+IFILE_OPERATION_SET_OWNER_WINDOW = 9
 IFILE_OPERATION_DELETE_ITEM = 18
 IFILE_OPERATION_PERFORM_OPERATIONS = 21
 ISHELL_ITEM_GET_DISPLAY_NAME = 5
 
 # Réglages de l'opération (IFileOperation::SetOperationFlags) : à la corbeille (FOFX_RECYCLEONDELETE,
-# et FOF_ALLOWUNDO, qui garde aussi l'annulation de l'Explorateur), sans question (on peut l'en
-# ressortir), sans fenêtre d'avancement ni d'erreur de Windows (la page dit ce qui se passe).
+# et FOF_ALLOWUNDO, qui garde aussi l'annulation de l'Explorateur), sans question pour la corbeille (on
+# peut l'en ressortir), sans fenêtre d'avancement ni d'erreur de Windows (la page dit ce qui se passe) ;
+# mais avec sa question avant une suppression définitive (FOF_WANTNUKEWARNING, qui passe avant
+# FOF_NOCONFIRMATION : sans lui, « Oui à tout » répondait aussi « Oui » à « supprimer définitivement ? »,
+# relevé par la fabrication avec une photo plus grande que la corbeille).
 FOF_SILENT = 0x0004
 FOF_NOCONFIRMATION = 0x0010
 FOF_ALLOWUNDO = 0x0040
 FOF_NOERRORUI = 0x0400
+FOF_WANTNUKEWARNING = 0x4000
 FOFX_RECYCLEONDELETE = 0x0008_0000
-REGLAGES_DE_L_OPERATION = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOFX_RECYCLEONDELETE
+REGLAGES_DE_L_OPERATION = (
+    FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING | FOFX_RECYCLEONDELETE
+)
 # PreDeleteItem : présent si Windows va mettre la photo dans la corbeille, absent s'il va la supprimer
 # pour de bon (TRANSFER_SOURCE_FLAGS).
 TSF_DELETE_RECYCLE_IF_POSSIBLE = 0x80
@@ -319,10 +390,17 @@ E_POINTER = _signe(0x8000_4003)
 RAISONS = {
     0x8007_0020: "elle est ouverte dans un autre programme",  # ERROR_SHARING_VIOLATION
     0x8007_0021: "elle est ouverte dans un autre programme",  # ERROR_LOCK_VIOLATION
+    0x8027_0027: "elle est ouverte dans un autre programme",  # COPYENGINE_E_SHARING_VIOLATION_SRC (relevé par la fabrication)
     0x8007_0005: "Windows en refuse l'accès (photo protégée ?)",  # E_ACCESSDENIED
+    0x8027_0021: "Windows en refuse l'accès (photo protégée ?)",  # COPYENGINE_E_ACCESS_DENIED_SRC
     0x8007_0002: "elle n'existe plus à cet endroit",  # ERROR_FILE_NOT_FOUND
     0x8007_0003: "son dossier n'existe plus",  # ERROR_PATH_NOT_FOUND
+    0x8027_0023: "elle n'existe plus à cet endroit",  # COPYENGINE_E_PATH_NOT_FOUND_SRC
+    0x8027_0025: "son dossier réseau ne répond plus",  # COPYENGINE_E_NET_DISCONNECT_SRC
 }
+# « Non » à la question de Windows (supprimer définitivement ?) : COPYENGINE_E_USER_CANCELLED,
+# ERROR_CANCELLED, et COPYENGINE_S_USER_IGNORED (un code de réussite : « l'utilisateur a répondu Non »).
+REPONSES_NON = {0x8027_0000, 0x8007_04C7, 0x0027_0005}
 
 
 def raison(code: int) -> str:
@@ -331,13 +409,13 @@ def raison(code: int) -> str:
     return RAISONS.get(code, f"erreur de Windows 0x{code:08X}")
 
 
-def _jeter_avec_windows(chemin: Path) -> Jetee:
+def _jeter_avec_windows(chemin: Path, fenetre: int | None = None) -> Jetee:
     """Met la photo à la corbeille ; si Windows ne peut pas la déplacer à ce moment-là (lue par un autre
-    programme), réessaie un peu plus tard (ESSAIS_POUR_JETER fois en tout). PasDeCorbeille n'est jamais
-    réessayée : la question d'abord."""
+    programme), réessaie un peu plus tard (ESSAIS_POUR_JETER fois en tout). PasDeCorbeille et Gardee ne
+    sont jamais réessayées : la question d'abord, et la réponse « Non » est respectée."""
     for essai in range(ESSAIS_POUR_JETER):
         try:
-            return _jeter_avec_windows_une_fois(chemin)
+            return _jeter_avec_windows_une_fois(chemin, fenetre)
         except ErreurDeCorbeille:
             if essai == ESSAIS_POUR_JETER - 1 or not chemin.exists():
                 raise
@@ -345,14 +423,14 @@ def _jeter_avec_windows(chemin: Path) -> Jetee:
     raise ErreurDeCorbeille("Windows ne l'a pas déplacée")  # jamais atteint
 
 
-def _jeter_avec_windows_une_fois(chemin: Path) -> Jetee:
+def _jeter_avec_windows_une_fois(chemin: Path, fenetre: int | None) -> Jetee:
     """IFileOperation ne marche que dans un fil de travail « à appartement unique » (STA) : l'opération
     se fait dans un fil à elle, quel que soit celui qui la demande."""
     issue: dict[str, object] = {}
 
     def travail() -> None:
         try:
-            issue["jetee"] = _operation_windows(chemin)
+            issue["jetee"] = _operation_windows(chemin, fenetre)
         except BaseException as erreur:  # noqa: BLE001 : rendue telle quelle à l'appelant
             issue["erreur"] = erreur
 
@@ -364,7 +442,7 @@ def _jeter_avec_windows_une_fois(chemin: Path) -> Jetee:
     return issue["jetee"]  # type: ignore[return-value]
 
 
-def _operation_windows(chemin: Path) -> Jetee:  # Windows seulement (ses tests tournent sur GitHub)
+def _operation_windows(chemin: Path, fenetre: int | None = None) -> Jetee:  # Windows seulement (ses tests tournent sur GitHub)
     import ctypes
     from ctypes import wintypes
 
@@ -425,6 +503,9 @@ def _operation_windows(chemin: Path) -> Jetee:  # Windows seulement (ses tests t
                     code = appeler(operation, IFILE_OPERATION_SET_OPERATION_FLAGS, REGLAGES_DE_L_OPERATION, types=(wintypes.DWORD,))
                     if code < 0:
                         raise ErreurDeCorbeille(raison(code))
+                    if fenetre:
+                        # Sa question éventuelle (supprimer définitivement ?) au-dessus de la fenêtre de l'app.
+                        appeler(operation, IFILE_OPERATION_SET_OWNER_WINDOW, ctypes.c_void_p(fenetre), types=(ctypes.c_void_p,))
                     code = appeler(operation, IFILE_OPERATION_DELETE_ITEM, element, None, types=(ctypes.c_void_p, ctypes.c_void_p))
                     if code < 0:
                         raise ErreurDeCorbeille(raison(code))
@@ -440,23 +521,30 @@ def _operation_windows(chemin: Path) -> Jetee:  # Windows seulement (ses tests t
 
     if suivi.refusee:
         raise PasDeCorbeille()
+    return _ce_qui_s_est_passe(chemin, suivi, code_des_operations, depuis)
+
+
+def _ce_qui_s_est_passe(chemin: Path, suivi, code_des_operations: int, depuis: float) -> Jetee:
+    """Ce que l'opération a fait, d'après le disque (la photo est-elle encore là ?) et ce que Windows a
+    dit (le suivi, le code de l'opération)."""
+    codes = [code for code in (suivi.code_de_suppression, code_des_operations) if code is not None]
+    if chemin.exists():  # rien n'a bougé
+        if any(code & 0xFFFF_FFFF in REPONSES_NON for code in codes):
+            raise Gardee()
+        erreur = next((code for code in codes if code < 0), None)
+        raise ErreurDeCorbeille(raison(erreur) if erreur is not None else "Windows ne l'a pas déplacée")
+    dedans = Path(suivi.dans_la_corbeille) if suivi.dans_la_corbeille else None
+    if dedans is None or not dedans.exists():
+        dedans = chercher_dans_la_corbeille(chemin, depuis)
+    if dedans is not None or suivi.recyclee:
+        return Jetee(chemin, True, dedans)
     if suivi.supprimee:
-        dedans = Path(suivi.dans_la_corbeille) if suivi.dans_la_corbeille else None
-        if dedans is None or not dedans.exists():
-            dedans = chercher_dans_la_corbeille(chemin, depuis)
-        # Pas dans la corbeille d'après Windows (ne devrait pas arriver : il avait annoncé la corbeille) :
-        # dite supprimée définitivement, sauf si on l'y retrouve.
-        return Jetee(chemin, suivi.recyclee or dedans is not None, dedans)
-    if suivi.code_de_suppression is not None and suivi.code_de_suppression < 0:
-        raise ErreurDeCorbeille(raison(suivi.code_de_suppression))
-    if code_des_operations < 0:
-        raise ErreurDeCorbeille(raison(code_des_operations))
-    # Windows n'a rien dit après la suppression : on regarde ce qu'il en est. Il l'avait annoncée dans
-    # la corbeille (sinon le suivi aurait tout arrêté) : elle y est, même si on ne la retrouve pas.
-    if chemin.exists():
-        raise ErreurDeCorbeille("Windows ne l'a pas déplacée")
-    dedans = chercher_dans_la_corbeille(chemin, depuis)
-    return Jetee(chemin, suivi.vers_la_corbeille or dedans is not None, dedans)
+        # Windows dit l'avoir supprimée sans la mettre dans la corbeille : c'est qu'on a répondu « Oui » à
+        # sa question (supprimer définitivement ?).
+        return Jetee(chemin, False)
+    # Windows n'a rien dit après la suppression ; il l'avait annoncée dans la corbeille (sinon le suivi
+    # aurait tout arrêté) : elle y est, même si on ne la retrouve pas.
+    return Jetee(chemin, suivi.vers_la_corbeille, None)
 
 
 class _Suivi:  # Windows seulement (ses tests tournent sur GitHub)
