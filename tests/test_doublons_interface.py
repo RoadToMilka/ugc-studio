@@ -463,3 +463,62 @@ def test_decider_dans_la_fenetre_en_grand(app_configuree, qtbot, services, dossi
     assert fenetre.texte_decision.text() == "« a.jpg » mise à la corbeille." and fenetre.bouton_annuler.isVisible()
     assert fenetre.titre.text() == "Paire 1 sur 1"
     fenetre.close()
+
+
+def test_la_fenetre_en_grand_suit_la_page_et_reste_suivie(app_configuree, qtbot, services, dossiers):
+    """Relecture indépendante de la 4.5.0 : la fenêtre « Agrandir » montre toujours la paire choisie dans
+    la page (ce qu'on y supprime est ce qu'on y voit), et une fenêtre rouverte reste suivie."""
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+    premiere = page.agrandir(0)
+    seconde = page.agrandir(1)  # la première se ferme ; elle n'est détruite qu'ensuite
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    assert premiere is not seconde and page._fenetre_en_grand is seconde
+    page.choisir(0)  # ↑ dans le tableau, la fenêtre ouverte
+    assert seconde.rang == 0 and seconde.description.text().startswith("100 % · Identiques")
+    seconde.boutons_supprimer[1].click()  # la photo de droite de la paire montrée : a.jpg
+    qtbot.waitUntil(lambda: not page.decision_en_cours, timeout=10_000)
+    assert not (dossiers[0] / "a.jpg").exists() and (dossiers[0] / "a petite.jpg").exists()
+    assert seconde.texte_decision.text() == "« a.jpg » mise à la corbeille." and seconde.titre.text() == "Paire 1 sur 1"
+    seconde.close()
+
+
+def test_la_touche_i_gardee_enfoncee_n_ignore_qu_une_paire(app_configuree, qtbot, services, dossiers):
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QApplication
+
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+    page.tableau.setFocus()
+    for repetee in (False, True, True, True):
+        QApplication.sendEvent(page.tableau, QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_I, Qt.KeyboardModifier.NoModifier, "i", repetee))
+    assert len(page.paires()) == 1
+
+
+def test_rien_ne_change_pendant_qu_une_photo_part(app_configuree, qtbot, services, dossiers, monkeypatch):
+    """Relecture indépendante de la 4.5.0 : pendant qu'une photo part dans la corbeille, ni dossier
+    ajouté (même glissé sur la page) ni nouvelle analyse : la décision arrive toujours à son résultat."""
+    import threading
+
+    from ugc_studio.doublons import corbeille
+
+    page = _page(qtbot, services)
+    _analyser_le_premier_lot(qtbot, page, dossiers)
+    feu = threading.Event()
+    vraie = corbeille.mettre_a_la_corbeille
+
+    def lente(chemin):
+        feu.wait(10)
+        return vraie(chemin)
+
+    monkeypatch.setattr(corbeille, "mettre_a_la_corbeille", lente)
+    assert page.supprimer(0) and page.decision_en_cours
+    assert page.ajouter([dossiers[1]]) == 0 and not page.analyser()
+    assert not page.bouton_analyser.isEnabled() and not page.bouton_ignorer.isEnabled()
+    feu.set()
+    qtbot.waitUntil(lambda: not page.decision_en_cours, timeout=10_000)
+    assert page.texte_decision.text() == "« a copie.jpg » mise à la corbeille." and page.bouton_annuler.isVisible()
+    assert page.ajouter([dossiers[1]]) == 1  # ensuite, tout est permis

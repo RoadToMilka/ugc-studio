@@ -220,7 +220,8 @@ class FenetrePaireEnGrand(QDialog):
         elif touche == Qt.Key.Key_I and not evenement.modifiers() & (
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier
         ):
-            self.ignorer_demande.emit()
+            if not evenement.isAutoRepeat():  # gardée enfoncée : une seule paire ignorée
+                self.ignorer_demande.emit()
         elif touche == Qt.Key.Key_Up:
             self.aller(self._rang - 1)
         elif touche == Qt.Key.Key_Down:

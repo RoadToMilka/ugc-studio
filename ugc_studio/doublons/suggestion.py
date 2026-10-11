@@ -8,8 +8,10 @@ L'ordre des raisons, pour la même photo en deux versions :
 1. une partie de la photo (recadrée, zoomée) : garder la photo entière ;
 2. des bords unis ajoutés sur l'une : garder celle sans bords (la photo d'origine) ;
 3. la plus grande (plus de pixels) ;
-4. à taille égale : celle dans un format sans perte (PNG, TIFF, BMP), sinon, dans le même format, la
-   moins compressée (le fichier le plus lourd) ;
+4. à taille égale et dans le même format : la moins compressée (le fichier le plus lourd). Deux formats
+   différents ne se comparent pas ainsi : un PNG fait d'après un JPG est plus lourd sans être meilleur
+   (relu sur les captures de la fabrication : « format sans perte, PNG » était proposé pour une copie
+   retournée en PNG, sans raison de la préférer) ;
 5. celle dont le nom n'est pas celui d'une copie (« - Copie », « (1) », « Copie de »…).
 Quand leurs couleurs diffèrent, la suggestion le rappelle : on peut préférer les couleurs de l'autre.
 """
@@ -22,7 +24,6 @@ from pathlib import PurePath
 
 from .choix import IDENTIQUES, MEME_PHOTO
 
-SANS_PERTE = {"PNG": "PNG", "TIFF": "TIFF", "BMP": "BMP"}  # formats de Pillow → noms montrés
 ECART_DE_TAILLE = 0.02  # au moins 2 % de pixels en plus : « plus grande »
 ECART_DE_POIDS = 0.05  # même taille, même format, au moins 5 % d'octets en plus : « moins compressée »
 
@@ -91,11 +92,7 @@ def suggerer(
         return Suggestion(1 - bords_sur, "sans les bords ajoutés", autres_couleurs)
     if max(pixels) > min(pixels) * (1 + ECART_DE_TAILLE):
         return Suggestion(0 if pixels[0] > pixels[1] else 1, "plus grande", autres_couleurs)
-    sans_perte = (formats[0] in SANS_PERTE, formats[1] in SANS_PERTE)
-    if sans_perte[0] != sans_perte[1]:
-        garder = 0 if sans_perte[0] else 1
-        return Suggestion(garder, f"format sans perte, {SANS_PERTE[formats[garder]]}", autres_couleurs)
-    if formats[0] == formats[1] and not sans_perte[0] and max(octets) > min(octets) * (1 + ECART_DE_POIDS):
+    if formats[0] == formats[1] and max(octets) > min(octets) * (1 + ECART_DE_POIDS):
         return Suggestion(0 if octets[0] > octets[1] else 1, "moins compressée", autres_couleurs)
     originale = _celle_qui_n_est_pas_une_copie(noms)
     if originale is not None:

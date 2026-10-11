@@ -250,17 +250,29 @@ class Resultat:
             self._etendus = etendus
         return self._etendus
 
-    def _une_par_couple(self, paires: list[Paire], groupe: list[int]) -> list[Paire]:
-        """Une seule paire par couple de groupes : la plus proche (à égalité, les premières photos). Un
-        couple dont une paire est ignorée n'en montre aucune : ce sont les mêmes photos."""
-        def couple(a: int, b: int) -> tuple[int, int]:
-            return min(groupe[a], groupe[b]), max(groupe[a], groupe[b])
+    def _ignorees_par_couple(self, liens: set[tuple[int, int]]) -> tuple[list[int], set[tuple[int, int]]]:
+        """Les groupes formés par ces liens, photos mises à la corbeille comprises, et les couples de
+        groupes dont une paire est ignorée. Avec les photos mises à la corbeille : une paire ignorée, puis
+        l'une de ses photos mise à la corbeille, ne revient pas par une copie de cette photo (relecture
+        indépendante de la 4.5.0)."""
+        complets = self._groupes(liens, sans=set())
+        return complets, {(min(complets[a], complets[b]), max(complets[a], complets[b])) for a, b in self.ignorees}
 
-        vus = {couple(a, b) for a, b in self.ignorees}
+    def _une_par_couple(self, paires: list[Paire], liens: set[tuple[int, int]]) -> list[Paire]:
+        """Une seule paire par couple de groupes (formés par ces liens, sans les photos mises à la
+        corbeille) : la plus proche (à égalité, les premières photos). Aucune pour un couple dont une paire
+        est ignorée : ce sont les mêmes photos."""
+        groupe = self._groupes(liens)
+        complets, ignores = self._ignorees_par_couple(liens)
+        vus: set[tuple[int, int]] = set()
         gardees = []
         for paire in sorted(paires, key=lambda p: p.cle_de_tri):
-            if couple(paire.a, paire.b) not in vus:
-                vus.add(couple(paire.a, paire.b))
+            a, b = paire.a, paire.b
+            if (min(complets[a], complets[b]), max(complets[a], complets[b])) in ignores:
+                continue
+            couple = (min(groupe[a], groupe[b]), max(groupe[a], groupe[b]))
+            if couple not in vus:
+                vus.add(couple)
                 gardees.append(paire)
         return gardees
 
@@ -293,7 +305,7 @@ class Resultat:
             for (a, b), preuve in self.preuves.items()
             if (a, b) not in connues and permises[a, b]
         ]
-        prouvees += self._une_par_couple(entieres, self._groupes(identiques))
+        prouvees += self._une_par_couple(entieres, identiques)
         connues |= set(self.preuves)
         etendus = self.recadrages_etendus() if methode in (COPIES_IA, AVEC_IA) else {}
         recadrees = [
@@ -301,7 +313,7 @@ class Resultat:
             for (a, b), preuve in etendus.items()
             if (a, b) not in connues and permises[a, b]
         ]
-        prouvees += self._une_par_couple(recadrees, self._groupes(identiques | set(self.preuves)))
+        prouvees += self._une_par_couple(recadrees, identiques | set(self.preuves))
         if methode != AVEC_IA or self.empreintes is None or len(self.photos) < 2:
             return ToutesLesPaires(prouvees)
         connues |= set(etendus)
@@ -313,17 +325,26 @@ class Resultat:
         # Une seule paire par couple de groupes de copies : la plus proche (à égalité, les premières
         # photos), et aucune à l'intérieur d'un groupe (ses photos sont déjà montrées comme copies), ni
         # pour un couple dont une paire est ignorée.
-        groupe = self._groupes(identiques | set(self.preuves) | set(etendus))
+        liens = identiques | set(self.preuves) | set(etendus)
+        groupe = self._groupes(liens)
         groupes = np.asarray(groupe)
         g_a, g_b = groupes[lignes], groupes[colonnes]
         n = len(groupe)
         couples = np.minimum(g_a, g_b) * n + np.maximum(g_a, g_b)
-        ignores = {min(groupe[a], groupe[b]) * n + max(groupe[a], groupe[b]) for a, b in self.ignorees}
+        # Les couples ignorés, d'après les groupes qui gardent les photos mises à la corbeille.
+        complets, ignores = self._ignorees_par_couple(liens)
+        if ignores:
+            complets_a, complets_b = np.asarray(complets)[lignes], np.asarray(complets)[colonnes]
+            codes = np.minimum(complets_a, complets_b) * n + np.maximum(complets_a, complets_b)
+            ignorees = np.isin(codes, [x * n + y for x, y in ignores])
+        else:
+            ignorees = np.zeros(len(lignes), dtype=bool)
+        # La plus proche de chaque couple est choisie parmi les paires qui ne sont pas ignorées.
+        garder = ~ignorees
+        lignes, colonnes, valeurs, g_a, g_b, couples = (x[garder] for x in (lignes, colonnes, valeurs, g_a, g_b, couples))
         ordre = np.lexsort((colonnes, lignes, -valeurs))
         _, premieres = np.unique(couples[ordre], return_index=True)
-        gardees = np.array(
-            [k for k in sorted(ordre[premieres].tolist()) if g_a[k] != g_b[k] and int(couples[k]) not in ignores], dtype=np.int64
-        )
+        gardees = np.array([k for k in sorted(ordre[premieres].tolist()) if g_a[k] != g_b[k]], dtype=np.int64)
         if len(gardees) == 0:
             return ToutesLesPaires(prouvees)
         return ToutesLesPaires(prouvees, lignes[gardees], colonnes[gardees], valeurs[gardees])

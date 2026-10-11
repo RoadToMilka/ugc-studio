@@ -42,6 +42,11 @@ OUVRIR_LA_CORBEILLE = "shell:RecycleBinFolder"  # la corbeille, dans l'Explorate
 
 ESSAIS_POUR_RESSORTIR = 3  # l'Explorateur peut tenir le fichier un instant (aperçu de la corbeille ouverte)
 PAUSE_ENTRE_LES_ESSAIS_S = 0.2
+# Mettre à la corbeille : une photo que l'app (une vignette, la comparaison), un antivirus ou l'Explorateur
+# lit à ce moment-là ne peut pas être déplacée ; l'opération est refaite un peu plus tard (rien n'a été
+# supprimé entre-temps).
+ESSAIS_POUR_JETER = 3
+PAUSE_AVANT_DE_REJETER_S = 0.4
 
 
 class PasDeCorbeille(Exception):
@@ -132,7 +137,7 @@ def ressortir(jetee: Jetee) -> None:
         raise ImpossibleDeRessortir("son dossier n'existe plus")
     fiche = fiche_de_la_corbeille(dedans)
     notee = lire_l_origine(fiche)
-    if notee is None or os.path.normcase(notee) != os.path.normcase(str(origine)):
+    if notee is None or not meme_place(notee, origine):
         raise ImpossibleDeRessortir("la corbeille ne confirme pas d'où elle vient")
     for essai in range(ESSAIS_POUR_RESSORTIR):
         try:
@@ -149,6 +154,22 @@ def ressortir(jetee: Jetee) -> None:
     except OSError:
         pass  # la photo est revenue : la fiche orpheline n'est qu'une ligne vide pour la corbeille
     _prevenir_l_explorateur(dedans, origine)
+
+
+def meme_place(notee: str, chemin: Path) -> bool:
+    """Vrai si le chemin noté par la corbeille désigne la même place que `chemin` : le même nom, dans le
+    même dossier. Le dossier est comparé par Windows lui-même (os.path.samefile) : un même dossier
+    s'écrit de plusieurs façons (le nom court « RUNNER~1 » du dossier temporaire de Windows, relevé par
+    la fabrication : la corbeille note « runneradmin » ; un lien ; un lecteur substitué ; les majuscules)."""
+    ecrit = Path(notee)
+    if os.path.normcase(ecrit.name) != os.path.normcase(chemin.name):
+        return False
+    if os.path.normcase(str(ecrit.parent)) == os.path.normcase(str(chemin.parent)):
+        return True
+    try:
+        return os.path.samefile(ecrit.parent, chemin.parent)
+    except OSError:
+        return False
 
 
 def fiche_de_la_corbeille(dedans: Path) -> Path:
@@ -235,7 +256,7 @@ def chercher_dans_la_corbeille(chemin: Path, depuis: float) -> Path | None:
                 continue
             notee = lire_l_origine(Path(entree.path))
             dedans = Path(dossier.path) / ("$R" + entree.name[2:])
-            if notee is not None and os.path.normcase(notee) == os.path.normcase(str(chemin)) and dedans.exists():
+            if notee is not None and meme_place(notee, chemin) and dedans.exists():
                 trouvees.append((modifiee, dedans))
     return max(trouvees)[1] if trouvees else None
 
@@ -311,6 +332,20 @@ def raison(code: int) -> str:
 
 
 def _jeter_avec_windows(chemin: Path) -> Jetee:
+    """Met la photo à la corbeille ; si Windows ne peut pas la déplacer à ce moment-là (lue par un autre
+    programme), réessaie un peu plus tard (ESSAIS_POUR_JETER fois en tout). PasDeCorbeille n'est jamais
+    réessayée : la question d'abord."""
+    for essai in range(ESSAIS_POUR_JETER):
+        try:
+            return _jeter_avec_windows_une_fois(chemin)
+        except ErreurDeCorbeille:
+            if essai == ESSAIS_POUR_JETER - 1 or not chemin.exists():
+                raise
+            time.sleep(PAUSE_AVANT_DE_REJETER_S)
+    raise ErreurDeCorbeille("Windows ne l'a pas déplacée")  # jamais atteint
+
+
+def _jeter_avec_windows_une_fois(chemin: Path) -> Jetee:
     """IFileOperation ne marche que dans un fil de travail « à appartement unique » (STA) : l'opération
     se fait dans un fil à elle, quel que soit celui qui la demande."""
     issue: dict[str, object] = {}
@@ -406,21 +441,22 @@ def _operation_windows(chemin: Path) -> Jetee:  # Windows seulement (ses tests t
     if suivi.refusee:
         raise PasDeCorbeille()
     if suivi.supprimee:
-        if not suivi.recyclee:
-            return Jetee(chemin, False)  # supprimée définitivement malgré tout (ne devrait pas arriver)
         dedans = Path(suivi.dans_la_corbeille) if suivi.dans_la_corbeille else None
         if dedans is None or not dedans.exists():
             dedans = chercher_dans_la_corbeille(chemin, depuis)
-        return Jetee(chemin, True, dedans)
+        # Pas dans la corbeille d'après Windows (ne devrait pas arriver : il avait annoncé la corbeille) :
+        # dite supprimée définitivement, sauf si on l'y retrouve.
+        return Jetee(chemin, suivi.recyclee or dedans is not None, dedans)
     if suivi.code_de_suppression is not None and suivi.code_de_suppression < 0:
         raise ErreurDeCorbeille(raison(suivi.code_de_suppression))
     if code_des_operations < 0:
         raise ErreurDeCorbeille(raison(code_des_operations))
-    # Windows n'a rien dit de la suppression : on regarde ce qu'il en est.
+    # Windows n'a rien dit après la suppression : on regarde ce qu'il en est. Il l'avait annoncée dans
+    # la corbeille (sinon le suivi aurait tout arrêté) : elle y est, même si on ne la retrouve pas.
     if chemin.exists():
         raise ErreurDeCorbeille("Windows ne l'a pas déplacée")
     dedans = chercher_dans_la_corbeille(chemin, depuis)
-    return Jetee(chemin, dedans is not None, dedans)
+    return Jetee(chemin, suivi.vers_la_corbeille or dedans is not None, dedans)
 
 
 class _Suivi:  # Windows seulement (ses tests tournent sur GitHub)
@@ -434,6 +470,7 @@ class _Suivi:  # Windows seulement (ses tests tournent sur GitHub)
         from ctypes import wintypes
 
         self.refusee = False
+        self.vers_la_corbeille = False  # Windows a annoncé la corbeille (PreDeleteItem)
         self.supprimee = False
         self.recyclee = False
         self.dans_la_corbeille: str | None = None
@@ -468,6 +505,7 @@ class _Suivi:  # Windows seulement (ses tests tournent sur GitHub)
         def avant_suppression(_this, drapeaux_recus, _element):
             try:
                 if drapeaux_recus & TSF_DELETE_RECYCLE_IF_POSSIBLE:
+                    self.vers_la_corbeille = True
                     return S_OK
             except Exception:  # noqa: BLE001 : dans le doute, rien n'est supprimé
                 pass

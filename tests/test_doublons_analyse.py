@@ -300,3 +300,18 @@ def test_un_recadrage_suit_la_copie_identique_de_sa_photo():
     assert resultat.paires(LES_DEUX, 95, COPIES_IA).total == 0
     resultat.remettre(0)
     assert resultat.paires(LES_DEUX, 95, COPIES_IA).total == 1  # (0, 2) seulement : le recadrage reste ignoré
+
+
+def test_une_paire_ignoree_ne_revient_pas_quand_sa_photo_part(lot):
+    """Relecture indépendante de la 4.5.0 : une paire ignorée, puis l'une de ses photos mise à la
+    corbeille, ne revient pas par la copie identique de cette photo."""
+    resultat = analyser(lister_les_photos([lot]), False, Memoire())
+
+    def paires():
+        return {(x, y) for x, y, *_ in _noms(resultat, resultat.paires(LES_DEUX, 50))}
+
+    resultat.ignorer(0, 2)  # a copie.jpg et a petite.jpg
+    assert ("a copie.jpg", "a petite.jpg") not in paires() and ("a petite.jpg", "a.jpg") not in paires()
+    resultat.retirer(0)  # a copie.jpg à la corbeille : a.jpg, sa copie identique, reste ignorée face à a petite.jpg
+    assert ("a petite.jpg", "a.jpg") not in paires()
+    assert ("a miroir.png", "a.jpg") in paires()  # le reste des paires suit, comme sans paire ignorée

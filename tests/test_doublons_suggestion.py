@@ -25,9 +25,11 @@ def test_les_raisons_dans_l_ordre():
     assert _suggerer(pixels=(640_000, 480_000), bords_sur=0) == Suggestion(1, "sans les bords ajoutés")
     assert _suggerer(pixels=(120_000, 480_000)) == Suggestion(1, "plus grande")
     assert _suggerer(pixels=(480_000, 475_000)) is None  # 1 % de pixels en plus : la même taille
-    assert _suggerer(formats=("JPEG", "PNG"), octets=(90_000, 600_000)) == Suggestion(1, "format sans perte, PNG")
     assert _suggerer(octets=(60_000, 90_000)) == Suggestion(1, "moins compressée")
-    assert _suggerer(formats=("JPEG", "WEBP"), octets=(90_000, 60_000)) is None  # deux formats différents : les poids ne se comparent pas
+    # Deux formats différents : les poids ne se comparent pas (un PNG fait d'après un JPG est plus lourd
+    # sans être meilleur).
+    assert _suggerer(formats=("JPEG", "PNG"), octets=(90_000, 600_000)) is None
+    assert _suggerer(formats=("JPEG", "WEBP"), octets=(90_000, 60_000)) is None
     assert _suggerer(noms=("photo.jpg", "photo (1).jpg")) == Suggestion(0, "l'autre a un nom de copie")
     assert _suggerer() is None  # rien ne les départage
     assert _suggerer(pixels=(120_000, 480_000), autres_couleurs=True) == Suggestion(1, "plus grande", True)

@@ -4,6 +4,7 @@ et, sous Windows (la fabrication sur GitHub), la vraie corbeille de Windows."""
 import os
 import struct
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -180,3 +181,123 @@ def test_jamais_supprimee_pour_de_bon_sans_question(tmp_path, monkeypatch):
     with pytest.raises(PasDeCorbeille):
         mettre_a_la_corbeille(en_reseau)
     assert photo.exists() and photo.read_bytes() == b"\xff\xd8 une photo \xff\xd9"
+
+
+@sous_windows
+def test_une_photo_lue_ailleurs_un_instant_part_quand_meme(tmp_path, monkeypatch):
+    """Une photo qu'un autre programme lit à ce moment-là (une vignette de l'app, un antivirus) : Windows
+    ne peut pas la déplacer tout de suite ; l'app réessaie un peu plus tard."""
+    monkeypatch.delenv(corbeille.VARIABLE_FAUSSE_CORBEILLE)
+    photo = _photo(tmp_path / "Lue")
+    fichier = open(photo, "rb")  # noqa: SIM115 : Python l'ouvre sans permettre qu'on la déplace
+    threading.Timer(0.5, fichier.close).start()
+    jetee = mettre_a_la_corbeille(photo)
+    assert jetee.recyclee and not photo.exists()
+    ressortir(jetee)
+    assert photo.exists()
+
+
+@sous_windows
+def test_une_photo_tenue_par_un_autre_programme(tmp_path, monkeypatch):
+    """Tenue tout du long : rien n'est supprimé, et la raison est dite en français."""
+    monkeypatch.delenv(corbeille.VARIABLE_FAUSSE_CORBEILLE)
+    photo = _photo(tmp_path / "Tenue")
+    with open(photo, "rb"):
+        with pytest.raises(ErreurDeCorbeille) as erreur:
+            mettre_a_la_corbeille(photo)
+    assert photo.exists()
+    assert str(erreur.value) == "elle est ouverte dans un autre programme"
+
+
+def _reglage_de_la_corbeille(chemin: Path, nom: str, valeur: int):
+    """Change un réglage de la corbeille du disque de `chemin` (HKCU\\…\\BitBucket\\Volume\\{…}) le temps
+    d'un test, puis le remet comme avant. None si le disque n'a pas d'identifiant de volume."""
+    import contextlib
+    import ctypes
+    import winreg
+
+    tampon = ctypes.create_unicode_buffer(64)
+    racine = os.path.splitdrive(str(chemin))[0] + "\\"
+    if not ctypes.windll.kernel32.GetVolumeNameForVolumeMountPointW(racine, tampon, len(tampon)):
+        return None
+    volume = tampon.value[tampon.value.index("{") : tampon.value.index("}") + 1]
+    cle = rf"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\{volume}"
+
+    @contextlib.contextmanager
+    def reglage():
+        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, cle, 0, winreg.KEY_READ | winreg.KEY_WRITE) as ouverte:
+            try:
+                avant = winreg.QueryValueEx(ouverte, nom)
+            except OSError:
+                avant = None
+            winreg.SetValueEx(ouverte, nom, 0, winreg.REG_DWORD, valeur)
+            try:
+                yield
+            finally:
+                if avant is None:
+                    winreg.DeleteValue(ouverte, nom)
+                else:
+                    winreg.SetValueEx(ouverte, nom, 0, avant[1], avant[0])
+
+    return reglage()
+
+
+@sous_windows
+@pytest.mark.parametrize(("nom", "valeur", "octets"), [("NukeOnDelete", 1, 4096), ("MaxCapacity", 1, 3 * 1024 * 1024)])
+def test_jamais_supprimee_pour_de_bon_quand_la_corbeille_la_refuse(tmp_path, monkeypatch, nom, valeur, octets):
+    """La corbeille réglée pour tout supprimer (NukeOnDelete), ou une photo plus grande que la corbeille
+    (MaxCapacity, en Mo) : Windows la supprimerait pour de bon. Ce qui ne doit jamais arriver : la photo
+    partie sans être dans la corbeille. Soit l'app arrête tout (PasDeCorbeille), soit (si Windows ne relit
+    pas tout de suite ce réglage) la photo est bien dans la corbeille."""
+    monkeypatch.delenv(corbeille.VARIABLE_FAUSSE_CORBEILLE)
+    reglage = _reglage_de_la_corbeille(tmp_path, nom, valeur)
+    if reglage is None:
+        pytest.skip("ce disque n'a pas d'identifiant de volume")
+    photo = _photo(tmp_path / nom, octets=os.urandom(octets))
+    with reglage:
+        try:
+            jetee = mettre_a_la_corbeille(photo)
+        except PasDeCorbeille:
+            assert photo.exists()  # rien n'a été supprimé : la question d'abord
+            return
+    assert jetee.recyclee and jetee.dans_la_corbeille is not None and jetee.dans_la_corbeille.exists()
+    ressortir(jetee)
+    pytest.skip(f"{nom} : Windows a encore pris la photo dans la corbeille (réglage pas relu) ; rien de perdu")
+
+
+def test_la_meme_place_ecrite_autrement(tmp_path):
+    """La fiche de la corbeille et l'app peuvent écrire un même dossier de deux façons (relevé par la
+    fabrication : le nom court « RUNNER~1 » du dossier temporaire de Windows, « runneradmin » dans la
+    fiche). Le dossier est comparé par le système lui-même ; le nom de la photo, lui, doit être le même."""
+    dossier = tmp_path / "Lot"
+    dossier.mkdir()
+    photo = dossier / "Photo.jpg"
+    assert corbeille.meme_place(str(photo), photo)
+    assert not corbeille.meme_place(str(dossier / "Autre.jpg"), photo)
+    assert not corbeille.meme_place(str(tmp_path / "Ailleurs" / "Photo.jpg"), photo)
+    if sys.platform != "win32":
+        lien = tmp_path / "Lien vers le lot"
+        lien.symlink_to(dossier, target_is_directory=True)
+        assert corbeille.meme_place(str(lien / "Photo.jpg"), photo)
+
+
+@sous_windows
+def test_annuler_avec_le_nom_court_d_un_dossier(tmp_path, monkeypatch):
+    """La photo désignée par le nom court de son dossier (comme dans le dossier temporaire de Windows) :
+    la corbeille note le nom long ; « Annuler » la remet quand même."""
+    import ctypes
+
+    monkeypatch.delenv(corbeille.VARIABLE_FAUSSE_CORBEILLE)
+    dossier = tmp_path / "Un dossier au nom vraiment long"
+    photo = _photo(dossier)
+    tampon = ctypes.create_unicode_buffer(1024)
+    if not ctypes.windll.kernel32.GetShortPathNameW(str(dossier), tampon, len(tampon)) or tampon.value == str(dossier):
+        pytest.skip("pas de noms courts sur ce disque")
+    courte = Path(tampon.value) / photo.name
+    assert courte.exists() and str(courte) != str(photo)
+    depuis = time.time()
+    jetee = mettre_a_la_corbeille(courte)
+    assert jetee.recyclee and not photo.exists()
+    assert corbeille.chercher_dans_la_corbeille(courte, depuis) == jetee.dans_la_corbeille
+    ressortir(jetee)
+    assert photo.exists()

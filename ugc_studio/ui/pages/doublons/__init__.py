@@ -504,8 +504,13 @@ class PageDoublons(Page):
 
     # --- Dossiers -----------------------------------------------------------------------------
 
+    @property
+    def _libre(self) -> bool:
+        """Ni analyse, ni photo en route vers la corbeille (ou en retour) : la liste peut changer."""
+        return not self._occupe and not self._decision_en_cours
+
     def choisir_dossier(self) -> None:
-        if self._occupe:
+        if not self._libre:
             return
         depart = self._preferences.lire(PREF_DOSSIER) or str(dossier_documents())
         choix = QFileDialog.getExistingDirectory(self, "Ajouter un dossier de photos", str(depart))
@@ -515,7 +520,7 @@ class PageDoublons(Page):
     def ajouter(self, dossiers: list[Path]) -> int:
         """Ajoute ces dossiers à la liste (un dossier déjà présent ne l'est pas deux fois). Renvoie le
         nombre de dossiers ajoutés."""
-        if self._occupe:
+        if not self._libre:
             return 0
         ajoutes = 0
         for dossier in dossiers:
@@ -529,7 +534,7 @@ class PageDoublons(Page):
 
     def retirer(self, dossier: Path) -> None:
         """× : le dossier quitte la liste (ses photos ne bougent pas)."""
-        if self._occupe or dossier not in self._dossiers:
+        if not self._libre or dossier not in self._dossiers:
             return
         self._dossiers.remove(dossier)
         self._dossiers_changes()
@@ -579,7 +584,7 @@ class PageDoublons(Page):
 
     def dragEnterEvent(self, evenement) -> None:  # noqa: N802 : nom imposé par Qt
         donnees = evenement.mimeData()
-        if not self._occupe and donnees.hasUrls() and dossiers_deposes(donnees):
+        if self._libre and donnees.hasUrls() and dossiers_deposes(donnees):
             evenement.acceptProposedAction()
             self.zone_depot.survol(True)
 
@@ -633,7 +638,7 @@ class PageDoublons(Page):
 
     def analyser(self) -> bool:
         """Lance l'analyse des dossiers (en arrière-plan). Renvoie True si elle commence."""
-        if self._occupe or not self._dossiers:
+        if not self._libre or not self._dossiers:
             return False
         self._arreter_les_vignettes()
         arret = threading.Event()
@@ -865,6 +870,12 @@ class PageDoublons(Page):
             self.origine.setText("")
         self.suggestion.setText(suggestion.texte() if suggestion is not None else "")
         self.suggestion.setVisible(suggestion is not None)
+        # La fenêtre « Agrandir » (non modale) montre toujours la paire choisie ici : ce qu'on y supprime
+        # ou ignore est ce qu'on y voit (relu par une relecture indépendante : ↑ ↓ dans le tableau, la
+        # fenêtre ouverte, la laissaient sur l'ancienne paire).
+        fenetre = self._fenetre_en_grand
+        if fenetre is not None and choisie and fenetre.rang != rang:
+            fenetre.aller(rang)
         self._mettre_a_jour_les_boutons()
 
     def rang_choisi(self) -> int:
@@ -897,11 +908,13 @@ class PageDoublons(Page):
         fenetre = FenetrePaireEnGrand(self, self._paire_pour_la_fenetre, rang, len(paires))
         fenetre.rang_change.connect(self.choisir)
         # V4.5 : décider aussi en grand ; la page fait le travail, la fenêtre suit.
-        fenetre.supprimer_demande.connect(self.supprimer)
-        fenetre.ignorer_demande.connect(self.ignorer)
+        fenetre.supprimer_demande.connect(lambda laquelle, f=fenetre: self._depuis_la_fenetre(f) and self.supprimer(laquelle))
+        fenetre.ignorer_demande.connect(lambda f=fenetre: self._depuis_la_fenetre(f) and self.ignorer())
         fenetre.annuler_demande.connect(self.annuler)
         fenetre.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        fenetre.destroyed.connect(self._fenetre_en_grand_fermee)
+        # Quand une fenêtre se ferme, seule elle est oubliée : une fenêtre fermée pour en rouvrir une autre
+        # n'est détruite qu'ensuite, et ne doit pas faire oublier la nouvelle (relecture indépendante).
+        fenetre.destroyed.connect(lambda *_arguments, f=fenetre: self._fenetre_en_grand_fermee(f))
         self._fenetre_en_grand = fenetre
         if self.zone_decision.isVisible():
             fenetre.montrer_la_decision(self.texte_decision.text(), self.texte_decision.property("role") or "secondaire", self.bouton_annuler.isVisible())
@@ -909,8 +922,18 @@ class PageDoublons(Page):
         fenetre.show()
         return fenetre
 
-    def _fenetre_en_grand_fermee(self, *_arguments) -> None:
-        self._fenetre_en_grand = None
+    def _fenetre_en_grand_fermee(self, fenetre) -> None:
+        if self._fenetre_en_grand is fenetre:
+            self._fenetre_en_grand = None
+
+    def _depuis_la_fenetre(self, fenetre) -> bool:
+        """Une décision demandée dans la fenêtre « Agrandir » : elle vaut pour la paire que la fenêtre
+        montre. La page s'y place d'abord (elles vont ensemble ; c'est une sécurité)."""
+        if fenetre is not self._fenetre_en_grand:
+            return False
+        if self.rang_choisi() != fenetre.rang:
+            self.choisir(fenetre.rang)
+        return self.rang_choisi() == fenetre.rang
 
     def _fermer_la_fenetre_en_grand(self) -> None:
         if self._fenetre_en_grand is not None:
@@ -1192,14 +1215,16 @@ class PageDoublons(Page):
             self.tableau.setFocus()
 
     def eventFilter(self, objet, evenement) -> bool:  # noqa: N802 : nom imposé par Qt
-        """La touche I dans le tableau : « Ignorer » (sans Ctrl, Alt ni Windows)."""
+        """La touche I dans le tableau : « Ignorer » (sans Ctrl, Alt ni Windows). Gardée enfoncée, elle
+        n'ignore qu'une paire : les répétitions du clavier sont sans effet."""
         if (
             objet is self.tableau
             and evenement.type() == QEvent.Type.KeyPress
             and evenement.key() == Qt.Key.Key_I
             and not evenement.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier)
         ):
-            self.ignorer()
+            if not evenement.isAutoRepeat():
+                self.ignorer()
             return True
         return super().eventFilter(objet, evenement)
 

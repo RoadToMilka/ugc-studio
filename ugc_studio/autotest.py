@@ -2503,21 +2503,25 @@ def _doublons_v45(fenetre, capturer, rapport: dict) -> bool:
     page.choisir(rang)
     infos["suggestion"] = page.suggestion.text()
     paire = page.paire_choisie()
-    gauche = resultat.photos[paire.a].chemin
-    contenu, date = gauche.read_bytes(), gauche.stat().st_mtime
-    infos["photo"] = gauche.name
-    infos["supprimer_commence"] = page.supprimer(0)
+    # La copie (son nom le dit), d'un côté ou de l'autre selon l'ordre de l'Explorateur : celle que la
+    # suggestion ne garde pas.
+    cote = 0 if resultat.photos[paire.a].chemin.name == "produit-copie.jpg" else 1
+    copie = resultat.photos[paire.a if cote == 0 else paire.b].chemin
+    contenu, date = copie.read_bytes(), copie.stat().st_mtime
+    infos["photo"] = copie.name
+    infos["supprimer_commence"] = page.supprimer(cote)
     _attendre(lambda: not page.decision_en_cours, 30)
     decision = page.derniere_decision
     jetee = decision.jetee if decision is not None else None
     dans = jetee.dans_la_corbeille if jetee is not None else None
     infos.update(
         {
-            "disparue": not gauche.exists(),
+            "disparue": not copie.exists(),
             "dans_la_corbeille": str(dans) if dans else None,
             "dans_le_dossier_de_la_corbeille": bool(dans) and dans.parent.parent.name.lower() == "$recycle.bin",
             "dans_la_corbeille_intacte": bool(dans) and dans.exists() and dans.read_bytes() == contenu,
             "fiche_de_la_corbeille": corbeille.lire_l_origine(corbeille.fiche_de_la_corbeille(dans)) if dans else None,
+            "chemin_de_la_photo": str(copie),
             "texte_apres_suppression": page.texte_decision.text(),
             "annuler_visible": page.bouton_annuler.isVisible(),
             "paires_apres_suppression": noms(),
@@ -2529,7 +2533,7 @@ def _doublons_v45(fenetre, capturer, rapport: dict) -> bool:
     _attendre(lambda: not page.decision_en_cours, 30)
     infos.update(
         {
-            "revenue": gauche.exists() and gauche.read_bytes() == contenu and gauche.stat().st_mtime == date,
+            "revenue": copie.exists() and copie.read_bytes() == contenu and copie.stat().st_mtime == date,
             "plus_dans_la_corbeille": bool(dans) and not dans.exists() and not corbeille.fiche_de_la_corbeille(dans).exists(),
             "texte_apres_annulation": page.texte_decision.text(),
             "paires_apres_annulation": noms(),
@@ -2549,18 +2553,21 @@ def _doublons_v45(fenetre, capturer, rapport: dict) -> bool:
     infos["paires_apres_la_seconde_annulation"] = noms()
     page.methode.definir(COPIES_IA)  # la méthode de départ
     page._methode_changee(COPIES_IA)
-    paire_texte = f"« {gauche.name} »"
+    paire_texte = f"« {copie.name} »"
+    gardee = "droite" if cote == 0 else "gauche"
     return (
         infos["supprimer_commence"]
-        and infos["suggestion"] == "Suggestion : garder celle de droite (l'autre a un nom de copie)."
+        and infos["photo"] == "produit-copie.jpg"
+        and infos["suggestion"] == f"Suggestion : garder celle de {gardee} (l'autre a un nom de copie)."
         and infos["fausse_corbeille"] is None
         and infos["disparue"]
         and infos["dans_le_dossier_de_la_corbeille"]
         and infos["dans_la_corbeille_intacte"]
-        and infos["fiche_de_la_corbeille"] == str(gauche)
+        and infos["fiche_de_la_corbeille"] is not None
+        and corbeille.meme_place(infos["fiche_de_la_corbeille"], copie)
         and infos["texte_apres_suppression"] == f"{paire_texte} mise à la corbeille."
         and infos["annuler_visible"]
-        and not any(gauche.name in paire for paire in infos["paires_apres_suppression"])
+        and not any(copie.name in paire for paire in infos["paires_apres_suppression"])
         and infos["annuler_commence"]
         and infos["revenue"]
         and infos["plus_dans_la_corbeille"]
