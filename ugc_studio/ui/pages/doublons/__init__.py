@@ -213,11 +213,17 @@ def dossiers_deposes(donnees) -> list[Path]:
 
 
 class CoteACoteOuDessous(QWidget):
-    """Deux blocs côte à côte quand la page est assez large (Dimensions.DOUBLONS_COTE_A_COTE_MIN), l'un
-    sous l'autre sinon (fenêtre étroite)."""
+    """Deux blocs côte à côte quand la page est assez large, l'un sous l'autre sinon (fenêtre étroite).
+
+    Assez large : au moins Dimensions.DOUBLONS_COTE_A_COTE_MIN, et au moins ce que demandent les deux
+    blocs côte à côte (largeur_cote_a_cote). Comme pour le studio des sous-titres, la largeur minimale
+    annoncée est celle des blocs l'un sous l'autre : sinon, côte à côte, la disposition ne pourrait pas
+    devenir plus étroite que ses deux blocs, ne repasserait jamais l'un sous l'autre, et le bord droit de
+    la page serait coupé (relu sur les captures à 125 et 150 % : 327 px de trop)."""
 
     def __init__(self, premier: QWidget, second: QWidget):
         super().__init__()
+        self._premier, self._second = premier, second
         self._disposition = QBoxLayout(QBoxLayout.Direction.TopToBottom, self)
         self._disposition.setContentsMargins(0, 0, 0, 0)
         self._disposition.setSpacing(Dimensions.ESPACE_BLOCS)
@@ -229,11 +235,30 @@ class CoteACoteOuDessous(QWidget):
     def cote_a_cote(self) -> bool:
         return self._disposition.direction() == QBoxLayout.Direction.LeftToRight
 
+    def largeur_cote_a_cote(self) -> int:
+        """La largeur qu'il faut pour les deux blocs côte à côte : leurs largeurs minimales et l'espace
+        entre eux, et au moins DOUBLONS_COTE_A_COTE_MIN."""
+        besoin = self._premier.minimumSizeHint().width() + self._disposition.spacing() + self._second.minimumSizeHint().width()
+        return max(Dimensions.DOUBLONS_COTE_A_COTE_MIN, besoin)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 : nom imposé par Qt
+        """Largeur minimale : celle des deux blocs l'un sous l'autre (voir la description de la classe)."""
+        largeur = max(self._premier.minimumSizeHint().width(), self._second.minimumSizeHint().width())
+        return QSize(largeur, super().minimumSizeHint().height())
+
     def resizeEvent(self, evenement) -> None:  # noqa: N802 : nom imposé par Qt
         super().resizeEvent(evenement)
-        voulue = QBoxLayout.Direction.LeftToRight if self.width() >= Dimensions.DOUBLONS_COTE_A_COTE_MIN else QBoxLayout.Direction.TopToBottom
+        self._adapter()
+
+    def _adapter(self) -> None:
+        # Pour passer côte à côte, il faut un peu plus de place que pour y rester : sans cette marge, la
+        # barre de défilement de la page, qui apparaît ou disparaît avec la disposition, pourrait la faire
+        # changer en boucle autour de la limite.
+        marge = 0 if self.cote_a_cote else Dimensions.BARRE_DEFILEMENT + Espacements.S
+        voulue = QBoxLayout.Direction.LeftToRight if self.width() >= self.largeur_cote_a_cote() + marge else QBoxLayout.Direction.TopToBottom
         if self._disposition.direction() != voulue:
             self._disposition.setDirection(voulue)
+            self.updateGeometry()  # la hauteur minimale change avec la disposition
 
 
 class PageDoublons(Page):

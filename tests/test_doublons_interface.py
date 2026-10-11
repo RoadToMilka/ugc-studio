@@ -23,7 +23,7 @@ from ugc_studio.ui.pages.doublons import (
     texte_du_resume,
 )
 from ugc_studio.ui.pages.doublons.tableau import COLONNE_DOSSIERS, COLONNE_IMAGE_1, COLONNE_IMAGE_2, COLONNE_PROXIMITE, COLONNE_TYPE, texte_du_type
-from ugc_studio.ui.theme import Dimensions
+from ugc_studio.ui.theme import Dimensions, Espacements
 
 
 class FauxModele:
@@ -293,11 +293,15 @@ def test_la_comparaison_a_cote_du_tableau_en_grande_fenetre(app_configuree, qtbo
     page.methode.definir(SANS_IA)
     _analyser(qtbot, page)
     qtbot.waitUntil(lambda: page.resultats.width() > 0, timeout=5_000)
-    if page.resultats.width() >= Dimensions.DOUBLONS_COTE_A_COTE_MIN:
+    if page.resultats.width() >= page.resultats.largeur_cote_a_cote() + Dimensions.BARRE_DEFILEMENT + Espacements.S:
         assert page.resultats.cote_a_cote
         assert page.cadre_comparaison.x() > page.cadre_paires.x()
+    # Côte à côte, la disposition annonce la largeur minimale des blocs l'un sous l'autre : elle peut
+    # donc rétrécir et repasser l'un sous l'autre (à 125 et 150 %, elle restait côte à côte, coupée).
+    assert page.resultats.minimumSizeHint().width() < page.resultats.largeur_cote_a_cote()
     page.resize(Dimensions.FENETRE_LARGEUR_MIN - Dimensions.LARGEUR_BARRE_LATERALE, Dimensions.FENETRE_HAUTEUR)
     qtbot.waitUntil(lambda: not page.resultats.cote_a_cote, timeout=5_000)
     qtbot.waitUntil(lambda: page.cadre_comparaison.y() > page.cadre_paires.y(), timeout=5_000)
     assert page.cadre_comparaison.x() == page.cadre_paires.x()
+    assert page.resultats.width() <= page.defilement.viewport().width()  # rien ne dépasse à droite
     assert page.mode.valeur() == LES_DEUX  # le mode de départ (sans effet avec un seul dossier)
