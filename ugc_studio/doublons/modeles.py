@@ -26,7 +26,7 @@ ADRESSE_DES_FICHIERS = "https://huggingface.co/{depot}/resolve/{revision}/{chemi
 @dataclass(frozen=True)
 class FichierDuModele:
     """Un fichier d'un modèle : son chemin sur sa page Hugging Face, son empreinte SHA-256 et sa taille
-    en octets (0 : pas encore notée, l'empreinte suffit)."""
+    en octets (vérifiées par la fabrication le 11/10/2026)."""
 
     chemin: str
     empreinte: str
@@ -93,7 +93,7 @@ MODELES: dict[str, Modele] = {
             "dinov2-small-q8",
             DEPOT_DINOV2,
             REVISION_DINOV2,
-            (FichierDuModele("onnx/model_quantized.onnx", "c179f8f7f592449c4c1bca4cd124a7538021428c5ffb89afde9503935b197efb"),),
+            (FichierDuModele("onnx/model_quantized.onnx", "c179f8f7f592449c4c1bca4cd124a7538021428c5ffb89afde9503935b197efb", 24_446_700),),
             "Apache 2.0",
             LICENCE_DINOV2,
             "DINOv2 small (Meta), version compacte : chaque réglage sur 1 octet au lieu de 4",
@@ -102,7 +102,7 @@ MODELES: dict[str, Modele] = {
             "dinov2-small-fp32",
             DEPOT_DINOV2,
             REVISION_DINOV2,
-            (FichierDuModele("onnx/model.onnx", "f22797eabf810a75e41de68d378541ebea372122b25c4ce3ef25ff618250c20a"),),
+            (FichierDuModele("onnx/model.onnx", "f22797eabf810a75e41de68d378541ebea372122b25c4ce3ef25ff618250c20a", 88_532_934),),
             "Apache 2.0",
             LICENCE_DINOV2,
             "DINOv2 small (Meta), version complète",
@@ -112,8 +112,8 @@ MODELES: dict[str, Modele] = {
             DEPOT_DINOV3,
             REVISION_DINOV3,
             (
-                FichierDuModele("onnx/model_quantized.onnx", "7686e8c849202c4fdd67d1cd336449c29bdddbcca535d765d3014f50d04d516d"),
-                FichierDuModele("onnx/model_quantized.onnx_data", "51572f7fc3c272eb574a70509ea1eeb7e674e5ca2cd96fec1632edb38983d529"),
+                FichierDuModele("onnx/model_quantized.onnx", "7686e8c849202c4fdd67d1cd336449c29bdddbcca535d765d3014f50d04d516d", 183_889),
+                FichierDuModele("onnx/model_quantized.onnx_data", "51572f7fc3c272eb574a70509ea1eeb7e674e5ca2cd96fec1632edb38983d529", 21_762_048),
             ),
             "DINOv3 License (Meta)",
             LICENCE_DINOV3,
@@ -127,6 +127,8 @@ MODELES: dict[str, Modele] = {
 MODELE_DE_L_APP = "dinov2-small-q8"
 # Les modèles d'essai : préparés seulement sur demande (outils/preparer_modeles.py --essai).
 MODELES_D_ESSAI = ("dinov2-small-fp32", "dinov3-small-q8")
+# Le modèle de l'app voyage dans une ressource Windows du .exe, sous ce nom (packaging/ugc_studio.spec).
+NOM_DE_RESSOURCE = "DOUBLONS_MODELE"
 
 
 def empreinte_du_fichier(chemin) -> str:

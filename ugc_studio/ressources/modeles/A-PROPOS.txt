@@ -1,0 +1,34 @@
+Doublons dans UGC Studio : le modèle d'IA et ses bibliothèques
+==============================================================
+
+Le module Doublons décrit chaque photo avec un modèle d'IA de vision, qui tourne sur ton ordinateur :
+ni les photos, ni rien d'autre ne part sur internet.
+
+Le modèle
+---------
+DINOv2 « small » (ViT-S/14), de Meta, au format ONNX, en version compacte (chaque réglage sur 1 octet).
+C'est la conversion par Hugging Face du modèle officiel « facebook/dinov2-small » :
+https://huggingface.co/onnx-community/dinov2-small
+Version figée : ef1fb1005bfd7768839d18080f7038b403506f87, fichier onnx/model_quantized.onnx
+(24 446 700 octets, empreinte SHA-256 c179f8f7f592449c4c1bca4cd124a7538021428c5ffb89afde9503935b197efb,
+vérifiée à chaque fabrication de l'app et à chaque analyse).
+
+Licence : Apache License, version 2.0 (texte complet : LICENCE-DINOv2.txt, depuis le dépôt officiel de
+Meta, https://github.com/facebookresearch/dinov2).
+
+Il voyage dans le fichier UGC-Studio.exe, où l'app le lit directement : rien n'est recopié sur le disque.
+
+Les bibliothèques de calcul
+---------------------------
+- ONNX Runtime 1.30.0 (Microsoft, licence MIT) : fait tourner le modèle sur le processeur.
+  https://github.com/microsoft/onnxruntime
+  Par défaut, ONNX Runtime envoie des statistiques d'utilisation à Microsoft (sa « télémétrie ») :
+  UGC Studio la coupe avant de le charger.
+- numpy 2.5.3 (licence BSD) : les calculs. https://numpy.org
+
+Elles voyagent compressées dans UGC-Studio.exe et sont recopiées une seule fois, à la première analyse,
+dans :
+%LOCALAPPDATA%\UGC Studio\bibliotheques\
+avec le texte complet de leurs licences (dossier numpy-2.5.3.dist-info\licenses, fichiers
+onnxruntime\LICENSE et onnxruntime\ThirdPartyNotices.txt). Ce dossier peut être effacé sans risque :
+l'app le recrée à la prochaine analyse.

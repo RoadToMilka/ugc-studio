@@ -90,7 +90,9 @@ class Tableau(QTableWidget):
                     element.ensurePolished()  # sa police (ex. montant en gras) vient de la feuille de style
         entete = self.horizontalHeader()
         for colonne in range(self.columnCount()):
-            self._naturelles[colonne] = max(entete.sectionSizeHint(colonne), self.sizeHintForColumn(colonne), 0)
+            # Une colonne cachée (V4.3 : « Dossiers » de Doublons, avec un seul dossier) ne prend aucune place.
+            cachee = self.isColumnHidden(colonne)
+            self._naturelles[colonne] = 0 if cachee else max(entete.sectionSizeHint(colonne), self.sizeHintForColumn(colonne), 0)
         self._ajuster_hauteurs()
         self.ajuster_colonnes()
 
@@ -120,13 +122,13 @@ class Tableau(QTableWidget):
         if not any(self._naturelles):
             return
         largeurs = list(self._naturelles)
-        textes = [index for index, colonne in enumerate(self.colonnes) if colonne.texte]
+        textes = [index for index, colonne in enumerate(self.colonnes) if colonne.texte and not self.isColumnHidden(index)]
         fixes = sum(largeurs[index] for index in range(len(largeurs)) if index not in textes)
         place = self.viewport().width() - fixes  # place pour les colonnes de texte
         naturelle_des_textes = sum(largeurs[index] for index in textes)
         if place >= naturelle_des_textes:
             # Assez de place : chaque colonne en entier, et le surplus à la colonne étirée.
-            etiree = next((index for index, colonne in enumerate(self.colonnes) if colonne.etiree), None)
+            etiree = next((index for index, colonne in enumerate(self.colonnes) if colonne.etiree and not self.isColumnHidden(index)), None)
             if etiree is not None:
                 largeurs[etiree] += place - naturelle_des_textes
         elif textes:

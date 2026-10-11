@@ -19,7 +19,6 @@
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import logging
 import lzma
@@ -36,6 +35,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from ..chemins import dossier_programmes, dossier_ressources
+from ..ressource_du_exe import TYPE_DONNEES_BRUTES, adresse_de_la_ressource, lire_la_ressource
 from .cadence import texte_ffmpeg
 
 journal = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ VERSION_INTEGREE = "9.0.2"  # celle que la fabrication automatique place dans le
 TAILLE_DU_PROGRAMME = 105_423_872
 EMPREINTE_DU_PROGRAMME = "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec"
 # La ressource Windows du .exe qui contient FFmpeg, compressé au format xz.
-TYPE_DE_RESSOURCE = 10  # RT_RCDATA : des données brutes
+TYPE_DE_RESSOURCE = TYPE_DONNEES_BRUTES  # RT_RCDATA : des données brutes
 NOM_DE_RESSOURCE = "FFMPEG"
 MORCEAU_RECOPIE = 1024 * 1024  # FFmpeg est décompressé et écrit par morceaux (peu de mémoire)
 LIGNES_D_ERREUR_GARDEES = 40
@@ -76,50 +76,15 @@ def copie_de_ffmpeg() -> Path:
     return dossier_programmes() / DOSSIER_FFMPEG / VERSION_INTEGREE / nom_du_programme()
 
 
-@functools.cache
 def _ressource() -> tuple[int, int] | None:
     """Adresse et taille de FFmpeg compressé dans la ressource du .exe (None : pas dans un .exe, ou
-    ressource absente). FindResource, LoadResource et LockResource (fonctions de Windows) donnent
-    l'adresse des données dans le programme déjà ouvert : rien n'est lu du disque avant qu'on y
-    touche, et rien ne change pendant que l'app tourne (d'où la mémoire de la réponse)."""
-    if sys.platform != "win32" or not getattr(sys, "frozen", False):
-        return None
-    import ctypes
-    from ctypes import wintypes
-
-    noyau = ctypes.WinDLL("kernel32", use_last_error=True)
-    noyau.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-    noyau.GetModuleHandleW.restype = wintypes.HMODULE
-    noyau.FindResourceW.argtypes = [wintypes.HMODULE, wintypes.LPCWSTR, wintypes.LPCWSTR]
-    noyau.FindResourceW.restype = wintypes.HANDLE
-    noyau.SizeofResource.argtypes = [wintypes.HMODULE, wintypes.HANDLE]
-    noyau.SizeofResource.restype = wintypes.DWORD
-    noyau.LoadResource.argtypes = [wintypes.HMODULE, wintypes.HANDLE]
-    noyau.LoadResource.restype = wintypes.HGLOBAL
-    noyau.LockResource.argtypes = [wintypes.HGLOBAL]
-    noyau.LockResource.restype = ctypes.c_void_p
-    module = noyau.GetModuleHandleW(None)  # le .exe lui-même
-    # Un type de ressource numéroté se donne comme une « adresse » égale à son numéro (MAKEINTRESOURCE).
-    trouvee = noyau.FindResourceW(module, NOM_DE_RESSOURCE, wintypes.LPCWSTR(TYPE_DE_RESSOURCE))
-    if not trouvee:
-        return None
-    taille = noyau.SizeofResource(module, trouvee)
-    chargee = noyau.LoadResource(module, trouvee)
-    adresse = noyau.LockResource(chargee) if chargee else None
-    if not taille or not adresse:
-        return None
-    return adresse, taille
+    ressource absente). Voir ressource_du_exe.py."""
+    return adresse_de_la_ressource(NOM_DE_RESSOURCE, TYPE_DE_RESSOURCE)
 
 
 def _lire_la_ressource() -> bytes | None:
     """FFmpeg compressé (format xz), copié depuis la ressource du .exe."""
-    trouvee = _ressource()
-    if trouvee is None:
-        return None
-    import ctypes
-
-    adresse, taille = trouvee
-    return ctypes.string_at(adresse, taille)
+    return lire_la_ressource(NOM_DE_RESSOURCE, TYPE_DE_RESSOURCE)
 
 
 def ffmpeg_dans_le_exe() -> bool:

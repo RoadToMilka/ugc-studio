@@ -79,4 +79,23 @@ class OngletDonnees(QWidget):
         )
         boutons.addStretch(1)
         d.addLayout(boutons)
+        # Doublons (V4.3) : son modèle d'IA et ses bibliothèques de calcul, fournis avec l'app ; leurs
+        # licences sont jointes à l'app (ressources/modeles).
+        d.addWidget(
+            libelle(
+                "Doublons : modèle d'IA DINOv2 (Meta, licence Apache 2.0), ONNX Runtime (Microsoft, licence MIT), numpy (licence BSD)",
+                "legende",
+            )
+        )
+        boutons = QHBoxLayout()
+        boutons.addWidget(
+            bouton(
+                "Licences du modèle d'IA de Doublons",
+                variante="contour",
+                nom_icone="file-text",
+                action=lambda: ouvrir_fichier(dossier_ressources() / "modeles" / "A-PROPOS.txt"),
+            )
+        )
+        boutons.addStretch(1)
+        d.addLayout(boutons)
         contenu.addWidget(cadre)
