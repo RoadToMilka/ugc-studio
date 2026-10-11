@@ -96,3 +96,23 @@ def test_grande_photo_lue_en_plus_petit(tmp_path):
         lue = lire_la_photo(chemin)
         assert (lue.largeur, lue.hauteur) == taille  # la taille réelle du fichier
         assert COTE_DE_LECTURE <= min(lue.image.size) < 2 * COTE_DE_LECTURE  # l'image, réduite
+
+
+def test_une_photo_changee_depuis_l_analyse(tmp_path):
+    """V4.5 : une photo déplacée, supprimée ou modifiée depuis l'analyse n'est plus celle qui a été
+    montrée : elle n'est pas mise à la corbeille."""
+    from ugc_studio.doublons.photos import a_change
+
+    chemin = tmp_path / "a.jpg"
+    chemin.write_bytes(b"photo")
+    photo = lister_les_photos([tmp_path])[0]
+    assert not a_change(photo)
+    os.utime(chemin, (photo.modifiee + 60, photo.modifiee + 60))
+    assert a_change(photo)  # modifiée (autre date)
+    os.utime(chemin, (photo.modifiee, photo.modifiee))
+    assert not a_change(photo)
+    chemin.write_bytes(b"autre photo")
+    os.utime(chemin, (photo.modifiee, photo.modifiee))
+    assert a_change(photo)  # autre taille
+    chemin.unlink()
+    assert a_change(photo)  # disparue

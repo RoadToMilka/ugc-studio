@@ -165,6 +165,7 @@ class Preuve:
     contours: float  # ressemblance des contours superposés (de SEUIL_CONTOURS à 1)
     ecart_de_couleurs: float  # écart moyen des couleurs, sur 255
     bords: bool  # l'une a des bords unis que l'autre n'a pas
+    bords_sur: int = -1  # V4.5 : laquelle a ces bords (0 la première, 1 la seconde ; -1 aucune), pour la suggestion
 
     @property
     def autres_couleurs(self) -> bool:
@@ -226,18 +227,20 @@ def _superposer(a: Vue, b: Vue) -> tuple[float, bool] | None:
 def prouver(a: Signature, b: Signature, seuil: float = SEUIL_CONTOURS) -> Preuve | None:
     """La preuve que `a` et `b` sont la même photo entière (droite ou retournée, avec ou sans bords
     unis ajoutés), ou None. `seuil` : pour les essais de réglage seulement."""
-    meilleure: tuple[float, bool, Vue, Vue, bool] | None = None
+    meilleure: tuple[float, bool, Vue, Vue, bool, bool] | None = None
     for vue_a, rognee_a in a.vues():
         for vue_b, rognee_b in b.vues():
             trouvee = _superposer(vue_a, vue_b)
             if trouvee is not None and (meilleure is None or trouvee[0] > meilleure[0]):
-                meilleure = (trouvee[0], trouvee[1], vue_a, vue_b, rognee_a != rognee_b)
+                meilleure = (trouvee[0], trouvee[1], vue_a, vue_b, rognee_a, rognee_b)
     if meilleure is None or meilleure[0] < seuil:
         return None
-    ressemblance, miroir, vue_a, vue_b, bords = meilleure
+    ressemblance, miroir, vue_a, vue_b, rognee_a, rognee_b = meilleure
     couleurs_b = vue_b.couleurs[:, ::-1] if miroir else vue_b.couleurs
     ecart = float(np.abs(vue_a.couleurs - couleurs_b).mean())
-    return Preuve(miroir, ressemblance, ecart, bords)
+    # Des bords retirés d'un seul côté : c'est celle-là qui a des bords ajoutés.
+    bords_sur = -1 if rognee_a == rognee_b else 0 if rognee_a else 1
+    return Preuve(miroir, ressemblance, ecart, rognee_a != rognee_b, bords_sur)
 
 
 def paires_candidates(signatures: list[Signature], permises: np.ndarray | None = None) -> list[tuple[int, int]]:

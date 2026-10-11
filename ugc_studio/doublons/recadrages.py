@@ -664,16 +664,26 @@ def _ecart_de_couleurs(conteneur: np.ndarray, extrait: np.ndarray, vers_conteneu
     return float(ecarts.mean())
 
 
-def paires_a_examiner(empreintes: np.ndarray, groupes: list[int], connues: set[tuple[int, int]]) -> list[tuple[int, int]]:
+def paires_a_examiner(
+    empreintes: np.ndarray, groupes: list[int], connues: set[tuple[int, int]], familles: list[int] | None = None
+) -> list[tuple[int, int]]:
     """Les paires (i < j) à examiner : pour chaque photo, ses VOISINS photos les plus proches pour l'IA
-    (au moins COSINUS_MIN), d'un autre groupe de copies, sans les paires déjà prouvées. Une seule photo
-    par groupe de copies (la première) : ses copies ont les mêmes voisins."""
+    (au moins COSINUS_MIN), d'un autre groupe, sans les paires déjà prouvées. Une seule photo par groupe
+    (la première) : ses copies identiques ont les mêmes voisins, et la même preuve.
+
+    `familles` (V4.5) : pour chaque photo, sa famille (la photo, ses copies identiques et ses copies
+    entières : autre taille, autres couleurs…). Deux photos d'une même famille ne sont pas examinées
+    ensemble (déjà prouvées) et ne prennent pas la place d'un voisin : chaque copie entière garde ses
+    VOISINS à elle (si l'une est mise à la corbeille, l'autre garde ses copies recadrées)."""
     representants = sorted(set(groupes))
     if len(representants) < 2:
         return []
     index = np.array(representants)
     proximites = empreintes[index] @ empreintes[index].T
     np.fill_diagonal(proximites, -2.0)
+    if familles is not None:
+        famille = np.asarray(familles)[index]
+        proximites[famille[:, None] == famille[None, :]] = -2.0
     paires: set[tuple[int, int]] = set()
     voisins = min(VOISINS, len(index) - 1)
     plus_proches = np.argpartition(-proximites, voisins - 1, axis=1)[:, :voisins]

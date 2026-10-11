@@ -12,23 +12,28 @@ Le parcours, de haut en bas :
    (deux vignettes, proximité, type, les deux noms, leurs dossiers).
 4. Comparaison : la paire choisie, à côté du tableau en grande fenêtre (dessous sinon) ; ↑ et ↓ ;
    « Agrandir » (ou double-clic) ; ⋯ : l'Explorateur, ou les deux dans le module Comparer.
+5. Décider (V4.5, lot 3) : « Supprimer » sous chaque photo (dans la corbeille de Windows, jamais
+   supprimée pour de bon sans question), « Ignorer » (ou la touche I) pour l'analyse en cours,
+   « Annuler » juste après ; une suggestion pour la même photo en deux versions.
 
-Rien n'est modifié : au lot 1 (4.3.0), le module ne fait que lire les photos. Il ne dépend pas d'un projet :
-ses réglages sont retenus dans les préférences de l'app. numpy et ONNX Runtime ne sont chargés qu'à la
-première analyse (jamais au démarrage de l'app).
+L'analyse ne fait que lire les photos ; seul « Supprimer » en déplace une, à la demande. Le module ne
+dépend pas d'un projet : ses réglages sont retenus dans les préférences de l'app. numpy et ONNX Runtime
+ne sont chargés qu'à la première analyse (jamais au démarrage de l'app).
 """
 
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QEvent, QSize, Qt, Signal
+from PySide6.QtGui import QGuiApplication, QPixmap
 from PySide6.QtWidgets import QBoxLayout, QFileDialog, QHBoxLayout, QTableWidgetItem, QVBoxLayout, QWidget
 from shiboken6 import isValid
 
 from ....chemins import dossier_documents
+from ....doublons import corbeille
 from ....doublons.choix import (
     AVEC_IA,
     COPIES_IA,
@@ -55,7 +60,7 @@ from ....doublons.choix import (
     SEUIL_MAX,
     SEUIL_MIN,
 )
-from ....doublons.photos import Photo, lister_les_photos
+from ....doublons.photos import Photo, a_change, lister_les_photos
 from ....dossiers import EXTENSIONS_IMAGES
 from ....images.redimensionnement import quantite
 from ....images.vignettes import faire_les_vignettes
@@ -79,8 +84,9 @@ from ...composants.elements import (
 )
 from ...composants.menu import Menu
 from ...composants.tableau import Tableau
+from ...dialogues import messages
 from ...icones import icone, icone_menu
-from ...ouvrir import montrer_dans_l_explorateur
+from ...ouvrir import montrer_dans_l_explorateur, ouvrir_la_corbeille
 from ...theme import Dimensions, Espacements, Hauteurs
 from ..base import Page
 from ..renommer.grille import qimage_depuis_pillow
@@ -147,11 +153,40 @@ ALERTE_SOUS_LES_VRAIS_DOUBLONS = (
 )
 AIDE_COMPARAISON = (
     "La paire choisie dans le tableau. Flèches ↑ et ↓ : la paire précédente ou suivante. Double-clic sur une "
-    "ligne, ou « Agrandir » : les deux photos en grand."
+    "ligne, ou « Agrandir » : les deux photos en grand. « Supprimer » met une photo dans la corbeille de "
+    "Windows ; « Ignorer » (touche I) masque la paire pour cette analyse ; « Annuler », juste après, défait l'un "
+    "ou l'autre."
 )
+AIDE_IGNORER = "Masquer cette paire pour cette analyse (touche I). Rien n'est retenu pour les analyses suivantes."
+TITRE_SANS_CORBEILLE = "Supprimer définitivement ?"
 
 TEXTE_SANS_ANALYSE = "Clique « Analyser » pour chercher les doublons."
 TEXTE_SANS_PAIRE_CHOISIE = "Choisis une paire dans le tableau."
+
+
+# La dernière décision (V4.5), que « Annuler » défait.
+SUPPRESSION, IGNOREE = "suppression", "ignoree"
+
+
+@dataclass(frozen=True)
+class Decision:
+    """La dernière décision : une photo mise à la corbeille (`numero`, `jetee`) ou une paire ignorée,
+    `paire` (les numéros des deux photos), dans le résultat de cette analyse-là (`resultat`)."""
+
+    genre: str
+    paire: tuple[int, int]
+    resultat: object
+    numero: int = -1
+    jetee: corbeille.Jetee | None = None
+
+
+def texte_de_la_suppression(jetee: corbeille.Jetee) -> str:
+    """« « TestClaude_107.jpg » mise à la corbeille. » (ou supprimée définitivement)."""
+    if not jetee.recyclee:
+        return f"« {jetee.origine.name} » supprimée définitivement."
+    if jetee.dans_la_corbeille is None:
+        return f"« {jetee.origine.name} » mise à la corbeille. Pour la remettre : « Ouvrir la corbeille », puis « Restaurer »."
+    return f"« {jetee.origine.name} » mise à la corbeille."
 
 
 def _pluriel(nombre: int, singulier: str, pluriel: str) -> str:
@@ -284,6 +319,8 @@ class PageDoublons(Page):
         self._bouton_occupe = BoutonOccupe()
         self._fenetre_en_grand: FenetrePaireEnGrand | None = None
         self._dernieres_paires: list = []  # les paires du tableau, pour y retrouver la paire choisie
+        self._derniere_decision: Decision | None = None  # V4.5 : ce que « Annuler » défait
+        self._decision_en_cours = False  # une photo part dans la corbeille (ou en revient)
         self.setAcceptDrops(True)
 
         # --- Dossiers ---
@@ -389,7 +426,11 @@ class PageDoublons(Page):
         # V4.4 : d'où vient la note (une preuve sans IA, et ce qu'elle a trouvé, ou une estimation de l'IA).
         self.origine = libelle("", "legende")
         d.addWidget(self.origine)
+        # V4.5 : celle à garder, pour la même photo en deux versions.
+        self.suggestion = libelle("", "legende")
+        d.addWidget(self.suggestion)
         self.deux_photos = DeuxPhotos()
+        self.deux_photos.supprimer_demande.connect(self.supprimer)
         d.addWidget(self.deux_photos)
         self.vide = libelle(TEXTE_SANS_PAIRE_CHOISIE, "discret")
         d.addWidget(self.vide)
@@ -401,6 +442,9 @@ class PageDoublons(Page):
         boutons.addWidget(self.bouton_suivante)
         self.bouton_agrandir = bouton("Agrandir", variante="contour", nom_icone="maximize-2", action=self.agrandir)
         boutons.addWidget(self.bouton_agrandir)
+        self.bouton_ignorer = bouton("Ignorer", variante="contour", nom_icone="eye-off", action=self.ignorer)
+        self.bouton_ignorer.setToolTip(AIDE_IGNORER)
+        boutons.addWidget(self.bouton_ignorer)
         boutons.addStretch(1)
         self.bouton_plus = bouton("", variante="icone")
         self.bouton_plus.setIcon(icone("ellipsis"))
@@ -410,9 +454,23 @@ class PageDoublons(Page):
         menu.addAction(icone_menu("folder-open"), "Afficher l'image 1 dans l'Explorateur").triggered.connect(lambda: self.montrer_dans_l_explorateur(0))
         menu.addAction(icone_menu("folder-open"), "Afficher l'image 2 dans l'Explorateur").triggered.connect(lambda: self.montrer_dans_l_explorateur(1))
         menu.addAction(icone_menu("square-split-horizontal"), "Ouvrir les deux dans Comparer").triggered.connect(self.ouvrir_dans_comparer)
+        menu.addAction(icone_menu("trash"), "Ouvrir la corbeille de Windows").triggered.connect(ouvrir_la_corbeille)
         self.bouton_plus.setMenu(menu)
         boutons.addWidget(self.bouton_plus)
         d.addLayout(boutons)
+        # V4.5 : la dernière décision (« … mise à la corbeille. ») et « Annuler », jusqu'à la suivante.
+        self.zone_decision = QWidget()
+        decision = QHBoxLayout(self.zone_decision)
+        decision.setContentsMargins(0, 0, 0, 0)
+        decision.setSpacing(Espacements.M)
+        self.texte_decision = libelle("", "secondaire")
+        decision.addWidget(self.texte_decision, 1)
+        self.bouton_annuler = bouton("Annuler", variante="contour", nom_icone="undo-2", action=self.annuler)
+        decision.addWidget(self.bouton_annuler, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.bouton_corbeille = bouton("Ouvrir la corbeille", variante="contour", nom_icone="trash", action=ouvrir_la_corbeille)
+        decision.addWidget(self.bouton_corbeille, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.zone_decision.hide()
+        d.addWidget(self.zone_decision)
 
         self.resultats = CoteACoteOuDessous(self.cadre_paires, self.cadre_comparaison)
         self.contenu.addWidget(self.resultats)
@@ -424,6 +482,7 @@ class PageDoublons(Page):
         self.champ_seuil.valueChanged.connect(self._seuil_tape)
         self.tableau.currentCellChanged.connect(lambda rang, _colonne, _avant, _colonne_avant: self._paire_choisie(rang))
         self.tableau.cellDoubleClicked.connect(lambda rang, _colonne: self.agrandir(rang))
+        self.tableau.installEventFilter(self)  # la touche I : « Ignorer »
         self._actualiser_les_dossiers()
         self._actualiser_les_paires()
 
@@ -445,8 +504,13 @@ class PageDoublons(Page):
 
     # --- Dossiers -----------------------------------------------------------------------------
 
+    @property
+    def _libre(self) -> bool:
+        """Ni analyse, ni photo en route vers la corbeille (ou en retour) : la liste peut changer."""
+        return not self._occupe and not self._decision_en_cours
+
     def choisir_dossier(self) -> None:
-        if self._occupe:
+        if not self._libre:
             return
         depart = self._preferences.lire(PREF_DOSSIER) or str(dossier_documents())
         choix = QFileDialog.getExistingDirectory(self, "Ajouter un dossier de photos", str(depart))
@@ -456,7 +520,7 @@ class PageDoublons(Page):
     def ajouter(self, dossiers: list[Path]) -> int:
         """Ajoute ces dossiers à la liste (un dossier déjà présent ne l'est pas deux fois). Renvoie le
         nombre de dossiers ajoutés."""
-        if self._occupe:
+        if not self._libre:
             return 0
         ajoutes = 0
         for dossier in dossiers:
@@ -470,7 +534,7 @@ class PageDoublons(Page):
 
     def retirer(self, dossier: Path) -> None:
         """× : le dossier quitte la liste (ses photos ne bougent pas)."""
-        if self._occupe or dossier not in self._dossiers:
+        if not self._libre or dossier not in self._dossiers:
             return
         self._dossiers.remove(dossier)
         self._dossiers_changes()
@@ -520,7 +584,7 @@ class PageDoublons(Page):
 
     def dragEnterEvent(self, evenement) -> None:  # noqa: N802 : nom imposé par Qt
         donnees = evenement.mimeData()
-        if not self._occupe and donnees.hasUrls() and dossiers_deposes(donnees):
+        if self._libre and donnees.hasUrls() and dossiers_deposes(donnees):
             evenement.acceptProposedAction()
             self.zone_depot.survol(True)
 
@@ -574,7 +638,7 @@ class PageDoublons(Page):
 
     def analyser(self) -> bool:
         """Lance l'analyse des dossiers (en arrière-plan). Renvoie True si elle commence."""
-        if self._occupe or not self._dossiers:
+        if not self._libre or not self._dossiers:
             return False
         self._arreter_les_vignettes()
         arret = threading.Event()
@@ -644,6 +708,7 @@ class PageDoublons(Page):
         resultat, memoire = retour
         self._fin()
         self._resultat, self._memoire = resultat, memoire
+        self._oublier_la_decision()  # elle parlait des paires de l'analyse précédente
         self._actualiser_les_paires()
         self._faire_les_vignettes()
         self._afficher(f"Analyse terminée en {duree_lisible(resultat.duree_s)}.", "succes")
@@ -662,6 +727,7 @@ class PageDoublons(Page):
         self._arreter_les_vignettes()
         self._resultat = None
         self._selection = None
+        self._oublier_la_decision()
 
     # --- Paires -------------------------------------------------------------------------------
 
@@ -671,8 +737,11 @@ class PageDoublons(Page):
         de seuil, toutes sont montrées."""
         return self.methode.valeur() != AVEC_IA
 
-    def _actualiser_les_paires(self) -> None:
-        """Le résumé et le tableau, selon le résultat, la méthode, « Comparer » et le seuil."""
+    def _actualiser_les_paires(self, rang: int | None = None, paire: tuple[int, int] | None = None, decision: bool = False) -> None:
+        """Le résumé et le tableau, selon le résultat, la méthode, « Comparer » et le seuil. Après une
+        décision (V4.5) : `paire`, la paire à choisir si elle est là (« Annuler ») ; sinon `rang`, le
+        même rang (la paire suivante prend la place de celle qui est partie) ; `decision` : la fenêtre
+        « Agrandir » reste ouverte et suit."""
         resultat = self._resultat
         alertes = []
         methode = self.methode.valeur()
@@ -689,7 +758,8 @@ class PageDoublons(Page):
             self._selection = resultat.paires(mode, seuil, methode)
             nombre_dossiers = len({photo.dossier for photo in resultat.photos}) or len(self._dossiers)
             seuil_montre = None if copies_seulement else self.seuil
-            self.resume.setText(texte_du_resume(len(resultat.photos), nombre_dossiers, seuil_montre, self._selection, copies_seulement or not resultat.avec_ia))
+            nombre_photos = len(resultat.photos) - len(resultat.retirees)  # sans celles mises à la corbeille
+            self.resume.setText(texte_du_resume(nombre_photos, nombre_dossiers, seuil_montre, self._selection, copies_seulement or not resultat.avec_ia))
             if methode in METHODES_AVEC_IA and not resultat.avec_ia:
                 cherchees = "les copies recadrées" if methode == COPIES_IA else "les copies recadrées et les photos proches"
                 alertes.append(f"Analysé sans IA : clique « Analyser » pour chercher aussi {cherchees}.")
@@ -701,7 +771,7 @@ class PageDoublons(Page):
                 alertes.append(illisibles)
         self.alertes.setText("\n".join(alertes))
         self.alertes.setVisible(bool(alertes))
-        self._remplir_le_tableau()
+        self._remplir_le_tableau(rang, paire, decision)
 
     def paires(self) -> list:
         """Les paires montrées dans le tableau (dans son ordre)."""
@@ -714,15 +784,16 @@ class PageDoublons(Page):
         dossier = self._dossiers[photo.dossier] if 0 <= photo.dossier < len(self._dossiers) else photo.chemin.parent
         return dossier.name or str(dossier)
 
-    def _remplir_le_tableau(self) -> None:
-        ancienne = self._paire_affichee()
+    def _remplir_le_tableau(self, rang_voulu: int | None = None, paire_voulue: tuple[int, int] | None = None, decision: bool = False) -> None:
+        ancienne = paire_voulue or self._paire_affichee()
         paires = self.paires()
-        self._fermer_la_fenetre_en_grand()  # elle montrait les paires d'avant
+        if not decision or not paires:
+            self._fermer_la_fenetre_en_grand()  # elle montrait les paires d'avant
         self.tableau.blockSignals(True)
         self.tableau.setRowCount(len(paires))
         plusieurs = len(self._dossiers) >= 2
         self.tableau.setColumnHidden(COLONNE_DOSSIERS, not plusieurs)
-        nouveau_rang = 0
+        nouveau_rang = min(rang_voulu, len(paires) - 1) if rang_voulu is not None and paires else 0
         for rang, paire in enumerate(paires):
             a, b = self._photo(paire.a), self._photo(paire.b)
             if ancienne is not None and (paire.a, paire.b) == ancienne:
@@ -755,6 +826,8 @@ class PageDoublons(Page):
             self.tableau.setCurrentCell(nouveau_rang, COLONNE_PROXIMITE)
         self.tableau.blockSignals(False)
         self._paire_choisie(nouveau_rang if paires else -1)
+        if self._fenetre_en_grand is not None and paires:
+            self._fenetre_en_grand.actualiser(len(paires), nouveau_rang)
 
     def _paire_affichee(self) -> tuple[int, int] | None:
         rang = self.tableau.currentRow()
@@ -783,16 +856,26 @@ class PageDoublons(Page):
         self.origine.setVisible(choisie)
         self.vide.setVisible(not choisie)
         self.vide.setText(TEXTE_SANS_PAIRE_CHOISIE if paires else ("Aucune paire à montrer." if self._resultat is not None else TEXTE_SANS_ANALYSE))
+        suggestion = None
         if choisie:
             paire = paires[rang]
             # Le cas seul : ce qui a changé est dit juste dessous, avec d'où vient la note (V4.4).
             self.description.setText(f"Paire {rang + 1} sur {len(paires)} · {paire.proximite} % · {NOMS_DES_CAS.get(paire.genre, paire.genre)}")
             self.origine.setText(texte_de_l_origine(paire))
+            suggestion = self._resultat.suggestion(paire)
             self.deux_photos.montrer(self.fiche(paire.a), self.fiche(paire.b))
         else:
             self.deux_photos.vider()
             self.description.setText("")
             self.origine.setText("")
+        self.suggestion.setText(suggestion.texte() if suggestion is not None else "")
+        self.suggestion.setVisible(suggestion is not None)
+        # La fenêtre « Agrandir » (non modale) montre toujours la paire choisie ici : ce qu'on y supprime
+        # ou ignore est ce qu'on y voit (relu par une relecture indépendante : ↑ ↓ dans le tableau, la
+        # fenêtre ouverte, la laissaient sur l'ancienne paire).
+        fenetre = self._fenetre_en_grand
+        if fenetre is not None and choisie and fenetre.rang != rang:
+            fenetre.aller(rang)
         self._mettre_a_jour_les_boutons()
 
     def rang_choisi(self) -> int:
@@ -824,14 +907,33 @@ class PageDoublons(Page):
         self._fermer_la_fenetre_en_grand()
         fenetre = FenetrePaireEnGrand(self, self._paire_pour_la_fenetre, rang, len(paires))
         fenetre.rang_change.connect(self.choisir)
+        # V4.5 : décider aussi en grand ; la page fait le travail, la fenêtre suit.
+        fenetre.supprimer_demande.connect(lambda laquelle, f=fenetre: self._depuis_la_fenetre(f) and self.supprimer(laquelle))
+        fenetre.ignorer_demande.connect(lambda f=fenetre: self._depuis_la_fenetre(f) and self.ignorer())
+        fenetre.annuler_demande.connect(self.annuler)
         fenetre.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        fenetre.destroyed.connect(self._fenetre_en_grand_fermee)
+        # Quand une fenêtre se ferme, seule elle est oubliée : une fenêtre fermée pour en rouvrir une autre
+        # n'est détruite qu'ensuite, et ne doit pas faire oublier la nouvelle (relecture indépendante).
+        fenetre.destroyed.connect(lambda *_arguments, f=fenetre: self._fenetre_en_grand_fermee(f))
         self._fenetre_en_grand = fenetre
+        if self.zone_decision.isVisible():
+            fenetre.montrer_la_decision(self.texte_decision.text(), self.texte_decision.property("role") or "secondaire", self.bouton_annuler.isVisible())
+        self._mettre_a_jour_les_boutons()
         fenetre.show()
         return fenetre
 
-    def _fenetre_en_grand_fermee(self, *_arguments) -> None:
-        self._fenetre_en_grand = None
+    def _fenetre_en_grand_fermee(self, fenetre) -> None:
+        if self._fenetre_en_grand is fenetre:
+            self._fenetre_en_grand = None
+
+    def _depuis_la_fenetre(self, fenetre) -> bool:
+        """Une décision demandée dans la fenêtre « Agrandir » : elle vaut pour la paire que la fenêtre
+        montre. La page s'y place d'abord (elles vont ensemble ; c'est une sécurité)."""
+        if fenetre is not self._fenetre_en_grand:
+            return False
+        if self.rang_choisi() != fenetre.rang:
+            self.choisir(fenetre.rang)
+        return self.rang_choisi() == fenetre.rang
 
     def _fermer_la_fenetre_en_grand(self) -> None:
         if self._fenetre_en_grand is not None:
@@ -895,13 +997,21 @@ class PageDoublons(Page):
     # --- Outils ---------------------------------------------------------------------------------
 
     def _mettre_a_jour_les_boutons(self) -> None:
-        self.bouton_analyser.setEnabled((bool(self._dossiers) and not self._occupe) or self._bouton_occupe.est(self.bouton_analyser))
+        libre = not self._occupe and not self._decision_en_cours
+        self.bouton_analyser.setEnabled((bool(self._dossiers) and libre) or self._bouton_occupe.est(self.bouton_analyser))
         rang, nombre = self.rang_choisi(), len(self.paires())
         choisie = 0 <= rang < nombre
         self.bouton_precedente.setEnabled(choisie and rang > 0)
         self.bouton_suivante.setEnabled(choisie and rang < nombre - 1)
         self.bouton_agrandir.setEnabled(choisie)
         self.bouton_plus.setEnabled(choisie)
+        # V4.5 : décider, seulement quand rien d'autre ne se fait (ni analyse, ni photo en route).
+        for supprimer in self.deux_photos.boutons_supprimer:
+            supprimer.setEnabled(choisie and libre)
+        self.bouton_ignorer.setEnabled(choisie and libre)
+        self.bouton_annuler.setEnabled(self._derniere_decision is not None and libre)
+        if self._fenetre_en_grand is not None:
+            self._fenetre_en_grand.permettre_les_decisions(libre, self._derniere_decision is not None and libre)
 
     def _occuper(self, occupe: bool, bouton_occupe=None) -> None:
         """Pendant l'analyse : le cercle tourne dans « Analyser » ; les dossiers et leurs réglages sont
@@ -917,6 +1027,213 @@ class PageDoublons(Page):
     def _afficher(self, message: str, role: str) -> None:
         # Vert, rouge ou orange : effacé après 8 s (V3.2) ; la ligne garde sa place.
         afficher_message(self.statut, message, role, cacher_vide=False)
+
+    # --- Décider (V4.5) -------------------------------------------------------------------------
+
+    @property
+    def derniere_decision(self) -> Decision | None:
+        return self._derniere_decision
+
+    @property
+    def decision_en_cours(self) -> bool:
+        return self._decision_en_cours
+
+    def paire_choisie(self):
+        """La paire montrée dans la comparaison (doublons/paires.py : Paire), ou None."""
+        paires, rang = self.paires(), self.rang_choisi()
+        return paires[rang] if 0 <= rang < len(paires) else None
+
+    def supprimer(self, laquelle: int) -> bool:
+        """« Supprimer » sous une photo de la paire (0 : celle de gauche, 1 : celle de droite) : elle part
+        dans la corbeille de Windows, en arrière-plan. Renvoie True si c'est commencé.
+
+        Pas de question avant : on peut l'en ressortir (« Annuler »). Une photo changée depuis l'analyse
+        n'est pas touchée ; un disque sans corbeille : la question d'abord (_mise_a_la_corbeille_impossible)."""
+        paire = self.paire_choisie()
+        if paire is None or self._occupe or self._decision_en_cours:
+            return False
+        numero = paire.a if laquelle == 0 else paire.b
+        photo = self._photo(numero)
+        if a_change(photo):
+            self._dire_la_decision(
+                f"« {photo.chemin.name} » a changé depuis l'analyse (déplacée, modifiée ou supprimée ailleurs) : elle n'est "
+                "pas touchée. Clique « Analyser » pour mettre la liste à jour.",
+                "avertissement",
+            )
+            return False
+        rang = self.rang_choisi()
+        resultat = self._resultat
+        # La fenêtre de l'app (ou « Agrandir ») : si Windows devait demander « supprimer définitivement ? »
+        # (une photo plus grande que la corbeille), sa question s'afficherait au-dessus d'elle.
+        proprietaire = (self._fenetre_en_grand or self).window()
+        fenetre = int(proprietaire.winId()) if QGuiApplication.platformName() == "windows" else None
+        self._decider(True)
+        taches.lancer(
+            lambda: corbeille.mettre_a_la_corbeille(photo.chemin, fenetre),
+            lambda jetee: self._mise_a_la_corbeille(resultat, numero, (paire.a, paire.b), rang, jetee),
+            lambda erreur: self._mise_a_la_corbeille_impossible(resultat, numero, (paire.a, paire.b), rang, erreur),
+        )
+        return True
+
+    def _mise_a_la_corbeille(self, resultat, numero: int, paire: tuple[int, int], rang: int, jetee: corbeille.Jetee) -> None:
+        if not isValid(self):
+            return
+        self._decider(False)
+        resultat.retirer(numero)
+        if resultat is not self._resultat:
+            return  # une autre analyse est montrée depuis : rien d'autre à faire
+        self._derniere_decision = Decision(SUPPRESSION, paire, resultat, numero, jetee) if jetee.recyclee else None
+        self._actualiser_les_dossiers()  # « 162 images »
+        self._actualiser_les_paires(rang=rang, decision=True)
+        a_ressortir = jetee.recyclee and jetee.dans_la_corbeille is not None
+        self._dire_la_decision(texte_de_la_suppression(jetee), "secondaire", annuler=a_ressortir, corbeille=jetee.recyclee and not a_ressortir)
+        self._rendre_la_main_au_tableau()
+
+    def _mise_a_la_corbeille_impossible(self, resultat, numero: int, paire: tuple[int, int], rang: int, erreur: Exception) -> None:
+        if not isValid(self):
+            return
+        self._decider(False)
+        photo = resultat.photos[numero]
+        if isinstance(erreur, corbeille.PasDeCorbeille):
+            # Windows l'aurait supprimée pour de bon : rien n'a été fait, la question d'abord.
+            if not messages.confirmer(
+                self._fenetre_en_grand or self,
+                TITRE_SANS_CORBEILLE,
+                f"Windows ne peut pas mettre « {photo.chemin.name} » dans la corbeille : ce disque n'en a pas, comme "
+                "souvent une clé USB ou un dossier réseau.",
+                "Supprimée définitivement, elle ne pourra pas être récupérée : ni « Annuler », ni la corbeille.",
+                action="Supprimer définitivement",
+                icone_action="trash",
+                annuler="Garder la photo",
+            ):
+                self._dire_la_decision(f"« {photo.chemin.name} » est gardée.", "secondaire")
+                return
+            if a_change(photo):
+                self._dire_la_decision(f"« {photo.chemin.name} » a changé depuis l'analyse : elle n'est pas touchée.", "avertissement")
+                return
+            self._decider(True)
+            taches.lancer(
+                lambda: corbeille.supprimer_definitivement(photo.chemin),
+                lambda jetee: self._mise_a_la_corbeille(resultat, numero, paire, rang, jetee),
+                lambda autre: self._mise_a_la_corbeille_impossible(resultat, numero, paire, rang, autre),
+            )
+            return
+        if isinstance(erreur, corbeille.Gardee):  # « Non » à la question de Windows
+            self._dire_la_decision(f"« {photo.chemin.name} » est gardée.", "secondaire")
+            return
+        raison = str(erreur) if isinstance(erreur, corbeille.ErreurDeCorbeille) else (getattr(erreur, "strerror", None) or str(erreur))
+        self._dire_la_decision(f"Impossible de supprimer « {photo.chemin.name} » : {raison}.", "erreur")
+
+    def ignorer(self) -> bool:
+        """« Ignorer » (ou la touche I) : la paire disparaît pour cette analyse, la suivante s'affiche.
+        Renvoie True si la paire a été ignorée."""
+        paire = self.paire_choisie()
+        if paire is None or self._occupe or self._decision_en_cours:
+            return False
+        rang = self.rang_choisi()
+        self._resultat.ignorer(paire.a, paire.b)
+        self._derniere_decision = Decision(IGNOREE, (paire.a, paire.b), self._resultat)
+        self._actualiser_les_paires(rang=rang, decision=True)
+        noms = f"« {self._photo(paire.a).chemin.name} » et « {self._photo(paire.b).chemin.name} »"
+        self._dire_la_decision(f"Paire ignorée : {noms}.", "secondaire", annuler=True)
+        self._rendre_la_main_au_tableau()
+        return True
+
+    def annuler(self) -> bool:
+        """« Annuler » : défait la dernière décision (la photo revient à sa place, ou la paire revient
+        dans le tableau). Renvoie True si c'est fait ou commencé."""
+        decision = self._derniere_decision
+        if decision is None or self._occupe or self._decision_en_cours or decision.resultat is not self._resultat:
+            return False
+        if decision.genre == IGNOREE:
+            self._derniere_decision = None
+            self._resultat.ne_plus_ignorer(*decision.paire)
+            self._actualiser_les_paires(paire=decision.paire, decision=True)
+            self._dire_la_decision("La paire est revenue dans le tableau.", "secondaire")
+            self._rendre_la_main_au_tableau()
+            return True
+        self._decider(True)
+        taches.lancer(
+            lambda: corbeille.ressortir(decision.jetee),
+            lambda _rien: self._remise_a_sa_place(decision),
+            lambda erreur: self._remise_impossible(decision, erreur),
+        )
+        return True
+
+    def _remise_a_sa_place(self, decision: Decision, deja: bool = False) -> None:
+        if not isValid(self):
+            return
+        self._decider(False)
+        decision.resultat.remettre(decision.numero)
+        if self._derniere_decision is decision:
+            self._derniere_decision = None
+        if decision.resultat is self._resultat:
+            self._actualiser_les_dossiers()
+            self._actualiser_les_paires(paire=decision.paire, decision=True)
+        nom = decision.jetee.origine.name
+        self._dire_la_decision(f"« {nom} » est déjà revenue à sa place." if deja else f"« {nom} » est revenue à sa place.", "secondaire")
+        self._rendre_la_main_au_tableau()
+
+    def _remise_impossible(self, decision: Decision, erreur: Exception) -> None:
+        if not isValid(self):
+            return
+        if isinstance(erreur, corbeille.DejaRevenue):
+            self._remise_a_sa_place(decision, deja=True)
+            return
+        self._decider(False)
+        if self._derniere_decision is decision:
+            self._derniere_decision = None
+        nom = decision.jetee.origine.name
+        dedans = decision.jetee.dans_la_corbeille is not None and decision.jetee.dans_la_corbeille.exists()
+        suite = " Elle est toujours dans la corbeille de Windows, où « Restaurer » la remet." if dedans else ""
+        self._dire_la_decision(f"Impossible de remettre « {nom} » à sa place : {erreur}.{suite}", "erreur", corbeille=dedans)
+
+    def _decider(self, en_cours: bool) -> None:
+        """Une photo part dans la corbeille (ou en revient) : les boutons qui décident attendent, et les
+        dossiers ne changent pas entre-temps."""
+        self._decision_en_cours = en_cours
+        self.cadre_dossiers.setEnabled(not en_cours and not self._occupe)
+        self._mettre_a_jour_les_boutons()
+
+    def _dire_la_decision(self, texte: str, role: str, annuler: bool = False, corbeille: bool = False) -> None:
+        """La ligne sous la comparaison : la dernière décision (ou ce qui l'a empêchée), avec « Annuler »
+        quand elle peut être défaite ; elle reste jusqu'à la suivante (pas d'effacement au bout de 8 s :
+        « Annuler » doit rester à portée)."""
+        self.texte_decision.setText(texte)
+        if self.texte_decision.property("role") != role:
+            self.texte_decision.setProperty("role", role)
+            self.texte_decision.style().unpolish(self.texte_decision)
+            self.texte_decision.style().polish(self.texte_decision)
+        self.bouton_annuler.setVisible(annuler)
+        self.bouton_corbeille.setVisible(corbeille)
+        self.zone_decision.setVisible(bool(texte))
+        if self._fenetre_en_grand is not None:
+            self._fenetre_en_grand.montrer_la_decision(texte, role, annuler)
+        self._mettre_a_jour_les_boutons()
+
+    def _oublier_la_decision(self) -> None:
+        self._derniere_decision = None
+        self.zone_decision.hide()
+
+    def _rendre_la_main_au_tableau(self) -> None:
+        """Après une décision prise à la souris : ↑, ↓ et I continuent de marcher dans le tableau (sauf si
+        la fenêtre « Agrandir » est ouverte : elle garde la main)."""
+        if self._fenetre_en_grand is None and self.tableau.isVisible():
+            self.tableau.setFocus()
+
+    def eventFilter(self, objet, evenement) -> bool:  # noqa: N802 : nom imposé par Qt
+        """La touche I dans le tableau : « Ignorer » (sans Ctrl, Alt ni Windows). Gardée enfoncée, elle
+        n'ignore qu'une paire : les répétitions du clavier sont sans effet."""
+        if (
+            objet is self.tableau
+            and evenement.type() == QEvent.Type.KeyPress
+            and evenement.key() == Qt.Key.Key_I
+            and not evenement.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier)
+        ):
+            if not evenement.isAutoRepeat():
+                self.ignorer()
+            return True
+        return super().eventFilter(objet, evenement)
 
 
 def _meme_chemin(a: Path, b: Path) -> bool:

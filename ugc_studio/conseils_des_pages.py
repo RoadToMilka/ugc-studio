@@ -1242,14 +1242,36 @@ DOUBLONS = PageDeConseils(
                 "Flèches ↑ et ↓ : la paire précédente ou suivante, sans quitter le clavier.",
                 "« Agrandir » ou double-clic : les deux photos en grand, côte à côte, ou l'une puis l'autre à la "
                 "même place (barre Espace) : c'est la meilleure façon de voir une petite différence.",
-                "Menu ⋯ : afficher l'une des photos dans l'Explorateur, ou ouvrir les deux dans le module Comparer.",
+                "Menu ⋯ : afficher l'une des photos dans l'Explorateur, ouvrir les deux dans le module Comparer, ou "
+                "ouvrir la corbeille de Windows.",
+            ),
+        ),
+        Rubrique(
+            "Supprimer ou ignorer",
+            (
+                "« Supprimer », sous chaque photo de la paire : elle part dans la corbeille de Windows, sans question "
+                "puisqu'on peut l'en ressortir. Ses paires disparaissent du tableau, et la paire suivante s'affiche.",
+                "« Annuler », juste après : la photo revient à sa place, intacte. Pour une photo supprimée plus tôt : "
+                "menu ⋯, « Ouvrir la corbeille de Windows », puis « Restaurer ».",
+                "« Ignorer » (ou la touche I dans le tableau) : la paire disparaît pour cette analyse, et « Annuler » "
+                "la remet. Rien n'est retenu pour les analyses suivantes.",
+                "Une suggestion pour la même photo en deux versions : garder la photo entière plutôt qu'une partie "
+                "recadrée, celle sans bords ajoutés, la plus grande, puis la moins compressée. Rien pour deux photos "
+                "qui se ressemblent seulement : c'est une question de goût.",
+                "Une photo en plusieurs exemplaires : en supprimer un fait apparaître la même paire avec une autre "
+                "copie. On décide photo par photo, jusqu'à n'en garder qu'une.",
+                "Dans la fenêtre « Agrandir » aussi : « Supprimer » sous chaque photo, « Ignorer » (touche I), "
+                "« Annuler ».",
             ),
         ),
         Rubrique(
             "Sécurité",
             (
-                "L'analyse ne fait que lire tes photos : elle ne les modifie, ne les déplace et ne les supprime "
-                "jamais.",
+                "L'analyse ne fait que lire tes photos. Seul « Supprimer » en déplace une, dans la corbeille de "
+                "Windows, et seulement celle que tu choisis : rien n'est jamais supprimé tout seul.",
+                "Sur un disque sans corbeille (une clé USB, un dossier réseau), Windows supprimerait la photo pour de "
+                "bon : l'app le voit avant et te le demande. Une photo changée depuis l'analyse (déplacée, modifiée) "
+                "n'est pas touchée.",
                 "Ce que l'analyse a lu reste en mémoire le temps de la séance : après avoir ajouté un dossier, "
                 "« Analyser » ne relit que les nouvelles photos. Rien n'est gardé sur le disque.",
             ),

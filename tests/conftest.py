@@ -19,6 +19,16 @@ def dossier_donnees_temporaire(tmp_path, monkeypatch):
     return dossier
 
 
+@pytest.fixture(autouse=True)
+def fausse_corbeille(tmp_path, monkeypatch):
+    """Doublons (V4.5) : « Supprimer » met les photos dans une fausse corbeille, un dossier temporaire,
+    même sous Windows : aucun test n'envoie de fichier dans la vraie corbeille, sauf ceux qui la
+    vérifient exprès (tests/test_doublons_corbeille.py, sous Windows)."""
+    dossier = tmp_path / "corbeille"
+    monkeypatch.setenv("UGC_STUDIO_FAUSSE_CORBEILLE", str(dossier))
+    return dossier
+
+
 # Date « du jour » fixée pendant les tests : les prix de Google changent à des dates annoncées
 # (ex. hausse du 01/01/2027), et un test ne doit pas donner un autre résultat selon le jour où il
 # est lancé.
