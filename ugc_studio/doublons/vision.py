@@ -15,6 +15,8 @@ déclinées : document « UGC Studio - V4.3 Doublons », §9) :
   bout ;
 - la photo est décrite droite et retournée, et les deux résumés sont additionnés : une photo et sa
   copie retournée en miroir ont exactement la même empreinte.
+V4.4 (lot 2) : ce que le modèle voit dans chaque carreau est gardé aussi, droit et retourné, pour
+retrouver une photo recadrée, zoomée ou tournée (recadrages.py).
 Deux empreintes se comparent par leur « cosinus » : 1 pour deux photos que le modèle voit identiques,
 autour de 0,5 pour deux photos sans rapport (sur ce lot).
 """
@@ -33,6 +35,7 @@ from PIL import Image
 from ..chemins import dossier_ressources
 from ..ressource_du_exe import lire_la_ressource
 from .copies import rogner_bords_unis
+from .recadrages import Carreaux
 from .modeles import MODELE_DE_L_APP, MODELES, NOM_DE_RESSOURCE, Modele
 
 COTE = 224  # petit côté de la photo vue par le modèle
@@ -116,19 +119,36 @@ class Descripteur:
         self._session = ort.InferenceSession(octets if octets is not None else octets_du_modele(), options, providers=["CPUExecutionProvider"])
         self._entree = self._session.get_inputs()[0].name
 
-    def _resume(self, image: Image.Image) -> np.ndarray:
+    def _passer(self, image: Image.Image) -> tuple[np.ndarray, np.ndarray, tuple[int, int]]:
+        """Ce que le modèle voit : son résumé de la photo (768 nombres), ses carreaux (un par ligne, dans
+        l'ordre de lecture) et la taille de l'image qu'il a vue (largeur, hauteur)."""
         pixels = preparer_pour_le_modele(image)
         etat = self._session.run(None, {self._entree: pixels})[0][0]
-        carreaux = (pixels.shape[2] // CARREAU) * (pixels.shape[3] // CARREAU)
-        global_, details = etat[0], etat[etat.shape[0] - carreaux :].mean(axis=0)
-        return np.concatenate([_normee(global_), _normee(details)])
+        hauteur, largeur = pixels.shape[2], pixels.shape[3]
+        carreaux = etat[etat.shape[0] - (hauteur // CARREAU) * (largeur // CARREAU) :]
+        resume = np.concatenate([_normee(etat[0]), _normee(carreaux.mean(axis=0))])
+        return resume, carreaux, (largeur, hauteur)
+
+    def decrire_rognee(self, rognee: Image.Image) -> tuple[np.ndarray, Carreaux]:
+        """L'empreinte visuelle de la photo (RGB, dans le bon sens, ses bords unis déjà retirés) : 768
+        nombres, de longueur 1 ; et ses carreaux, droits et retournés (V4.4, recadrages.py)."""
+        resume_droit, droits, taille = self._passer(rognee)
+        resume_retourne, retournes, _ = self._passer(rognee.transpose(Image.Transpose.FLIP_LEFT_RIGHT))
+        largeur, hauteur = taille
+        colonnes = largeur // CARREAU
+        rangs, cols = np.divmod(np.arange(len(droits)), colonnes)
+        centres = np.stack([(cols + 0.5) * CARREAU, (rangs + 0.5) * CARREAU], axis=1).astype(np.float32)
+
+        def normes(carreaux: np.ndarray) -> np.ndarray:
+            return (carreaux / np.maximum(np.linalg.norm(carreaux, axis=1, keepdims=True), 1e-12)).astype(np.float16)
+
+        empreinte = _normee(resume_droit + resume_retourne).astype(np.float32)
+        return empreinte, Carreaux(normes(droits), normes(retournes), centres, taille)
 
     def decrire(self, image: Image.Image) -> np.ndarray:
         """L'empreinte visuelle de la photo (RGB, dans le bon sens) : 768 nombres, de longueur 1."""
         rognee, _bords = rogner_bords_unis(image)
-        droite = self._resume(rognee)
-        retournee = self._resume(rognee.transpose(Image.Transpose.FLIP_LEFT_RIGHT))
-        return _normee(droite + retournee).astype(np.float32)
+        return self.decrire_rognee(rognee)[0]
 
 
 _descripteur: Descripteur | None = None

@@ -11,6 +11,7 @@ from PIL import PngImagePlugin
 from photos_factices import miroir, photo_factice, plus_petite
 from ugc_studio.doublons import analyse as module_analyse
 from ugc_studio.doublons.analyse import COMPARAISON, IA, LECTURE, MODELE, AnalyseArretee, Memoire, analyser
+from ugc_studio.doublons.choix import COPIES_IA, SANS_IA
 from ugc_studio.doublons.paires import DANS_CHAQUE_DOSSIER, ENTRE_LES_DOSSIERS, IDENTIQUES, LES_DEUX, MEME_PHOTO, RESSEMBLANTES, note_de_l_ia
 from ugc_studio.doublons.photos import lister_les_photos
 
@@ -198,6 +199,8 @@ def test_copies_seulement_apres_une_analyse_avec_ia(tmp_path):
     a, b = _vecteurs_de_cosinus(0.96)
     resultat = analyser(lister_les_photos([tmp_path]), True, Memoire(), descripteur_ia=lambda: FauxModele({(500, 640): a, (502, 640): b}))
     avec = _noms(resultat, resultat.paires(LES_DEUX, 85))
-    sans = _noms(resultat, resultat.paires(LES_DEUX, 85, avec_ia=False))
+    sans = _noms(resultat, resultat.paires(LES_DEUX, 85, SANS_IA))
+    toutes = _noms(resultat, resultat.paires(LES_DEUX, 85, COPIES_IA))
     assert [genre for *_noms_, genre, _note, _details in avec] == [MEME_PHOTO, RESSEMBLANTES]
     assert [genre for *_noms_, genre, _note, _details in sans] == [MEME_PHOTO]
+    assert toutes == sans  # le faux modèle ne donne pas de carreaux : pas de recadrage à prouver

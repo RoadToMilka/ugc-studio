@@ -1,7 +1,8 @@
-"""L'analyse d'un lot de photos (V4.3) : lire chaque photo une fois, trouver les copies (sans IA) et,
-avec la méthode « avec IA », décrire chaque photo par le modèle. Sans interface : la page Doublons la
-lance en arrière-plan, et le résultat lui permet de montrer les paires de n'importe quel mode
-(« Comparer ») et de n'importe quel seuil sans rien refaire.
+"""L'analyse d'un lot de photos (V4.3) : lire chaque photo une fois, trouver les copies entières (sans
+IA) et, avec une méthode avec IA, décrire chaque photo par le modèle, puis prouver les copies
+recadrées, zoomées ou tournées (V4.4, recadrages.py). Sans interface : la page Doublons la lance en
+arrière-plan, et le résultat lui permet de montrer les paires de n'importe quelle méthode, de
+n'importe quel mode (« Comparer ») et de n'importe quel seuil sans rien refaire.
 
 Ce qui est lu reste en mémoire le temps de la séance (Memoire) : relancer l'analyse après avoir ajouté
 un dossier ne relit que les nouvelles photos (et celles modifiées entre-temps). Rien n'est écrit sur le
@@ -21,10 +22,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageChops, ImageOps
 
-from .choix import COMPARAISON, IA, LECTURE, MODELE
-from .copies import Preuve, Signature, paires_candidates, prouver, signature
+from . import recadrages
+from .choix import AVEC_IA, COMPARAISON, COPIES_IA, IA, LECTURE, MODELE, RECADRAGES
+from .copies import Preuve, Signature, paires_candidates, prouver, rogner_bords_unis, signature
 from .paires import IDENTIQUES, MEME_PHOTO, Paire, Selection, ToutesLesPaires, paires_permises
 from .photos import Photo, PhotoLue, lire_la_photo
+from .recadrages import Detail, PreuveRecadrage
 
 LECTEURS = 3  # photos lues en même temps (Pillow décode en parallèle)
 EN_AVANCE = 6  # photos lues d'avance, au plus (mémoire)
@@ -61,6 +64,7 @@ class _Lue:
     infos: Infos
     signature: Signature
     ia: np.ndarray | None = None
+    detail: Detail | None = None  # ses carreaux et sa photo réduite, pour les recadrages (avec IA)
 
 
 class Memoire:
@@ -97,18 +101,21 @@ class Resultat:
     preuves: dict[tuple[int, int], Preuve]
     empreintes: np.ndarray | None  # n × 768 (avec IA), sinon None
     duree_s: float
-    _par_mode: dict[tuple[str, bool], ToutesLesPaires] = field(default_factory=dict, repr=False)
+    recadrages: dict[tuple[int, int], PreuveRecadrage] = field(default_factory=dict)  # V4.4 (avec IA)
+    _par_mode: dict[tuple[str, str], ToutesLesPaires] = field(default_factory=dict, repr=False)
 
     @property
     def dossiers(self) -> list[int]:
         return [photo.dossier for photo in self.photos]
 
-    def paires(self, mode: str, seuil: int, avec_ia: bool = True) -> Selection:
-        """Les paires de ce mode au-dessus de ce seuil, les plus proches d'abord. `avec_ia=False` : les
-        copies seulement (identiques et même photo), même si l'IA a servi."""
-        cle = (mode, avec_ia and self.empreintes is not None)
+    def paires(self, mode: str, seuil: int, methode: str = AVEC_IA) -> Selection:
+        """Les paires de ce mode au-dessus de ce seuil, les plus proches d'abord, selon la méthode :
+        SANS_IA, les copies entières (identiques et même photo entière, même si l'IA a servi) ;
+        COPIES_IA, aussi les copies recadrées, zoomées ou tournées ; AVEC_IA, aussi les photos que l'IA
+        juge proches. Sans l'IA à l'analyse, les deux dernières ne montrent que les copies entières."""
+        cle = (mode, methode)
         if cle not in self._par_mode:
-            self._par_mode[cle] = self._toutes(*cle)
+            self._par_mode[cle] = self._toutes(mode, methode)
         return self._par_mode[cle].au_dessus(seuil)
 
     def details(self, a: int, b: int, preuve: Preuve | None) -> tuple[str, ...]:
@@ -131,6 +138,14 @@ class Resultat:
             details.append("autre compression")
         return tuple(details)
 
+    def details_du_recadrage(self, a: int, b: int, preuve: PreuveRecadrage) -> tuple[str, ...]:
+        """Ce qui distingue deux photos dont l'une est l'autre recadrée, zoomée ou tournée : « recadrée
+        (55 % gardée) », « tournée de 6° », « retournée », « autres couleurs », et « autre format »."""
+        details = list(preuve.details())
+        if self.infos[a].format != self.infos[b].format:
+            details.append("autre format")
+        return tuple(details) or ("autre taille",)
+
     def cosinus(self, a: int, b: int) -> float | None:
         """La proximité vue par l'IA (de -1 à 1), quand l'IA a servi."""
         if self.empreintes is None:
@@ -142,7 +157,7 @@ class Resultat:
         identiques ; avec `memes_photos`, aussi ses copies prouvées (même photo, modifiée). Les photos
         d'un groupe ont à peu près les mêmes ressemblances avec toutes les autres."""
         groupe = list(range(len(self.photos)))
-        liees = self.identiques | self.memes_pixels | (set(self.preuves) if memes_photos else set())
+        liees = self.identiques | self.memes_pixels | ((set(self.preuves) | set(self.recadrages)) if memes_photos else set())
         for a, b in sorted(liees):
             racine_a, racine_b = groupe[a], groupe[b]
             while groupe[racine_a] != racine_a:
@@ -158,11 +173,12 @@ class Resultat:
             groupe[numero] = racine
         return groupe
 
-    def _toutes(self, mode: str, avec_ia: bool) -> ToutesLesPaires:
-        """Toutes les paires du mode. Les copies identiques entre elles sont toutes montrées ; les copies
-        prouvées, une seule par couple de groupes de copies identiques ; les paires de l'IA, une seule
-        par couple de groupes de copies (identiques ou prouvées). Sans cela, une photo présente en
-        plusieurs exemplaires ferait apparaître chacune de ses ressemblances plusieurs fois."""
+    def _toutes(self, mode: str, methode: str) -> ToutesLesPaires:
+        """Toutes les paires du mode et de la méthode. Les copies identiques entre elles sont toutes
+        montrées ; les copies prouvées (entières, puis recadrées), une seule par couple de groupes de
+        copies identiques ; les paires de l'IA, une seule par couple de groupes de copies (identiques ou
+        prouvées). Sans cela, une photo présente en plusieurs exemplaires ferait apparaître chacune de
+        ses ressemblances plusieurs fois."""
         permises = paires_permises(self.dossiers, mode) if self.photos else np.zeros((0, 0), dtype=bool)
         groupe = self.groupes()
         prouvees: list[Paire] = []
@@ -181,14 +197,21 @@ class Resultat:
             for (a, b), preuve in self.preuves.items()
             if (a, b) not in connues and permises[a, b]
         ]
+        if methode in (COPIES_IA, AVEC_IA):
+            meme_photo += [
+                Paire(a, b, preuve.proximite(), MEME_PHOTO, self.details_du_recadrage(a, b, preuve), self.cosinus(a, b), preuve)
+                for (a, b), preuve in self.recadrages.items()
+                if (a, b) not in connues and (a, b) not in self.preuves and permises[a, b]
+            ]
         for paire in sorted(meme_photo, key=lambda p: p.cle_de_tri):
             couple = (min(groupe[paire.a], groupe[paire.b]), max(groupe[paire.a], groupe[paire.b]))
             if couple not in couples_vus:
                 couples_vus.add(couple)
                 prouvees.append(paire)
         connues |= set(self.preuves)
-        if not avec_ia or self.empreintes is None or len(self.photos) < 2:
+        if methode != AVEC_IA or self.empreintes is None or len(self.photos) < 2:
             return ToutesLesPaires(prouvees)
+        connues |= set(self.recadrages)
         restantes = np.triu(permises, 1)
         for a, b in connues:
             restantes[a, b] = False
@@ -281,7 +304,7 @@ def analyser(
                     else:
                         lue = deja or _Lue(Infos(lue_brute.empreinte, lue_brute.largeur, lue_brute.hauteur, lue_brute.format), signee)
                         if modele is not None and lue.ia is None:
-                            lue.ia = modele.decrire(lue_brute.image)
+                            _decrire(modele, lue, lue_brute.image)
                         memoire.garder(photo, lue)
                         lues.append((photo, lue))
                 faites += 1
@@ -322,4 +345,45 @@ def analyser(
                 pixels.add((a, b))
 
     empreintes = np.stack([lue.ia for _photo, lue in lues]).astype(np.float32) if avec_ia and lues else None
-    return Resultat(photos_lues, infos, illisibles, avec_ia, identiques, pixels, preuves, empreintes, time.perf_counter() - debut)
+    resultat = Resultat(photos_lues, infos, illisibles, avec_ia, identiques, pixels, preuves, empreintes, 0.0)
+    if empreintes is not None:
+        details = [lue.detail for _photo, lue in lues]
+        resultat.recadrages = _recadrages(resultat, details, dire, arret)
+    resultat.duree_s = time.perf_counter() - debut
+    return resultat
+
+
+def _decrire(modele, lue: _Lue, image: Image.Image) -> None:
+    """L'empreinte de la photo pour l'IA et, si le modèle les donne, ses carreaux (V4.4) : ce qu'il faut
+    pour prouver un recadrage. Un modèle sans carreaux (les faux modèles des tests) donne l'empreinte
+    seule : pas de recherche des recadrages pour cette photo."""
+    if hasattr(modele, "decrire_rognee"):
+        rognee, _bords = rogner_bords_unis(image)
+        lue.ia, carreaux = modele.decrire_rognee(rognee)
+        lue.detail = recadrages.detail(rognee, carreaux)
+    else:
+        lue.ia = modele.decrire(image)
+
+
+def _recadrages(resultat: Resultat, details: list[Detail | None], dire, arret: threading.Event) -> dict[tuple[int, int], PreuveRecadrage]:
+    """Les copies recadrées, zoomées ou tournées (V4.4) : les paires que l'IA voit assez proches
+    (recadrages.paires_a_examiner), prouvées sans IA (recadrages.prouver)."""
+    connues = resultat.identiques | resultat.memes_pixels | set(resultat.preuves)
+    a_examiner = [
+        (a, b)
+        for a, b in recadrages.paires_a_examiner(resultat.empreintes, resultat.groupes(memes_photos=True), connues)
+        if details[a] is not None and details[b] is not None
+    ]
+    trouves: dict[tuple[int, int], PreuveRecadrage] = {}
+    dire(Avancement(RECADRAGES, 0, len(a_examiner)))
+    for rang, (a, b) in enumerate(a_examiner):
+        if arret.is_set():
+            raise AnalyseArretee()
+        taille_a = (resultat.infos[a].largeur, resultat.infos[a].hauteur)
+        taille_b = (resultat.infos[b].largeur, resultat.infos[b].hauteur)
+        preuve = recadrages.prouver(details[a], details[b], taille_a, taille_b, graine=a * 100_003 + b)
+        if preuve is not None:
+            trouves[(a, b)] = preuve
+        if rang % 16 == 15 or rang == len(a_examiner) - 1:
+            dire(Avancement(RECADRAGES, rang + 1, len(a_examiner)))
+    return trouves

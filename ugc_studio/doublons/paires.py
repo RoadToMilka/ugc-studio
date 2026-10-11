@@ -74,6 +74,7 @@ class Paire:
     genre: str
     details: tuple[str, ...] = ()
     ia: float | None = None
+    recadrage: object | None = None  # V4.4 : la preuve, quand l'une est l'autre recadrée (recadrages.PreuveRecadrage)
 
     @property
     def cle_de_tri(self) -> tuple:

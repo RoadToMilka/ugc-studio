@@ -4,11 +4,19 @@ démarrage de l'app, sans charger numpy ni ONNX Runtime (qui ne le sont qu'à la
 
 from __future__ import annotations
 
-# « Méthode » (demande de l'utilisateur du 11/10/2026, 19 h 49)
-SANS_IA = "sans_ia"  # copies seulement : identiques et même photo, prouvées sans IA
-AVEC_IA = "avec_ia"  # copies et photos proches : aussi ce que l'IA juge proche
-METHODES = {AVEC_IA: "Copies et photos proches (avec IA)", SANS_IA: "Copies seulement (sans IA)"}
-METHODE_DE_DEPART = AVEC_IA
+# « Méthode » (demandes de l'utilisateur du 11/10/2026, 19 h 49 et 21 h 10). Les valeurs retenues dans
+# les préférences ne changent pas d'une version à l'autre (« sans_ia » s'appelait « Copies seulement »
+# en 4.3.0).
+SANS_IA = "sans_ia"  # copies entières : identiques et même photo entière, prouvées sans IA
+COPIES_IA = "copies_ia"  # toutes les copies : aussi recadrées, zoomées ou tournées, repérées par l'IA, prouvées sans elle
+AVEC_IA = "avec_ia"  # copies et photos proches : aussi ce que l'IA juge proche, sans preuve
+METHODES = {
+    COPIES_IA: "Toutes les copies (avec IA)",
+    AVEC_IA: "Copies et photos proches (avec IA)",
+    SANS_IA: "Copies entières (sans IA)",
+}
+METHODE_DE_DEPART = COPIES_IA
+METHODES_AVEC_IA = (COPIES_IA, AVEC_IA)
 
 # « Comparer » (à partir de deux dossiers)
 DANS_CHAQUE_DOSSIER = "dans"
@@ -25,8 +33,9 @@ SEUIL_MIN, SEUIL_MAX = 50, 100
 SEUIL_DES_VRAIS_DOUBLONS = 85
 SEUIL_DE_DEPART = SEUIL_DES_VRAIS_DOUBLONS
 MAX_PAIRES = 5000  # au-delà, seulement les plus proches (une sécurité : les lots de 200 photos en sont loin)
-# « Copies seulement » : toutes les copies prouvées sont montrées, sans seuil (question de l'utilisateur du
-# 11/10/2026, 21 h 14 : un seuil n'y sert à rien, toutes sont de vraies copies, de 95 à 100 %).
+# Sans les photos proches (copies entières, toutes les copies) : toutes les copies prouvées sont montrées,
+# sans seuil (question de l'utilisateur du 11/10/2026, 21 h 14 : un seuil n'y sert à rien, toutes sont
+# de vraies copies, de 95 à 100 %).
 SEUIL_DES_COPIES = 95
 
 # Ce qu'est une paire (document V4.3, §4.3)
@@ -41,3 +50,4 @@ MODELE = "modele"  # le modèle d'IA se prépare
 LECTURE = "lecture"  # les photos se lisent (sans IA)
 IA = "ia"  # les photos se lisent et l'IA les décrit
 COMPARAISON = "comparaison"  # les paires se comparent
+RECADRAGES = "recadrages"  # les photos recadrées, zoomées ou tournées se cherchent (avec IA)

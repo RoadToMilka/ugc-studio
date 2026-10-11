@@ -1202,30 +1202,35 @@ DOUBLONS = PageDeConseils(
                 "Le tableau montre une ligne par paire, les plus proches en haut, avec les deux photos en tout petit "
                 "au début de la ligne. Une photo présente en plusieurs exemplaires identiques ne fait pas apparaître "
                 "ses ressemblances plusieurs fois.",
-                "Avec l'IA, le seuil choisit les paires montrées : le tableau le suit tout de suite, sans refaire "
-                "l'analyse. 85 % est le plus bas pour ne trouver que de vrais doublons (réglé sur des photos de "
-                "clients) : en dessous, ce sont surtout des photos qui se ressemblent sans être des doublons. Sans IA, "
-                "pas de seuil : toutes les copies trouvées sont montrées, puisqu'elles sont toutes prouvées.",
+                "Avec « Copies et photos proches », le seuil choisit les paires montrées : le tableau le suit tout "
+                "de suite, sans refaire l'analyse. 85 % est le plus bas pour ne trouver que de vrais doublons (réglé "
+                "sur des photos de clients) : en dessous, ce sont surtout des photos qui se ressemblent sans être des "
+                "doublons. Avec les deux autres méthodes, pas de seuil : toutes les copies trouvées sont montrées, "
+                "puisqu'elles sont toutes prouvées.",
             ),
         ),
         Rubrique(
             "La méthode et la note",
             (
-                "« Copies seulement (sans IA) » : les fichiers identiques et les copies d'une même photo (autre "
-                "taille, autre compression ou autre format, autres couleurs, retournée en miroir, bords unis "
-                "ajoutés). Elles sont prouvées en superposant les contours des deux photos : pas d'erreur possible "
-                "entre deux photos différentes.",
-                "« Copies et photos proches (avec IA) » : aussi les photos que l'IA juge proches, comme la même "
-                "photo rognée ou zoomée, ou des prises presque identiques. Le modèle d'IA (DINOv2, de Meta) tourne "
-                "sur ton ordinateur : rien ne part sur internet.",
+                "« Toutes les copies (avec IA) », au départ : les fichiers identiques et les copies d'une même photo, "
+                "même recadrée, zoomée, un peu tournée ou retournée, avec d'autres couleurs. L'IA repère les paires "
+                "à vérifier ; chacune est ensuite prouvée sans IA, en superposant les contours des deux photos au "
+                "pixel près. Seules les copies prouvées sont montrées : pas de fausse ressemblance.",
+                "« Copies et photos proches (avec IA) » : aussi les photos que l'IA juge proches, sans preuve, comme "
+                "des prises presque identiques. « Copies entières (sans IA) » : la photo entière seulement (autre "
+                "taille, compression ou format, autres couleurs, miroir, bords ajoutés), sans modèle d'IA, en une "
+                "seconde environ. Le modèle d'IA (DINOv2, de Meta) tourne sur ton ordinateur : rien ne part sur "
+                "internet.",
                 "La note suit une seule échelle : 100 % pour des identiques, de 95 à 99 % pour la même photo "
                 "modifiée (plus elle a été modifiée, plus on descend), 94 % au plus pour des photos proches, "
                 "estimé par l'IA. Seule une preuve fait entrer dans les zones du haut.",
                 "L'IA voit les ressemblances, pas qui a pris la photo : deux photos différentes du même produit (la "
                 "même montre chez deux clients) peuvent ressortir avec une note élevée. Le seuil de départ (85 %) est "
                 "réglé pour les laisser dessous sur des photos de clients.",
-                "Les photos rognées ou recadrées seront prouvées dans une prochaine version ; en attendant, avec "
-                "l'IA, elles ressortent comme photos proches.",
+                "Sous la paire choisie, une phrase dit d'où vient sa note : prouvé sans IA (et ce qui a changé : "
+                "« celle de droite est recadrée, 55 % de la photo gardée, et tournée de 6° »), ou estimé par l'IA.",
+                "Une photo déformée en perspective n'est pas prouvée : avec « Copies et photos proches », elle "
+                "ressort comme photo proche.",
             ),
         ),
         Rubrique(
