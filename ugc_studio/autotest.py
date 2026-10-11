@@ -111,6 +111,7 @@ VERIFICATIONS_OBLIGATOIRES = (
     "upscale_v4",
     "comparer_v41",
     "doublons_v43",
+    "doublons_v44",
 )
 ELEMENTS_SIGNALES_MAX = 6
 TOLERANCE_TEXTE_PX = 1  # arrondis de Qt : un texte n'est « coupé » qu'au-delà d'un pixel
@@ -2302,8 +2303,10 @@ def _comparer_v41(fenetre, capturer, capturer_image, rapport: dict) -> bool:
 
 
 def _scene_de_demonstration(graine: int, taille: tuple[int, int]):
-    """Une scène reconnaissable, différente pour chaque graine (un fond en dégradé et des formes de
-    toutes les couleurs) : les photos de démonstration de Doublons."""
+    """Une scène reconnaissable, différente pour chaque graine (un fond en dégradé, des formes de toutes
+    les couleurs, et un peu de grain, comme une vraie photo) : les photos de démonstration de Doublons.
+    V4.4 : sans grain, ses grandes parties lisses ne ressemblaient pas à une photo, et le modèle d'IA y
+    décrivait surtout la place de chaque carreau (voir doublons/recadrages.py)."""
     import random
 
     from PIL import Image, ImageDraw, ImageFilter
@@ -2324,22 +2327,31 @@ def _scene_de_demonstration(graine: int, taille: tuple[int, int]):
             dessin.rectangle(boite, fill=couleur)
         else:
             dessin.line(boite, fill=couleur, width=hasard.randrange(3, 14))
-    return image.filter(ImageFilter.GaussianBlur(1.2))
+    image = image.filter(ImageFilter.GaussianBlur(1.2))
+    grain = Image.effect_noise(taille, 18).convert("RGB")
+    return Image.blend(image, grain, 0.08)
 
 
-def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
-    """V4.3 (4.3.0) : le module Doublons dans le vrai .exe, avec le vrai modèle d'IA (lu dans sa ressource)
-    et ses bibliothèques de calcul (numpy, ONNX Runtime), recopiées depuis le .exe à la première analyse
-    (dans le dossier des programmes de l'autotest, hors du rapport). Sept photos de démonstration : une
-    scène, sa copie exacte, la même plus petite, retournée (en PNG), plus claire (en WebP), et deux autres
-    scènes. Avec l'IA, puis « Copies seulement » ; la paire en grand, des deux façons."""
+def _doublons(fenetre, capturer, rapport: dict) -> tuple[bool, bool]:
+    """Le module Doublons dans le vrai .exe, avec le vrai modèle d'IA (lu dans sa ressource) et ses
+    bibliothèques de calcul (numpy, ONNX Runtime), recopiées depuis le .exe à la première analyse (dans
+    le dossier des programmes de l'autotest, hors du rapport). Huit photos de démonstration : une scène,
+    sa copie exacte, la même plus petite, retournée (en PNG), plus claire (en WebP), une partie de la
+    scène tournée de 5° (V4.4), et deux autres scènes.
+    - V4.3 (4.3.0) : avec l'IA (« Copies et photos proches »), puis « Copies entières (sans IA) » ; la
+      paire en grand, des deux façons.
+    - V4.4 (4.4.0) : « Toutes les copies (avec IA) » : la partie tournée prouvée (« Même photo »,
+      recadrée et tournée), jamais les autres scènes ; pas de seuil ; d'où vient la note.
+    Renvoie (vérification V4.3, vérification V4.4)."""
+    import cmath
+    import math
     import os
     import shutil
     import tempfile
 
     from PIL import Image, ImageEnhance
 
-    from .doublons.choix import AVEC_IA, IDENTIQUES, MEME_PHOTO, SANS_IA
+    from .doublons.choix import AVEC_IA, COPIES_IA, IDENTIQUES, MEME_PHOTO, SANS_IA
 
     au_demarrage = sorted(nom for nom in ("numpy", "onnxruntime") if nom in sys.modules)
     dossier = Path(tempfile.mkdtemp(prefix="ugc-studio-doublons-")) / "Photos clients"
@@ -2350,6 +2362,10 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
     scene.reduce(2).save(dossier / "produit-petit.jpg", quality=70)  # deux fois plus petite
     scene.transpose(Image.Transpose.FLIP_LEFT_RIGHT).save(dossier / "produit-miroir.png")
     ImageEnhance.Brightness(scene).enhance(1.3).save(dossier / "produit-clair.webp", quality=85)
+    # V4.4 : une partie de la scène (environ 40 % de sa surface), tournée de 5°.
+    tour = cmath.exp(1j * math.radians(5))
+    partie = scene.transform((380, 500), Image.Transform.AFFINE, (tour.real, -tour.imag, 110, tour.imag, tour.real, 140), Image.Resampling.BICUBIC)
+    partie.save(dossier / "produit-recadre.jpg", quality=88)
     _scene_de_demonstration(2, (800, 600)).save(dossier / "autre-1.jpg", quality=90)
     _scene_de_demonstration(3, (600, 600)).save(dossier / "autre-2.jpg", quality=90)
     page = fenetre.page("doublons")
@@ -2367,7 +2383,7 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
         return [[nom(paire.a), nom(paire.b), paire.genre, paire.proximite, list(paire.details)] for paire in page.paires()] if resultat else []
 
     avec_ia = releve()
-    vignettes = _attendre(lambda: page.vignettes_faites() >= 7, 20)
+    vignettes = _attendre(lambda: page.vignettes_faites() >= 8, 20)
     capturer(fenetre, "doublons-paires")
     grande = page.agrandir(1)
     if grande is not None:
@@ -2380,10 +2396,28 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
     copies = releve()
     seuil_cache = page.zone_seuil.isHidden()  # sans IA, pas de seuil : toutes les copies sont montrées
     resume_copies = page.resume.text()
-    capturer(fenetre, "doublons-copies-seulement")
+    capturer(fenetre, "doublons-copies-entieres")
+    # V4.4 : toutes les copies, la partie tournée choisie dans le tableau.
+    page.methode.definir(COPIES_IA)
+    page._methode_changee(COPIES_IA)
+    toutes = releve()
+    seuil_cache_v44 = page.zone_seuil.isHidden()
+    rang_partie = next((rang for rang, ligne in enumerate(toutes) if "produit-recadre.jpg" in ligne[:2]), None)
+    if rang_partie is not None:
+        page.choisir(rang_partie)
+        photos_de_la_paire = (page.deux_photos.premiere.image, page.deux_photos.seconde.image)
+        _attendre(lambda: all(image.pixmap() is not None and not image.pixmap().isNull() for image in photos_de_la_paire), 10)
+    origine = page.origine.text()
+    capturer(fenetre, "doublons-toutes-les-copies")
     page.methode.definir(AVEC_IA)
     page._methode_changee(AVEC_IA)
     numpy = sys.modules.get("numpy")
+    rapport["doublons_v44"] = {
+        "paires_toutes_les_copies": toutes,
+        "recadrages_prouves": len(resultat.recadrages) if resultat else 0,
+        "seuil_cache": seuil_cache_v44,
+        "origine": origine,
+    }
     rapport["doublons_v43"] = {
         "bibliotheques_au_demarrage": au_demarrage,
         "statut": page.statut.text(),
@@ -2402,7 +2436,18 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
     autres = {"autre-1.jpg", "autre-2.jpg"}
     identiques = [p for p in copies if p[2] == IDENTIQUES]
     memes_photos = [p for p in copies if p[2] == MEME_PHOTO]
-    return (
+    partie = [p for p in toutes if "produit-recadre.jpg" in p[:2]]
+    v44 = (
+        bool(fini)
+        and len(partie) >= 1
+        and all(p[2] == MEME_PHOTO and 95 <= p[3] <= 99 and set(p[:2]) <= produit | {"produit-recadre.jpg"} for p in partie)
+        and any(any(d.startswith("recadrée") for d in p[4]) and any(d.startswith("tournée") for d in p[4]) for p in partie)
+        and not any(set(p[:2]) & autres for p in toutes)
+        and all(p[2] != "ressemblantes" for p in toutes)
+        and seuil_cache_v44
+        and origine.startswith("Prouvé sans IA : la même photo ; celle")
+    )
+    v43 = (
         bool(fini)
         and au_demarrage == []
         and len(identiques) == 1
@@ -2416,7 +2461,9 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
         and rapport["doublons_v43"]["telemetrie_onnx_runtime_coupee"]
         and seuil_cache
         and bool(vignettes)
+        and not any("produit-recadre.jpg" in p[:2] for p in copies)  # sans IA : la photo entière seulement
     )
+    return v43, v44
 
 
 def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_fixe: bool) -> None:
@@ -2742,7 +2789,7 @@ def lancer_autotest(app, fenetre, dossier: Path, resume: dict, captures_taille_f
             # V4.1 (4.2.0) : le module Comparer, avec le vrai video-compare (sa fenêtre, sur l'écran réel).
             verifs["comparer_v41"] = _comparer_v41(fenetre, capturer, capturer_image, rapport)
             # V4.3 (4.3.0) : le module Doublons, avec le vrai modèle d'IA et ses bibliothèques (dans le .exe).
-            verifs["doublons_v43"] = _doublons_v43(fenetre, capturer, rapport)
+            verifs["doublons_v43"], verifs["doublons_v44"] = _doublons(fenetre, capturer, rapport)
 
             # Chaque onglet des Réglages, puis le dialogue d'ajout de clé.
             reglages = fenetre.page("reglages")

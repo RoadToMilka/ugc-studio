@@ -31,6 +31,7 @@ from shiboken6 import isValid
 from ....chemins import dossier_documents
 from ....doublons.choix import (
     AVEC_IA,
+    COPIES_IA,
     COMPARAISON,
     IA,
     IDENTIQUES,
@@ -40,13 +41,14 @@ from ....doublons.choix import (
     MEME_PHOTO,
     METHODE_DE_DEPART,
     METHODES,
+    METHODES_AVEC_IA,
     MODE_DE_DEPART,
     MODELE,
     MODES,
     NOMS_DES_CAS,
     PREPARATION,
+    RECADRAGES,
     RESSEMBLANTES,
-    SANS_IA,
     SEUIL_DE_DEPART,
     SEUIL_DES_COPIES,
     SEUIL_DES_VRAIS_DOUBLONS,
@@ -61,7 +63,7 @@ from ....services import Services
 from ... import taches
 from ...composants.barre_avancement import BarreAvancement
 from ...composants.bouton import BoutonOccupe
-from ...composants.choix import ChoixEnBoutons
+from ...composants.choix import ChoixEnBoutons, ChoixEnListe
 from ...composants.depot_dossier import ZoneDepotDossier
 from ...composants.elements import (
     afficher_message,
@@ -95,6 +97,7 @@ from .tableau import (
     ROLE_PHOTOS,
     DelegueVignettes,
     cle,
+    texte_de_l_origine,
     texte_des_dossiers,
     texte_du_type,
 )
@@ -117,9 +120,11 @@ AIDE_DOSSIERS = (
 )
 AIDE_SOUS_DOSSIERS = "Aussi les photos de leurs sous-dossiers : elles comptent pour le dossier ajouté."
 AIDE_METHODE = (
-    "Copies seulement : les fichiers identiques et les copies d'une même photo (autre taille, compression, "
-    "couleurs, miroir, bords ajoutés), prouvées sans IA, toutes montrées. Avec IA : aussi les photos que l'IA "
-    "juge proches, au-dessus du seuil (la même photo rognée ou zoomée, des prises presque identiques)."
+    "Toutes les copies : les fichiers identiques et les copies d'une même photo, même recadrée, zoomée, un peu "
+    "tournée ou retournée, avec d'autres couleurs ; l'IA repère les paires à vérifier, et seules les copies "
+    "prouvées sont montrées. Copies et photos proches : aussi les photos que l'IA juge proches, au-dessus du "
+    "seuil, sans preuve. Copies entières : sans IA, la photo entière seulement (autre taille, compression, "
+    "couleurs, miroir, bords ajoutés), en une seconde environ."
 )
 AIDE_COMPARER = (
     "Dans chaque dossier : les photos d'un même dossier entre elles. Entre les dossiers : chaque photo avec "
@@ -132,8 +137,8 @@ AIDE_PAIRES = (
 AIDE_SEUIL = (
     "Avec l'IA, les paires moins proches que le seuil ne sont pas montrées. Le tableau suit le seuil tout de "
     f"suite. {SEUIL_DES_VRAIS_DOUBLONS} % : le plus bas pour ne trouver que de vrais doublons (réglé sur tes photos "
-    "de clients) ; en dessous, surtout des photos qui se ressemblent sans être des doublons. Copies seulement : "
-    "pas de seuil, toutes les copies sont montrées."
+    "de clients) ; en dessous, surtout des photos qui se ressemblent sans être des doublons. Sans les photos "
+    "proches : pas de seuil, toutes les copies sont montrées."
 )
 TEXTE_VRAIS_DOUBLONS = f"Vrais doublons : {SEUIL_DES_VRAIS_DOUBLONS} % au moins"
 ALERTE_SOUS_LES_VRAIS_DOUBLONS = (
@@ -302,7 +307,8 @@ class PageDoublons(Page):
         self.zone_sous_dossiers, self.case_sous_dossiers = case_a_cocher("Inclure les sous-dossiers", AIDE_SOUS_DOSSIERS)
         self.case_sous_dossiers.setChecked(self._preferences.lire(PREF_SOUS_DOSSIERS, False) is True)
         d.addWidget(self.zone_sous_dossiers)
-        self.methode = ChoixEnBoutons(METHODES)
+        # Trois choix (V4.4) : en boutons, ils ne tiendraient pas dans la fenêtre à sa largeur minimale.
+        self.methode = ChoixEnListe(METHODES)
         self.methode.definir(self._valeur(PREF_METHODE, METHODES, METHODE_DE_DEPART))
         self.champ_methode = champ_nomme("Méthode", self.methode, aide=AIDE_METHODE)
         d.addWidget(self.champ_methode)
@@ -380,6 +386,9 @@ class PageDoublons(Page):
         self.cadre_comparaison, d = bloc("Comparaison", aide=AIDE_COMPARAISON)
         self.description = libelle_abrege("", "secondaire")
         d.addWidget(self.description)
+        # V4.4 : d'où vient la note (une preuve sans IA, et ce qu'elle a trouvé, ou une estimation de l'IA).
+        self.origine = libelle("", "legende")
+        d.addWidget(self.origine)
         self.deux_photos = DeuxPhotos()
         d.addWidget(self.deux_photos)
         self.vide = libelle(TEXTE_SANS_PAIRE_CHOISIE, "discret")
@@ -572,7 +581,7 @@ class PageDoublons(Page):
         self._arret = arret
         dossiers = list(self._dossiers)
         sous_dossiers = self.case_sous_dossiers.isChecked()
-        avec_ia = self.methode.valeur() == AVEC_IA
+        avec_ia = self.methode.valeur() in METHODES_AVEC_IA
         memoire = self._memoire
 
         def travail(progres):
@@ -612,6 +621,9 @@ class PageDoublons(Page):
         elif etape == COMPARAISON:
             self.barre.definir(1)
             self.avancee.setText("Comparaison des photos…")
+        elif etape == RECADRAGES:
+            self.barre.definir(valeur.faites / max(1, valeur.total))
+            self.avancee.setText(f"Recherche des photos recadrées : {valeur.faites} sur {quantite(valeur.total, 'paire')}")
 
     def arreter(self) -> None:
         """« Arrêter » : l'analyse s'arrête à la photo en cours (aussi à la fermeture de l'app)."""
@@ -655,12 +667,15 @@ class PageDoublons(Page):
 
     @property
     def copies_seulement(self) -> bool:
-        return self.methode.valeur() == SANS_IA
+        """Vrai si la méthode ne montre que des copies prouvées (copies entières, toutes les copies) : pas
+        de seuil, toutes sont montrées."""
+        return self.methode.valeur() != AVEC_IA
 
     def _actualiser_les_paires(self) -> None:
         """Le résumé et le tableau, selon le résultat, la méthode, « Comparer » et le seuil."""
         resultat = self._resultat
         alertes = []
+        methode = self.methode.valeur()
         copies_seulement = self.copies_seulement
         self.zone_seuil.setVisible(not copies_seulement)
         if not copies_seulement and self.seuil < SEUIL_DES_VRAIS_DOUBLONS:
@@ -671,12 +686,13 @@ class PageDoublons(Page):
         else:
             mode = self.mode.valeur() if len(self._dossiers) >= 2 else LES_DEUX
             seuil = SEUIL_DES_COPIES if copies_seulement else self.seuil
-            self._selection = resultat.paires(mode, seuil, avec_ia=not copies_seulement)
+            self._selection = resultat.paires(mode, seuil, methode)
             nombre_dossiers = len({photo.dossier for photo in resultat.photos}) or len(self._dossiers)
             seuil_montre = None if copies_seulement else self.seuil
             self.resume.setText(texte_du_resume(len(resultat.photos), nombre_dossiers, seuil_montre, self._selection, copies_seulement or not resultat.avec_ia))
-            if not copies_seulement and not resultat.avec_ia:
-                alertes.append("Analysé sans IA : clique « Analyser » pour chercher aussi les photos proches.")
+            if methode in METHODES_AVEC_IA and not resultat.avec_ia:
+                cherchees = "les copies recadrées" if methode == COPIES_IA else "les copies recadrées et les photos proches"
+                alertes.append(f"Analysé sans IA : clique « Analyser » pour chercher aussi {cherchees}.")
             if self._selection.tronquee:
                 maximum = f"{MAX_PAIRES:,}".replace(",", " ")
                 alertes.append(f"Plus de {maximum} paires : seules les {maximum} plus proches sont montrées. Monte le seuil pour n'en garder que les plus proches.")
@@ -764,15 +780,19 @@ class PageDoublons(Page):
         choisie = 0 <= rang < len(paires)
         self.deux_photos.setVisible(choisie)
         self.description.setVisible(choisie)
+        self.origine.setVisible(choisie)
         self.vide.setVisible(not choisie)
         self.vide.setText(TEXTE_SANS_PAIRE_CHOISIE if paires else ("Aucune paire à montrer." if self._resultat is not None else TEXTE_SANS_ANALYSE))
         if choisie:
             paire = paires[rang]
-            self.description.setText(f"Paire {rang + 1} sur {len(paires)} · {self.description_de_la_paire(paire)}")
+            # Le cas seul : ce qui a changé est dit juste dessous, avec d'où vient la note (V4.4).
+            self.description.setText(f"Paire {rang + 1} sur {len(paires)} · {paire.proximite} % · {NOMS_DES_CAS.get(paire.genre, paire.genre)}")
+            self.origine.setText(texte_de_l_origine(paire))
             self.deux_photos.montrer(self.fiche(paire.a), self.fiche(paire.b))
         else:
             self.deux_photos.vider()
             self.description.setText("")
+            self.origine.setText("")
         self._mettre_a_jour_les_boutons()
 
     def rang_choisi(self) -> int:

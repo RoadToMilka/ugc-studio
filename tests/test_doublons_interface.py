@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QLabel
 
 from photos_factices import miroir, photo_factice, plus_petite
 from ugc_studio.doublons import vision
-from ugc_studio.doublons.choix import AVEC_IA, DANS_CHAQUE_DOSSIER, ENTRE_LES_DOSSIERS, IDENTIQUES, LES_DEUX, MEME_PHOTO, RESSEMBLANTES, SANS_IA
+from ugc_studio.doublons.choix import AVEC_IA, COPIES_IA, DANS_CHAQUE_DOSSIER, ENTRE_LES_DOSSIERS, IDENTIQUES, LES_DEUX, MEME_PHOTO, RESSEMBLANTES, SANS_IA
 from ugc_studio.ui.pages.doublons import (
     PREF_METHODE,
     PREF_MODE,
@@ -22,7 +22,9 @@ from ugc_studio.ui.pages.doublons import (
     texte_des_illisibles,
     texte_du_resume,
 )
-from ugc_studio.ui.pages.doublons.tableau import COLONNE_DOSSIERS, COLONNE_IMAGE_1, COLONNE_IMAGE_2, COLONNE_PROXIMITE, COLONNE_TYPE, texte_du_type
+from ugc_studio.doublons.paires import Paire
+from ugc_studio.doublons.recadrages import PreuveRecadrage
+from ugc_studio.ui.pages.doublons.tableau import COLONNE_DOSSIERS, COLONNE_IMAGE_1, COLONNE_IMAGE_2, COLONNE_PROXIMITE, COLONNE_TYPE, texte_de_l_origine, texte_du_type
 from ugc_studio.ui.theme import Dimensions, Espacements
 
 
@@ -98,8 +100,17 @@ def test_page_vide(app_configuree, qtbot, services):
     assert not page.bouton_analyser.isEnabled()
     assert not page.champ_mode.isVisible()  # « Comparer » : à partir de deux dossiers
     assert not page.tableau.isVisible()
-    assert page.methode.valeur() == AVEC_IA and page.seuil == 85
-    assert page.zone_seuil.isVisible()  # avec l'IA, le seuil choisit les paires montrées
+    # V4.4 : « Toutes les copies (avec IA) » au départ ; seules des copies prouvées : pas de seuil.
+    assert page.methode.valeur() == COPIES_IA and page.seuil == 85
+    assert [page.methode.itemText(k) for k in range(page.methode.count())] == [
+        "Toutes les copies (avec IA)",
+        "Copies et photos proches (avec IA)",
+        "Copies entières (sans IA)",
+    ]
+    assert not page.zone_seuil.isVisible()
+    page.methode.definir(AVEC_IA)
+    page._methode_changee(AVEC_IA)
+    assert page.zone_seuil.isVisible()  # avec les photos proches, le seuil choisit les paires montrées
     assert page.rappel_seuil.isVisible() and page.rappel_seuil.text() == "Vrais doublons : 85 % au moins"
     assert not page.alertes.isVisible()
     # Sous 85 % : le rappel de ne pas descendre plus bas pour ne trouver que de vrais doublons.
@@ -138,7 +149,8 @@ def test_analyse_sans_ia(app_configuree, qtbot, services, dossiers):
     rang = next(k for k, ligne in enumerate(lignes) if ligne[1] == "a miroir.png" and ligne[0] == "a copie.jpg")
     assert page.tableau.item(rang, COLONNE_TYPE).toolTip() == "Même photo · autre format, retournée"
     page.choisir(rang)
-    assert page.description.text().endswith("98 % · Même photo · autre format, retournée")
+    assert page.description.text().endswith("98 % · Même photo")
+    assert page.origine.text() == "Prouvé sans IA : la même photo (autre format, retournée)."
     page.choisir(0)
     # Copies seulement : pas de seuil, toutes les copies (prouvées) sont montrées.
     assert not page.zone_seuil.isVisible()
@@ -159,6 +171,8 @@ def test_analyse_sans_ia(app_configuree, qtbot, services, dossiers):
 def test_le_seuil_et_comparer_sans_refaire_l_analyse(app_configuree, qtbot, services, dossiers, faux_modele):
     page = _page(qtbot, services)
     page.ajouter(list(dossiers))
+    page.methode.definir(AVEC_IA)
+    page._methode_changee(AVEC_IA)
     _analyser(qtbot, page)
     resultat = page.resultat
     genres = [paire.genre for paire in page.paires()]
@@ -183,6 +197,10 @@ def test_le_seuil_et_comparer_sans_refaire_l_analyse(app_configuree, qtbot, serv
     assert RESSEMBLANTES not in [paire.genre for paire in page.paires()]
     assert page.resultat is resultat
     assert not page.zone_seuil.isVisible()
+    page.methode.definir(COPIES_IA)  # toutes les copies : les mêmes ici (le faux modèle ne donne pas de carreaux)
+    page._methode_changee(COPIES_IA)
+    assert RESSEMBLANTES not in [paire.genre for paire in page.paires()] and not page.zone_seuil.isVisible()
+    assert page.resultat is resultat
     page.methode.definir(AVEC_IA)
     page._methode_changee(AVEC_IA)
     assert page.zone_seuil.isVisible() and page.seuil == 85
@@ -270,6 +288,17 @@ def test_textes():
     assert texte_du_type(MEME_PHOTO, ("autre taille", "retournée")) == "Même photo · autre taille, retournée"
     assert texte_du_type(RESSEMBLANTES, ()) == "Ressemblantes"
     assert texte_des_illisibles([]) == ""
+    # D'où vient la note (V4.4)
+    assert texte_de_l_origine(Paire(0, 1, 100, IDENTIQUES, ("même fichier",))) == "Prouvé sans IA : le même fichier, à l'octet près."
+    assert texte_de_l_origine(Paire(0, 1, 100, IDENTIQUES, ("mêmes pixels",))) == "Prouvé sans IA : les mêmes pixels, dans deux fichiers différents."
+    assert texte_de_l_origine(Paire(0, 1, 98, MEME_PHOTO, ("autre taille", "retournée"))) == "Prouvé sans IA : la même photo (autre taille, retournée)."
+    recadrage = PreuveRecadrage(extrait=1, gardee=0.55, angle=-6.2, miroir=True, agrandie=False, contours=0.99, carreaux=1.0, ecart_de_couleurs=30, correspondances=90)
+    paire = Paire(0, 1, 95, MEME_PHOTO, (*recadrage.details(), "autre format"), 0.9, recadrage)
+    assert texte_de_l_origine(paire) == (
+        "Prouvé sans IA : la même photo ; celle de droite est recadrée (55 % de la photo gardée), tournée de 6° "
+        "et retournée (autres couleurs, autre format)."
+    )
+    assert texte_de_l_origine(Paire(0, 1, 88, RESSEMBLANTES)).startswith("Estimé par l'IA :")
 
     class Selection:
         def __init__(self, total, comptes):

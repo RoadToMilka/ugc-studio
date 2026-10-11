@@ -43,6 +43,38 @@ def texte_du_type(genre: str, details: tuple[str, ...]) -> str:
     return nom
 
 
+def _liste(elements: list[str]) -> str:
+    """« a », « a et b », « a, b et c »."""
+    return elements[0] if len(elements) == 1 else f"{', '.join(elements[:-1])} et {elements[-1]}"
+
+
+def texte_de_l_origine(paire) -> str:
+    """D'où vient la note, en une phrase (V4.4) : une preuve sans IA (et ce qu'elle a trouvé), ou une
+    estimation de l'IA."""
+    if paire.genre == IDENTIQUES:
+        if "mêmes pixels" in paire.details:
+            return "Prouvé sans IA : les mêmes pixels, dans deux fichiers différents."
+        return "Prouvé sans IA : le même fichier, à l'octet près."
+    if paire.genre == MEME_PHOTO:
+        recadrage = paire.recadrage
+        if recadrage is None:
+            return f"Prouvé sans IA : la même photo ({', '.join(paire.details)})." if paire.details else "Prouvé sans IA : la même photo."
+        changements = []
+        if recadrage.recadree:
+            changements.append(f"recadrée ({round(recadrage.gardee * 100)} % de la photo gardée)")
+        if recadrage.agrandie:
+            changements.append("agrandie")
+        if recadrage.tournee:
+            changements.append(f"tournée de {round(abs(recadrage.angle))}°")
+        if recadrage.miroir:
+            changements.append("retournée")
+        cote = "de gauche" if recadrage.extrait == 0 else "de droite"
+        phrase = f"Prouvé sans IA : la même photo ; celle {cote} est {_liste(changements)}" if changements else "Prouvé sans IA : la même photo"
+        autres = [texte for texte in ("autres couleurs", "autre format") if texte in paire.details]
+        return phrase + (f" ({', '.join(autres)})." if autres else ".")
+    return "Estimé par l'IA : ces photos se ressemblent, mais rien ne prouve que ce soit la même photo."
+
+
 def texte_des_dossiers(dossier_a: str, dossier_b: str) -> str:
     """« Lot 1 » (même dossier) ou « Lot 1 · Lot 2 »."""
     return dossier_a if dossier_a == dossier_b else f"{dossier_a} · {dossier_b}"
