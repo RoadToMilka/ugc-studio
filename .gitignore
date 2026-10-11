@@ -18,3 +18,8 @@ outils/cache/
 
 # video-compare (V4.1) : son zip, mis en cache par la fabrication pour l'autotest, jamais envoyé sur GitHub
 outils/cache-video-compare/
+
+# Modèles d'IA de Doublons (V4.3) : téléchargés par outils/preparer_modeles.py pendant la fabrication,
+# jamais envoyés sur GitHub avec le code (seuls les fichiers du dossier modeles lui-même le sont)
+outils/cache-modeles/
+ugc_studio/ressources/modeles/*/

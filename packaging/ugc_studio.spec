@@ -83,11 +83,15 @@ a = Analysis(
 
 def _garder(destination):
     """Allège le .exe : seules les traductions françaises de Qt sont gardées, et FFmpeg (préparé à côté
-    du code pour les tests) n'est pas recopié à chaque démarrage : il voyage dans la ressource."""
+    du code pour les tests) n'est pas recopié à chaque démarrage : il voyage dans la ressource. De même
+    pour les modèles d'IA de Doublons (V4.3), préparés dans un sous-dossier de ressources/modeles pour
+    les tests : seuls les fichiers du dossier modeles lui-même (licences) sont gardés."""
     parties = Path(destination).parts
     if "translations" in parties and parties[0] == "PySide6":
         return Path(destination).name.endswith("_fr.qm")
     if parties[:3] == ("ugc_studio", "ressources", "ffmpeg") and parties[-1] in ("ffmpeg.exe", "ffmpeg"):
+        return False
+    if parties[:3] == ("ugc_studio", "ressources", "modeles") and len(parties) > 4:
         return False
     return True
 
@@ -99,7 +103,7 @@ a.datas = [entree for entree in a.datas if _garder(entree[0])]
 a.binaries = [entree for entree in a.binaries if _garder(entree[0]) and Path(entree[0]).name.lower() != "opengl32sw.dll"]
 _restes = [entree[0] for entree in (*a.datas, *a.binaries) if not _garder(entree[0])]
 if _restes:
-    raise SystemExit(f"FFmpeg serait recopié à chaque démarrage : {_restes}")
+    raise SystemExit(f"FFmpeg ou un modèle d'IA serait recopié à chaque démarrage : {_restes}")
 
 pyz = PYZ(a.pure)
 

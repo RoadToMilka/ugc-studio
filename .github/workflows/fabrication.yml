@@ -1,7 +1,8 @@
 # Fabrication automatique de l'app, sur une machine Windows prêtée par GitHub.
 #
 # À chaque envoi de code sur GitHub :
-#   1. installe Python et les bibliothèques, et prépare FFmpeg (version figée, empreinte vérifiée) ;
+#   1. installe Python et les bibliothèques, et prépare FFmpeg et le modèle d'IA de Doublons (versions
+#      figées, empreintes vérifiées) ;
 #   2. lance les tests automatiques ;
 #   3. fabrique UGC-Studio.exe ;
 #   4. démarre le .exe pour vérifier qu'il fonctionne (autotest avec captures d'écran et vrais
@@ -11,6 +12,8 @@
 #   5. joint le .exe et le rapport au « run » (onglet Actions du dépôt) ;
 #   6. sur la branche main uniquement : publie une Release « v<version> » avec le .exe,
 #      si cette version n'a pas encore été publiée.
+# Sur les autres branches, une machine Linux dépose aussi les modèles d'IA de Doublons dans une
+# référence cachée, pour les essais de Claude (travail « modeles », plus bas).
 #
 # Sur main, après la fusion d'une étape, le code est en général exactement celui de sa branche,
 # déjà fabriqué et vérifié : la Release reprend alors ce .exe au lieu de tout refaire (voir le
@@ -136,6 +139,20 @@ jobs:
             & $ffmpeg -hide_banner -h "encoder=$encodeur" | Out-File -Encoding utf8 -Append rapport/ffmpeg.txt
           }
           Get-Content rapport/ffmpeg.txt -TotalCount 1
+
+      # Doublons (V4.3) : le modèle d'IA de l'app (DINOv2 small, de Meta, version compacte) et le texte de
+      # sa licence, à des versions figées, empreintes vérifiées (outils/preparer_modeles.py). Gardés en
+      # cache d'une fabrication à l'autre (la clé change dès que la liste des modèles change).
+      - name: Garder le modèle d'IA (cache)
+        uses: actions/cache@v6
+        with:
+          path: outils/cache-modeles
+          key: modeles-${{ hashFiles('ugc_studio/doublons/modeles.py') }}
+
+      - name: Préparer le modèle d'IA (empreinte vérifiée)
+        run: |
+          python outils/preparer_modeles.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Tests automatiques
         env:
@@ -353,6 +370,65 @@ jobs:
           path: dist/UGC-Studio.exe
           retention-days: 7
 
+  # Doublons (V4.3) : les modèles d'IA, pour les essais de Claude sur les photos de l'utilisateur. Ces
+  # photos ne vont jamais sur GitHub (dépôt public) : les essais se font dans l'espace de travail de
+  # Claude, qui n'a pas accès au site des modèles (Hugging Face), mais a accès à GitHub. Cette machine
+  # télécharge les modèles (versions figées, empreintes vérifiées), le modèle de l'app comme ceux
+  # d'essai, et les dépose avec le texte de leurs licences (comme elles le demandent) dans une
+  # référence Git cachée, refs/modeles/<code> : une seule fois par jeu de modèles (le code change avec
+  # la liste). Sur les branches seulement ; une machine Linux suffit.
+  modeles:
+    name: Modèles d'IA pour les essais (référence cachée)
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      JETON: ${{ github.token }}
+      DEPOT: ${{ github.repository }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Déjà déposés ?
+        id: depot
+        run: |
+          cle=$(python3 outils/preparer_modeles.py --essai --cle)
+          ref="refs/modeles/$cle"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code "https://x-access-token:$JETON@github.com/$DEPOT.git" "$ref" > /dev/null; then
+            echo "Ces modèles sont déjà déposés ($ref) : rien à faire."
+            echo "a_deposer=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "Ces modèles ne sont pas encore déposés ($ref)."
+            echo "a_deposer=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Préparer les modèles (empreintes vérifiées)
+        if: steps.depot.outputs.a_deposer == 'oui'
+        run: python3 outils/preparer_modeles.py --essai --assembler "$RUNNER_TEMP/modeles"
+
+      - name: Déposer les modèles (référence cachée)
+        if: steps.depot.outputs.a_deposer == 'oui'
+        env:
+          REF: ${{ steps.depot.outputs.ref }}
+        run: |
+          cd "$RUNNER_TEMP/modeles"
+          cat LISEZ-MOI.txt
+          git init -q
+          git config user.name "Fabrication automatique"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Modèles d'IA de Doublons pour les essais ($GITHUB_SHA)"
+          for essai in 1 2 3 4 5; do
+            if git push -f "https://x-access-token:$JETON@github.com/$DEPOT.git" "HEAD:$REF"; then
+              echo "Modèles déposés dans $REF."
+              exit 0
+            fi
+            if [ "$essai" -lt 5 ]; then sleep $((15 * essai)); fi
+          done
+          echo "::error title=Modèles non déposés::$REF"
+          exit 1
+
   # Sur main : la Release « v<version> » avec le .exe vérifié (celui de la branche de l'étape, ou
   # celui fabriqué juste avant si le code n'avait pas encore été fabriqué), si cette version n'a pas
   # encore été publiée ; puis le rangement des branches fusionnées. Sur une machine Linux.
@@ -399,4 +475,9 @@ jobs:
             for ref in "heads/$branche" "rapports/$branche"; do
               if gh api -X DELETE "repos/$DEPOT/git/refs/$ref" > /dev/null 2>&1; then echo "Supprimé : $ref"; fi
             done
+          done
+          # Les modèles d'IA déposés pour les essais (travail « modeles ») ne servent plus une fois l'étape
+          # fusionnée : la prochaine branche les redéposera si besoin.
+          for ref in $(gh api "repos/$DEPOT/git/matching-refs/modeles/" --jq '.[].ref' 2> /dev/null); do
+            if gh api -X DELETE "repos/$DEPOT/git/$ref" > /dev/null 2>&1; then echo "Supprimé : $ref"; fi
           done
