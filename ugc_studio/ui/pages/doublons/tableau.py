@@ -23,7 +23,9 @@ ROLE_PHOTOS = Qt.ItemDataRole.UserRole + 1  # les chemins des deux photos de la 
 COLONNES = (
     Colonne("Photos"),
     Colonne("Proximité", a_droite=True, aide="100 % : identiques. 95 à 99 % : la même photo, modifiée. 94 % au plus : estimé par l'IA."),
-    Colonne("Type", texte=True),
+    # Le cas, toujours en entier (« Même photo », « Ressemblantes ») : ce sont les noms des images qui se
+    # resserrent quand la place manque (abrégés au milieu, leur numéro et leur extension restent lisibles).
+    Colonne("Type"),
     Colonne("Image 1", texte=True, etiree=True),
     Colonne("Image 2", texte=True),
     Colonne("Dossiers", texte=True),

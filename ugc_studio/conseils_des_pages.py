@@ -1202,8 +1202,10 @@ DOUBLONS = PageDeConseils(
                 "Le tableau montre une ligne par paire, les plus proches en haut, avec les deux photos en tout petit "
                 "au début de la ligne. Une photo présente en plusieurs exemplaires identiques ne fait pas apparaître "
                 "ses ressemblances plusieurs fois.",
-                "Le seuil choisit les paires montrées : le tableau le suit tout de suite, sans refaire l'analyse. "
-                "Monte-le pour ne garder que les plus proches, baisse-le pour voir des photos un peu moins proches.",
+                "Avec l'IA, le seuil choisit les paires montrées : le tableau le suit tout de suite, sans refaire "
+                "l'analyse. 85 % est le plus bas pour ne trouver que de vrais doublons (réglé sur des photos de "
+                "clients) : en dessous, ce sont surtout des photos qui se ressemblent sans être des doublons. Sans IA, "
+                "pas de seuil : toutes les copies trouvées sont montrées, puisqu'elles sont toutes prouvées.",
             ),
         ),
         Rubrique(
@@ -1213,15 +1215,15 @@ DOUBLONS = PageDeConseils(
                 "taille, autre compression ou autre format, autres couleurs, retournée en miroir, bords unis "
                 "ajoutés). Elles sont prouvées en superposant les contours des deux photos : pas d'erreur possible "
                 "entre deux photos différentes.",
-                "« Copies et photos proches (avec IA) » : aussi les photos que l'IA juge proches, comme deux prises "
-                "de la même personne sous un autre angle. Le modèle d'IA (DINOv2, de Meta) tourne sur ton "
-                "ordinateur : rien ne part sur internet.",
+                "« Copies et photos proches (avec IA) » : aussi les photos que l'IA juge proches, comme la même "
+                "photo rognée ou zoomée, ou des prises presque identiques. Le modèle d'IA (DINOv2, de Meta) tourne "
+                "sur ton ordinateur : rien ne part sur internet.",
                 "La note suit une seule échelle : 100 % pour des identiques, de 95 à 99 % pour la même photo "
                 "modifiée (plus elle a été modifiée, plus on descend), 94 % au plus pour des photos proches, "
                 "estimé par l'IA. Seule une preuve fait entrer dans les zones du haut.",
-                "Deux photos différentes du même produit (la même montre chez deux clients) peuvent ressortir avec "
-                "une note élevée : l'IA voit surtout le produit. Le seuil de départ (85 %) est réglé pour les laisser "
-                "dessous sur des photos de clients.",
+                "L'IA voit les ressemblances, pas qui a pris la photo : deux photos différentes du même produit (la "
+                "même montre chez deux clients) peuvent ressortir avec une note élevée. Le seuil de départ (85 %) est "
+                "réglé pour les laisser dessous sur des photos de clients.",
                 "Les photos rognées ou recadrées seront prouvées dans une prochaine version ; en attendant, avec "
                 "l'IA, elles ressortent comme photos proches.",
             ),

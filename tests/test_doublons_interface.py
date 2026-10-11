@@ -20,6 +20,7 @@ from ugc_studio.ui.pages.doublons import (
     dossiers_deposes,
     duree_lisible,
     texte_des_illisibles,
+    texte_du_resume,
 )
 from ugc_studio.ui.pages.doublons.tableau import COLONNE_DOSSIERS, COLONNE_IMAGE_1, COLONNE_IMAGE_2, COLONNE_PROXIMITE, COLONNE_TYPE, texte_du_type
 from ugc_studio.ui.theme import Dimensions
@@ -98,6 +99,14 @@ def test_page_vide(app_configuree, qtbot, services):
     assert not page.champ_mode.isVisible()  # « Comparer » : à partir de deux dossiers
     assert not page.tableau.isVisible()
     assert page.methode.valeur() == AVEC_IA and page.seuil == 85
+    assert page.zone_seuil.isVisible()  # avec l'IA, le seuil choisit les paires montrées
+    assert page.rappel_seuil.isVisible() and page.rappel_seuil.text() == "Vrais doublons : 85 % au moins"
+    assert not page.alertes.isVisible()
+    # Sous 85 % : le rappel de ne pas descendre plus bas pour ne trouver que de vrais doublons.
+    page.definir_le_seuil(84)
+    assert page.alertes.isVisible() and page.alertes.text().startswith("Sous 85 % : surtout des photos qui se ressemblent")
+    page.definir_le_seuil(85)
+    assert not page.alertes.isVisible()
     textes = {e.text() for e in page.zone_depot.findChildren(QLabel) if e.wordWrap()}
     assert "Glisse un ou plusieurs dossiers de photos ici" in textes
 
@@ -131,7 +140,11 @@ def test_analyse_sans_ia(app_configuree, qtbot, services, dossiers):
     page.choisir(rang)
     assert page.description.text().endswith("98 % · Même photo · autre format, retournée")
     page.choisir(0)
-    assert page.resume.text().startswith("7 images dans 2 dossiers · 4 paires à 85 % ou plus : 1 identique, 3 mêmes photos.")
+    # Copies seulement : pas de seuil, toutes les copies (prouvées) sont montrées.
+    assert not page.zone_seuil.isVisible()
+    assert page.resume.text() == "7 images dans 2 dossiers · 4 paires de copies : 1 identique, 3 mêmes photos."
+    page.definir_le_seuil(100)  # le seuil retenu pour l'IA ne change rien ici
+    assert len(page.paires()) == 4
     assert page.statut.text().startswith("Analyse terminée en ")
     assert not page.tableau.isColumnHidden(COLONNE_DOSSIERS)
     assert page.tableau.item(0, COLONNE_DOSSIERS).text() == "Lot 1"
@@ -169,6 +182,10 @@ def test_le_seuil_et_comparer_sans_refaire_l_analyse(app_configuree, qtbot, serv
     page._methode_changee(SANS_IA)
     assert RESSEMBLANTES not in [paire.genre for paire in page.paires()]
     assert page.resultat is resultat
+    assert not page.zone_seuil.isVisible()
+    page.methode.definir(AVEC_IA)
+    page._methode_changee(AVEC_IA)
+    assert page.zone_seuil.isVisible() and page.seuil == 85
 
 
 def test_avec_ia_apres_une_analyse_sans_ia(app_configuree, qtbot, services, dossiers, faux_modele):
@@ -253,6 +270,21 @@ def test_textes():
     assert texte_du_type(MEME_PHOTO, ("autre taille", "retournée")) == "Même photo · autre taille, retournée"
     assert texte_du_type(RESSEMBLANTES, ()) == "Ressemblantes"
     assert texte_des_illisibles([]) == ""
+
+    class Selection:
+        def __init__(self, total, comptes):
+            self.total, self._comptes = total, comptes
+
+        def compte(self, genre):
+            return self._comptes.get(genre, 0)
+
+    aucune, quelques = Selection(0, {}), Selection(43, {IDENTIQUES: 42, MEME_PHOTO: 1})
+    assert texte_du_resume(163, 1, None, aucune, True) == "163 images dans 1 dossier · Aucune copie."
+    assert texte_du_resume(163, 1, None, quelques, True) == "163 images dans 1 dossier · 43 paires de copies : 42 identiques, 1 même photo."
+    assert texte_du_resume(163, 1, 85, quelques, False) == "163 images dans 1 dossier · 43 paires à 85 % ou plus : 42 identiques, 1 même photo."
+    assert texte_du_resume(163, 1, 85, aucune, False) == "163 images dans 1 dossier · Aucune paire à 85 % ou plus : pas de doublon."
+    assert texte_du_resume(163, 1, 80, aucune, False) == "163 images dans 1 dossier · Aucune paire à 80 % ou plus."
+    assert texte_du_resume(163, 1, 85, aucune, True) == "163 images dans 1 dossier · Aucune copie à 85 % ou plus."
 
 
 def test_la_comparaison_a_cote_du_tableau_en_grande_fenetre(app_configuree, qtbot, services, dossiers):

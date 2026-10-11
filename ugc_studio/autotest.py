@@ -2378,6 +2378,8 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
     page.methode.definir(SANS_IA)
     page._methode_changee(SANS_IA)
     copies = releve()
+    seuil_cache = page.zone_seuil.isHidden()  # sans IA, pas de seuil : toutes les copies sont montrées
+    resume_copies = page.resume.text()
     capturer(fenetre, "doublons-copies-seulement")
     page.methode.definir(AVEC_IA)
     page._methode_changee(AVEC_IA)
@@ -2390,6 +2392,8 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
         "photos": len(resultat.photos) if resultat else 0,
         "paires_avec_ia": avec_ia,
         "paires_copies_seulement": copies,
+        "seuil_cache_sans_ia": seuil_cache,
+        "resume_copies_seulement": resume_copies,
         "vignettes": vignettes,
         "numpy": getattr(numpy, "__file__", ""),
         "telemetrie_onnx_runtime_coupee": os.environ.get("ORT_DISABLE_TELEMETRY") == "1",
@@ -2410,6 +2414,7 @@ def _doublons_v43(fenetre, capturer, rapport: dict) -> bool:
         and not any(set(p[:2]) & autres for p in copies)
         and all(p[3] <= 94 for p in avec_ia if set(p[:2]) & autres)
         and rapport["doublons_v43"]["telemetrie_onnx_runtime_coupee"]
+        and seuil_cache
         and bool(vignettes)
     )
 

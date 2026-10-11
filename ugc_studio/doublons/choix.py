@@ -19,8 +19,15 @@ MODE_DE_DEPART = LES_DEUX
 
 # Le seuil : les paires en dessous ne sont pas montrées.
 SEUIL_MIN, SEUIL_MAX = 50, 100
-SEUIL_DE_DEPART = 85
+# 85 % : le plus bas pour ne trouver que de vrais doublons, réglé sur le lot de l'utilisateur (sa paire de
+# photos différentes la plus proche, la même montre chez deux clients, est à 84 %). Rappelé à côté du seuil
+# (demande de l'utilisateur du 11/10/2026, 21 h 28 : « que je me souvienne de ne pas mettre moins »).
+SEUIL_DES_VRAIS_DOUBLONS = 85
+SEUIL_DE_DEPART = SEUIL_DES_VRAIS_DOUBLONS
 MAX_PAIRES = 5000  # au-delà, seulement les plus proches (une sécurité : les lots de 200 photos en sont loin)
+# « Copies seulement » : toutes les copies prouvées sont montrées, sans seuil (question de l'utilisateur du
+# 11/10/2026, 21 h 14 : un seuil n'y sert à rien, toutes sont de vraies copies, de 95 à 100 %).
+SEUIL_DES_COPIES = 95
 
 # Ce qu'est une paire (document V4.3, §4.3)
 IDENTIQUES = "identiques"  # 100 % : le même fichier, ou les mêmes pixels (prouvé sans IA)

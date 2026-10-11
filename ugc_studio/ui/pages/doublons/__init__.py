@@ -48,6 +48,8 @@ from ....doublons.choix import (
     RESSEMBLANTES,
     SANS_IA,
     SEUIL_DE_DEPART,
+    SEUIL_DES_COPIES,
+    SEUIL_DES_VRAIS_DOUBLONS,
     SEUIL_MAX,
     SEUIL_MIN,
 )
@@ -116,8 +118,8 @@ AIDE_DOSSIERS = (
 AIDE_SOUS_DOSSIERS = "Aussi les photos de leurs sous-dossiers : elles comptent pour le dossier ajouté."
 AIDE_METHODE = (
     "Copies seulement : les fichiers identiques et les copies d'une même photo (autre taille, compression, "
-    "couleurs, miroir, bords ajoutés), prouvées sans IA. Avec IA : aussi les photos proches, comme deux prises "
-    "de la même personne sous un autre angle (estimé par l'IA, sur ton ordinateur)."
+    "couleurs, miroir, bords ajoutés), prouvées sans IA, toutes montrées. Avec IA : aussi les photos que l'IA "
+    "juge proches, au-dessus du seuil (la même photo rognée ou zoomée, des prises presque identiques)."
 )
 AIDE_COMPARER = (
     "Dans chaque dossier : les photos d'un même dossier entre elles. Entre les dossiers : chaque photo avec "
@@ -127,7 +129,17 @@ AIDE_PAIRES = (
     "Une ligne par paire, les plus proches en haut. 100 % : identiques. 95 à 99 % : la même photo, modifiée "
     "(prouvé sans IA). 94 % au plus : des photos proches, estimé par l'IA."
 )
-AIDE_SEUIL = "Les paires moins proches que le seuil ne sont pas montrées. Le tableau suit le seuil tout de suite."
+AIDE_SEUIL = (
+    "Avec l'IA, les paires moins proches que le seuil ne sont pas montrées. Le tableau suit le seuil tout de "
+    f"suite. {SEUIL_DES_VRAIS_DOUBLONS} % : le plus bas pour ne trouver que de vrais doublons (réglé sur tes photos "
+    "de clients) ; en dessous, surtout des photos qui se ressemblent sans être des doublons. Copies seulement : "
+    "pas de seuil, toutes les copies sont montrées."
+)
+TEXTE_VRAIS_DOUBLONS = f"Vrais doublons : {SEUIL_DES_VRAIS_DOUBLONS} % au moins"
+ALERTE_SOUS_LES_VRAIS_DOUBLONS = (
+    f"Sous {SEUIL_DES_VRAIS_DOUBLONS} % : surtout des photos qui se ressemblent sans être des doublons, comme le "
+    f"même produit chez un autre client. Remets {SEUIL_DES_VRAIS_DOUBLONS} % pour ne garder que les vrais doublons."
+)
 AIDE_COMPARAISON = (
     "La paire choisie dans le tableau. Flèches ↑ et ↓ : la paire précédente ou suivante. Double-clic sur une "
     "ligne, ou « Agrandir » : les deux photos en grand."
@@ -141,13 +153,18 @@ def _pluriel(nombre: int, singulier: str, pluriel: str) -> str:
     return f"{nombre} {singulier if nombre == 1 else pluriel}"
 
 
-def texte_du_resume(nombre_photos: int, nombre_dossiers: int, seuil: int, selection, copies_seulement: bool) -> str:
-    """« 163 images dans 1 dossier · 43 paires à 85 % ou plus : 42 identiques, 1 même photo. »"""
+def texte_du_resume(nombre_photos: int, nombre_dossiers: int, seuil: int | None, selection, copies_seulement: bool) -> str:
+    """« 163 images dans 1 dossier · 43 paires à 85 % ou plus : 42 identiques, 1 même photo. » ; sans seuil
+    (copies seulement) : « 163 images dans 1 dossier · 43 paires de copies : 42 identiques, 1 même photo. »"""
     debut = f"{quantite(nombre_photos, 'image')} dans {quantite(nombre_dossiers, 'dossier')}"
     if not selection.total:
+        if seuil is None:
+            return f"{debut} · Aucune copie."
         if copies_seulement:
             return f"{debut} · Aucune copie à {seuil} % ou plus."
-        return f"{debut} · Aucune paire à {seuil} % ou plus : baisse le seuil pour voir des photos un peu moins proches."
+        if seuil >= SEUIL_DES_VRAIS_DOUBLONS:
+            return f"{debut} · Aucune paire à {seuil} % ou plus : pas de doublon."
+        return f"{debut} · Aucune paire à {seuil} % ou plus."
     parties = []
     for genre, singulier, pluriel in (
         (IDENTIQUES, "identique", "identiques"),
@@ -157,6 +174,8 @@ def texte_du_resume(nombre_photos: int, nombre_dossiers: int, seuil: int, select
         nombre = selection.compte(genre)
         if nombre:
             parties.append(_pluriel(nombre, singulier, pluriel))
+    if seuil is None:
+        return f"{debut} · {quantite(selection.total, 'paire')} de copies : {', '.join(parties)}."
     return f"{debut} · {quantite(selection.total, 'paire')} à {seuil} % ou plus : {', '.join(parties)}."
 
 
@@ -304,12 +323,19 @@ class PageDoublons(Page):
         seuil.addWidget(self.barre_seuil)
         self.champ_seuil = champ_entier(SEUIL_MIN, SEUIL_MAX, " %")
         seuil.addWidget(self.champ_seuil)
+        # Le rappel demandé par l'utilisateur (11/10/2026, 21 h 28) : ne pas descendre plus bas pour ne
+        # trouver que de vrais doublons.
+        self.rappel_seuil = libelle(TEXTE_VRAIS_DOUBLONS, "legende", retour_a_la_ligne=False)
+        seuil.addWidget(self.rappel_seuil)
         seuil.addStretch(1)
         valeur = self._preferences.lire(PREF_SEUIL, SEUIL_DE_DEPART)
         valeur = valeur if isinstance(valeur, int) and SEUIL_MIN <= valeur <= SEUIL_MAX else SEUIL_DE_DEPART
         self.barre_seuil.setValue(valeur)
         self.champ_seuil.setValue(valeur)
-        d.addWidget(champ_nomme("Seuil", seuil, aide=AIDE_SEUIL))
+        # Le seuil ne sert qu'avec l'IA : sans elle, toutes les paires sont des copies prouvées (95 à 100 %),
+        # toutes montrées (question de l'utilisateur du 11/10/2026, 21 h 14).
+        self.zone_seuil = champ_nomme("Seuil", seuil, aide=AIDE_SEUIL)
+        d.addWidget(self.zone_seuil)
         self.resume = libelle(TEXTE_SANS_ANALYSE, "secondaire")
         d.addWidget(self.resume)
         self.alertes = libelle("", "avertissement")
@@ -610,15 +636,21 @@ class PageDoublons(Page):
         """Le résumé et le tableau, selon le résultat, la méthode, « Comparer » et le seuil."""
         resultat = self._resultat
         alertes = []
+        copies_seulement = self.copies_seulement
+        self.zone_seuil.setVisible(not copies_seulement)
+        if not copies_seulement and self.seuil < SEUIL_DES_VRAIS_DOUBLONS:
+            alertes.append(ALERTE_SOUS_LES_VRAIS_DOUBLONS)
         if resultat is None:
             self._selection = None
             self.resume.setText(TEXTE_SANS_ANALYSE if self._dossiers else "Ajoute un ou plusieurs dossiers de photos.")
         else:
             mode = self.mode.valeur() if len(self._dossiers) >= 2 else LES_DEUX
-            self._selection = resultat.paires(mode, self.seuil, avec_ia=not self.copies_seulement)
+            seuil = SEUIL_DES_COPIES if copies_seulement else self.seuil
+            self._selection = resultat.paires(mode, seuil, avec_ia=not copies_seulement)
             nombre_dossiers = len({photo.dossier for photo in resultat.photos}) or len(self._dossiers)
-            self.resume.setText(texte_du_resume(len(resultat.photos), nombre_dossiers, self.seuil, self._selection, self.copies_seulement or not resultat.avec_ia))
-            if not self.copies_seulement and not resultat.avec_ia:
+            seuil_montre = None if copies_seulement else self.seuil
+            self.resume.setText(texte_du_resume(len(resultat.photos), nombre_dossiers, seuil_montre, self._selection, copies_seulement or not resultat.avec_ia))
+            if not copies_seulement and not resultat.avec_ia:
                 alertes.append("Analysé sans IA : clique « Analyser » pour chercher aussi les photos proches.")
             if self._selection.tronquee:
                 maximum = f"{MAX_PAIRES:,}".replace(",", " ")
